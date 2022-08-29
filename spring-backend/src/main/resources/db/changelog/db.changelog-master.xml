@@ -1,0 +1,26 @@
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <changeSet author="sven (generated)" id="00000000000000-1">
+        <dropTable tableName="CATEGORY"></dropTable>
+        <createTable tableName="CATEGORY">
+            <column autoIncrement="true" name="id" type="LONG">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="name" type="VARCHAR(255)"/>
+        </createTable>
+
+        <loadData
+                file="db/data/categories.csv"
+                seperator=","
+                tableName = "CATEGORY" >
+            <column header="id" name="id" type="string"/>
+            <column header="name" name="name" type="string"/>
+        </loadData>
+
+    </changeSet>
+
+</databaseChangeLog>
