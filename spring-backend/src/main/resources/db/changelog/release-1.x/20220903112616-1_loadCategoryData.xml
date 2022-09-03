@@ -1,0 +1,18 @@
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <changeSet author="sven (generated)" id="20220903112616-1">
+        <loadData
+                file="db/data/categories.csv"
+                seperator=","
+                tableName = "CATEGORY" >
+            <column header="id" name="id" type="string"/>
+            <column header="name" name="name" type="string"/>
+        </loadData>
+
+    </changeSet>
+
+</databaseChangeLog>
