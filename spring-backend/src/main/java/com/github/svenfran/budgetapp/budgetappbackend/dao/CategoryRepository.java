@@ -4,8 +4,15 @@ import com.github.svenfran.budgetapp.budgetappbackend.entity.Category;
 import org.springframework.data.repository.CrudRepository;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface CategoryRepository extends CrudRepository<Category, Long> {
 
     List<Category> findAll();
+
+    Optional<Category> findById(Long id);
+
+    Category save (Category category);
+
+    void deleteById(Long id);
 }

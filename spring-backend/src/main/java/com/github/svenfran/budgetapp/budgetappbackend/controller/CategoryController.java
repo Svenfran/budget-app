@@ -5,9 +5,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.service.CategoryService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -24,4 +22,21 @@ public class CategoryController {
         return new ResponseEntity<>(categories, HttpStatus.OK);
     }
 
+    @PostMapping("/categories/add")
+    public ResponseEntity<Category> addCategory(@RequestBody Category category) {
+        Category newCategory = categoryService.addCategory(category);
+        return new ResponseEntity<>(newCategory, HttpStatus.CREATED);
+    }
+
+    @PutMapping("/categories/update")
+    public ResponseEntity<Category> updateCategory(@RequestBody Category category) {
+        Category updateCategory = categoryService.updateCategory(category);
+        return new ResponseEntity<>(updateCategory, HttpStatus.OK);
+    }
+
+    @DeleteMapping("/categories/delete/{id}")
+    public ResponseEntity<Category> deleteCategory(@PathVariable("id") Long id) {
+        categoryService.deleteCategory(id);
+        return new ResponseEntity<>(HttpStatus.OK);
+    }
 }
