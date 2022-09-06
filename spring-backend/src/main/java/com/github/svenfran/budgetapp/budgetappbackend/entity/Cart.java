@@ -43,10 +43,11 @@ public class Cart implements Serializable {
     @JoinColumn(name = "category_id", nullable = false)
     private Category category;
 
-    public Cart(Long id, String title, String description, Date datePurchased, Date dateCreated, Date lastUpdate, User user, Category category) {
+    public Cart(Long id, String title, String description, Double amount, Date datePurchased, Date dateCreated, Date lastUpdate, User user, Category category) {
         this.id = id;
         this.title = title;
         this.description = description;
+        this.amount = amount;
         this.datePurchased = datePurchased;
         this.dateCreated = dateCreated;
         this.lastUpdate = lastUpdate;
@@ -79,6 +80,14 @@ public class Cart implements Serializable {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public Double getAmount() {
+        return amount;
+    }
+
+    public void setAmount(Double amount) {
+        this.amount = amount;
     }
 
     public Date getDatePurchased() {

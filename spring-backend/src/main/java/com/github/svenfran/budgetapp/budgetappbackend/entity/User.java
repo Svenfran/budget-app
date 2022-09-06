@@ -1,6 +1,7 @@
 package com.github.svenfran.budgetapp.budgetappbackend.entity;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import javax.persistence.*;
 import java.io.Serializable;
@@ -55,6 +56,7 @@ public class User implements Serializable {
         this.userName = userName;
     }
 
+    @JsonIgnore
     public String getEmail() {
         return email;
     }
@@ -63,6 +65,7 @@ public class User implements Serializable {
         this.email = email;
     }
 
+    @JsonIgnore
     public String getPassword() {
         return password;
     }
