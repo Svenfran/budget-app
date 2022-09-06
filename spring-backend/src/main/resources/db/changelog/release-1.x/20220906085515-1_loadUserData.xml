@@ -4,13 +4,15 @@
         xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
 
-    <changeSet author="sven (generated)" id="20220903112616-1">
+    <changeSet author="sven (generated)" id="20220906085515-1">
         <loadData
-                file="db/data/categories.csv"
+                file="db/data/users.csv"
                 seperator=","
-                tableName = "category" >
+                tableName = "user_details" >
             <column header="id" name="id" type="string"/>
-            <column header="name" name="name" type="string"/>
+            <column header="user_name" name="user_name" type="string"/>
+            <column header="email" name="email" type="string"/>
+            <column header="password" name="password" type="string"/>
         </loadData>
 
     </changeSet>

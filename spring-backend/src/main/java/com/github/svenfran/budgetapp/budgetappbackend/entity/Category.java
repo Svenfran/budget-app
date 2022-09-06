@@ -1,7 +1,10 @@
 package com.github.svenfran.budgetapp.budgetappbackend.entity;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
+
 import javax.persistence.*;
 import java.io.Serializable;
+import java.util.Set;
 
 @Entity
 @Table(name = "category")
@@ -15,9 +18,14 @@ public class Category implements Serializable{
     @Column(name = "name")
     private String name;
 
-    public Category(Long id, String name) {
+    @OneToMany(mappedBy = "category", cascade = CascadeType.ALL)
+    @JsonBackReference
+    private Set<Cart> carts;
+
+    public Category(Long id, String name, Set<Cart> carts) {
         this.id = id;
         this.name = name;
+        this.carts = carts;
     }
 
     public Category() {
@@ -37,5 +45,13 @@ public class Category implements Serializable{
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public Set<Cart> getCarts() {
+        return carts;
+    }
+
+    public void setCarts(Set<Cart> carts) {
+        this.carts = carts;
     }
 }

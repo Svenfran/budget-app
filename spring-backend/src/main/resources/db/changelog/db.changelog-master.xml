@@ -5,7 +5,15 @@
         xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
 
+    <include file="db/changelog/release-1.x/20220903112614-1_dropCategoryTable.xml" relativeToChangelogFile="false"/>
     <include file="db/changelog/release-1.x/20220903112615-1_createCategoryTable.xml" relativeToChangelogFile="false"/>
     <include file="db/changelog/release-1.x/20220903112616-1_loadCategoryData.xml" relativeToChangelogFile="false"/>
+    <include file="db/changelog/release-1.x/20220906083113-1_dropCartTable.xml" relativeToChangelogFile="false"/>
+    <include file="db/changelog/release-1.x/20220906083113-2_dropUserDetailsTable.xml" relativeToChangelogFile="false"/>
+    <include file="db/changelog/release-1.x/20220906083114-1_createCartTable.xml" relativeToChangelogFile="false"/>
+    <include file="db/changelog/release-1.x/20220906083115-1_createUserTable.xml" relativeToChangelogFile="false"/>
+    <include file="db/changelog/release-1.x/20220906083116-1_addForeignKeysToCartTable.xml" relativeToChangelogFile="false"/>
+    <include file="db/changelog/release-1.x/20220906085515-1_loadUserData.xml" relativeToChangelogFile="false"/>
+    <include file="db/changelog/release-1.x/20220906105715-1_loadCartData.xml" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>

@@ -1,0 +1,23 @@
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <changeSet author="sven (generated)" id="20220906083114-1">
+        <createTable tableName="cart">
+            <column autoIncrement="true" name="id" type="bigint">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="title" type="VARCHAR(255)"/>
+            <column name="description" type="VARCHAR(255)"/>
+            <column name="amount" type="DOUBLE"/>
+            <column name="date_purchased" type="DATE"/>
+            <column name="date_created" type="DATETIME"/>
+            <column name="last_update" type="DATETIME"/>
+            <column name="user_id" type="BIGINT"/>
+            <column name="category_id" type="BIGINT"/>
+        </createTable>
+    </changeSet>
+
+</databaseChangeLog>

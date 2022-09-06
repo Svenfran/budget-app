@@ -4,13 +4,8 @@
         xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
 
-    <changeSet author="sven (generated)" id="20220903112615-1">
-        <createTable tableName="category">
-            <column autoIncrement="true" name="id" type="bigint">
-                <constraints primaryKey="true"/>
-            </column>
-            <column name="name" type="VARCHAR(255)"/>
-        </createTable>
+    <changeSet author="sven (generated)" id="20220906083113-1">
+        <dropTable tableName="cart"/>
     </changeSet>
 
 </databaseChangeLog>

@@ -1,0 +1,16 @@
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <changeSet author="sven (generated)" id="20220906083116-1">
+        <addForeignKeyConstraint baseTableName="cart" baseColumnNames="category_id" constraintName="fk_cart_category"
+                                 referencedTableName="category"
+                                 referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="cart" baseColumnNames="user_id" constraintName="fk_cart_user"
+                                 referencedTableName="user_details"
+                                 referencedColumnNames="id"/>
+    </changeSet>
+
+</databaseChangeLog>
