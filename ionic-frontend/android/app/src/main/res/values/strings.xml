@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">BudgetApp</string>
+    <string name="title_activity_main">BudgetApp</string>
+    <string name="package_name">com.svenfran.ionicbudgetapp</string>
+    <string name="custom_url_scheme">com.svenfran.ionicbudgetapp</string>
+</resources>
