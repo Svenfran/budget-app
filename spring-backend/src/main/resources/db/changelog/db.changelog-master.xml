@@ -15,5 +15,7 @@
     <include file="db/changelog/release-1.x/20220906083116-1_addForeignKeysToCartTable.xml" relativeToChangelogFile="false"/>
     <include file="db/changelog/release-1.x/20220906085515-1_loadUserData.xml" relativeToChangelogFile="false"/>
     <include file="db/changelog/release-1.x/20220906105715-1_loadCartData.xml" relativeToChangelogFile="false"/>
+    <include file="db/changelog/release-1.x/20220920162315-1_loadMoreUserData.xml" relativeToChangelogFile="false"/>
+    <include file="db/changelog/release-1.x/20220920175815-1_loadMoreCartData.xml" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>

@@ -1,5 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.entity;
 
+import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import javax.persistence.*;
@@ -28,7 +29,7 @@ public class Cart implements Serializable {
     private Date datePurchased;
 
     @Column(name = "date_created")
-    @UpdateTimestamp
+    @CreationTimestamp
     private Date dateCreated;
 
     @Column(name = "last_update")

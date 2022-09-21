@@ -1,10 +1,12 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
 import com.github.svenfran.budgetapp.budgetappbackend.dao.CategoryRepository;
+import com.github.svenfran.budgetapp.budgetappbackend.dto.CategoryDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Category;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -13,29 +15,40 @@ public class CategoryService {
     @Autowired
     private CategoryRepository categoryRepository;
 
-    public List<Category> getAllCategories() {
-        return categoryRepository.findAll();
+    public List<CategoryDto> getAllCategories() {
+        List<Category> categoryList = categoryRepository.findAll();
+        List<CategoryDto> categoryDtoList = new ArrayList<>();
+        for (Category category : categoryList) {
+            var categoryDto = new CategoryDto(category);
+            categoryDtoList.add(categoryDto);
+        }
+        return categoryDtoList;
     }
 
-    public Category getCategoryById(Long id) {
-        Category category = categoryRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Category with id " + id + " not found"));
-        return category;
+    public CategoryDto getCategoryById(Long id) {
+        CategoryDto categoryDto = new CategoryDto(categoryRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Category with id " + id + " not found")));
+        return categoryDto;
     }
 
-    public Category addCategory(Category category) {
+    public CategoryDto addCategory(CategoryDto categoryDto) {
         Category newCategory = new Category();
-        newCategory.setName(category.getName());
-        return categoryRepository.save(newCategory);
+        newCategory.setName(categoryDto.getName());
+        categoryRepository.save(newCategory);
+        return new CategoryDto(newCategory);
     }
 
-    public Category updateCategory(Category category) {
-        return categoryRepository.save(category);
+    public CategoryDto updateCategory(CategoryDto categoryDto) {
+        Category updateCategory = new Category();
+        updateCategory.setId(categoryDto.getId());
+        updateCategory.setName(categoryDto.getName());
+        categoryRepository.save(updateCategory);
+        return new CategoryDto(updateCategory);
     }
 
     public void deleteCategory(Long id) {
-      Category category = getCategoryById(id);
-      categoryRepository.deleteById(category.getId());
+        CategoryDto categoryDto = getCategoryById(id);
+        categoryRepository.deleteById(categoryDto.getId());
     }
 
 }

@@ -1,6 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.controller;
 
-import com.github.svenfran.budgetapp.budgetappbackend.entity.Cart;
+import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto;
 import com.github.svenfran.budgetapp.budgetappbackend.service.CartService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -19,8 +19,8 @@ public class CartController {
     private CartService cartService;
 
     @GetMapping("/carts")
-    public ResponseEntity<List<Cart>> getAllCarts() {
-        List<Cart> carts = cartService.getAllCarts();
-        return new ResponseEntity<>(carts, HttpStatus.OK);
+    public ResponseEntity<List<CartDto>> getAllCarts() {
+        List<CartDto> cartDtoList = cartService.getAllCarts();
+        return new ResponseEntity<>(cartDtoList, HttpStatus.OK);
     }
 }

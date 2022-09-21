@@ -1,5 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend;
 
+import com.github.svenfran.budgetapp.budgetappbackend.dto.CategoryDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Category;
 import com.github.svenfran.budgetapp.budgetappbackend.service.CategoryService;
 import org.junit.Assert;
@@ -20,7 +21,7 @@ public class CategoryServiceUnitTest {
 
     @Test
     public void h2InitialRecordsCreationOnApplicationStartTest() {
-        List<Category> categories = categoryService.getAllCategories();
+        List<CategoryDto> categories = categoryService.getAllCategories();
         Assert.assertEquals(categories.size(), 6);
     }
 }

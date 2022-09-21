@@ -1,0 +1,25 @@
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <changeSet author="sven (generated)" id="20220920175815-1">
+        <loadData
+                file="db/data/more_carts.csv"
+                seperator=","
+                tableName = "cart" >
+            <column header="id" name="id" type="string"/>
+            <column header="title" name="title" type="string"/>
+            <column header="description" name="description" type="string"/>
+            <column header="amount" name="amount" type="numeric"/>
+            <column header="date_purchased" name="date_purchased" type="date"/>
+            <column header="date_created" name="date_created" type="datetime"/>
+            <column header="last_update" name="last_update" type="datetime"/>
+            <column header="user_id" name="user_id" type="numeric"/>
+            <column header="category_id" name="category_id" type="numeric"/>
+        </loadData>
+
+    </changeSet>
+
+</databaseChangeLog>

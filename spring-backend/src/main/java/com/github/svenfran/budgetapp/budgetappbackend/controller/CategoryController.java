@@ -1,5 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.controller;
 
+import com.github.svenfran.budgetapp.budgetappbackend.dto.CategoryDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Category;
 import com.github.svenfran.budgetapp.budgetappbackend.service.CategoryService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,25 +18,25 @@ public class CategoryController {
     private CategoryService categoryService;
 
     @GetMapping("/categories")
-    public ResponseEntity<List<Category>> getAllCategories() {
-        List<Category> categories = categoryService.getAllCategories();
-        return new ResponseEntity<>(categories, HttpStatus.OK);
+    public ResponseEntity<List<CategoryDto>> getAllCategories() {
+        List<CategoryDto> categoryDtoList = categoryService.getAllCategories();
+        return new ResponseEntity<>(categoryDtoList, HttpStatus.OK);
     }
 
     @PostMapping("/categories/add")
-    public ResponseEntity<Category> addCategory(@RequestBody Category category) {
-        Category newCategory = categoryService.addCategory(category);
+    public ResponseEntity<CategoryDto> addCategory(@RequestBody CategoryDto categoryDto) {
+        CategoryDto newCategory = categoryService.addCategory(categoryDto);
         return new ResponseEntity<>(newCategory, HttpStatus.CREATED);
     }
 
     @PutMapping("/categories/update")
-    public ResponseEntity<Category> updateCategory(@RequestBody Category category) {
-        Category updateCategory = categoryService.updateCategory(category);
+    public ResponseEntity<CategoryDto> updateCategory(@RequestBody CategoryDto categoryDto) {
+        CategoryDto updateCategory = categoryService.updateCategory(categoryDto);
         return new ResponseEntity<>(updateCategory, HttpStatus.OK);
     }
 
     @DeleteMapping("/categories/delete/{id}")
-    public ResponseEntity<Category> deleteCategory(@PathVariable("id") Long id) {
+    public ResponseEntity<CategoryDto> deleteCategory(@PathVariable("id") Long id) {
         categoryService.deleteCategory(id);
         return new ResponseEntity<>(HttpStatus.OK);
     }
