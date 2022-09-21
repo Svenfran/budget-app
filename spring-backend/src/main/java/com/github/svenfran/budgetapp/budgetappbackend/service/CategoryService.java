@@ -26,29 +26,25 @@ public class CategoryService {
     }
 
     public CategoryDto getCategoryById(Long id) {
-        CategoryDto categoryDto = new CategoryDto(categoryRepository.findById(id)
+        return new CategoryDto(categoryRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Category with id " + id + " not found")));
-        return categoryDto;
     }
 
     public CategoryDto addCategory(CategoryDto categoryDto) {
         Category newCategory = new Category();
         newCategory.setName(categoryDto.getName());
-        categoryRepository.save(newCategory);
-        return new CategoryDto(newCategory);
+        return new CategoryDto(categoryRepository.save(newCategory));
     }
 
     public CategoryDto updateCategory(CategoryDto categoryDto) {
         Category updateCategory = new Category();
         updateCategory.setId(categoryDto.getId());
         updateCategory.setName(categoryDto.getName());
-        categoryRepository.save(updateCategory);
-        return new CategoryDto(updateCategory);
+        return new CategoryDto(categoryRepository.save(updateCategory));
     }
 
     public void deleteCategory(Long id) {
-        CategoryDto categoryDto = getCategoryById(id);
-        categoryRepository.deleteById(categoryDto.getId());
+        categoryRepository.deleteById(getCategoryById(id).getId());
     }
 
 }
