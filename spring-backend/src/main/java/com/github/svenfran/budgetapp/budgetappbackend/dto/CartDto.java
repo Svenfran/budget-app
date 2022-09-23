@@ -9,17 +9,19 @@ public class CartDto {
     private Long id;
     private String title;
     private String description;
+    private Double amount;
     private Date datePurchased;
     private UserDto userDto;
     private CategoryDto categoryDto;
 
-    public CartDto(Cart cart, CategoryDto categoryDto, UserDto userDto) {
+    public CartDto(Cart cart) {
         this.id = cart.getId();
         this.title = cart.getTitle();
         this.description = cart.getDescription();
+        this.amount = cart.getAmount();
         this.datePurchased = cart.getDatePurchased();
-        this.userDto = userDto;
-        this.categoryDto = categoryDto;
+        this.userDto = new UserDto(cart.getUser());
+        this.categoryDto = new CategoryDto(cart.getCategory());
     }
 
 
@@ -71,5 +73,13 @@ public class CartDto {
 
     public void setCategoryDto(CategoryDto categoryDto) {
         this.categoryDto = categoryDto;
+    }
+
+    public Double getAmount() {
+        return amount;
+    }
+
+    public void setAmount(Double amount) {
+        this.amount = amount;
     }
 }
