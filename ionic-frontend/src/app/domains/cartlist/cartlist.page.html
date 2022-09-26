@@ -4,6 +4,11 @@
       <ion-menu-button menu="m1"></ion-menu-button>
     </ion-buttons>
     <ion-title>Ausgaben</ion-title>
+    <ion-buttons slot="primary">
+      <ion-button [routerLink]="['new-edit']">
+        <ion-icon name="add" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
   </ion-toolbar>
 </ion-header>
 
@@ -20,7 +25,7 @@
     <ion-row>
       <ion-col>
         <ion-list *ngIf="!isLoading && cartlist.length > 0">
-          <ion-item-sliding *ngFor="let cart of cartlist" #slidingitem>
+          <ion-item-sliding *ngFor="let cart of cartlist" #slidingItem>
             <ion-item>
               <ion-icon slot="start" name="ellipse"></ion-icon>
               <ion-label>
@@ -38,9 +43,9 @@
             </ion-item>
             <ion-item-options>
               <ion-item-option color="secondary">
-                <ion-icon name="create" slot="icon-only"></ion-icon>
+                <ion-icon name="create" slot="icon-only" [routerLink]="['new-edit', cart.id]"></ion-icon>
               </ion-item-option>
-              <ion-item-option color="secondary">
+              <ion-item-option color="secondary" (click)="onDelete(cart.id, slidingItem)">
                 <ion-icon name="trash" slot="icon-only"></ion-icon>
               </ion-item-option>
             </ion-item-options>

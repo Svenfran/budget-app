@@ -9,6 +9,7 @@ import { AppComponent } from './app.component';
 import { AppRoutingModule } from './app-routing.module';
 import { CurrencyPipe, DatePipe, registerLocaleData } from '@angular/common';
 import localDe from '@angular/common/locales/de';
+import { ReactiveFormsModule } from '@angular/forms';
 registerLocaleData(localDe, 'de');
 
 @NgModule({
@@ -17,7 +18,8 @@ registerLocaleData(localDe, 'de');
     BrowserModule,
     IonicModule.forRoot(), 
     AppRoutingModule,
-    HttpClientModule
+    HttpClientModule,
+    ReactiveFormsModule
   ],
   providers: [DatePipe, CurrencyPipe, { provide: RouteReuseStrategy, useClass: IonicRouteStrategy }],
   bootstrap: [AppComponent],

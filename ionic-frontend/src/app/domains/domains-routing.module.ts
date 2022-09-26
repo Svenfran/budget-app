@@ -14,7 +14,20 @@ const routes: Routes = [
       },
       {
         path: 'cartlist',
-        loadChildren: () => import('./cartlist/cartlist.module').then( m => m.CartlistPageModule)
+        children: [
+          {
+            path: '',
+            loadChildren: () => import('./cartlist/cartlist.module').then( m => m.CartlistPageModule)
+          },
+          {
+            path: 'new-edit',
+            loadChildren: () => import('./new-edit-cart/new-edit-cart.module').then( m => m.NewEditCartPageModule)
+          },
+          {
+            path: 'new-edit/:id',
+            loadChildren: () => import('./new-edit-cart/new-edit-cart.module').then( m => m.NewEditCartPageModule)
+          }
+        ]
       },
       {
         path: 'shoppinglist',
@@ -27,7 +40,7 @@ const routes: Routes = [
   },
   {
     path: '', redirectTo: 'domains/tabs/overview', pathMatch: 'full'
-  }
+  },
 
 ];
 

@@ -22,14 +22,14 @@ export class AppComponent {
   initializeApp() {
     this.platform.ready().then(() => {
       this.lightColorTheme();
-      this.darkColorTheme();
+      this.initBackButton();
     })
   }
 
   initBackButton() {
     this.platform.backButton.subscribeWithPriority(10, () => {
       const currentUrl = this.router.url;
-      if (currentUrl === "/domains/tabs/overview") {
+      if (currentUrl === "/auth" || currentUrl === "/domains/tabs/overview") {
         navigator['app'].exitApp();
       } else {
         this.navCtrl.back();
@@ -51,7 +51,7 @@ export class AppComponent {
     if (isPlatform('mobile')) {
       StatusBar.setStyle({ style: Style.Dark });
       StatusBar.setBackgroundColor({ color: '#000000'});
-      NavigationBar.setColor({ color: '#000000', darkButtons: false});
+      NavigationBar.setColor({ color: '#000000', darkButtons: false });
     }
   }
 
@@ -59,7 +59,7 @@ export class AppComponent {
     if (isPlatform('mobile')) {
       StatusBar.setStyle({ style: Style.Light });
       StatusBar.setBackgroundColor({ color: '#FFFFFF'});
-      NavigationBar.setColor({ color: '#FFFFFF', darkButtons: true});
+      NavigationBar.setColor({ color: '#FFFFFF', darkButtons: true });
     }
   }
 
