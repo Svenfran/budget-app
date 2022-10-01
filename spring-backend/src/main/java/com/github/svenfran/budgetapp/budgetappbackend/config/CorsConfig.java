@@ -18,7 +18,8 @@ public class CorsConfig {
                         .allowedHeaders("Origin", "Access-Control-Allow-Origin", "Content-Type",
                                 "Accept", "Authorization", "Origin, Accept", "X-Requested-With",
                                 "Access-Control-Request-Method", "Access-Control-Request-Headers")
-                        .allowedOrigins("http://localhost", "http://localhost:8100");
+                        .allowedOrigins("http://localhost", "http://localhost:8100",
+                                "http://192.168.178.23:8100", "http://192.168.32.1:8100");
             }
         };
     }

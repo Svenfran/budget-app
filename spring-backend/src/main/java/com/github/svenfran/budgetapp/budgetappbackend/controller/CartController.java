@@ -3,6 +3,7 @@ package com.github.svenfran.budgetapp.budgetappbackend.controller;
 import com.github.svenfran.budgetapp.budgetappbackend.Exceptions.AddCartCategoryNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.Exceptions.CartNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.Exceptions.UpdateCartCategoryNotFoundException;
+import com.github.svenfran.budgetapp.budgetappbackend.Exceptions.UserNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto;
 import com.github.svenfran.budgetapp.budgetappbackend.service.CartService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,13 +33,13 @@ public class CartController {
     }
 
     @PostMapping("/carts/add")
-    public ResponseEntity<CartDto> addCart(@RequestBody CartDto cartDto) throws AddCartCategoryNotFoundException {
+    public ResponseEntity<CartDto> addCart(@RequestBody CartDto cartDto) throws AddCartCategoryNotFoundException, UserNotFoundException {
         CartDto newCart = cartService.addCart(cartDto);
         return new ResponseEntity<>(newCart, HttpStatus.CREATED);
     }
 
     @PutMapping("/carts/update")
-    public ResponseEntity<CartDto> updateCart(@RequestBody CartDto cartDto) throws UpdateCartCategoryNotFoundException {
+    public ResponseEntity<CartDto> updateCart(@RequestBody CartDto cartDto) throws UpdateCartCategoryNotFoundException, UserNotFoundException {
         CartDto updateCart = cartService.updateCart(cartDto);
         return new ResponseEntity<>(updateCart, HttpStatus.CREATED);
     }

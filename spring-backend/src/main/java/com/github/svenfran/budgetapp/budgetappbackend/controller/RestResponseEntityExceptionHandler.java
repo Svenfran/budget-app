@@ -1,8 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.controller;
 
-import com.github.svenfran.budgetapp.budgetappbackend.Exceptions.AddCartCategoryNotFoundException;
-import com.github.svenfran.budgetapp.budgetappbackend.Exceptions.CartNotFoundException;
-import com.github.svenfran.budgetapp.budgetappbackend.Exceptions.UpdateCartCategoryNotFoundException;
+import com.github.svenfran.budgetapp.budgetappbackend.Exceptions.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -35,5 +33,18 @@ public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionH
         LOG.debug("Exception Message: " + ex.getMessage(), ex);
         return new ResponseEntity<>(ex.getMessage(), HttpStatus.BAD_REQUEST);
     }
+
+    @ExceptionHandler(value = { CategoryNotFoundException.class })
+    protected ResponseEntity<Object> handleCategoryNotFoundException (CategoryNotFoundException ex, WebRequest request) {
+        LOG.debug("Exception Message: " + ex.getMessage(), ex);
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(value = { UserNotFoundException.class })
+    protected ResponseEntity<Object> handleUserNotFoundException (UserNotFoundException ex, WebRequest request) {
+        LOG.debug("Exception Message: " + ex.getMessage(), ex);
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
 
 }

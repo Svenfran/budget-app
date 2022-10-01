@@ -1,5 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.controller;
 
+import com.github.svenfran.budgetapp.budgetappbackend.Exceptions.CategoryNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CategoryDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Category;
 import com.github.svenfran.budgetapp.budgetappbackend.service.CategoryService;
@@ -23,6 +24,12 @@ public class CategoryController {
         return new ResponseEntity<>(categoryDtoList, HttpStatus.OK);
     }
 
+    @GetMapping("/categories/{id}")
+    public ResponseEntity<CategoryDto> getCategoryById(@PathVariable("id") Long id) throws CategoryNotFoundException {
+        CategoryDto categoryDto = categoryService.getCategoryById(id);
+        return new ResponseEntity<>(categoryDto, HttpStatus.OK);
+    }
+
     @PostMapping("/categories/add")
     public ResponseEntity<CategoryDto> addCategory(@RequestBody CategoryDto categoryDto) {
         CategoryDto newCategory = categoryService.addCategory(categoryDto);
@@ -36,7 +43,7 @@ public class CategoryController {
     }
 
     @DeleteMapping("/categories/delete/{id}")
-    public ResponseEntity<CategoryDto> deleteCategory(@PathVariable("id") Long id) {
+    public ResponseEntity<CategoryDto> deleteCategory(@PathVariable("id") Long id) throws CategoryNotFoundException {
         categoryService.deleteCategory(id);
         return new ResponseEntity<>(HttpStatus.OK);
     }

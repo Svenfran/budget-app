@@ -3,6 +3,7 @@ package com.github.svenfran.budgetapp.budgetappbackend.service;
 import com.github.svenfran.budgetapp.budgetappbackend.Exceptions.AddCartCategoryNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.Exceptions.CartNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.Exceptions.UpdateCartCategoryNotFoundException;
+import com.github.svenfran.budgetapp.budgetappbackend.Exceptions.UserNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.dao.CartRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.dao.CategoryRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.dao.UserRepository;
@@ -40,7 +41,7 @@ public class CartService {
                 .orElseThrow(() -> new CartNotFoundException("Cart with id " + id + " not found")));
     }
 
-    public CartDto addCart(CartDto cartDto) throws AddCartCategoryNotFoundException {
+    public CartDto addCart(CartDto cartDto) throws AddCartCategoryNotFoundException, UserNotFoundException {
         var category = categoryRepository.findById(cartDto.getCategoryDto().getId())
                 .orElseThrow(() -> new AddCartCategoryNotFoundException("Add Cart: Category with id " + cartDto.getCategoryDto().getId() + " not found"));
         // Sven als Nutzer, id = 1
@@ -48,7 +49,7 @@ public class CartService {
         return new CartDto(cartRepository.save(cartDtoMapper.CartDtoToEntity(cartDto, category, user)));
     }
 
-    public CartDto updateCart(CartDto cartDto) throws UpdateCartCategoryNotFoundException {
+    public CartDto updateCart(CartDto cartDto) throws UpdateCartCategoryNotFoundException, UserNotFoundException {
         var category = categoryRepository.findById(cartDto.getCategoryDto().getId())
                 .orElseThrow(() -> new UpdateCartCategoryNotFoundException("Update Cart: Category with id " + cartDto.getCategoryDto().getId() + " not found"));
         // Sven als Nutzer, id = 1
@@ -61,8 +62,8 @@ public class CartService {
     }
 
     // Derzeit angemeldete Nutzer -> Spring Security
-    private User getCurrentUser(Long id) {
+    private User getCurrentUser(Long id) throws UserNotFoundException {
         return userRepository.findById(id).
-                orElseThrow(() -> new RuntimeException("User with id " + id + " not found"));
+                orElseThrow(() -> new UserNotFoundException("User with id " + id + " not found"));
     }
 }

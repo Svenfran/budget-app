@@ -11,7 +11,7 @@ public class CartDtoMapper {
 
     public Cart CartDtoToEntity(CartDto dto, Category category, User user) {
         var cart = new Cart();
-        cart.setId(dto.getId() == null ? null : dto.getId());
+        cart.setId(dto.getId());
         cart.setTitle(dto.getTitle());
         cart.setDescription(dto.getDescription());
         cart.setAmount(dto.getAmount());
