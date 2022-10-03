@@ -9,7 +9,7 @@ import { Cart } from '../models/cart';
 })
 export class CartService {
 
-  private apiBaseUrl = environment.apiBaseUrl;
+  private apiBaseUrl = environment.apiBaseUrlExternal;
   private cartlistUrl = `${this.apiBaseUrl}/api/carts`;
   private getCartByIdUrl = `${this.apiBaseUrl}/api/carts`;
   private addCartUrl = `${this.apiBaseUrl}/api/carts/add`;

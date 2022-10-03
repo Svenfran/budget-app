@@ -2,11 +2,25 @@
   <ion-menu side="start" menuId="m1" contentId="main">
     <ion-header class="ion-no-border">
       <ion-toolbar>
-        <ion-title>BudgetApp</ion-title>
+        <ion-title>Budget App</ion-title>
       </ion-toolbar>
     </ion-header>
     <ion-content>
       <ion-list>
+        <!-- <ion-header class="ion-padding ion-no-border">Hauptmenü</ion-header>
+        <ion-menu-toggle menu="m1">
+          <ion-item lines="none" button>
+            <ion-icon name="ellipse" slot="start" color="dark"></ion-icon>
+            <ion-label>Kategorien</ion-label>
+          </ion-item>
+        </ion-menu-toggle>
+        <ion-menu-toggle menu="m1">
+          <ion-item lines="none" button>
+            <ion-icon name="ellipse" slot="start" color="dark"></ion-icon>
+            <ion-label>Gruppen</ion-label>
+          </ion-item>
+        </ion-menu-toggle>
+        <ion-header class="ion-padding ion-no-border">Einstellungen</ion-header> -->
         <ion-menu-toggle menu="m1">
           <ion-item lines="none">
             <ion-icon name="moon" slot="start" color="dark"></ion-icon>
@@ -21,7 +35,11 @@
           </ion-item>
         </ion-menu-toggle>
       </ion-list>
+      
+   
     </ion-content>
+   
+  
   </ion-menu>
   <ion-router-outlet id="main"></ion-router-outlet>
 </ion-app>

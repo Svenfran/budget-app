@@ -9,7 +9,7 @@ import { CategoryDto } from '../models/category';
 })
 export class CategoryService {
 
-  private apiBaseUrl = environment.apiBaseUrl;
+  private apiBaseUrl = environment.apiBaseUrlExternal;
   private getCategoriesUrl = `${this.apiBaseUrl}/api/categories`;
 
   constructor(private http: HttpClient) { }

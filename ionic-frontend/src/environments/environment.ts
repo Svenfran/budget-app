@@ -5,7 +5,7 @@
 export const environment = {
   production: false,
   apiBaseUrl: 'http://localhost:8080',
-  apiBaseUrlServer: 'http://192.168.178.23:8080'
+  apiBaseUrlExternal: 'http://192.168.178.23:8080'
 };
 // http://192.168.178.23:8100, http://192.168.32.1:8100
 /*

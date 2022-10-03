@@ -1,13 +1,14 @@
-import { DatePipe } from '@angular/common';
-import { Component, Input, OnInit } from '@angular/core';
+import { Component, OnInit, ViewChild } from '@angular/core';
 import { FormGroup, UntypedFormBuilder, Validators } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
-import { LoadingController } from '@ionic/angular';
+import { IonDatetime, LoadingController } from '@ionic/angular';
 import { CategoryDto } from 'src/app/models/category';
 import { first } from 'rxjs/operators';
 import { CartService } from 'src/app/services/cart.service';
 import { CategoryService } from 'src/app/services/category.service';
 import { Cart } from 'src/app/models/cart';
+import { format, parseISO } from 'date-fns'
+
 
 @Component({
   selector: 'app-new-edit-cart',
@@ -18,18 +19,18 @@ export class NewEditCartPage implements OnInit {
 
   form: FormGroup;
   categories: CategoryDto[] = [];
-  // categoryDto: CategoryDto;
-  // cartDto: Cart;
   today = new Date();
   isAddMode: boolean;
   cartId: String;
+  showPicker = false;
+  formattedString = "";
 
+  @ViewChild(IonDatetime) datetime: IonDatetime;
   constructor(
     private categoryService: CategoryService,
     private fb: UntypedFormBuilder,
     private cartService: CartService,
     private router: Router,
-    private datePipe: DatePipe,
     private loadingCtrl: LoadingController,
     private route: ActivatedRoute) { }
 
@@ -45,7 +46,16 @@ export class NewEditCartPage implements OnInit {
 
     this.cartId = this.route.snapshot.paramMap.get('id');
     this.isAddMode = !this.cartId;
+    
+    this.categoryService.getCategories().subscribe((categories) => {
+      this.categories = categories;
+    });
  
+    this.setToday();
+    this.setInitialFormValues();
+  }
+
+  setInitialFormValues() {
     if (!this.isAddMode) {
       this.cartService.getCartById(+this.cartId)
       .pipe(first())
@@ -55,27 +65,36 @@ export class NewEditCartPage implements OnInit {
           title: data.title,
           amount: data.amount.toFixed(2),
           description: data.description,
-          datePurchased: this.getStringFromDate(data.datePurchased),
+          datePurchased: this.setDate(data.datePurchased),
           category: data.categoryDto.name
         })
       );
     } else if (this.isAddMode) {
       this.form.patchValue({
-        datePurchased: this.getCurrentDateAsString()
+        datePurchased: this.formattedString
       });
     }
-
-    this.categoryService.getCategories().subscribe((categories) => {
-      this.categories = categories;
-    })
   }
 
-  getCurrentDateAsString() {
-    return this.datePipe.transform(this.today, 'dd.MM.yyyy');
+  setToday() {
+    this.formattedString = format(parseISO(format(this.today, 'yyyy-MM-dd') + 'T09:00:00.000Z'), 'dd.MM.yyyy');
   }
 
-  getStringFromDate(date: Date) {
-    return this.datePipe.transform(date, 'dd.MM.yyyy');
+  setDate(date: Date) {
+    this.formattedString = format(parseISO(format(new Date(date), 'yyyy-MM-dd') + 'T09:00:00.000Z'), 'dd.MM.yyyy');
+  }
+
+  dateChanged(value) {
+    this.formattedString = format(parseISO(value), 'dd.MM.yyyy');
+    this.showPicker = false;
+  }
+
+  close() {
+    this.datetime.cancel(true);
+  }
+
+  select() {
+    this.datetime.confirm(true);
   }
 
   getDateFromString(date: string) {
@@ -92,8 +111,7 @@ export class NewEditCartPage implements OnInit {
       let newCategory = new CategoryDto(
         this.categories.filter(cat => cat.name === this.form.value.category)[0].id,
         this.form.value.category
-        );
-
+      );
       let newCart = new Cart(
         null,
         this.form.value.title,
@@ -122,8 +140,7 @@ export class NewEditCartPage implements OnInit {
       let updateCategory = new CategoryDto(
         this.categories.filter(cat => cat.name === this.form.value.category)[0].id,
         this.form.value.category
-        );
-  
+      );
       let updateCart = new Cart(
         +this.cartId,
         this.form.value.title,
