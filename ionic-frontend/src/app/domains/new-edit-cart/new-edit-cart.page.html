@@ -87,6 +87,7 @@
                   #datetime
                   size="cover"
                   presentation="date"
+                  [value]="dateValue"
                   [preferWheel]="false"
                   (ionChange)="dateChanged(datetime.value)"
                   (ionCancel)="showPicker = false;">

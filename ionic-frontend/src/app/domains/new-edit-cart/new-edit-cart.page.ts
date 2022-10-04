@@ -23,6 +23,7 @@ export class NewEditCartPage implements OnInit {
   isAddMode: boolean;
   cartId: String;
   showPicker = false;
+  dateValue = "";
   formattedString = "";
 
   @ViewChild(IonDatetime) datetime: IonDatetime;
@@ -78,10 +79,12 @@ export class NewEditCartPage implements OnInit {
 
   setToday() {
     this.formattedString = format(parseISO(format(this.today, 'yyyy-MM-dd') + 'T09:00:00.000Z'), 'dd.MM.yyyy');
+    this.dateValue = format(this.today, 'yyyy-MM-dd') + 'T00:00:00';
   }
 
   setDate(date: Date) {
     this.formattedString = format(parseISO(format(new Date(date), 'yyyy-MM-dd') + 'T09:00:00.000Z'), 'dd.MM.yyyy');
+    this.dateValue = format(new Date(date), 'yyyy-MM-dd') + 'T00:00:00';
   }
 
   dateChanged(value) {
@@ -97,10 +100,8 @@ export class NewEditCartPage implements OnInit {
     this.datetime.confirm(true);
   }
 
-  getDateFromString(date: string) {
-    let dateArray = date.split('.');
-    let newDateFormat = dateArray[2] + "-" + dateArray[1] + "-" + dateArray[0];
-    return new Date(newDateFormat);
+  getDateFromString(formattedString: string) {
+    return new Date(formattedString.replace(/(\d{2}).(\d{2}).(\d{4})/, "$3-$2-$1"));
   }
 
   onCreateCart() {
