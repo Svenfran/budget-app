@@ -37,6 +37,10 @@ public class Cart implements Serializable {
     private Date lastUpdate;
 
     @ManyToOne
+    @JoinColumn(name = "group_id", nullable = false)
+    private Group group;
+
+    @ManyToOne
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
@@ -44,7 +48,7 @@ public class Cart implements Serializable {
     @JoinColumn(name = "category_id", nullable = false)
     private Category category;
 
-    public Cart(Long id, String title, String description, Double amount, Date datePurchased, Date dateCreated, Date lastUpdate, User user, Category category) {
+    public Cart(Long id, String title, String description, Double amount, Date datePurchased, Date dateCreated, Date lastUpdate, Group group, User user, Category category) {
         this.id = id;
         this.title = title;
         this.description = description;
@@ -52,6 +56,7 @@ public class Cart implements Serializable {
         this.datePurchased = datePurchased;
         this.dateCreated = dateCreated;
         this.lastUpdate = lastUpdate;
+        this.group = group;
         this.user = user;
         this.category = category;
     }
@@ -129,5 +134,13 @@ public class Cart implements Serializable {
 
     public void setCategory(Category category) {
         this.category = category;
+    }
+
+    public Group getGroup() {
+        return group;
+    }
+
+    public void setGroup(Group group) {
+        this.group = group;
     }
 }

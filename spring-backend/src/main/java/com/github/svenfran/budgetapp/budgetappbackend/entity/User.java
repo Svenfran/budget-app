@@ -25,15 +25,23 @@ public class User implements Serializable {
     @Column(name = "password", nullable = false)
     private String password;
 
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "group_members",
+        joinColumns = @JoinColumn(name = "user_id", referencedColumnName = "id"),
+        inverseJoinColumns = @JoinColumn(name = "group_id", referencedColumnName = "id"))
+    private Set<Group> groups;
+
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
     @JsonBackReference
     private Set<Cart> carts;
 
-    public User(Long id, String userName, String email, String password, Set<Cart> carts) {
+    public User(Long id, String userName, String email, String password, Set<Group> groups, Set<Cart> carts) {
         this.id = id;
         this.userName = userName;
         this.email = email;
         this.password = password;
+        this.groups = groups;
         this.carts = carts;
     }
 
@@ -81,4 +89,13 @@ public class User implements Serializable {
     public void setCarts(Set<Cart> carts) {
         this.carts = carts;
     }
+
+    public Set<Group> getGroups() {
+        return groups;
+    }
+
+    public void setGroups(Set<Group> groups) {
+        this.groups = groups;
+    }
+
 }

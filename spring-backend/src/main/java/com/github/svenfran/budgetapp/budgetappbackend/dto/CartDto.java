@@ -11,6 +11,7 @@ public class CartDto {
     private String description;
     private Double amount;
     private Date datePurchased;
+    private Long groupId;
     private UserDto userDto;
     private CategoryDto categoryDto;
 
@@ -20,10 +21,10 @@ public class CartDto {
         this.description = cart.getDescription();
         this.amount = cart.getAmount();
         this.datePurchased = cart.getDatePurchased();
+        this.groupId = cart.getGroup().getId();
         this.userDto = new UserDto(cart.getUser());
         this.categoryDto = new CategoryDto(cart.getCategory());
     }
-
 
     public CartDto() {}
 
@@ -81,5 +82,13 @@ public class CartDto {
 
     public void setAmount(Double amount) {
         this.amount = amount;
+    }
+
+    public Long getGroupId() {
+        return groupId;
+    }
+
+    public void setGroupId(Long groupId) {
+        this.groupId = groupId;
     }
 }
