@@ -8,6 +8,7 @@ export class Cart {
         public description: string,
         public amount: number,
         public datePurchased: Date,
+        public groupId: number,
         public userDto: UserDto,
         public categoryDto: CategoryDto
     ) {}

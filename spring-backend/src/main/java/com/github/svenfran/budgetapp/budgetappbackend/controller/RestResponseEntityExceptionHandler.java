@@ -46,5 +46,11 @@ public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionH
         return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
     }
 
+    @ExceptionHandler(value = { GroupNotFoundException.class })
+    protected ResponseEntity<Object> handleGroupNotFoundException (GroupNotFoundException ex, WebRequest request) {
+        LOG.debug("Exception Message: " + ex.getMessage(), ex);
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
 
 }

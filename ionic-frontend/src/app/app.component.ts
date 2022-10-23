@@ -2,7 +2,11 @@ import { Component, Renderer2 } from '@angular/core';
 import { Router } from '@angular/router';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { NavigationBar } from '@hugotomazi/capacitor-navigation-bar';
-import { isPlatform, NavController, Platform } from '@ionic/angular';
+import { AlertController, isPlatform, LoadingController, NavController, Platform } from '@ionic/angular';
+import { Group } from './models/group';
+import { GroupSideNav } from './models/group-side-nav';
+import { GroupService } from './services/group.service';
+import { Storage } from '@ionic/storage';
 
 @Component({
   selector: 'app-root',
@@ -10,12 +14,23 @@ import { isPlatform, NavController, Platform } from '@ionic/angular';
   styleUrls: ['app.component.scss'],
 })
 export class AppComponent {
+
+  userName: string;
+  grouplistSideNav: GroupSideNav[];
+  isOpen = false;
+  activeGroup: GroupSideNav;
+
   constructor(
     private renderer: Renderer2,
     private platform: Platform,
     private router: Router,
-    private navCtrl: NavController) {
+    private navCtrl: NavController,
+    private groupService: GroupService,
+    private alertCtrl: AlertController,
+    private loadingCtrl: LoadingController) {
       this.initializeApp();
+      this.getCurrentUser();
+      this.initActiveGroup();
     }
 
 
@@ -25,6 +40,21 @@ export class AppComponent {
       this.initBackButton();
     })
   }
+
+  getGroupsForSideNav() {
+    this.groupService.getGroupsForSideNav().subscribe(groups => {
+      this.grouplistSideNav = groups;
+    })
+  }
+  
+  initActiveGroup() {
+    this.groupService.getGroupsForSideNav().subscribe(groups => {
+      this.grouplistSideNav = groups;
+      this.activeGroup = groups[0];
+      this.groupService.setActiveGroup(this.activeGroup);
+    })
+  }
+
 
   initBackButton() {
     this.platform.backButton.subscribeWithPriority(10, () => {
@@ -65,5 +95,42 @@ export class AppComponent {
 
   onLogout() {
     console.log("Logging out...")
+  }
+
+  getCurrentUser() {
+    this.userName = "sven";
+  }
+
+  getActiveGroup(id: number) {
+    this.activeGroup = this.grouplistSideNav.filter(group => group.id == id)[0];
+    this.groupService.setActiveGroup(this.activeGroup);
+  }
+
+  onCreateGroup() {
+    this.alertCtrl.create({
+      header: "Gruppenname:",
+      buttons: [{
+        text: "Abbrechen",
+        role: "cancel"
+      }, {
+        text: "ok",
+        handler: (data) => {
+          this.loadingCtrl.create({
+            message: "Erstelle Gruppe..."
+          }).then(loadingEl => {
+            let newGroup = new Group(null, data.groupName, null);
+            this.groupService.addGroup(newGroup).subscribe(() => {
+              loadingEl.dismiss();
+              this.getGroupsForSideNav();
+            })
+          })
+        }
+      }],
+      inputs: [
+        {
+          name: "groupName"
+        }
+      ]
+    }).then(alertEl => alertEl.present());
   }
 }

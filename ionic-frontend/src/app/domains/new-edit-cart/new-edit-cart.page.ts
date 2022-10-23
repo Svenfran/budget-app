@@ -8,6 +8,7 @@ import { CartService } from 'src/app/services/cart.service';
 import { CategoryService } from 'src/app/services/category.service';
 import { Cart } from 'src/app/models/cart';
 import { format, parseISO } from 'date-fns'
+import { GroupService } from 'src/app/services/group.service';
 
 
 @Component({
@@ -25,6 +26,7 @@ export class NewEditCartPage implements OnInit {
   showPicker = false;
   dateValue = "";
   formattedString = "";
+  activeGroupId: number;
 
   @ViewChild(IonDatetime) datetime: IonDatetime;
   constructor(
@@ -33,7 +35,8 @@ export class NewEditCartPage implements OnInit {
     private cartService: CartService,
     private router: Router,
     private loadingCtrl: LoadingController,
-    private route: ActivatedRoute) { }
+    private route: ActivatedRoute,
+    private groupService: GroupService) { }
 
   ngOnInit() {
     this.form = this.fb.group({
@@ -54,6 +57,13 @@ export class NewEditCartPage implements OnInit {
  
     this.setToday();
     this.setInitialFormValues();
+    this.getActiveGroupId();
+  }
+
+  getActiveGroupId() {
+    this.groupService.activeGroup.subscribe(group => {
+      this.activeGroupId = group.id;
+    });
   }
 
   setInitialFormValues() {
@@ -87,8 +97,9 @@ export class NewEditCartPage implements OnInit {
     this.dateValue = format(new Date(date), 'yyyy-MM-dd') + 'T00:00:00';
   }
 
-  dateChanged(value) {
+  dateChanged(value: string) {
     this.formattedString = format(parseISO(value), 'dd.MM.yyyy');
+    this.dateValue = value;
     this.showPicker = false;
   }
 
@@ -119,6 +130,7 @@ export class NewEditCartPage implements OnInit {
         this.form.value.description,
         this.form.value.amount,
         this.getDateFromString(this.form.value.datePurchased),
+        this.activeGroupId,
         null,
         newCategory
       );
@@ -148,6 +160,7 @@ export class NewEditCartPage implements OnInit {
         this.form.value.description,
         this.form.value.amount,
         this.getDateFromString(this.form.value.datePurchased),
+        this.activeGroupId,
         null,
         updateCategory
       );
@@ -173,7 +186,7 @@ export class NewEditCartPage implements OnInit {
   }
 
 
-  get title() {return this.form.get('title')}
+  get title() {return this.form.get('title');}
   get description() {return this.form.get('description');}
   get amount() {return this.form.get('amount');}
   get datePurchased() {return this.form.get('datePurchased');}

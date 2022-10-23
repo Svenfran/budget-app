@@ -10,7 +10,7 @@ import { Cart } from '../models/cart';
 export class CartService {
 
   private apiBaseUrl = environment.apiBaseUrlExternal;
-  private cartlistUrl = `${this.apiBaseUrl}/api/carts`;
+  private cartlistUrl = `${this.apiBaseUrl}/api/cartsbygroupid`;
   private getCartByIdUrl = `${this.apiBaseUrl}/api/carts`;
   private addCartUrl = `${this.apiBaseUrl}/api/carts/add`;
   private updateCartUrl = `${this.apiBaseUrl}/api/carts/update`;
@@ -19,8 +19,8 @@ export class CartService {
 
   constructor(private http: HttpClient) { }
 
-  getCartList(): Observable<Cart[]> {
-    return this.http.get<Cart[]>(this.cartlistUrl);
+  getCartListByGroupId(groupId: number): Observable<Cart[]> {
+    return this.http.get<Cart[]>(`${this.cartlistUrl}/${groupId}`);
   }
 
   getCartById(cartId: number): Observable<Cart> {

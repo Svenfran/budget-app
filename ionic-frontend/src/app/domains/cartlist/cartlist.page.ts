@@ -1,37 +1,53 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { AlertController, IonItemSliding, LoadingController } from '@ionic/angular';
+import { Subscription } from 'rxjs';
+import { switchMap, take } from 'rxjs/operators';
 import { Cart } from 'src/app/models/cart';
+import { GroupSideNav } from 'src/app/models/group-side-nav';
 import { CartService } from 'src/app/services/cart.service';
+import { GroupService } from 'src/app/services/group.service';
 
 @Component({
   selector: 'app-cartlist',
   templateUrl: './cartlist.page.html',
   styleUrls: ['./cartlist.page.scss'],
 })
-export class CartlistPage implements OnInit {
+export class CartlistPage implements OnInit, OnDestroy {
 
   cartlist: Cart[] = [];
   isLoading = false;
+  userName: string;
+  activeGroup: GroupSideNav;
+  activeGroupName: string;
+  groupSub: Subscription;
 
   constructor(
     private cartService: CartService,
     private alertCtrl: AlertController,
-    private loadingCtrl: LoadingController) { }
+    private loadingCtrl: LoadingController,
+    private groupService: GroupService) { }
 
   ngOnInit() {
-    this.getAllCarts();
+    this.getCurrentUser();
+    this.groupSub = this.groupService.activeGroup.subscribe(group => {
+      this.activeGroupName = group.name;
+      this.getAllCartsByGroupId(group.id)
+    })
   }
-
+  
   ionViewWillEnter() {
-    this.getAllCarts();
+    this.groupService.activeGroup.subscribe(group => {
+      this.activeGroupName = group.name;
+      this.getAllCartsByGroupId(group.id)
+    })
   }
 
-  getAllCarts() {
+  getAllCartsByGroupId(groupId: number) {
     this.isLoading = true;
-    this.cartService.getCartList().subscribe(carts => {
+    this.cartService.getCartListByGroupId(groupId).subscribe(carts => {
       this.cartlist = carts;
       this.isLoading = false;
-    })
+    });
   }
 
   onDelete(cartId: number, slidingItem: IonItemSliding) {
@@ -58,4 +74,13 @@ export class CartlistPage implements OnInit {
     }).then(alertEl => alertEl.present());
   }
 
+  getCurrentUser() {
+    this.userName = "sven";
+  }
+
+  ngOnDestroy(): void {
+    if (this.groupSub) {
+      this.groupSub.unsubscribe();
+    }
+  }
 }

@@ -2,44 +2,88 @@
   <ion-menu side="start" menuId="m1" contentId="main">
     <ion-header class="ion-no-border">
       <ion-toolbar>
-        <ion-title>Budget App</ion-title>
+        <ion-title class="menu-header-title">Budget App</ion-title>
+        <ion-item>
+          <div class="menu-header">
+            <ion-label>Hallo {{ userName | titlecase }}!</ion-label>
+            <ion-text color="medium">Gruppe: {{ activeGroup?.name }}</ion-text>
+          </div>
+        </ion-item>
       </ion-toolbar>
     </ion-header>
     <ion-content>
       <ion-list>
-        <!-- <ion-header class="ion-padding ion-no-border">Hauptmenü</ion-header>
+        <ion-list-header>
+          <ion-label color="medium">GRUPPEN</ion-label>
+        </ion-list-header>
+        <ion-item button lines="none" (click)="isOpen = !isOpen" [class.active-parent]="isOpen" detail="false">
+          <ion-icon slot="start" name="chevron-up" *ngIf="!isOpen"></ion-icon>
+          <ion-icon slot="start" name="chevron-down" *ngIf="isOpen"></ion-icon>
+          <ion-label>Meine Gruppen</ion-label>
+        </ion-item>
+        <ion-list *ngIf="isOpen">
+          <ion-item *ngIf="grouplistSideNav?.length <= 0" class="sub-item" lines="none">
+            <p>Keine Gruppen gefunden.</p>
+          </ion-item>
+          <ion-menu-toggle>
+            <ion-item *ngFor="let group of grouplistSideNav" 
+                      class="sub-item"
+                      (click)="getActiveGroup(group.id)"
+                      [class.active]="group.name == activeGroup.name"
+                      lines="none" 
+                      button>
+              <ion-icon name="folder-outline" slot="start"></ion-icon>
+              <ion-label>{{ group.name }}</ion-label>
+            </ion-item>
+          </ion-menu-toggle>
+        </ion-list>
         <ion-menu-toggle menu="m1">
           <ion-item lines="none" button>
-            <ion-icon name="ellipse" slot="start" color="dark"></ion-icon>
-            <ion-label>Kategorien</ion-label>
+            <ion-icon name="ellipsis-horizontal" slot="start"></ion-icon>
+            <ion-label>Gruppen bearbeiten</ion-label>
+          </ion-item>
+        </ion-menu-toggle>
+        <ion-menu-toggle menu="m1">
+          <ion-item lines="none" (click)="onCreateGroup()" button>
+            <ion-icon name="add" slot="start"></ion-icon>
+            <ion-label>Gruppe hinzufügen</ion-label>
+          </ion-item>
+        </ion-menu-toggle>
+
+        <ion-list-header>
+          <ion-label color="medium">KATEGORIEN</ion-label>
+        </ion-list-header>
+        <ion-menu-toggle menu="m1">
+          <ion-item lines="none" button>
+            <ion-icon name="ellipsis-horizontal" slot="start"></ion-icon>
+            <ion-label>Kategorien bearbeiten</ion-label>
           </ion-item>
         </ion-menu-toggle>
         <ion-menu-toggle menu="m1">
           <ion-item lines="none" button>
-            <ion-icon name="ellipse" slot="start" color="dark"></ion-icon>
-            <ion-label>Gruppen</ion-label>
+            <ion-icon name="add" slot="start"></ion-icon>
+            <ion-label>Kategorie hinzufügen</ion-label>
           </ion-item>
         </ion-menu-toggle>
-        <ion-header class="ion-padding ion-no-border">Einstellungen</ion-header> -->
-        <ion-menu-toggle menu="m1">
-          <ion-item lines="none">
-            <ion-icon name="moon" slot="start" color="dark"></ion-icon>
-            <ion-label>Dark Mode</ion-label>
-            <ion-toggle slot="end" (ionChange)="onToggleColorTheme($event)"></ion-toggle>
-          </ion-item>
-        </ion-menu-toggle>
-        <ion-menu-toggle menu="m1">
-          <ion-item lines="none" (click)="onLogout()" button>
-            <ion-icon name="exit" slot="start" color="dark"></ion-icon>
-            <ion-label>Logout</ion-label>
-          </ion-item>
-        </ion-menu-toggle>
+
+        <ion-list-header>
+          <ion-label color="medium">EINSTELLUNGEN</ion-label>
+        </ion-list-header>
+        <ion-item lines="none">
+          <ion-icon name="moon-outline" slot="start"></ion-icon>
+          <ion-label>Dark Mode</ion-label>
+          <ion-toggle slot="end" (ionChange)="onToggleColorTheme($event)"></ion-toggle>
+        </ion-item>
       </ion-list>
-      
-   
     </ion-content>
-   
-  
+    <ion-footer class="ion-no-border">
+      <ion-menu-toggle>
+        <div class="menu-footer" (click)="onLogout()">
+          <ion-icon name="power-outline" color="dark"></ion-icon>
+          <ion-text color="dark"><small>Logout</small></ion-text>
+        </div>
+      </ion-menu-toggle>
+    </ion-footer>
   </ion-menu>
   <ion-router-outlet id="main"></ion-router-outlet>
 </ion-app>

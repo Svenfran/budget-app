@@ -10,6 +10,8 @@ public interface CartRepository extends CrudRepository<Cart, Long> {
 
     List<Cart> findAllByOrderByDatePurchasedDesc();
 
+    List<Cart> findCartsByGroupIdOrderByDatePurchasedDesc(Long groupId);
+
     Optional<Cart> findById(Long id);
 
     @Override

@@ -19,9 +19,9 @@ registerLocaleData(localDe, 'de');
     IonicModule.forRoot(), 
     AppRoutingModule,
     HttpClientModule,
-    ReactiveFormsModule
+    ReactiveFormsModule,
   ],
-  providers: [DatePipe, CurrencyPipe, { provide: RouteReuseStrategy, useClass: IonicRouteStrategy }],
+  providers: [DatePipe, CurrencyPipe,  { provide: RouteReuseStrategy, useClass: IonicRouteStrategy }],
   bootstrap: [AppComponent],
 })
 export class AppModule {}

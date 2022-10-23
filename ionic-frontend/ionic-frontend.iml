@@ -5,6 +5,14 @@
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/dist" />
       <excludeFolder url="file://$MODULE_DIR$/tmp" />
+      <excludeFolder url="file://$MODULE_DIR$/android/.idea/modules/capacitor-cordova-android-plugins" />
+      <excludeFolder url="file://$MODULE_DIR$/android/.idea/libraries" />
+      <excludeFolder url="file://$MODULE_DIR$/android/app/src/main/assets/public" />
+      <excludeFolder url="file://$MODULE_DIR$/android/app/build" />
+      <excludeFolder url="file://$MODULE_DIR$/android/.gradle" />
+      <excludeFolder url="file://$MODULE_DIR$/android/capacitor-cordova-android-plugins" />
+      <excludeFolder url="file://$MODULE_DIR$/.angular" />
+      <excludeFolder url="file://$MODULE_DIR$/www" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
