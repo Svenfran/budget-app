@@ -32,11 +32,12 @@
 
 ion-modal {
   --background: rgba(44, 39, 45, 0.2);
+  --border-radius: 16px;
 
-  &::part(content) {
-    backdrop-filter: blur(6px);
-  }
-
+  // &::part(content) {
+  //   backdrop-filter: blur(6px);
+  // }
+  
   ion-content {
     --background: transparent;
     --padding-top: 25vh;
@@ -45,6 +46,16 @@ ion-modal {
 
     ion-datetime {
       border-radius: 8px;
+    }
+
+    ion-toolbar {
+      border-top-left-radius: 8px;
+      border-top-right-radius: 8px;
+    }
+
+    ion-list, ion-item {
+      border-bottom-left-radius: 8px;
+      border-bottom-right-radius: 8px;
     }
   }
 }

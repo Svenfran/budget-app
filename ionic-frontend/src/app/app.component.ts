@@ -19,6 +19,7 @@ export class AppComponent {
   grouplistSideNav: GroupSideNav[];
   isOpen = false;
   activeGroup: GroupSideNav;
+  groupModified: boolean;
 
   constructor(
     private renderer: Renderer2,
@@ -30,7 +31,7 @@ export class AppComponent {
     private loadingCtrl: LoadingController) {
       this.initializeApp();
       this.getCurrentUser();
-      this.initActiveGroup();
+      this.getGroupsForSideNav();
     }
 
 
@@ -41,18 +42,23 @@ export class AppComponent {
     })
   }
 
-  getGroupsForSideNav() {
+  ngOnInit() {
     this.groupService.getGroupsForSideNav().subscribe(groups => {
-      this.grouplistSideNav = groups;
-    })
-  }
-  
-  initActiveGroup() {
-    this.groupService.getGroupsForSideNav().subscribe(groups => {
-      this.grouplistSideNav = groups;
       this.activeGroup = groups[0];
       this.groupService.setActiveGroup(this.activeGroup);
     })
+  }
+  
+  getGroupsForSideNav() {
+    this.groupService.groupModified.subscribe(() => {
+      this.groupService.getGroupsForSideNav().subscribe(groups => {
+        this.grouplistSideNav = groups.sort((a, b) => a.id < b.id ? -1 : 1 );
+      })
+      this.groupService.activeGroup.subscribe(group => {
+        this.activeGroup = group;
+      })
+    })
+    this.groupService.setGroupModified(false);
   }
 
 
@@ -108,7 +114,7 @@ export class AppComponent {
 
   onCreateGroup() {
     this.alertCtrl.create({
-      header: "Gruppenname:",
+      header: "Neue Gruppe:",
       buttons: [{
         text: "Abbrechen",
         role: "cancel"
@@ -121,14 +127,15 @@ export class AppComponent {
             let newGroup = new Group(null, data.groupName, null);
             this.groupService.addGroup(newGroup).subscribe(() => {
               loadingEl.dismiss();
-              this.getGroupsForSideNav();
+              this.groupService.setGroupModified(true);
             })
           })
         }
       }],
       inputs: [
         {
-          name: "groupName"
+          name: "groupName",
+          placeholder: "Gruppenname"
         }
       ]
     }).then(alertEl => alertEl.present());

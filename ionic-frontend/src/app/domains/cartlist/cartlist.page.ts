@@ -1,7 +1,6 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { AlertController, IonItemSliding, LoadingController } from '@ionic/angular';
 import { Subscription } from 'rxjs';
-import { switchMap, take } from 'rxjs/operators';
 import { Cart } from 'src/app/models/cart';
 import { GroupSideNav } from 'src/app/models/group-side-nav';
 import { CartService } from 'src/app/services/cart.service';
@@ -20,6 +19,7 @@ export class CartlistPage implements OnInit, OnDestroy {
   activeGroup: GroupSideNav;
   activeGroupName: string;
   groupSub: Subscription;
+  cartSub: Subscription;
 
   constructor(
     private cartService: CartService,
@@ -44,7 +44,7 @@ export class CartlistPage implements OnInit, OnDestroy {
 
   getAllCartsByGroupId(groupId: number) {
     this.isLoading = true;
-    this.cartService.getCartListByGroupId(groupId).subscribe(carts => {
+    this.cartSub = this.cartService.getCartListByGroupId(groupId).subscribe(carts => {
       this.cartlist = carts;
       this.isLoading = false;
     });
@@ -54,7 +54,7 @@ export class CartlistPage implements OnInit, OnDestroy {
     slidingItem.close();
     this.alertCtrl.create({
       header: 'Löschen',
-      message: 'Möchtest du den Eintrag löschen?',
+      message: 'Möchtest du den Eintrag wirklich löschen?',
       buttons: [{
         text: 'Nein'
       }, {
@@ -66,7 +66,7 @@ export class CartlistPage implements OnInit, OnDestroy {
             loadingEl.present(),
             this.cartService.deleteCart(cartId).subscribe(() => {
               loadingEl.dismiss();
-              this.ionViewWillEnter();
+              this.cartlist = this.cartlist.filter(cart => cart.id !== cartId);
             })
           })
         }
@@ -81,6 +81,9 @@ export class CartlistPage implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     if (this.groupSub) {
       this.groupSub.unsubscribe();
+    }
+    if (this.cartSub) {
+      this.cartSub.unsubscribe();
     }
   }
 }

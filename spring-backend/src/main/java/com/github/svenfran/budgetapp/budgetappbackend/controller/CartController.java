@@ -23,7 +23,7 @@ public class CartController {
         return new ResponseEntity<>(cartDtoList, HttpStatus.OK);
     }
 
-    @GetMapping("/cartsbygroupid/{groupId}")
+    @GetMapping("/carts/carts-by-groupid/{groupId}")
     public ResponseEntity<List<CartDto>> getCartsByGroupId(@PathVariable("groupId") Long groupId) {
         List<CartDto> cartDtoList = cartService.getCartsByGroupId(groupId);
         return new ResponseEntity<>(cartDtoList, HttpStatus.OK);

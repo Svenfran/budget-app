@@ -1,8 +1,11 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { BehaviorSubject, Observable } from 'rxjs';
+import { map, switchMap, take, tap } from 'rxjs/operators';
 import { environment } from 'src/environments/environment';
 import { Cart } from '../models/cart';
+import { CategoryDto } from '../models/category';
+import { UserDto } from '../models/user';
 
 @Injectable({
   providedIn: 'root'
@@ -10,7 +13,7 @@ import { Cart } from '../models/cart';
 export class CartService {
 
   private apiBaseUrl = environment.apiBaseUrlExternal;
-  private cartlistUrl = `${this.apiBaseUrl}/api/cartsbygroupid`;
+  private cartlistUrl = `${this.apiBaseUrl}/api/carts/carts-by-groupid`;
   private getCartByIdUrl = `${this.apiBaseUrl}/api/carts`;
   private addCartUrl = `${this.apiBaseUrl}/api/carts/add`;
   private updateCartUrl = `${this.apiBaseUrl}/api/carts/update`;
@@ -18,6 +21,7 @@ export class CartService {
 
 
   constructor(private http: HttpClient) { }
+
 
   getCartListByGroupId(groupId: number): Observable<Cart[]> {
     return this.http.get<Cart[]>(`${this.cartlistUrl}/${groupId}`);
@@ -39,4 +43,5 @@ export class CartService {
     const deleteCartUrl = `${this.deleteCartUrl}/${cartId}`;
     return this.http.delete<void>(deleteCartUrl);
   }
+
 }

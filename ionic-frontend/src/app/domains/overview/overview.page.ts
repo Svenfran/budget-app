@@ -1,4 +1,5 @@
 import { Component, OnInit } from '@angular/core';
+import { GroupService } from 'src/app/services/group.service';
 
 @Component({
   selector: 'app-overview',
@@ -7,9 +8,16 @@ import { Component, OnInit } from '@angular/core';
 })
 export class OverviewPage implements OnInit {
 
-  constructor() { }
+  activeGroupName: string;
+
+  constructor(
+    private groupService: GroupService
+  ) { }
 
   ngOnInit() {
+    this.groupService.activeGroup.subscribe(group => {
+      this.activeGroupName = group.name;
+    })
   }
 
 }

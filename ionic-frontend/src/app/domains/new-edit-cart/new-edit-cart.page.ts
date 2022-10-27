@@ -70,16 +70,17 @@ export class NewEditCartPage implements OnInit {
     if (!this.isAddMode) {
       this.cartService.getCartById(+this.cartId)
       .pipe(first())
-      .subscribe(data => 
+      .subscribe(data => {
+        this.setDate(data.datePurchased);
         this.form.patchValue({
           id: data.id,
           title: data.title,
           amount: data.amount.toFixed(2),
           description: data.description,
-          datePurchased: this.setDate(data.datePurchased),
+          datePurchased: this.formattedString,
           category: data.categoryDto.name
         })
-      );
+      });
     } else if (this.isAddMode) {
       this.form.patchValue({
         datePurchased: this.formattedString
@@ -88,12 +89,12 @@ export class NewEditCartPage implements OnInit {
   }
 
   setToday() {
-    this.formattedString = format(parseISO(format(this.today, 'yyyy-MM-dd') + 'T09:00:00.000Z'), 'dd.MM.yyyy');
+    this.formattedString = format(parseISO(format(this.today, 'yyyy-MM-dd') + 'T00:00:00.000Z'), 'dd.MM.yyyy');
     this.dateValue = format(this.today, 'yyyy-MM-dd') + 'T00:00:00';
   }
 
   setDate(date: Date) {
-    this.formattedString = format(parseISO(format(new Date(date), 'yyyy-MM-dd') + 'T09:00:00.000Z'), 'dd.MM.yyyy');
+    this.formattedString = format(parseISO(format(new Date(date), 'yyyy-MM-dd') + 'T00:00:00.000Z'), 'dd.MM.yyyy');
     this.dateValue = format(new Date(date), 'yyyy-MM-dd') + 'T00:00:00';
   }
 

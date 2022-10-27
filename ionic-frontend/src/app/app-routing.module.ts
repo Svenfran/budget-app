@@ -21,6 +21,14 @@ const routes: Routes = [
     path: 'shoppinglist',
     loadChildren: () => import('./domains/shoppinglist/shoppinglist.module').then( m => m.ShoppinglistPageModule)
   },
+  {
+    path: 'groupoverview',
+    loadChildren: () => import('./groupoverview/groupoverview.module').then( m => m.GroupoverviewPageModule)
+  },
+  {
+    path: 'group-members',
+    loadChildren: () => import('./group-members/group-members.module').then( m => m.GroupMembersPageModule)
+  },
 ];
 
 @NgModule({

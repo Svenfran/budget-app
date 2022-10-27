@@ -1,0 +1,31 @@
+<ion-content>
+  <ion-toolbar>
+    <ion-title>Gruppenmitglieder</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="onDismiss()">
+        <ion-icon name="close-outline" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+  <ion-list class="ion-text-center" *ngIf="groupWithMembers?.members.length <= 0">
+    <ion-text><small>{{ groupWithMembers?.name }}</small></ion-text>
+    <ion-item class="ion-text-center" lines="none">
+      <ion-label><small>Keine Mitglieder vorhanden!</small></ion-label>
+    </ion-item>
+  </ion-list>
+  <ion-list class="ion-text-center ion-padding" *ngIf="groupWithMembers?.members.length > 0">
+    <ion-text><small>{{ groupWithMembers?.name }}</small></ion-text>
+    <ion-item *ngFor="let member of groupWithMembers?.members">
+      <ion-icon slot="start" name="person-outline"></ion-icon>
+      <ion-label>
+        <h2>{{ member.userName | titlecase }}</h2>
+      </ion-label>
+      <ion-icon 
+          *ngIf="member.userName === userName || groupOwnerName === userName"
+          (click)="onDelete(member, groupWithMembers)"
+          slot="end"
+          name="close-circle-outline">
+      </ion-icon>
+    </ion-item>
+  </ion-list>
+</ion-content>

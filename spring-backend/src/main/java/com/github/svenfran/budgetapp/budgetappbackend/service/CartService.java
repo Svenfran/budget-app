@@ -19,6 +19,9 @@ import java.util.List;
 public class CartService {
 
     @Autowired
+    private GroupRepository groupRepository;
+
+    @Autowired
     private CartRepository cartRepository;
 
     @Autowired
@@ -30,8 +33,6 @@ public class CartService {
     @Autowired
     private CartDtoMapper cartDtoMapper;
 
-    @Autowired
-    private GroupRepository groupRepository;
 
     public List<CartDto> getAllCarts() {
         List<Cart> cartList = cartRepository.findAllByOrderByDatePurchasedDesc();

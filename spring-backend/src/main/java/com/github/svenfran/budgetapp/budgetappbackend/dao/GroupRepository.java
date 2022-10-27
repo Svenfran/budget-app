@@ -8,9 +8,12 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+
 public interface GroupRepository extends CrudRepository<Group, Long> {
 
-    List<Group> findGroupsByMembersInOrOwnerOrderById(Set<User> members, User user);
+    List<Group> findGroupsByMembersInOrderById(Set<User> members);
+
+    List<Group> findGroupsByOwnerOrderById(User owner);
 
     Optional<Group> findById(Long id);
 

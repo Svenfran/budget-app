@@ -52,5 +52,22 @@ public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionH
         return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
     }
 
+    @ExceptionHandler(value = { NotOwnerOfGroupException.class })
+    protected ResponseEntity<Object> handleNotOwnerOfGroupException (NotOwnerOfGroupException ex, WebRequest request) {
+        LOG.debug("Exception Message: " + ex.getMessage(), ex);
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.FORBIDDEN);
+    }
+
+    @ExceptionHandler(value = { MemberAlreadyExixtsException.class })
+    protected ResponseEntity<Object> handleMemberAlreadyExistsException (MemberAlreadyExixtsException ex, WebRequest request) {
+        LOG.debug("Exception Message: " + ex.getMessage(), ex);
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.FORBIDDEN);
+    }
+
+    @ExceptionHandler(value = { MemberEqualsOwnerException.class })
+    protected ResponseEntity<Object> handleMemberEqualsOwnerException (MemberEqualsOwnerException ex, WebRequest request) {
+        LOG.debug("Exception Message: " + ex.getMessage(), ex);
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.FORBIDDEN);
+    }
 
 }
