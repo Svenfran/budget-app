@@ -26,33 +26,33 @@ public class GroupService {
     @Autowired
     private GroupDtoMapper groupDtoMapper;
 
-    public List<Group> getGroupsByMemberOrOwner() throws UserNotFoundException {
+    public Stream<Group> getGroupsByMemberOrOwner() throws UserNotFoundException {
         var user = getCurrentUser();
         var member = new HashSet<User>();
         member.add(user);
         List<Group> groupsMember = groupRepository.findGroupsByMembersInOrderById(member);
         List<Group> groupsOwner = groupRepository.findGroupsByOwnerOrderById(user);
-        return Stream.concat(groupsOwner.stream(), groupsMember.stream()).toList();
+        return Stream.concat(groupsOwner.stream(), groupsMember.stream()).sorted((a,b) -> (int) (a.getId() - b.getId()));
     }
 
     public List<GroupSideNavDto> getGroupsForSideNav() throws UserNotFoundException {
-        return getGroupsByMemberOrOwner().stream().map(GroupSideNavDto::new).toList();
+        return getGroupsByMemberOrOwner().map(GroupSideNavDto::new).toList();
     }
 
     public List<GroupOverviewDto> getGroupsForGroupOverview() throws UserNotFoundException {
-        return getGroupsByMemberOrOwner().stream().map(GroupOverviewDto::new).toList();
+        return getGroupsByMemberOrOwner().map(GroupOverviewDto::new).toList();
     }
 
-    public List<GroupMembersDto> getGroupsWithMembers() throws UserNotFoundException {
-        return getGroupsByMemberOrOwner().stream().map(GroupMembersDto::new).toList();
-    }
+    public GroupMembersDto getGroupMembers(Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
+        var user = getCurrentUser();
+        var group = groupRepository.findById(groupId).
+                orElseThrow(() -> new GroupNotFoundException("Get Group Members: Group not found"));
+        var groupMembers = group.getMembers();
+        var groupOwner = group.getOwner();
 
-    public GroupMembersDto getGroupMembers(Long groupId) throws UserNotFoundException, GroupNotFoundException {
-        var groups = getGroupsWithMembers();
-        return groups.stream().filter(group -> group.getId().equals(groupId)).findFirst().
-                orElseThrow(() -> new GroupNotFoundException("You are not allowed to access this group!"));
-//         return new GroupMembersDto(groupRepository.findById(groupId).
-//                orElseThrow(() -> new GroupNotFoundException("Group with id " + groupId + " not found!")));
+        if (groupOwner.equals(user) || groupMembers.contains(user)) {
+            return new GroupMembersDto(group);
+        } else throw new NotOwnerOrMemberOfGroupException("Get Group Members: You are either a member nor the owner of this group");
     }
 
     public GroupDto addGroup(GroupDto groupDto) throws UserNotFoundException {
@@ -60,9 +60,18 @@ public class GroupService {
         return new GroupDto(groupRepository.save(groupDtoMapper.GroupDtoToEntity(groupDto, user)));
     }
 
-    public GroupDto updateGroup(GroupDto groupDto) throws UserNotFoundException {
+    public GroupDto updateGroup(GroupDto groupDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOfGroupException {
         var user = getCurrentUser();
-        return new GroupDto(groupRepository.save(groupDtoMapper.GroupDtoToEntity(groupDto, user)));
+        var group = groupRepository.findById(groupDto.getId()).
+                orElseThrow(() -> new GroupNotFoundException("Update Group: Group not found"));
+        var groupOwner = userRepository.findById(group.getOwner().getId()).
+                orElseThrow(() -> new UserNotFoundException("Update Group: Group owner not found"));
+
+        if (groupOwner.equals(user)) {
+            return new GroupDto(groupRepository.save(groupDtoMapper.GroupDtoToEntity(groupDto, groupOwner)));
+        } else {
+            throw new NotOwnerOfGroupException("Update Group: You are not the owner of the Group");
+        }
     }
 
     public GroupMembersDto addMemberToGroup(AddGroupMemberDto addGroupMemberDto) throws GroupNotFoundException, UserNotFoundException, NotOwnerOfGroupException, MemberAlreadyExixtsException, MemberEqualsOwnerException {
@@ -83,7 +92,6 @@ public class GroupService {
             group.getMembers().add(newMember);
             newMember.getGroups().add(group);
         }
-
         return new GroupMembersDto(groupRepository.save(group));
     }
 
@@ -94,20 +102,24 @@ public class GroupService {
         var group = groupRepository.findById(removeGroupMemberDto.getId()).
                 orElseThrow(() -> new GroupNotFoundException("Remove member: Group not found!"));
 
-        group.getMembers().remove(removedMember);
-        removedMember.getGroups().remove(group);
-
-//        if (user.equals(group.getOwner())) {
-//        group.getMembers().remove(removedMember);
-//        removedMember.getGroups().remove(group);
-//        } else {
-//            throw new NotOwnerOfGroupException("Remove member: You are not the owner of the Group");
-//        }
+        if (user.equals(group.getOwner()) || user.equals(removedMember)) {
+            group.getMembers().remove(removedMember);
+            removedMember.getGroups().remove(group);
+        } else {
+            throw new NotOwnerOfGroupException("Remove member: You are not allowed to remove other members from the group");
+        }
         return new GroupMembersDto(groupRepository.save(group));
     }
 
-    public void deleteGroup(Long id) {
-        groupRepository.deleteById(id);
+    public void deleteGroup(Long id) throws UserNotFoundException, GroupNotFoundException, NotOwnerOfGroupException {
+        var user = getCurrentUser();
+        var group = groupRepository.findById(id).
+                orElseThrow(() -> new GroupNotFoundException("Delete Group: Group not found"));
+        var groupOwner = group.getOwner();
+
+        if (groupOwner.equals(user)) {
+            groupRepository.deleteById(id);
+        } else throw new NotOwnerOfGroupException("Delete Group: You are not the owner of the group");
     }
 
     // TODO: Derzeit angemeldete Nutzer -> Spring Security

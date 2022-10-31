@@ -2,6 +2,7 @@ package com.github.svenfran.budgetapp.budgetappbackend.dao;
 
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 
 import java.util.List;

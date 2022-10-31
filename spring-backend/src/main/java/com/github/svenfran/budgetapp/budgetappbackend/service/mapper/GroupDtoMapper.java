@@ -8,11 +8,11 @@ import org.springframework.stereotype.Service;
 @Service
 public class GroupDtoMapper {
 
-    public Group GroupDtoToEntity(GroupDto dto, User user) {
+    public Group GroupDtoToEntity(GroupDto dto, User owner) {
         var group = new Group();
         group.setId(dto.getId());
         group.setName(dto.getName());
-        group.setOwner(user);
+        group.setOwner(owner);
         return group;
     }
 }

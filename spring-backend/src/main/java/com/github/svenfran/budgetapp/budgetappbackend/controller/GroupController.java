@@ -30,7 +30,7 @@ public class GroupController {
     }
 
     @GetMapping("/groups/members/{groupId}")
-    public ResponseEntity<GroupMembersDto> getGroupMembers(@PathVariable("groupId") Long groupId) throws UserNotFoundException, GroupNotFoundException {
+    public ResponseEntity<GroupMembersDto> getGroupMembers(@PathVariable("groupId") Long groupId) throws UserNotFoundException, NotOwnerOfGroupException, GroupNotFoundException, NotMemberOfGroupException, NotOwnerOrMemberOfGroupException {
         GroupMembersDto groups = groupService.getGroupMembers(groupId);
         return new ResponseEntity<>(groups, HttpStatus.OK);
     }
@@ -41,27 +41,26 @@ public class GroupController {
         return new ResponseEntity<>(newGroup, HttpStatus.CREATED);
     }
 
-    @PutMapping("/groups/add-new-member")
+    @PostMapping("/groups/add-new-member")
     public ResponseEntity<GroupMembersDto> addMemberToGroup(@RequestBody AddGroupMemberDto addGroupMemberDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOfGroupException, MemberAlreadyExixtsException, MemberEqualsOwnerException {
         GroupMembersDto newGroup = groupService.addMemberToGroup(addGroupMemberDto);
         return new ResponseEntity<>(newGroup, HttpStatus.CREATED);
     }
 
-//    @PutMapping("/groups/remove-memeber-from-group")
-    @RequestMapping(value = "/groups/remove-member-from-group", method = RequestMethod.PUT)
+    @PostMapping("/groups/remove-member-from-group")
     public ResponseEntity<GroupMembersDto> removeMemberFromGroup(@RequestBody RemoveGroupMemberDto removeGroupMemberDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOfGroupException {
         GroupMembersDto newGroup = groupService.removeMemberFromGroup(removeGroupMemberDto);
         return new ResponseEntity<>(newGroup, HttpStatus.CREATED);
     }
 
     @PutMapping("/groups/update")
-    public ResponseEntity<GroupDto> updateGroup(@RequestBody GroupDto groupDto) throws UserNotFoundException {
+    public ResponseEntity<GroupDto> updateGroup(@RequestBody GroupDto groupDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOfGroupException {
         GroupDto updatedGroup = groupService.updateGroup(groupDto);
         return new ResponseEntity<>(updatedGroup, HttpStatus.CREATED);
     }
 
     @DeleteMapping("/groups/delete/{id}")
-    public ResponseEntity<GroupOverviewDto> deleteGroup(@PathVariable("id") Long id) {
+    public ResponseEntity<GroupOverviewDto> deleteGroup(@PathVariable("id") Long id) throws UserNotFoundException, GroupNotFoundException, NotOwnerOfGroupException {
         groupService.deleteGroup(id);
         return new ResponseEntity<>(HttpStatus.OK);
     }

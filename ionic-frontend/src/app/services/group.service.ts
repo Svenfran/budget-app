@@ -8,6 +8,7 @@ import { GroupOverview } from '../models/group-overview';
 import { GroupSideNav } from '../models/group-side-nav';
 import { NewMemberDto } from '../models/new-member-dto';
 import { RemoveMemberDto } from '../models/remove-member-dto';
+import { UserDto } from '../models/user';
 
 @Injectable({
   providedIn: 'root'
@@ -16,6 +17,7 @@ export class GroupService {
 
   private _activeGroup = new BehaviorSubject<GroupSideNav>(null);
   private _groupModified = new BehaviorSubject<boolean>(false);
+  private _currentUser = new BehaviorSubject<UserDto>(null);
 
   private apiBaseUrl = environment.apiBaseUrlExternal;
   private groupsSideNavUrl = `${this.apiBaseUrl}/api/groups/sidenav`;
@@ -37,12 +39,25 @@ export class GroupService {
     this._groupModified.next(groupAdded);
   }
 
+  setCurrentUser() {
+    this._currentUser.next(new UserDto(1, "sven"));
+    // this._currentUser.next(new UserDto(2, "sascha"));
+    // this._currentUser.next(new UserDto(3, "basti"));
+    // this._currentUser.next(new UserDto(4, "martin"));
+    // this._currentUser.next(new UserDto(5, "sabine"));
+    // this._currentUser.next(new UserDto(6, "tina"));
+  }
+
   get activeGroup() {
     return this._activeGroup.asObservable();
   }
 
   get groupModified() {
     return this._groupModified.asObservable();
+  }
+
+  get currentUser() {
+    return this._currentUser.asObservable();
   }
 
   getGroupsForSideNav(): Observable<GroupSideNav[]> {
@@ -71,10 +86,10 @@ export class GroupService {
   }
 
   addMemberToGroup(newMemberDto: NewMemberDto): Observable<NewMemberDto> {
-    return this.http.put<NewMemberDto>(this.addNewMemberUrl, newMemberDto);
+    return this.http.post<NewMemberDto>(this.addNewMemberUrl, newMemberDto);
   }
 
   removeMemberFromGroup(removeMemberDto: RemoveMemberDto): Observable<RemoveMemberDto> {
-    return this.http.put<RemoveMemberDto>(this.removeMemberUrl, removeMemberDto);
+    return this.http.post<RemoveMemberDto>(this.removeMemberUrl, removeMemberDto);
   }
 }

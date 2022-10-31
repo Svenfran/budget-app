@@ -40,11 +40,11 @@ export class GroupoverviewPage implements OnInit {
     this.groupService.groupModified.subscribe(() => {
       this.isLoading = true;
       this.groupService.getGroupsForOverview().subscribe(groups => {
-        this.groupOverviewList = groups.sort((a, b) => a.id < b.id ? -1 : 1 );
+        this.groupOverviewList = groups;
         this.isLoading = false;
       })
     })
-    this.groupService.setGroupModified(false);   
+    this.groupService.setGroupModified(false);
   }
 
 
@@ -120,6 +120,7 @@ export class GroupoverviewPage implements OnInit {
       }, {
         text: "ok",
         handler: (data) => {
+          // console.log(data.memberEmail.match("^[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,4}$")[0] == data.memberEmail);
           this.loadingCtrl.create({
             message: "Füge Benutzer hinzu..."
           }).then(loadingEl => {
@@ -157,11 +158,6 @@ export class GroupoverviewPage implements OnInit {
         }
       ]
     }).then(alertEl => alertEl.present());
-  }
-
-  getCurrentUser() {
-    this.userName = "sven";
-    this.currentUser = new UserDto(1, 'sven');
   }
 
   onUpdate(groupId: number, slidingItem: IonItemSliding) {
@@ -249,5 +245,12 @@ export class GroupoverviewPage implements OnInit {
       duration: 3000,
       position: 'bottom'
     }).then(toastEl => toastEl.present());
+  }
+
+  getCurrentUser() {
+    this.groupService.currentUser.subscribe(user => {
+      this.userName = user.userName;
+      this.currentUser = user;
+    })
   }
 }

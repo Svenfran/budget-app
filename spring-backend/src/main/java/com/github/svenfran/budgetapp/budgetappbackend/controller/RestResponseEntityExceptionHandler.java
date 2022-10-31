@@ -70,4 +70,22 @@ public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionH
         return new ResponseEntity<>(ex.getMessage(), HttpStatus.FORBIDDEN);
     }
 
+    @ExceptionHandler(value = { NotMemberOfGroupException.class })
+    protected ResponseEntity<Object> handleNotMemberOfGroupException (NotMemberOfGroupException ex, WebRequest request) {
+        LOG.debug("Exception Message: " + ex.getMessage(), ex);
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.FORBIDDEN);
+    }
+
+    @ExceptionHandler(value = { NotOwnerOrMemberOfGroupException.class })
+    protected ResponseEntity<Object> handleNotOwnerOrMemberOfGroupException (NotOwnerOrMemberOfGroupException ex, WebRequest request) {
+        LOG.debug("Exception Message: " + ex.getMessage(), ex);
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.FORBIDDEN);
+    }
+
+    @ExceptionHandler(value = { NotOwnerOfCartException.class })
+    protected ResponseEntity<Object> handleNotOwnerOfCartException (NotOwnerOfCartException ex, WebRequest request) {
+        LOG.debug("Exception Message: " + ex.getMessage(), ex);
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.FORBIDDEN);
+    }
+
 }

@@ -13,7 +13,22 @@
   </ion-toolbar>
 </ion-header>
 
+<ion-list-header color="light">
+  <ion-label>
+    <div class="total">
+      <ion-text>{{ filterTerm == "" ? "Gesamt" : filterTerm }}({{ count }}):</ion-text>
+      <ion-text>{{ sum | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
+    </div>
+  </ion-label>
+</ion-list-header>
+
 <ion-content>
+  <!-- <ion-fab vertical="bottom" horizontal="center" slot="fixed">
+    <ion-fab-button color="light" [routerLink]="['new-edit']">
+      <ion-icon name="add"></ion-icon>
+    </ion-fab-button>
+  </ion-fab> -->
+  
   <ion-grid class="ion-padding">
     <ion-row>
       <ion-col class="ion-text-center" size-md="6" offset-md="3" *ngIf="isLoading">
@@ -29,7 +44,7 @@
           <ion-item-sliding *ngFor="let cart of cartlist" #slidingItem>
             <ion-item>
               <!-- <ion-icon slot="start" name="ellipse"></ion-icon> -->
-              <ion-avatar slot="start">
+              <ion-avatar slot="start" (click)="onFilter(cart.categoryDto.name, cart.groupId)">
                 <div class="category-circle">
                   <p>{{ cart.categoryDto.name.substring(0, 2) | uppercase }}</p>
                   <!-- <p>{{ cart.userDto.userName.substring(0, 2) | uppercase }}</p> -->

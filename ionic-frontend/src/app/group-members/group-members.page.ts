@@ -20,6 +20,7 @@ export class GroupMembersPage implements OnInit {
   currentUser: UserDto;
   groupMembers: UserDto[] = [];
   groupsSideNav: GroupSideNav[] = [];
+  activeGroup: GroupSideNav;
 
   constructor(
     private groupService: GroupService,
@@ -34,7 +35,7 @@ export class GroupMembersPage implements OnInit {
   getGroupMembers() {
     this.groupService.getGroupMembers(this.groupId).subscribe(group => {
       this.groupWithMembers = group;
-      this.groupMembers = group.members.sort((a, b) => a.id < b.id ? -1 : 1);
+      this.groupMembers = group.members.sort((a, b) => a.userName < b.userName ? -1 : 1);
     })
   }
 
@@ -44,9 +45,10 @@ export class GroupMembersPage implements OnInit {
     })
   }
   
-  getCurrentUser() {
-    this.userName = "sven";
-    this.currentUser = new UserDto(1, 'sven');
+  getActiveGroup() {
+    this.groupService.activeGroup.subscribe(group => {
+      this.activeGroup = group;
+    })
   }
 
   onDelete(member: UserDto, groupWithMembers: GroupMembers) {
@@ -61,6 +63,7 @@ export class GroupMembersPage implements OnInit {
     )
 
     this.getGroupsForSideNav();
+    this.getActiveGroup();
 
     this.alertCtrl.create({
       header: "Löschen",
@@ -72,7 +75,7 @@ export class GroupMembersPage implements OnInit {
         text: "Ja",
         handler: () => {
  
-          if (this.groupsSideNav.length > 0 && (memberToRemove.id == this.currentUser.id)) {
+          if (this.groupsSideNav.length > 0 && (memberToRemove.id == this.currentUser.id) && this.activeGroup.id == groupWithMembers.id) {
             this.groupService.setActiveGroup(new GroupSideNav(
               this.groupsSideNav[0].id,
               this.groupsSideNav[0].name
@@ -99,5 +102,12 @@ export class GroupMembersPage implements OnInit {
 
   private toTitleCase(text: string) {
     return text.charAt(0).toUpperCase() + text.substring(1).toLowerCase();
+  }
+
+  getCurrentUser() {
+    this.groupService.currentUser.subscribe(user => {
+      this.userName = user.userName;
+      this.currentUser = user;
+    })
   }
 }

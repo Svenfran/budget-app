@@ -6,7 +6,6 @@ import { AlertController, isPlatform, LoadingController, NavController, Platform
 import { Group } from './models/group';
 import { GroupSideNav } from './models/group-side-nav';
 import { GroupService } from './services/group.service';
-import { Storage } from '@ionic/storage';
 
 @Component({
   selector: 'app-root',
@@ -30,19 +29,20 @@ export class AppComponent {
     private alertCtrl: AlertController,
     private loadingCtrl: LoadingController) {
       this.initializeApp();
-      this.getCurrentUser();
       this.getGroupsForSideNav();
+      this.groupService.setCurrentUser();
     }
-
-
-  initializeApp() {
-    this.platform.ready().then(() => {
-      this.lightColorTheme();
-      this.initBackButton();
-    })
-  }
-
-  ngOnInit() {
+    
+    
+    initializeApp() {
+      this.platform.ready().then(() => {
+        this.lightColorTheme();
+        this.initBackButton();
+      })
+    }
+    
+    ngOnInit() {
+    this.getCurrentUser();
     this.groupService.getGroupsForSideNav().subscribe(groups => {
       this.activeGroup = groups[0];
       this.groupService.setActiveGroup(this.activeGroup);
@@ -52,7 +52,7 @@ export class AppComponent {
   getGroupsForSideNav() {
     this.groupService.groupModified.subscribe(() => {
       this.groupService.getGroupsForSideNav().subscribe(groups => {
-        this.grouplistSideNav = groups.sort((a, b) => a.id < b.id ? -1 : 1 );
+        this.grouplistSideNav = groups;
       })
       this.groupService.activeGroup.subscribe(group => {
         this.activeGroup = group;
@@ -103,10 +103,6 @@ export class AppComponent {
     console.log("Logging out...")
   }
 
-  getCurrentUser() {
-    this.userName = "sven";
-  }
-
   getActiveGroup(id: number) {
     this.activeGroup = this.grouplistSideNav.filter(group => group.id == id)[0];
     this.groupService.setActiveGroup(this.activeGroup);
@@ -139,5 +135,11 @@ export class AppComponent {
         }
       ]
     }).then(alertEl => alertEl.present());
+  }
+
+  getCurrentUser() {
+    this.groupService.currentUser.subscribe(user => {
+      this.userName = user.userName;
+    })
   }
 }

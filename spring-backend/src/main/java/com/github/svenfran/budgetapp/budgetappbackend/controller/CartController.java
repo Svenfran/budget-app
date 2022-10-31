@@ -17,38 +17,32 @@ public class CartController {
     @Autowired
     private CartService cartService;
 
-    @GetMapping("/carts")
-    public ResponseEntity<List<CartDto>> getAllCarts() {
-        List<CartDto> cartDtoList = cartService.getAllCarts();
-        return new ResponseEntity<>(cartDtoList, HttpStatus.OK);
-    }
-
     @GetMapping("/carts/carts-by-groupid/{groupId}")
-    public ResponseEntity<List<CartDto>> getCartsByGroupId(@PathVariable("groupId") Long groupId) {
+    public ResponseEntity<List<CartDto>> getCartsByGroupId(@PathVariable("groupId") Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
         List<CartDto> cartDtoList = cartService.getCartsByGroupId(groupId);
         return new ResponseEntity<>(cartDtoList, HttpStatus.OK);
     }
 
     @GetMapping("/carts/{id}")
-    public ResponseEntity<CartDto> getCartById(@PathVariable("id") Long id) throws CartNotFoundException {
+    public ResponseEntity<CartDto> getCartById(@PathVariable("id") Long id) throws CartNotFoundException, UserNotFoundException, NotOwnerOrMemberOfGroupException {
         CartDto cartDto = cartService.getCartById(id);
         return new ResponseEntity<>(cartDto, HttpStatus.OK);
     }
 
     @PostMapping("/carts/add")
-    public ResponseEntity<CartDto> addCart(@RequestBody CartDto cartDto) throws AddCartCategoryNotFoundException, UserNotFoundException, GroupNotFoundException {
+    public ResponseEntity<CartDto> addCart(@RequestBody CartDto cartDto) throws AddCartCategoryNotFoundException, UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
         CartDto newCart = cartService.addCart(cartDto);
         return new ResponseEntity<>(newCart, HttpStatus.CREATED);
     }
 
     @PutMapping("/carts/update")
-    public ResponseEntity<CartDto> updateCart(@RequestBody CartDto cartDto) throws UpdateCartCategoryNotFoundException, UserNotFoundException, GroupNotFoundException {
+    public ResponseEntity<CartDto> updateCart(@RequestBody CartDto cartDto) throws UpdateCartCategoryNotFoundException, UserNotFoundException, GroupNotFoundException, CartNotFoundException, NotOwnerOfCartException, NotOwnerOrMemberOfGroupException {
         CartDto updateCart = cartService.updateCart(cartDto);
         return new ResponseEntity<>(updateCart, HttpStatus.CREATED);
     }
 
     @DeleteMapping("/carts/delete/{id}")
-    public ResponseEntity<CartDto> deleteCart(@PathVariable("id") Long id) {
+    public ResponseEntity<CartDto> deleteCart(@PathVariable("id") Long id) throws UserNotFoundException, GroupNotFoundException, CartNotFoundException, NotOwnerOfCartException, NotOwnerOrMemberOfGroupException {
         cartService.deleteCart(id);
         return new ResponseEntity<>(HttpStatus.OK);
     }
