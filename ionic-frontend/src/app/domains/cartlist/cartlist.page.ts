@@ -46,17 +46,26 @@ export class CartlistPage implements OnInit, OnDestroy {
       this.activeGroupName = group.name;
       this.activeGroup = group;
       this.getAllCartsByGroupId(group.id);
+      this.filterMode = false;
+      this.filterTerm = "";
     })
   }
 
   getAllCartsByGroupId(groupId: number) {
     this.isLoading = true;
-    this.cartSub = this.cartService.getCartListByGroupId(groupId).subscribe(carts => {
+    if (groupId === null) {
       this.isLoading = false;
-      this.cartlist = carts;
-      this.sum = this.cartlist.reduce((s, c) => s + (+c.amount), 0);
-      this.count = this.cartlist.length;
-    });
+      this.cartlist = [];
+      this.sum = 0;
+      this.count = 0;
+    } else {
+      this.cartSub = this.cartService.getCartListByGroupId(groupId).subscribe(carts => {
+        this.isLoading = false;
+        this.cartlist = carts;
+        this.sum = this.cartlist.reduce((s, c) => s + (+c.amount), 0);
+        this.count = this.cartlist.length;
+      });
+    }
   }
 
   onDelete(cartId: number, slidingItem: IonItemSliding) {
@@ -84,12 +93,27 @@ export class CartlistPage implements OnInit, OnDestroy {
     }).then(alertEl => alertEl.present());
   }
   
-  onFilter(filterTerm: string, groupId: number) {
+  onFilterCategory(filterTerm: string, groupId: number) {
     this.sum = 0;
     this.filterTerm = filterTerm;
     if (!this.filterMode) {
       this.filterMode = !this.filterMode;
       this.cartlist = this.cartlist.filter(c => c.categoryDto.name == filterTerm);
+      this.sum = this.cartlist.reduce((s, c) => s + (+c.amount), 0);
+      this.count = this.cartlist.length;
+    } else {
+      this.filterTerm = ""
+      this.filterMode = !this.filterMode;
+      this.getAllCartsByGroupId(groupId);
+    }
+  }
+
+  onFilterUserName(filterTerm: string, groupId: number) {
+    this.sum = 0;
+    this.filterTerm = filterTerm;
+    if (!this.filterMode) {
+      this.filterMode = !this.filterMode;
+      this.cartlist = this.cartlist.filter(c => c.userDto.userName == filterTerm);
       this.sum = this.cartlist.reduce((s, c) => s + (+c.amount), 0);
       this.count = this.cartlist.length;
     } else {

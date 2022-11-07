@@ -21,6 +21,7 @@ export class GroupoverviewPage implements OnInit {
   isLoading: boolean = false;
   userName: string;
   currentUser: UserDto;
+  activeGroup: GroupSideNav;
 
   constructor(
     private groupService: GroupService,
@@ -33,6 +34,9 @@ export class GroupoverviewPage implements OnInit {
   ngOnInit() {
     this.getCurrentUser();
     this.getGroupsForOverview();
+    this.groupService.activeGroup.subscribe(group => {
+      this.activeGroup = group;
+    })
   }
 
 
@@ -52,7 +56,7 @@ export class GroupoverviewPage implements OnInit {
     slidingItem.close();
     this.alertCtrl.create({
       header: 'Löschen',
-      message: 'Möchtest du die Gruppe wirklich löschen?',
+      message: 'Möchtest du die Gruppe wirklich löschen inkl. aller Mitglieder und gespeicherten Ausgaben?',
       buttons: [{
         text: 'Nein'
       }, {
@@ -68,10 +72,12 @@ export class GroupoverviewPage implements OnInit {
               this.groupService.setGroupModified(true);
               this.groupService.activeGroup.subscribe(activeGroup => {
                 if(this.groupOverviewList.length > 0 && (activeGroup.id === groupId)) {
-                  this.groupService.setActiveGroup(new GroupSideNav(
-                    this.groupOverviewList[0].id,
-                    this.groupOverviewList[0].name
-                  ))
+                    this.groupService.setActiveGroup(new GroupSideNav(
+                      this.groupOverviewList[0].id,
+                      this.groupOverviewList[0].name
+                    ))
+                } else if (this.groupOverviewList.length <= 0 && activeGroup.id === groupId) {
+                  this.groupService.setActiveGroup(null);
                 }
               })
             })
@@ -232,6 +238,10 @@ export class GroupoverviewPage implements OnInit {
       if (this.groupOverviewList[index].memberCount !== group.memberCount) {
         // this.groupOverviewList[index] = group;
         this.groupService.setGroupModified(true);
+      }
+
+      if ((this.groupOverviewList.length - 1) <= 0 && this.activeGroup.id == group.id) {
+        this.groupService.setActiveGroup(null);
       }
       
     });

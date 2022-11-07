@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonBackReference;
 
 import javax.persistence.*;
 import java.io.Serializable;
+import java.util.List;
 import java.util.Set;
 
 @Entity
@@ -79,6 +80,20 @@ public class Group implements Serializable {
 
     public void setCarts(Set<Cart> carts) {
         this.carts = carts;
+    }
+
+    public void addMember(User member) {
+        this.members.add(member);
+        member.getGroups().add(this);
+    }
+
+    public void removeMember(User member) {
+        this.members.remove(member);
+        member.getGroups().remove(this);
+    }
+
+    public void removeAll(Set<User> members) {
+        for (User member : members) removeMember(member);
     }
 
 }

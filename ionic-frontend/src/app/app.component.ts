@@ -40,14 +40,20 @@ export class AppComponent {
         this.initBackButton();
       })
     }
+
     
     ngOnInit() {
     this.getCurrentUser();
     this.groupService.getGroupsForSideNav().subscribe(groups => {
       this.activeGroup = groups[0];
-      this.groupService.setActiveGroup(this.activeGroup);
+      if (groups.length > 0) {
+        this.groupService.setActiveGroup(this.activeGroup);
+      } else {
+        this.groupService.setActiveGroup(null);
+      }
     })
   }
+
   
   getGroupsForSideNav() {
     this.groupService.groupModified.subscribe(() => {

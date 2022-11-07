@@ -1,9 +1,11 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
 import com.github.svenfran.budgetapp.budgetappbackend.Exceptions.*;
+import com.github.svenfran.budgetapp.budgetappbackend.dao.CartRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.dao.GroupRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.dao.UserRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.*;
+import com.github.svenfran.budgetapp.budgetappbackend.entity.Cart;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
 import com.github.svenfran.budgetapp.budgetappbackend.service.mapper.GroupDtoMapper;
@@ -26,6 +28,9 @@ public class GroupService {
     @Autowired
     private GroupDtoMapper groupDtoMapper;
 
+    @Autowired
+    private CartRepository cartRepository;
+
     public Stream<Group> getGroupsByMemberOrOwner() throws UserNotFoundException {
         var user = getCurrentUser();
         var member = new HashSet<User>();
@@ -47,8 +52,8 @@ public class GroupService {
         var user = getCurrentUser();
         var group = groupRepository.findById(groupId).
                 orElseThrow(() -> new GroupNotFoundException("Get Group Members: Group not found"));
-        var groupMembers = group.getMembers();
         var groupOwner = group.getOwner();
+        var groupMembers = group.getMembers();
 
         if (groupOwner.equals(user) || groupMembers.contains(user)) {
             return new GroupMembersDto(group);
@@ -77,20 +82,20 @@ public class GroupService {
     public GroupMembersDto addMemberToGroup(AddGroupMemberDto addGroupMemberDto) throws GroupNotFoundException, UserNotFoundException, NotOwnerOfGroupException, MemberAlreadyExixtsException, MemberEqualsOwnerException {
         var user = getCurrentUser();
         var newMember = userRepository.findByEmail(addGroupMemberDto.getNewMemberEmail());
+
+        if (newMember == null) throw new UserNotFoundException("Add new member: User not found");
+
         var group = groupRepository.findById(addGroupMemberDto.getId()).
                 orElseThrow(() -> new GroupNotFoundException("Add new member: Group not found!"));
 
-        if (newMember == null) {
-            throw new UserNotFoundException("Add new member: User not found");
-        } else if (!user.equals(group.getOwner())) {
+        if (!user.equals(group.getOwner())) {
             throw new NotOwnerOfGroupException("Add new member: You are not the owner of the Group");
         } else if (group.getMembers().contains(newMember)) {
             throw new MemberAlreadyExixtsException("Add new member: Member already exists");
         } else if (newMember.equals(user)) {
             throw new MemberEqualsOwnerException("Add new member: New member equals group owner");
         } else {
-            group.getMembers().add(newMember);
-            newMember.getGroups().add(group);
+            group.addMember(newMember);
         }
         return new GroupMembersDto(groupRepository.save(group));
     }
@@ -103,11 +108,11 @@ public class GroupService {
                 orElseThrow(() -> new GroupNotFoundException("Remove member: Group not found!"));
 
         if (user.equals(group.getOwner()) || user.equals(removedMember)) {
-            group.getMembers().remove(removedMember);
-            removedMember.getGroups().remove(group);
-        } else {
-            throw new NotOwnerOfGroupException("Remove member: You are not allowed to remove other members from the group");
-        }
+            group.removeMember(removedMember);
+            var cartsOfRemovedMember = cartRepository.findCartsByGroupAndUser(group, removedMember);
+            if (cartsOfRemovedMember.size() > 0) cartRepository.deleteAll(cartsOfRemovedMember);
+        } else throw new NotOwnerOfGroupException("Remove member: You are not allowed to remove other members from the group");
+
         return new GroupMembersDto(groupRepository.save(group));
     }
 
@@ -118,8 +123,27 @@ public class GroupService {
         var groupOwner = group.getOwner();
 
         if (groupOwner.equals(user)) {
+            var membersToRemove = new HashSet<>(group.getMembers());
+            group.removeAll(membersToRemove);
+            if (group.getCarts().size() > 0) cartRepository.deleteAll(group.getCarts());
             groupRepository.deleteById(id);
         } else throw new NotOwnerOfGroupException("Delete Group: You are not the owner of the group");
+    }
+
+    public void changeGroupOwner(ChangeGroupOwnerDto changeGroupOwnerDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOfGroupException {
+        var user = getCurrentUser();
+        var group = groupRepository.findById(changeGroupOwnerDto.getGroupId()).
+                orElseThrow(() -> new GroupNotFoundException("Change Group Owner: Group not found"));
+        var groupOwner = group.getOwner();
+        var newGroupOwner = userRepository.findById(changeGroupOwnerDto.getNewOwner().getId()).
+                orElseThrow(() -> new UserNotFoundException("Change Group Owner: User not found"));
+
+        if (groupOwner.equals(user)) {
+            group.removeMember(newGroupOwner);
+            group.setOwner(newGroupOwner);
+            group.addMember(user);
+            groupRepository.save(group);
+        } else throw new NotOwnerOfGroupException("Change Group Owner: You are not the owner of the group");
     }
 
     // TODO: Derzeit angemeldete Nutzer -> Spring Security

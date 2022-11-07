@@ -88,4 +88,10 @@ public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionH
         return new ResponseEntity<>(ex.getMessage(), HttpStatus.FORBIDDEN);
     }
 
+    @ExceptionHandler(value = { GroupIdNotFoundException.class })
+    protected ResponseEntity<Object> handleGroupIdNotFoundException (GroupIdNotFoundException ex, WebRequest request) {
+        LOG.debug("Exception Message: " + ex.getMessage(), ex);
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
 }

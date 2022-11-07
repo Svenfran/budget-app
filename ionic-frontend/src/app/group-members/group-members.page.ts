@@ -1,5 +1,6 @@
 import { Component, Input, OnInit } from '@angular/core';
 import { AlertController, ModalController } from '@ionic/angular';
+import { ChangeGroupOwner } from '../models/change-group-owner';
 import { GroupMembers } from '../models/group-members';
 import { GroupSideNav } from '../models/group-side-nav';
 import { RemoveMemberDto } from '../models/remove-member-dto';
@@ -21,6 +22,10 @@ export class GroupMembersPage implements OnInit {
   groupMembers: UserDto[] = [];
   groupsSideNav: GroupSideNav[] = [];
   activeGroup: GroupSideNav;
+  changeOwner: ChangeGroupOwner;
+  isSelected: boolean;
+  isNotVisible: boolean = true;
+  memberIndex: number;
 
   constructor(
     private groupService: GroupService,
@@ -67,21 +72,21 @@ export class GroupMembersPage implements OnInit {
 
     this.alertCtrl.create({
       header: "Löschen",
-      message: `Möchtest du den Nutzer ${this.toTitleCase(member.userName)} wirklich aus der Gruppe ${groupWithMembers.name} entfernen?`,
+      message: `Möchtest du den Nutzer ${this.toTitleCase(member.userName)} 
+                wirklich aus der Gruppe ${groupWithMembers.name} entfernen 
+                inkl. aller gespeicherten Ausgaben?`,
       buttons: [{
         text: "Nein",
         role: "cancel"
       }, {
         text: "Ja",
         handler: () => {
- 
           if (this.groupsSideNav.length > 0 && (memberToRemove.id == this.currentUser.id) && this.activeGroup.id == groupWithMembers.id) {
             this.groupService.setActiveGroup(new GroupSideNav(
               this.groupsSideNav[0].id,
               this.groupsSideNav[0].name
             ))
           }
-
           this.groupService.removeMemberFromGroup(removeGroupMember).subscribe(() => {
             this.groupMembers = this.groupWithMembers.members.filter(m => m.id !== member.id);
             this.groupWithMembers = new GroupMembers(
@@ -98,7 +103,31 @@ export class GroupMembersPage implements OnInit {
 
   onDismiss() {
     this.modalCtrl.dismiss(this.groupWithMembers);
+    if (this.changeOwner) {
+      this.groupService.changeGroupOwner(this.changeOwner).subscribe(() => {
+        this.groupService.setGroupModified(true);
+      });
+      // console.log(this.changeOwner);
+    }
   }
+
+  getSelectedMember(event: any, member: UserDto, groupId: number, index: number) {
+    this.memberIndex = index;
+    this.isSelected = !event.target.attributes['class'].value.includes('checked');
+    if (this.isSelected) {
+      this.changeOwner = new ChangeGroupOwner(
+        new UserDto(member.id, member.userName),
+        groupId
+      )
+    } else {
+      this.changeOwner = null;
+    }
+  }
+
+  toggleVisability() {
+    this.isNotVisible = !this.isNotVisible;
+  }
+
 
   private toTitleCase(text: string) {
     return text.charAt(0).toUpperCase() + text.substring(1).toLowerCase();
@@ -111,3 +140,4 @@ export class GroupMembersPage implements OnInit {
     })
   }
 }
+

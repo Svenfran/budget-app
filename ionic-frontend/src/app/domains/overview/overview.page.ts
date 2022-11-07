@@ -18,7 +18,9 @@ export class OverviewPage implements OnInit {
   ngOnInit() {
     this.getCurrentUser();
     this.groupService.activeGroup.subscribe(group => {
-      this.activeGroupName = group.name;
+      if (group) {
+        this.activeGroupName = group.name;
+      }
     })
   }
 

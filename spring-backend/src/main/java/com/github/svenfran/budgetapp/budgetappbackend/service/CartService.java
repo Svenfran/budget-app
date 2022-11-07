@@ -59,7 +59,10 @@ public class CartService {
         } else throw new NotOwnerOrMemberOfGroupException("Get Cart By Id: You are either a member nor the owner of the group");
     }
 
-    public CartDto addCart(CartDto cartDto) throws AddCartCategoryNotFoundException, UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
+    public CartDto addCart(CartDto cartDto) throws AddCartCategoryNotFoundException, UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, GroupIdNotFoundException {
+        if (cartDto.getGroupId() == null) {
+            throw new GroupIdNotFoundException("Add Cart: Group Id for this cart is null");
+        }
         var user = getCurrentUser();
         var category = categoryRepository.findById(cartDto.getCategoryDto().getId())
                 .orElseThrow(() -> new AddCartCategoryNotFoundException("Add Cart: Category not found"));
@@ -73,7 +76,10 @@ public class CartService {
         } else throw new NotOwnerOrMemberOfGroupException("Add Cart: You are either a member nor the owner of the group");
     }
 
-    public CartDto updateCart(CartDto cartDto) throws UpdateCartCategoryNotFoundException, UserNotFoundException, GroupNotFoundException, CartNotFoundException, NotOwnerOfCartException, NotOwnerOrMemberOfGroupException {
+    public CartDto updateCart(CartDto cartDto) throws UpdateCartCategoryNotFoundException, UserNotFoundException, GroupNotFoundException, CartNotFoundException, NotOwnerOfCartException, NotOwnerOrMemberOfGroupException, GroupIdNotFoundException {
+        if (cartDto.getGroupId() == null) {
+            throw new GroupIdNotFoundException("Update Cart: Group Id for this cart is null");
+        }
         var user = getCurrentUser();
         var cart = cartRepository.findById(cartDto.getId()).
                 orElseThrow(() -> new CartNotFoundException("Update Cart: Cart not found"));

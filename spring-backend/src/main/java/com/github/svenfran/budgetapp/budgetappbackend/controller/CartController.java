@@ -30,13 +30,13 @@ public class CartController {
     }
 
     @PostMapping("/carts/add")
-    public ResponseEntity<CartDto> addCart(@RequestBody CartDto cartDto) throws AddCartCategoryNotFoundException, UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
+    public ResponseEntity<CartDto> addCart(@RequestBody CartDto cartDto) throws AddCartCategoryNotFoundException, UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, GroupIdNotFoundException {
         CartDto newCart = cartService.addCart(cartDto);
         return new ResponseEntity<>(newCart, HttpStatus.CREATED);
     }
 
     @PutMapping("/carts/update")
-    public ResponseEntity<CartDto> updateCart(@RequestBody CartDto cartDto) throws UpdateCartCategoryNotFoundException, UserNotFoundException, GroupNotFoundException, CartNotFoundException, NotOwnerOfCartException, NotOwnerOrMemberOfGroupException {
+    public ResponseEntity<CartDto> updateCart(@RequestBody CartDto cartDto) throws UpdateCartCategoryNotFoundException, UserNotFoundException, GroupNotFoundException, CartNotFoundException, NotOwnerOfCartException, NotOwnerOrMemberOfGroupException, GroupIdNotFoundException {
         CartDto updateCart = cartService.updateCart(cartDto);
         return new ResponseEntity<>(updateCart, HttpStatus.CREATED);
     }

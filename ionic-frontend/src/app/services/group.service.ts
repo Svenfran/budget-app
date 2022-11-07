@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable, BehaviorSubject} from 'rxjs';
 import { environment } from 'src/environments/environment';
+import { ChangeGroupOwner } from '../models/change-group-owner';
 import { Group } from '../models/group';
 import { GroupMembers } from '../models/group-members';
 import { GroupOverview } from '../models/group-overview';
@@ -28,11 +29,19 @@ export class GroupService {
   private deleteGroupUrl = `${this.apiBaseUrl}/api/groups/delete`;
   private addNewMemberUrl = `${this.apiBaseUrl}/api/groups/add-new-member`;
   private removeMemberUrl = `${this.apiBaseUrl}/api/groups/remove-member-from-group`;
+  private changeGroupOwnerUrl = `${this.apiBaseUrl}/api/groups/change-groupowner`;
 
   constructor(private http: HttpClient) { }
 
   setActiveGroup(activeGroup: GroupSideNav) {
-    this._activeGroup.next(activeGroup);
+    let noGroupAvailable = new GroupSideNav(null, 'Keine Gruppe ausgewählt!')
+    if (!activeGroup) {
+      // console.log("Active Group not defined!")
+      this._activeGroup.next(noGroupAvailable);
+    } else {
+      // console.log("Active Group: " + activeGroup.name);
+      this._activeGroup.next(activeGroup);
+    }
   }
 
   setGroupModified(groupAdded: boolean) {
@@ -46,6 +55,8 @@ export class GroupService {
     // this._currentUser.next(new UserDto(4, "martin"));
     // this._currentUser.next(new UserDto(5, "sabine"));
     // this._currentUser.next(new UserDto(6, "tina"));
+    // this._currentUser.next(new UserDto(7, "montse"));
+    // this._currentUser.next(new UserDto(8, "patrick"));
   }
 
   get activeGroup() {
@@ -91,5 +102,9 @@ export class GroupService {
 
   removeMemberFromGroup(removeMemberDto: RemoveMemberDto): Observable<RemoveMemberDto> {
     return this.http.post<RemoveMemberDto>(this.removeMemberUrl, removeMemberDto);
+  }
+
+  changeGroupOwner(changeGroupOwner: ChangeGroupOwner): Observable<void> {
+    return this.http.post<void>(this.changeGroupOwnerUrl, changeGroupOwner);
   }
 }
