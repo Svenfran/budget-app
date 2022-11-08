@@ -94,4 +94,28 @@ public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionH
         return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
     }
 
+    @ExceptionHandler(value = { ShoppingListNotFoundException.class })
+    protected ResponseEntity<Object> handleShoppingListNotFoundException (ShoppingListNotFoundException ex, WebRequest request) {
+        LOG.debug("Exception Message: " + ex.getMessage(), ex);
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(value = { ShoppingItemNotFoundException.class })
+    protected ResponseEntity<Object> handleShoppingItemNotFoundException (ShoppingItemNotFoundException ex, WebRequest request) {
+        LOG.debug("Exception Message: " + ex.getMessage(), ex);
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(value = { ShoppingListDoesNotBelongToGroupException.class })
+    protected ResponseEntity<Object> handleShoppingListDoesNotBelongToGroupException (ShoppingListDoesNotBelongToGroupException ex, WebRequest request) {
+        LOG.debug("Exception Message: " + ex.getMessage(), ex);
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(value = { ShoppingItemDoesNotBelongToShoppingListException.class })
+    protected ResponseEntity<Object> handleShoppingItemDoesNotBelongToShoppingListException (ShoppingItemDoesNotBelongToShoppingListException ex, WebRequest request) {
+        LOG.debug("Exception Message: " + ex.getMessage(), ex);
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
 }

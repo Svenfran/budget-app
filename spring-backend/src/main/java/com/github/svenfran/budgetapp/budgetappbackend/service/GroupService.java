@@ -1,11 +1,9 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
 import com.github.svenfran.budgetapp.budgetappbackend.Exceptions.*;
-import com.github.svenfran.budgetapp.budgetappbackend.dao.CartRepository;
-import com.github.svenfran.budgetapp.budgetappbackend.dao.GroupRepository;
-import com.github.svenfran.budgetapp.budgetappbackend.dao.UserRepository;
+import com.github.svenfran.budgetapp.budgetappbackend.constants.UserEnum;
+import com.github.svenfran.budgetapp.budgetappbackend.dao.*;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.*;
-import com.github.svenfran.budgetapp.budgetappbackend.entity.Cart;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
 import com.github.svenfran.budgetapp.budgetappbackend.service.mapper.GroupDtoMapper;
@@ -30,6 +28,12 @@ public class GroupService {
 
     @Autowired
     private CartRepository cartRepository;
+
+    @Autowired
+    private ShoppingListRepository shoppingListRepository;
+
+    @Autowired
+    private ShoppingItemRepository shoppingItemRepository;
 
     public Stream<Group> getGroupsByMemberOrOwner() throws UserNotFoundException {
         var user = getCurrentUser();
@@ -126,6 +130,10 @@ public class GroupService {
             var membersToRemove = new HashSet<>(group.getMembers());
             group.removeAll(membersToRemove);
             if (group.getCarts().size() > 0) cartRepository.deleteAll(group.getCarts());
+            if (group.getShoppingLists().size() > 0) {
+                group.getShoppingLists().forEach(list -> shoppingItemRepository.deleteAll(list.getShoppingItems()));
+                shoppingListRepository.deleteAll(group.getShoppingLists());
+            }
             groupRepository.deleteById(id);
         } else throw new NotOwnerOfGroupException("Delete Group: You are not the owner of the group");
     }
@@ -149,7 +157,7 @@ public class GroupService {
     // TODO: Derzeit angemeldete Nutzer -> Spring Security
     private User getCurrentUser() throws UserNotFoundException {
         // Sven als Nutzer, id = 1
-        var userId = 1L;
+        var userId = UserEnum.CURRENT_USER.getId();
         return userRepository.findById(userId).
                 orElseThrow(() -> new UserNotFoundException("User with id " + userId + " not found"));
     }

@@ -4,7 +4,6 @@ import com.fasterxml.jackson.annotation.JsonBackReference;
 
 import javax.persistence.*;
 import java.io.Serializable;
-import java.util.List;
 import java.util.Set;
 
 @Entity
@@ -23,6 +22,10 @@ public class Group implements Serializable {
     @JsonBackReference
     private Set<Cart> carts;
 
+    @OneToMany(mappedBy = "group")
+    @JsonBackReference
+    private Set<ShoppingList> shoppingLists;
+
     @ManyToOne
     @JoinColumn(name = "owner_id", nullable = false)
     private User owner;
@@ -31,12 +34,13 @@ public class Group implements Serializable {
     @JsonBackReference
     private Set<User> members;
 
-    public Group(Long id, String name, Set<Cart> carts, User owner, Set<User> members) {
+    public Group(Long id, String name, Set<Cart> carts, User owner, Set<User> members, Set<ShoppingList> shoppingLists) {
         this.id = id;
         this.name = name;
         this.carts = carts;
         this.owner = owner;
         this.members = members;
+        this.shoppingLists = shoppingLists;
     }
 
     public Group() {
@@ -80,6 +84,14 @@ public class Group implements Serializable {
 
     public void setCarts(Set<Cart> carts) {
         this.carts = carts;
+    }
+
+    public Set<ShoppingList> getShoppingLists() {
+        return shoppingLists;
+    }
+
+    public void setShoppingLists(Set<ShoppingList> shoppingLists) {
+        this.shoppingLists = shoppingLists;
     }
 
     public void addMember(User member) {

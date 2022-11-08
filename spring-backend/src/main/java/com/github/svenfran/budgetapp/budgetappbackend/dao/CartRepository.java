@@ -10,8 +10,6 @@ import java.util.Optional;
 
 public interface CartRepository extends CrudRepository<Cart, Long> {
 
-    List<Cart> findAllByOrderByDatePurchasedDesc();
-
     List<Cart> findCartsByGroupAndUser(Group group, User user);
 
     List<Cart> findCartsByGroupIdOrderByDatePurchasedDesc(Long groupId);
@@ -23,4 +21,7 @@ public interface CartRepository extends CrudRepository<Cart, Long> {
 
     @Override
     void deleteAll(Iterable<? extends Cart> entities);
+
+    @Override
+    <S extends Cart> S save(S entity);
 }

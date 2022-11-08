@@ -3,7 +3,6 @@ package com.github.svenfran.budgetapp.budgetappbackend.controller;
 import com.github.svenfran.budgetapp.budgetappbackend.Exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.*;
 import com.github.svenfran.budgetapp.budgetappbackend.service.GroupService;
-import liquibase.pro.packaged.R;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -71,4 +70,5 @@ public class GroupController {
         groupService.deleteGroup(id);
         return new ResponseEntity<>(HttpStatus.OK);
     }
+
 }
