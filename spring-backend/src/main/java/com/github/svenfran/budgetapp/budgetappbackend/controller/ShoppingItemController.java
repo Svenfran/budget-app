@@ -28,7 +28,7 @@ public class ShoppingItemController {
         return new ResponseEntity<>(updatedItem, HttpStatus.CREATED);
     }
 
-    @DeleteMapping("/groups/shopping-list/delete-item")
+    @PostMapping("/groups/shopping-list/delete-item")
     public ResponseEntity<AddEditShoppingItemDto> deleteShoppingItem(@RequestBody AddEditShoppingItemDto shoppingItemDto) throws UserNotFoundException, GroupNotFoundException, ShoppingListNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingItemNotFoundException, ShoppingListDoesNotBelongToGroupException, ShoppingItemDoesNotBelongToShoppingListException {
         shoppingItemService.deleteShoppingItem(shoppingItemDto);
         return new ResponseEntity<>(HttpStatus.OK);

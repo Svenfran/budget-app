@@ -1,0 +1,23 @@
+.list-header {
+    ion-item {
+        --background: var(--ion-color-light);
+    }
+}
+
+.done {
+    text-decoration: line-through;
+    text-decoration-color: #D00000;
+    text-decoration-thickness: 1.5px;
+    color: #999;
+}
+
+ion-chip {
+    --background: var(--ion-color-light);
+    --color: var(--ion-color-medium);
+}
+
+.chip {
+    display: flex;
+    flex-flow: row-reverse;
+    padding-top: 1rem;
+}
