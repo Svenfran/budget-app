@@ -72,8 +72,8 @@ export class GroupMembersPage implements OnInit {
 
     this.alertCtrl.create({
       header: "Löschen",
-      message: `Möchtest du den Nutzer ${this.toTitleCase(member.userName)} 
-                wirklich aus der Gruppe ${groupWithMembers.name} entfernen 
+      message: `Möchtest du den Nutzer "${this.toTitleCase(member.userName)}" 
+                wirklich aus der Gruppe "${groupWithMembers.name}" entfernen 
                 inkl. aller gespeicherten Ausgaben?`,
       buttons: [{
         text: "Nein",

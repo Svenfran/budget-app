@@ -52,11 +52,11 @@ export class GroupoverviewPage implements OnInit {
   }
 
 
-  onDelete(groupId: number, slidingItem: IonItemSliding) {
+  onDelete(groupId: number, groupName: string, slidingItem: IonItemSliding) {
     slidingItem.close();
     this.alertCtrl.create({
       header: 'Löschen',
-      message: 'Möchtest du die Gruppe wirklich löschen inkl. aller Mitglieder und gespeicherten Ausgaben?',
+      message: `Möchtest du die Gruppe "${groupName}" wirklich löschen inkl. aller Mitglieder und gespeicherten Ausgaben?`,
       buttons: [{
         text: 'Nein'
       }, {
@@ -113,7 +113,10 @@ export class GroupoverviewPage implements OnInit {
           placeholder: "Gruppenname"
         }
       ]
-    }).then(alertEl => alertEl.present());
+    }).then(alertEl => alertEl.present().then(() => {
+      const inputField: HTMLElement = document.querySelector("ion-alert input");
+      inputField.focus();
+    }));
   }
 
   onAddMember(groupId: number, groupName: string, slidingItem: IonItemSliding) {
@@ -163,7 +166,10 @@ export class GroupoverviewPage implements OnInit {
           name: "memberEmail"
         }
       ]
-    }).then(alertEl => alertEl.present());
+    }).then(alertEl => alertEl.present().then(() => {
+      const inputField: HTMLElement = document.querySelector("ion-alert input");
+      inputField.focus();
+    }));
   }
 
   onUpdate(groupId: number, slidingItem: IonItemSliding) {
@@ -210,7 +216,10 @@ export class GroupoverviewPage implements OnInit {
           value: this.groupOverviewList.filter(g => g.id == groupId)[0].name
         }
       ]
-    }).then(alertEl => alertEl.present());
+    }).then(alertEl => alertEl.present().then(() => {
+      const inputField: HTMLElement = document.querySelector("ion-alert input");
+      inputField.focus();
+    }));
   }
 
   async showMembers(groupId: number, groupOwnerName: string, slidingItem: IonItemSliding) {

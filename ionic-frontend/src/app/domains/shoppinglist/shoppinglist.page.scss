@@ -7,7 +7,7 @@
 .done {
     text-decoration: line-through;
     text-decoration-color: #D00000;
-    text-decoration-thickness: 1.5px;
+    text-decoration-thickness: 2px;
     color: #999;
 }
 
@@ -20,4 +20,8 @@ ion-chip {
     display: flex;
     flex-flow: row-reverse;
     padding-top: 1rem;
+}
+
+ion-item-sliding {
+    border-radius: 6px;
 }

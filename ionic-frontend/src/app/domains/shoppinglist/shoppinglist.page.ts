@@ -84,7 +84,10 @@ export class ShoppinglistPage implements OnInit {
           placeholder: "Name der Einkaufsliste"
         }
       ]
-    }).then(alertEl => alertEl.present());
+    }).then(alertEl => alertEl.present().then(() => {
+      const inputField: HTMLElement = document.querySelector("ion-alert input");
+      inputField.focus();
+    }));
 
   }
 
@@ -115,14 +118,17 @@ export class ShoppinglistPage implements OnInit {
           value: list.name
         }
       ]
-    }).then(alertEl => alertEl.present());
+    }).then(alertEl => alertEl.present().then(() => {
+      const inputField: HTMLElement = document.querySelector("ion-alert input");
+      inputField.focus();
+    }));
   }
 
   onDeleteList(list: ShoppingListDto, slidingItem: IonItemSliding) {
     slidingItem.close();
     this.alertCtrl.create({
       header: "Löschen:",
-      message: 'Möchtest du die Einkaufsliste wirklich löschen inkl. aller Einträge?',
+      message: `Möchtest du die Einkaufsliste "${list.name}" wirklich löschen inkl. aller Einträge?`,
       buttons: [{
         text: "Abbrechen",
         role: "cancel"
@@ -154,7 +160,7 @@ export class ShoppinglistPage implements OnInit {
     this.shoppingItemService.addItemToShoppingList(newItem).subscribe(() => {
       list.shoppingItems[indexItem + 1] = null;
       this.getShoppingListWithItems(this.activeGroupId);
-      setTimeout(() => document.querySelectorAll('ion-input')[indexList].setFocus(), 500);
+      setTimeout(() => document.querySelectorAll('ion-input')[indexList].setFocus(), 300);
     })
     
   }
@@ -187,7 +193,10 @@ export class ShoppinglistPage implements OnInit {
           value: item.name
         }
       ]
-    }).then(alertEl => alertEl.present());
+    }).then(alertEl => alertEl.present().then(() => {
+      const inputField: HTMLElement = document.querySelector("ion-alert input");
+      inputField.focus();
+    }));
   }
 
   onDeleteItem(list: ShoppingListDto, item: ShoppingItemDto) {

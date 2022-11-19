@@ -62,7 +62,8 @@
             <ion-label position="floating">Kategorie*</ion-label>
             <ion-select
               type="text"
-              formControlName="category">
+              formControlName="category"
+              okText="Ok" cancelText="Abbrechen">
               <ion-select-option *ngFor="let category of categories">{{ category.name }}</ion-select-option>
             </ion-select>
           </ion-item>

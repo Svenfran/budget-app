@@ -140,7 +140,10 @@ export class AppComponent {
           placeholder: "Gruppenname"
         }
       ]
-    }).then(alertEl => alertEl.present());
+    }).then(alertEl => alertEl.present().then(() => {
+      const inputField: HTMLElement = document.querySelector("ion-alert input");
+      inputField.focus();
+    }));
   }
 
   getCurrentUser() {

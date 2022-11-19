@@ -51,7 +51,7 @@
               <ion-item-option *ngIf="group.ownerName == userName" color="secondary" (click)="onUpdate(group.id, slidingItem)">
                 <ion-icon name="create" slot="icon-only"></ion-icon>
               </ion-item-option>
-              <ion-item-option *ngIf="group.ownerName == userName" color="secondary" (click)="onDelete(group.id, slidingItem)">
+              <ion-item-option *ngIf="group.ownerName == userName" color="secondary" (click)="onDelete(group.id, group.name, slidingItem)">
                 <ion-icon name="trash" slot="icon-only"></ion-icon>
               </ion-item-option>
               <ion-item-option *ngIf="group.ownerName == userName" color="secondary" (click)="onAddMember(group.id, group.name, slidingItem)">

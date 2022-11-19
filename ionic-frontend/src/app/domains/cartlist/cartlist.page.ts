@@ -68,11 +68,11 @@ export class CartlistPage implements OnInit, OnDestroy {
     }
   }
 
-  onDelete(cartId: number, slidingItem: IonItemSliding) {
+  onDelete(cartId: number, cartTitle:string, slidingItem: IonItemSliding) {
     slidingItem.close();
     this.alertCtrl.create({
       header: 'Löschen',
-      message: 'Möchtest du den Eintrag wirklich löschen?',
+      message: `Möchtest du den Eintrag "${cartTitle}" wirklich löschen?`,
       buttons: [{
         text: 'Nein'
       }, {

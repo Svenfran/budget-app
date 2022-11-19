@@ -30,6 +30,10 @@
     src: url('assets/fonts/NunitoSans-Regular.ttf');
   }
 
+ion-item-sliding {
+	border-radius: 6px;
+}
+
 ion-modal {
   --background: rgba(44, 39, 45, 0.2);
   --border-radius: 16px;
