@@ -25,5 +25,7 @@
     <include file="db/changelog/release-1.x/20221017151815-2_addForeignKeyForGroupToCartTable.xml" relativeToChangelogFile="false"/>
     <include file="db/changelog/release-1.x/20221018141715-1_loadGroupData.xml" relativeToChangelogFile="false"/>
     <include file="db/changelog/release-1.x/20221019121215-1_renameTableNameToGroupDetails.xml" relativeToChangelogFile="false"/>
+    <include file="db/changelog/release-1.x/20221122190010-1_addColumnForGroupIdToCategoryTable.xml" relativeToChangelogFile="false"/>
+    <include file="db/changelog/release-1.x/20221122190015-1_addForeignKeyToCategoryTable.xml" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>

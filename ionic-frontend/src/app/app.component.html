@@ -54,13 +54,13 @@
           <ion-label color="medium">KATEGORIEN</ion-label>
         </ion-list-header>
         <ion-menu-toggle menu="m1">
-          <ion-item lines="none" button>
+          <ion-item lines="none" routerLink="/categoryoverview" button>
             <ion-icon name="ellipsis-horizontal" slot="start"></ion-icon>
             <ion-label>Kategorien bearbeiten</ion-label>
           </ion-item>
         </ion-menu-toggle>
         <ion-menu-toggle menu="m1">
-          <ion-item lines="none" button>
+          <ion-item lines="none" (click)="onCreateCategory()" button>
             <ion-icon name="add" slot="start"></ion-icon>
             <ion-label>Kategorie hinzufügen</ion-label>
           </ion-item>

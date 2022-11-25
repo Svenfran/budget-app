@@ -2,13 +2,11 @@ package com.github.svenfran.budgetapp.budgetappbackend.service;
 
 import com.github.svenfran.budgetapp.budgetappbackend.Exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.constants.UserEnum;
-import com.github.svenfran.budgetapp.budgetappbackend.dao.CartRepository;
-import com.github.svenfran.budgetapp.budgetappbackend.dao.CategoryRepository;
-import com.github.svenfran.budgetapp.budgetappbackend.dao.GroupRepository;
-import com.github.svenfran.budgetapp.budgetappbackend.dao.UserRepository;
+import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository;
+import com.github.svenfran.budgetapp.budgetappbackend.repository.CategoryRepository;
+import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository;
+import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto;
-import com.github.svenfran.budgetapp.budgetappbackend.dto.GroupDto;
-import com.github.svenfran.budgetapp.budgetappbackend.entity.Cart;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
 import com.github.svenfran.budgetapp.budgetappbackend.service.mapper.CartDtoMapper;
 import org.springframework.beans.factory.annotation.Autowired;

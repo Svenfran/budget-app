@@ -2,10 +2,12 @@ package com.github.svenfran.budgetapp.budgetappbackend.service;
 
 import com.github.svenfran.budgetapp.budgetappbackend.Exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.constants.UserEnum;
-import com.github.svenfran.budgetapp.budgetappbackend.dao.*;
+import com.github.svenfran.budgetapp.budgetappbackend.repository.*;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.*;
+import com.github.svenfran.budgetapp.budgetappbackend.entity.Category;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
+import com.github.svenfran.budgetapp.budgetappbackend.service.mapper.CategoryDtoMapper;
 import com.github.svenfran.budgetapp.budgetappbackend.service.mapper.GroupDtoMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -28,6 +30,12 @@ public class GroupService {
 
     @Autowired
     private CartRepository cartRepository;
+
+    @Autowired
+    private CategoryDtoMapper categoryDtoMapper;
+
+    @Autowired
+    private CategoryRepository categoryRepository;
 
     @Autowired
     private ShoppingListRepository shoppingListRepository;
@@ -66,7 +74,9 @@ public class GroupService {
 
     public GroupDto addGroup(GroupDto groupDto) throws UserNotFoundException {
         var user = getCurrentUser();
-        return new GroupDto(groupRepository.save(groupDtoMapper.GroupDtoToEntity(groupDto, user)));
+        var group = groupRepository.save(groupDtoMapper.GroupDtoToEntity(groupDto, user));
+        createDefaultCategories(group);
+        return new GroupDto(group);
     }
 
     public GroupDto updateGroup(GroupDto groupDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOfGroupException {
@@ -130,6 +140,7 @@ public class GroupService {
             var membersToRemove = new HashSet<>(group.getMembers());
             group.removeAll(membersToRemove);
             if (group.getCarts().size() > 0) cartRepository.deleteAll(group.getCarts());
+            if (group.getCategories().size() > 0) categoryRepository.deleteAll(group.getCategories());
             if (group.getShoppingLists().size() > 0) {
                 group.getShoppingLists().forEach(list -> shoppingItemRepository.deleteAll(list.getShoppingItems()));
                 shoppingListRepository.deleteAll(group.getShoppingLists());
@@ -152,6 +163,14 @@ public class GroupService {
             group.addMember(user);
             groupRepository.save(group);
         } else throw new NotOwnerOfGroupException("Change Group Owner: You are not the owner of the group");
+    }
+
+    private void createDefaultCategories(Group group) {
+        categoryRepository.save(new Category(null, "Lebensmittel", group, null));
+        categoryRepository.save(new Category(null, "Wohnung", group, null));
+        categoryRepository.save(new Category(null, "Restaurant", group, null));
+        categoryRepository.save(new Category(null, "Geschenke", group, null));
+        categoryRepository.save(new Category(null, "Sonstiges", group, null));
     }
 
     // TODO: Derzeit angemeldete Nutzer -> Spring Security

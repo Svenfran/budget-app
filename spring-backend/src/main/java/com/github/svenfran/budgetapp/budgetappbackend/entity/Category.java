@@ -18,13 +18,18 @@ public class Category implements Serializable{
     @Column(name = "name")
     private String name;
 
-    @OneToMany(mappedBy = "category", cascade = CascadeType.ALL)
+    @ManyToOne
+    @JoinColumn(name = "group_id", nullable = false)
+    private Group group;
+
+    @OneToMany(mappedBy = "category")
     @JsonBackReference
     private Set<Cart> carts;
 
-    public Category(Long id, String name, Set<Cart> carts) {
+    public Category(Long id, String name, Group group, Set<Cart> carts) {
         this.id = id;
         this.name = name;
+        this.group = group;
         this.carts = carts;
     }
 
@@ -53,5 +58,13 @@ public class Category implements Serializable{
 
     public void setCarts(Set<Cart> carts) {
         this.carts = carts;
+    }
+
+    public Group getGroup() {
+        return group;
+    }
+
+    public void setGroup(Group group) {
+        this.group = group;
     }
 }

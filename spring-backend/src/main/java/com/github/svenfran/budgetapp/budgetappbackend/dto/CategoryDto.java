@@ -6,10 +6,12 @@ public class CategoryDto {
 
     private Long id;
     private String name;
+    private Long groupId;
 
     public CategoryDto(Category category) {
         this.id = category.getId();
         this.name = category.getName();
+        this.groupId = category.getGroup().getId();
     }
 
     public CategoryDto() {
@@ -29,5 +31,13 @@ public class CategoryDto {
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public Long getGroupId() {
+        return groupId;
+    }
+
+    public void setGroupId(Long groupId) {
+        this.groupId = groupId;
     }
 }

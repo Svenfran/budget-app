@@ -3,8 +3,10 @@ import { Router } from '@angular/router';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { NavigationBar } from '@hugotomazi/capacitor-navigation-bar';
 import { AlertController, isPlatform, LoadingController, NavController, Platform } from '@ionic/angular';
+import { CategoryDto } from './models/category';
 import { Group } from './models/group';
 import { GroupSideNav } from './models/group-side-nav';
+import { CategoryService } from './services/category.service';
 import { GroupService } from './services/group.service';
 
 @Component({
@@ -26,6 +28,7 @@ export class AppComponent {
     private router: Router,
     private navCtrl: NavController,
     private groupService: GroupService,
+    private categoryService: CategoryService,
     private alertCtrl: AlertController,
     private loadingCtrl: LoadingController) {
       this.initializeApp();
@@ -138,6 +141,38 @@ export class AppComponent {
         {
           name: "groupName",
           placeholder: "Gruppenname"
+        }
+      ]
+    }).then(alertEl => alertEl.present().then(() => {
+      const inputField: HTMLElement = document.querySelector("ion-alert input");
+      inputField.focus();
+    }));
+  }
+
+  onCreateCategory() {
+    this.alertCtrl.create({
+      header: "Neue Kategorie:",
+      buttons: [{
+        text: "Abbrechen",
+        role: "cancel"
+      }, {
+        text: "ok",
+        handler: (data) => {
+          this.loadingCtrl.create({
+            message: "Erstelle Kategorie..."
+          }).then(loadingEl => {
+            let newCategory = new CategoryDto(null, data.categoryName, this.activeGroup.id);
+            this.categoryService.addCategory(newCategory).subscribe(() => {
+              loadingEl.dismiss();
+              this.groupService.setGroupModified(true);
+            })
+          })
+        }
+      }],
+      inputs: [
+        {
+          name: "categoryName",
+          placeholder: "Name der Kategorie"
         }
       ]
     }).then(alertEl => alertEl.present().then(() => {

@@ -1,4 +1,4 @@
-package com.github.svenfran.budgetapp.budgetappbackend.dao;
+package com.github.svenfran.budgetapp.budgetappbackend.repository;
 
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Category;
 import org.springframework.data.repository.CrudRepository;
@@ -9,6 +9,8 @@ import java.util.Optional;
 public interface CategoryRepository extends CrudRepository<Category, Long> {
 
     List<Category> findAll();
+
+    List<Category> findAllByGroup_IdOrderByName(Long groupId);
 
     Optional<Category> findById(Long id);
 

@@ -1,4 +1,4 @@
-package com.github.svenfran.budgetapp.budgetappbackend.dao;
+package com.github.svenfran.budgetapp.budgetappbackend.repository;
 
 import com.github.svenfran.budgetapp.budgetappbackend.entity.ShoppingList;
 import org.springframework.data.repository.CrudRepository;

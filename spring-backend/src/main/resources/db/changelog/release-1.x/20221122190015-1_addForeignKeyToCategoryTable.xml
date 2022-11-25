@@ -1,0 +1,13 @@
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <changeSet author="sven" id="20221122190015-1">
+        <addForeignKeyConstraint baseTableName="category" baseColumnNames="group_id" constraintName="fk_category_group"
+                                 referencedTableName="group_details"
+                                 referencedColumnNames="id"/>
+    </changeSet>
+
+</databaseChangeLog>

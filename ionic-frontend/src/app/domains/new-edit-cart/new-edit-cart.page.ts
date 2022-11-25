@@ -1,7 +1,7 @@
 import { Component, OnInit, ViewChild } from '@angular/core';
 import { FormGroup, UntypedFormBuilder, Validators } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
-import { IonDatetime, LoadingController } from '@ionic/angular';
+import { IonDatetime, LoadingController, MenuController } from '@ionic/angular';
 import { CategoryDto } from 'src/app/models/category';
 import { first } from 'rxjs/operators';
 import { CartService } from 'src/app/services/cart.service';
@@ -36,7 +36,8 @@ export class NewEditCartPage implements OnInit {
     private router: Router,
     private loadingCtrl: LoadingController,
     private route: ActivatedRoute,
-    private groupService: GroupService) { }
+    private groupService: GroupService,
+    private menuCtrl: MenuController) { }
 
   ngOnInit() {
     this.form = this.fb.group({
@@ -46,23 +47,28 @@ export class NewEditCartPage implements OnInit {
       description: [''],
       datePurchased: ['',[ Validators.required, Validators.pattern('(0[1-9]|1[0-9]|2[0-9]|3[01]).(0[1-9]|1[012]).[0-9]{4}')]],
       category: ['',[ Validators.required ]]
-    })
+    });
+
+    this.menuCtrl.enable(false, 'm1');
 
     this.cartId = this.route.snapshot.paramMap.get('id');
     this.isAddMode = !this.cartId;
-    
-    this.categoryService.getCategories().subscribe((categories) => {
-      this.categories = categories;
-    });
  
     this.setToday();
     this.setInitialFormValues();
     this.getActiveGroupId();
   }
 
+  ionViewDidLeave() {
+    this.menuCtrl.enable(true, 'm1');
+  }
+
   getActiveGroupId() {
     this.groupService.activeGroup.subscribe(group => {
-      this.activeGroupId = group.id;
+      this.categoryService.getCategoriesByGroup(group.id).subscribe((categories) => {
+        this.activeGroupId = group.id;
+        this.categories = categories;
+      });
     });
   }
 
@@ -123,7 +129,8 @@ export class NewEditCartPage implements OnInit {
       loadingEl.present();
       let newCategory = new CategoryDto(
         this.categories.filter(cat => cat.name === this.form.value.category)[0].id,
-        this.form.value.category
+        this.form.value.category,
+        this.categories.filter(cat => cat.name === this.form.value.category)[0].groupId
       );
       let newCart = new Cart(
         null,
@@ -153,7 +160,8 @@ export class NewEditCartPage implements OnInit {
     }).then(loadingEl => {
       let updateCategory = new CategoryDto(
         this.categories.filter(cat => cat.name === this.form.value.category)[0].id,
-        this.form.value.category
+        this.form.value.category,
+        this.categories.filter(cat => cat.name === this.form.value.category)[0].groupId
       );
       let updateCart = new Cart(
         +this.cartId,

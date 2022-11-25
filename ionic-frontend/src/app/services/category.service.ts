@@ -10,14 +10,29 @@ import { CategoryDto } from '../models/category';
 export class CategoryService {
 
   private apiBaseUrl = environment.apiBaseUrlExternal;
-  private getCategoriesUrl = `${this.apiBaseUrl}/api/categories`;
+  private getCategoriesUrl = `${this.apiBaseUrl}/api/groups/categories`;
+  private addCategoryUrl = `${this.apiBaseUrl}/api/groups/category/add`;
+  private updateCategoryUrl = `${this.apiBaseUrl}/api/groups/category/update`;
+  private deleteCategoryUrl = `${this.apiBaseUrl}/api/groups/category/delete`;
+
 
   constructor(private http: HttpClient) { }
 
 
-  getCategories(): Observable<CategoryDto[]> {
-    return this.http.get<CategoryDto[]>(this.getCategoriesUrl);
+  getCategoriesByGroup(groupId: number): Observable<CategoryDto[]> {
+    return this.http.get<CategoryDto[]>(`${this.getCategoriesUrl}/${groupId}`);
   }
 
+  addCategory(category: CategoryDto): Observable<CategoryDto> {
+    return this.http.post<CategoryDto>(this.addCategoryUrl, category);
+  }
+
+  updateCategory(category: CategoryDto): Observable<CategoryDto> {
+    return this.http.put<CategoryDto>(this.updateCategoryUrl, category);
+  }
+  
+  deleteCategory(category: CategoryDto): Observable<CategoryDto> {
+    return this.http.post<CategoryDto>(this.deleteCategoryUrl, category);
+  }
 
 }

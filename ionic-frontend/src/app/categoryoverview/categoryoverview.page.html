@@ -1,0 +1,58 @@
+<ion-header class="ion-no-border">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/domains/tabs/cartlist"></ion-back-button>
+    </ion-buttons>
+    <ion-title>Kategorien bearbeiten</ion-title>
+    <ion-buttons slot="primary">
+      <ion-button (click)="onCreateCategory()">
+        <ion-icon name="add" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <ion-grid class="ion-padding">
+    <ion-row>
+      <ion-col class="ion-text-center" size-md="6" offset-md="3" *ngIf="isLoading">
+        <ion-spinner color="primary"></ion-spinner>
+      </ion-col>
+      <ion-col class="ion-text-center" size-md="6" offset-md="3" *ngIf="!isLoading && (!categories || categories.length <= 0)">
+        <p>Keine Kategorien vorhanden!</p>
+      </ion-col>
+    </ion-row>
+    <ion-row>
+      <ion-col>
+        <ion-list *ngIf="!isLoading && categories.length > 0">
+          <ion-list-header>
+            <div class="category-header">
+              <ion-text color="medium">GRUPPE: {{ activeGroup.name }}</ion-text>
+              <ion-label>Kategorien ({{ categories.length }})</ion-label>
+            </div>
+          </ion-list-header>
+
+          <div *ngFor="let cat of categories, let i = index">
+            <ion-item>
+              <!-- <ion-text slot="start">{{ i + 1 }}</ion-text> -->
+              <ion-avatar slot="start">
+                <div class="category-circle">
+                  <p>{{ cat.name.substring(0, 2) | uppercase }}</p>
+                </div>
+              </ion-avatar>
+              <ion-label (click)="onUpdateCategory(cat)">
+                <p class="ion-text-wrap">{{ cat.name }}</p>
+              </ion-label>
+              <ion-buttons>
+                <ion-button (click)="onDeleteCategory(cat)">
+                  <ion-icon name="close-outline" slot="icon-only" size="small"></ion-icon>
+                </ion-button>
+              </ion-buttons>
+            </ion-item>
+          </div>
+
+        </ion-list>
+      </ion-col>
+    </ion-row>
+  </ion-grid>
+</ion-content>

@@ -2,10 +2,10 @@ package com.github.svenfran.budgetapp.budgetappbackend.service;
 
 import com.github.svenfran.budgetapp.budgetappbackend.Exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.constants.UserEnum;
-import com.github.svenfran.budgetapp.budgetappbackend.dao.GroupRepository;
-import com.github.svenfran.budgetapp.budgetappbackend.dao.ShoppingItemRepository;
-import com.github.svenfran.budgetapp.budgetappbackend.dao.ShoppingListRepository;
-import com.github.svenfran.budgetapp.budgetappbackend.dao.UserRepository;
+import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository;
+import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingItemRepository;
+import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingListRepository;
+import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingListDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingListDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User;

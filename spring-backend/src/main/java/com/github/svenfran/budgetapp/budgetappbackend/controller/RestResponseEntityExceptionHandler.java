@@ -118,4 +118,16 @@ public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionH
         return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
     }
 
+    @ExceptionHandler(value = { CategoryBelongsNotToGroupException.class })
+    protected ResponseEntity<Object> handleSCategoryBelongsNotToGroupException (CategoryBelongsNotToGroupException ex, WebRequest request) {
+        LOG.debug("Exception Message: " + ex.getMessage(), ex);
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(value = { CategoryIsUsedByCartException.class })
+    protected ResponseEntity<Object> handleCategoryIsUsedByCartException (CategoryIsUsedByCartException ex, WebRequest request) {
+        LOG.debug("Exception Message: " + ex.getMessage(), ex);
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
 }

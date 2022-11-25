@@ -29,6 +29,10 @@ const routes: Routes = [
     path: 'group-members',
     loadChildren: () => import('./group-members/group-members.module').then( m => m.GroupMembersPageModule)
   },
+  {
+    path: 'categoryoverview',
+    loadChildren: () => import('./categoryoverview/categoryoverview.module').then( m => m.CategoryoverviewPageModule)
+  },
 ];
 
 @NgModule({

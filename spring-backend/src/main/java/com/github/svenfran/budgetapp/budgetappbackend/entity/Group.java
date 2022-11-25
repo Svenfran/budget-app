@@ -26,6 +26,10 @@ public class Group implements Serializable {
     @JsonBackReference
     private Set<ShoppingList> shoppingLists;
 
+    @OneToMany(mappedBy = "group")
+    @JsonBackReference
+    private Set<Category> categories;
+
     @ManyToOne
     @JoinColumn(name = "owner_id", nullable = false)
     private User owner;
@@ -34,13 +38,14 @@ public class Group implements Serializable {
     @JsonBackReference
     private Set<User> members;
 
-    public Group(Long id, String name, Set<Cart> carts, User owner, Set<User> members, Set<ShoppingList> shoppingLists) {
+    public Group(Long id, String name, Set<Cart> carts, User owner, Set<User> members, Set<ShoppingList> shoppingLists, Set<Category> categories) {
         this.id = id;
         this.name = name;
         this.carts = carts;
         this.owner = owner;
         this.members = members;
         this.shoppingLists = shoppingLists;
+        this.categories = categories;
     }
 
     public Group() {
@@ -88,6 +93,14 @@ public class Group implements Serializable {
 
     public Set<ShoppingList> getShoppingLists() {
         return shoppingLists;
+    }
+
+    public Set<Category> getCategories() {
+        return categories;
+    }
+
+    public void setCategories(Set<Category> categories) {
+        this.categories = categories;
     }
 
     public void setShoppingLists(Set<ShoppingList> shoppingLists) {

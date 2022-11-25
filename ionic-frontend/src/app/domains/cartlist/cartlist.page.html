@@ -68,10 +68,10 @@
             </ion-item>
             <ion-item-options *ngIf="cart.userDto.userName == userName">
               <ion-item-option color="secondary">
-                <ion-icon name="create" slot="icon-only" [routerLink]="['new-edit', cart.id]"></ion-icon>
+                <ion-icon name="create-outline" slot="icon-only" [routerLink]="['new-edit', cart.id]"></ion-icon>
               </ion-item-option>
               <ion-item-option color="secondary" (click)="onDelete(cart.id, cart.title, slidingItem)">
-                <ion-icon name="trash" slot="icon-only"></ion-icon>
+                <ion-icon name="trash-outline" slot="icon-only"></ion-icon>
               </ion-item-option>
             </ion-item-options>
           </ion-item-sliding>
