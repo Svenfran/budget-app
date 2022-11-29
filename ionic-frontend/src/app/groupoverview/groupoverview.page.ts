@@ -186,7 +186,7 @@ export class GroupoverviewPage implements OnInit {
             message: "Bearbeite Gruppe..."
           }).then(loadingEl => {
             let updatedGroup = new Group(groupId, data.groupName, null);
-            this.groupService.addGroup(updatedGroup).subscribe(() => {
+            this.groupService.updateGroup(updatedGroup).subscribe(() => {
               loadingEl.dismiss();
               this.groupService.setGroupModified(true);
               this.groupService.setActiveGroup(updatedGroup);

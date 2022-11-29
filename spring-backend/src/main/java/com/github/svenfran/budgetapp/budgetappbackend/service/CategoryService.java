@@ -45,11 +45,11 @@ public class CategoryService {
         var group = groupRepository.findById(categoryDto.getGroupId()).
                 orElseThrow(() -> new GroupNotFoundException("Add Category: Group not found"));
 
-        if (!group.getOwner().equals(user) || group.getMembers().contains(user)) {
-            throw new NotOwnerOrMemberOfGroupException("Add Category: You are either the owner nor a member of the group");
-        } else if (group.getId().equals(categoryDto.getGroupId())) {
-            return new CategoryDto(categoryRepository.save(categoryDtoMapper.CategoryDtoToEntity(categoryDto, group)));
-        } else throw new CategoryBelongsNotToGroupException("Add Category: Category does not belong to group");
+        if (group.getOwner().equals(user) || group.getMembers().contains(user)) {
+            if (group.getId().equals(categoryDto.getGroupId())) {
+                return new CategoryDto(categoryRepository.save(categoryDtoMapper.CategoryDtoToEntity(categoryDto, group)));
+            } else throw new CategoryBelongsNotToGroupException("Add Category: Category does not belong to group");
+        } else throw new NotOwnerOrMemberOfGroupException("Add Category: You are either the owner nor a member of the group");
     }
 
     public CategoryDto updateCategory(CategoryDto categoryDto) throws GroupNotFoundException, CategoryBelongsNotToGroupException, CategoryNotFoundException, NotOwnerOrMemberOfGroupException, UserNotFoundException {
@@ -59,11 +59,11 @@ public class CategoryService {
         var category = categoryRepository.findById(categoryDto.getId()).
                 orElseThrow(() -> new CategoryNotFoundException("Update Category: Category not found"));
 
-        if (!group.getOwner().equals(user) || group.getMembers().contains(user)) {
-            throw new NotOwnerOrMemberOfGroupException("Update Category: You are either the owner nor a member of the group");
-        } else if (group.getId().equals(category.getGroup().getId())) {
-            return new CategoryDto(categoryRepository.save(categoryDtoMapper.CategoryDtoToEntity(categoryDto, group)));
-        } else throw new CategoryBelongsNotToGroupException("Update Category: Category does not belong to group");
+        if (group.getOwner().equals(user) || group.getMembers().contains(user)) {
+            if (group.getId().equals(category.getGroup().getId())) {
+                return new CategoryDto(categoryRepository.save(categoryDtoMapper.CategoryDtoToEntity(categoryDto, group)));
+            } else throw new CategoryBelongsNotToGroupException("Update Category: Category does not belong to group");
+        } else throw new NotOwnerOrMemberOfGroupException("Update Category: You are either the owner nor a member of the group");
     }
 
     public void deleteCategory(CategoryDto categoryDto) throws GroupNotFoundException, CategoryBelongsNotToGroupException, CategoryNotFoundException, CategoryIsUsedByCartException, NotOwnerOrMemberOfGroupException, UserNotFoundException {
@@ -73,13 +73,13 @@ public class CategoryService {
         var category = categoryRepository.findById(categoryDto.getId()).
                 orElseThrow(() -> new CategoryNotFoundException("Delete Category: Category not found"));
 
-        if (!group.getOwner().equals(user) || group.getMembers().contains(user)) {
-            throw new NotOwnerOrMemberOfGroupException("Delete Category: You are either the owner nor a member of the group");
-        } else if (!group.getId().equals(category.getGroup().getId())) {
-            throw new CategoryBelongsNotToGroupException("Delete Category: Category does not belong to group");
-        } else if (category.getCarts().isEmpty()) {
-            categoryRepository.deleteById(category.getId());
-        } else throw new CategoryIsUsedByCartException("Delete Category: Category is used by carts");
+        if (group.getOwner().equals(user) || group.getMembers().contains(user)) {
+            if (!group.getId().equals(category.getGroup().getId())) {
+                throw new CategoryBelongsNotToGroupException("Delete Category: Category does not belong to group");
+            } else if (category.getCarts().isEmpty()) {
+                categoryRepository.deleteById(category.getId());
+            } else throw new CategoryIsUsedByCartException("Delete Category: Category is used by carts");
+        } else throw new NotOwnerOrMemberOfGroupException("Delete Category: You are either the owner nor a member of the group");
     }
 
     // TODO: Derzeit angemeldete Nutzer -> Spring Security

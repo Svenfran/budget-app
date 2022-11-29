@@ -88,9 +88,7 @@ public class GroupService {
 
         if (groupOwner.equals(user)) {
             return new GroupDto(groupRepository.save(groupDtoMapper.GroupDtoToEntity(groupDto, groupOwner)));
-        } else {
-            throw new NotOwnerOfGroupException("Update Group: You are not the owner of the Group");
-        }
+        } else throw new NotOwnerOfGroupException("Update Group: You are not the owner of the Group");
     }
 
     public GroupMembersDto addMemberToGroup(AddGroupMemberDto addGroupMemberDto) throws GroupNotFoundException, UserNotFoundException, NotOwnerOfGroupException, MemberAlreadyExixtsException, MemberEqualsOwnerException {

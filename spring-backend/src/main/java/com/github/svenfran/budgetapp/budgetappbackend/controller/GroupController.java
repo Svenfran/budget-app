@@ -56,7 +56,7 @@ public class GroupController {
     @PutMapping("/groups/update")
     public ResponseEntity<GroupDto> updateGroup(@RequestBody GroupDto groupDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOfGroupException {
         GroupDto updatedGroup = groupService.updateGroup(groupDto);
-        return new ResponseEntity<>(updatedGroup, HttpStatus.CREATED);
+        return new ResponseEntity<>(updatedGroup, HttpStatus.OK);
     }
 
     @PostMapping("/groups/change-groupowner")
