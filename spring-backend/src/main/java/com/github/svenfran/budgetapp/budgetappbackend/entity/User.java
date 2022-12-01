@@ -32,16 +32,24 @@ public class User implements Serializable {
         inverseJoinColumns = @JoinColumn(name = "group_id", referencedColumnName = "id"))
     private Set<Group> groups;
 
-    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "group_membership_history",
+        joinColumns = @JoinColumn(name = "user_id", referencedColumnName = "id"),
+        inverseJoinColumns = @JoinColumn(name = "group_id", referencedColumnName = "id"))
+    private Set<Group> groupList;
+
+    @OneToMany(mappedBy = "user")
     @JsonBackReference
     private Set<Cart> carts;
 
-    public User(Long id, String userName, String email, String password, Set<Group> groups, Set<Cart> carts) {
+    public User(Long id, String userName, String email, String password, Set<Group> groups, Set<Group> groupList, Set<Cart> carts) {
         this.id = id;
         this.userName = userName;
         this.email = email;
         this.password = password;
         this.groups = groups;
+        this.groupList = groupList;
         this.carts = carts;
     }
 
@@ -98,4 +106,11 @@ public class User implements Serializable {
         this.groups = groups;
     }
 
+    public Set<Group> getGroupList() {
+        return groupList;
+    }
+
+    public void setGroupList(Set<Group> groupList) {
+        this.groupList = groupList;
+    }
 }

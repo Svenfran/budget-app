@@ -1,0 +1,8 @@
+membership_start,membership_end,type,user_id,group_id
+2022-10-25,,OWNER,1,1
+2022-11-25,,OWNER,2,2
+2022-09-25,,OWNER,2,3
+2022-18-25,,OWNER,3,4
+2022-11-15,,OWNER,4,5
+2022-11-20,,OWNER,1,6
+2022-11-30,,OWNER,6,7

@@ -9,8 +9,7 @@ public enum UserEnum {
     MARTIN(4L),
     SABINE(5L),
     TINA(6L),
-    MONTSE(7L),
-    PATRICK(8L);
+    MONTSE(7L);
 
     private final Long id;
 

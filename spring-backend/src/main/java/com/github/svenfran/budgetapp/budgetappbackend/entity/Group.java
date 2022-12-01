@@ -38,14 +38,19 @@ public class Group implements Serializable {
     @JsonBackReference
     private Set<User> members;
 
-    public Group(Long id, String name, Set<Cart> carts, User owner, Set<User> members, Set<ShoppingList> shoppingLists, Set<Category> categories) {
+    @ManyToMany(mappedBy = "groups", fetch = FetchType.LAZY)
+    @JsonBackReference
+    private Set<User> memberList;
+
+    public Group(Long id, String name, Set<Cart> carts, Set<ShoppingList> shoppingLists, Set<Category> categories, User owner, Set<User> members, Set<User> memberList) {
         this.id = id;
         this.name = name;
         this.carts = carts;
-        this.owner = owner;
-        this.members = members;
         this.shoppingLists = shoppingLists;
         this.categories = categories;
+        this.owner = owner;
+        this.members = members;
+        this.memberList = memberList;
     }
 
     public Group() {
@@ -107,6 +112,14 @@ public class Group implements Serializable {
         this.shoppingLists = shoppingLists;
     }
 
+    public Set<User> getMemberList() {
+        return memberList;
+    }
+
+    public void setMemberList(Set<User> memberList) {
+        this.memberList = memberList;
+    }
+
     public void addMember(User member) {
         this.members.add(member);
         member.getGroups().add(this);
@@ -120,5 +133,7 @@ public class Group implements Serializable {
     public void removeAll(Set<User> members) {
         for (User member : members) removeMember(member);
     }
+
+
 
 }

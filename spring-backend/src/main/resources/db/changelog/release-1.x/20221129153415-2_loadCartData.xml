@@ -4,9 +4,9 @@
         xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
 
-    <changeSet author="sven (generated)" id="20220920175815-1">
+    <changeSet author="sven (generated)" id="20221129153415-2">
         <loadData
-                file="db/data/more_carts.csv"
+                file="db/data/carts.csv"
                 seperator=","
                 tableName = "cart" >
             <column header="id" name="id" type="string"/>
@@ -18,6 +18,7 @@
             <column header="last_update" name="last_update" type="datetime"/>
             <column header="user_id" name="user_id" type="numeric"/>
             <column header="category_id" name="category_id" type="numeric"/>
+            <column header="group_id" name="group_id" type="numeric"/>
         </loadData>
 
     </changeSet>
