@@ -5,6 +5,7 @@ import { GroupMembers } from '../models/group-members';
 import { GroupSideNav } from '../models/group-side-nav';
 import { RemoveMemberDto } from '../models/remove-member-dto';
 import { UserDto } from '../models/user';
+import { CartService } from '../services/cart.service';
 import { GroupService } from '../services/group.service';
 
 @Component({
@@ -30,7 +31,8 @@ export class GroupMembersPage implements OnInit {
   constructor(
     private groupService: GroupService,
     private alertCtrl: AlertController,
-    private modalCtrl: ModalController) { }
+    private modalCtrl: ModalController,
+    private cartService: CartService) { }
 
   ngOnInit() {
     this.getCurrentUser();
@@ -109,6 +111,7 @@ export class GroupMembersPage implements OnInit {
       });
       // console.log(this.changeOwner);
     }
+    this.cartService.setCartModified(true);
   }
 
   getSelectedMember(event: any, member: UserDto, groupId: number, index: number) {

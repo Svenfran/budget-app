@@ -12,7 +12,7 @@ public interface CartRepository extends CrudRepository<Cart, Long> {
 
     List<Cart> findCartsByGroupAndUser(Group group, User user);
 
-    List<Cart> findCartsByGroupIdOrderByDatePurchasedDesc(Long groupId);
+    List<Cart> findCartsByGroupIdAndIsDeletedFalseOrderByDatePurchasedDesc(Long groupId);
 
     Optional<Cart> findById(Long id);
 

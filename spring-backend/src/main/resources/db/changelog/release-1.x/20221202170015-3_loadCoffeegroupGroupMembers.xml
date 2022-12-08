@@ -1,0 +1,19 @@
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <changeSet author="sven" id="20221202170015-3">
+        <loadData
+                file="db/data/coffeegroup_group_members.csv"
+                seperator=","
+                tableName = "group_members" >
+            <column header="id" name="id" type="string"/>
+            <column header="user_id" name="user_id" type="numeric"/>
+            <column header="group_id" name="group_id" type="numeric"/>
+        </loadData>
+
+    </changeSet>
+
+</databaseChangeLog>

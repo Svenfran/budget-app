@@ -16,6 +16,7 @@ public class CartDtoMapper {
         cart.setTitle(dto.getTitle());
         cart.setDescription(dto.getDescription());
         cart.setAmount(dto.getAmount());
+        cart.setDeleted(false);
         cart.setDatePurchased(dto.getDatePurchased());
         cart.setGroup(group);
         cart.setCategory(category);

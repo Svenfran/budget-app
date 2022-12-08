@@ -18,47 +18,47 @@ public class HandleGroupMembership {
 
     // Eine neue Gruppe wird erstellt
     public void startGroupMembershipForOwner(User user, Group group) {
-        var groupMembership = new GroupMembershipHistory();
-        groupMembership.setMembershipStart(new Date());
-        groupMembership.setMembershipEnd(null);
+        var groupMembership = createGroupMembership(user, group);
         groupMembership.setType(TypeEnum.OWNER);
-        groupMembership.setUserId(user.getId());
-        groupMembership.setGroupId(group.getId());
         groupMembershipHistoryRepository.save(groupMembership);
     }
 
     // Ein neuer Nutzer wird hinzugefügt
     public void startGroupMembershipForMember(User user, Group group) {
-        var groupMembership = new GroupMembershipHistory();
-        groupMembership.setMembershipStart(new Date());
-        groupMembership.setMembershipEnd(null);
+        var groupMembership = createGroupMembership(user, group);
         groupMembership.setType(TypeEnum.MEMBER);
-        groupMembership.setUserId(user.getId());
-        groupMembership.setGroupId(group.getId());
         groupMembershipHistoryRepository.save(groupMembership);
     }
 
     // Gruppenersteller wird zum Mitglied
     public void changeGroupOwnerToMember(User user, Group group) {
-        var groupMembership = groupMembershipHistoryRepository.
-                findByUserIdAndGroupIdAndMembershipEndIsNull(user.getId(), group.getId());
-        groupMembership.setType(TypeEnum.MEMBER);
-        groupMembershipHistoryRepository.save(groupMembership);
+        finishGroupMembership(user, group);
+        startGroupMembershipForMember(user, group);
     }
 
     // Gruppenmitglied wird zum Ersteller
     public void changeGroupMemberToOwner(User user, Group group) {
-        var groupMembership = groupMembershipHistoryRepository.
-                findByUserIdAndGroupIdAndMembershipEndIsNull(user.getId(), group.getId());
-        groupMembership.setType(TypeEnum.OWNER);
-        groupMembershipHistoryRepository.save(groupMembership);
+        finishGroupMembership(user, group);
+        startGroupMembershipForOwner(user, group);
     }
 
     // Benutzer wird aus Gruppe entfernt
-    public void finishGroupMembershipForMember(User user, Group group) {
-        var groupMembership = groupMembershipHistoryRepository.
-                findByUserIdAndGroupIdAndMembershipEndIsNull(user.getId(), group.getId());
+    public void finishGroupMembership(User user, Group group) {
+        var groupMembership = getGroupMembershipByUserIdAndGroupIdAndMembershipEndIsNull(user, group);
         groupMembership.setMembershipEnd(new Date());
         groupMembershipHistoryRepository.save(groupMembership);
+    }
+
+    private GroupMembershipHistory getGroupMembershipByUserIdAndGroupIdAndMembershipEndIsNull(User user, Group group) {
+        return groupMembershipHistoryRepository.findByUserIdAndGroupIdAndMembershipEndIsNull(user.getId(), group.getId());
+    }
+
+    private GroupMembershipHistory createGroupMembership(User user, Group group) {
+        var groupMembership = new GroupMembershipHistory();
+        groupMembership.setMembershipStart(new Date());
+        groupMembership.setMembershipEnd(null);
+        groupMembership.setUserId(user.getId());
+        groupMembership.setGroupId(group.getId());
+        return groupMembership;
     }
 }

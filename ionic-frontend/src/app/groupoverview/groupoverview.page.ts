@@ -7,6 +7,7 @@ import { GroupOverview } from '../models/group-overview';
 import { GroupSideNav } from '../models/group-side-nav';
 import { NewMemberDto } from '../models/new-member-dto';
 import { UserDto } from '../models/user';
+import { CartService } from '../services/cart.service';
 import { GroupService } from '../services/group.service';
 
 @Component({
@@ -28,7 +29,8 @@ export class GroupoverviewPage implements OnInit {
     private alertCtrl: AlertController,
     private loadingCtrl: LoadingController,
     private modalCtrl: ModalController,
-    private toastCtrl: ToastController
+    private toastCtrl: ToastController,
+    private cartService: CartService
     ) { }
 
   ngOnInit() {
@@ -140,6 +142,7 @@ export class GroupoverviewPage implements OnInit {
             )
             this.groupService.addMemberToGroup(newMember).subscribe(() => {
               this.getGroupsForOverview();
+              this.cartService.setCartModified(true);
               loadingEl.dismiss();
               let message = "Benutzer wurde zur Gruppe " + groupName + " hinzugefügt"
               this.showToast(message);

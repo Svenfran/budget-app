@@ -16,7 +16,7 @@
 <ion-list-header color="light">
   <ion-label>
     <div class="total">
-      <ion-text>{{ filterTerm == "" ? "Gesamt" : filterTerm | titlecase }}({{ count }}):</ion-text>
+      <ion-text>{{ filterTerm == "" ? "Gesamt" : filterTerm | titlecase }} ({{ count }})</ion-text>
       <ion-text>{{ sum | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
     </div>
   </ion-label>

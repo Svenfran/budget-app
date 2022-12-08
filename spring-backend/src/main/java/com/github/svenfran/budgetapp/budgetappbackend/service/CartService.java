@@ -41,7 +41,7 @@ public class CartService {
         var groupMembers = group.getMembers();
 
         if (groupOwner.equals(user) || groupMembers.contains(user)) {
-            var cartList = cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(groupId);
+            var cartList = cartRepository.findCartsByGroupIdAndIsDeletedFalseOrderByDatePurchasedDesc(groupId);
             return cartList.stream().map(CartDto::new).toList();
         } else throw new NotOwnerOrMemberOfGroupException("Get Carts: You are either a member nor the owner of the group");
     }

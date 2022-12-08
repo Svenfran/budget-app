@@ -116,6 +116,11 @@ public class GroupService {
         } else {
             group.addMember(newMember);
             handleGroupMembership.startGroupMembershipForMember(newMember, group);
+            var cartsOfNewMember = cartRepository.findCartsByGroupAndUser(group, newMember);
+            if (cartsOfNewMember.size() > 0) {
+                cartsOfNewMember.forEach(cart -> cart.setDeleted(false));
+                cartRepository.saveAll(cartsOfNewMember);
+            }
         }
         return new GroupMembersDto(groupRepository.save(group));
     }
@@ -130,10 +135,12 @@ public class GroupService {
 
         if (user.equals(group.getOwner()) || user.equals(removedMember)) {
             group.removeMember(removedMember);
-            handleGroupMembership.finishGroupMembershipForMember(removedMember, group);
-            // TODO: carts have to be available -> no deletion!
+            handleGroupMembership.finishGroupMembership(removedMember, group);
             var cartsOfRemovedMember = cartRepository.findCartsByGroupAndUser(group, removedMember);
-            if (cartsOfRemovedMember.size() > 0) cartRepository.deleteAll(cartsOfRemovedMember);
+            if (cartsOfRemovedMember.size() > 0) {
+                cartsOfRemovedMember.forEach(cart -> cart.setDeleted(true));
+                cartRepository.saveAll(cartsOfRemovedMember);
+            }
         } else throw new NotOwnerOfGroupException("Remove member: You are not allowed to remove other members from the group");
 
         return new GroupMembersDto(groupRepository.save(group));

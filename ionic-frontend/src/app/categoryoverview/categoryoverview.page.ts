@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { AlertController, IonItemSliding, LoadingController } from '@ionic/angular';
 import { CategoryDto } from '../models/category';
 import { GroupSideNav } from '../models/group-side-nav';
+import { CartService } from '../services/cart.service';
 import { CategoryService } from '../services/category.service';
 import { GroupService } from '../services/group.service';
 
@@ -20,7 +21,8 @@ export class CategoryoverviewPage implements OnInit {
     private alertCtrl: AlertController,
     private loadingCtrl: LoadingController,
     private groupService: GroupService,
-    private categoryService: CategoryService
+    private categoryService: CategoryService,
+    private cartService: CartService
   ) { }
 
   ngOnInit() {
@@ -91,6 +93,7 @@ export class CategoryoverviewPage implements OnInit {
               this.categoryService.getCategoriesByGroup(this.activeGroup.id).subscribe(categories => {
                 this.categories = categories;
               });
+              this.cartService.setCartModified(true);
             })
           })
         }
@@ -109,7 +112,7 @@ export class CategoryoverviewPage implements OnInit {
 
   onDeleteCategory(category: CategoryDto) {
     this.alertCtrl.create({
-      header: "Löschen:",
+      header: "Löschen",
       message: `Möchtest du die Kategorie "${category.name}" wirklich löschen?`,
       buttons: [{
         text: "Abbrechen",

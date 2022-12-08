@@ -59,12 +59,14 @@ export class CartlistPage implements OnInit, OnDestroy {
       this.sum = 0;
       this.count = 0;
     } else {
-      this.cartSub = this.cartService.getCartListByGroupId(groupId).subscribe(carts => {
-        this.isLoading = false;
-        this.cartlist = carts;
-        this.sum = this.cartlist.reduce((s, c) => s + (+c.amount), 0);
-        this.count = this.cartlist.length;
-      });
+      this.cartService.cartModified.subscribe(() => {
+        this.cartSub = this.cartService.getCartListByGroupId(groupId).subscribe(carts => {
+          this.isLoading = false;
+          this.cartlist = carts;
+          this.sum = this.cartlist.reduce((s, c) => s + (+c.amount), 0);
+          this.count = this.cartlist.length;
+        });
+      })
     }
   }
 

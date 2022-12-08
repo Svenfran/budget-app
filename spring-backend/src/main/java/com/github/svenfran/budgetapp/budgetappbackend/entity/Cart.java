@@ -25,6 +25,12 @@ public class Cart implements Serializable {
     @Column(name = "amount")
     private Double amount;
 
+    @Column(name = "average_per_member")
+    private Double averagePerMember;
+
+    @Column(name = "is_deleted")
+    private boolean isDeleted;
+
     @Column(name = "date_purchased")
     private Date datePurchased;
 
@@ -48,11 +54,13 @@ public class Cart implements Serializable {
     @JoinColumn(name = "category_id", nullable = false)
     private Category category;
 
-    public Cart(Long id, String title, String description, Double amount, Date datePurchased, Date dateCreated, Date lastUpdate, Group group, User user, Category category) {
+    public Cart(Long id, String title, String description, Double amount, Double averagePerMember, boolean isDeleted, Date datePurchased, Date dateCreated, Date lastUpdate, Group group, User user, Category category) {
         this.id = id;
         this.title = title;
         this.description = description;
         this.amount = amount;
+        this.averagePerMember = averagePerMember;
+        this.isDeleted = isDeleted;
         this.datePurchased = datePurchased;
         this.dateCreated = dateCreated;
         this.lastUpdate = lastUpdate;
@@ -142,5 +150,21 @@ public class Cart implements Serializable {
 
     public void setGroup(Group group) {
         this.group = group;
+    }
+
+    public boolean isDeleted() {
+        return isDeleted;
+    }
+
+    public void setDeleted(boolean deleted) {
+        isDeleted = deleted;
+    }
+
+    public Double getAveragePerMember() {
+        return averagePerMember;
+    }
+
+    public void setAveragePerMember(Double averagePerMember) {
+        this.averagePerMember = averagePerMember;
     }
 }
