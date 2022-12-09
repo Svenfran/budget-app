@@ -1,8 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service.mapper;
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto;
-import com.github.svenfran.budgetapp.budgetappbackend.dto.CategoryDto;
-import com.github.svenfran.budgetapp.budgetappbackend.dto.GroupDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Category;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
@@ -10,8 +8,6 @@ import org.junit.jupiter.api.Test;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.Date;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -19,15 +15,17 @@ import static org.junit.jupiter.api.Assertions.*;
 class CartDtoMapperTest {
 
     private final CartDtoMapper cartDtoMapper = new CartDtoMapper();
+    private int memberCount = 5;
 
     @Test
     void cartDtoToEntity_positive() throws ParseException {
-        var cartEntity = cartDtoMapper.CartDtoToEntity(cartDto(), category(),cartOwner(), group());
+        var cartEntity = cartDtoMapper.CartDtoToEntity(cartDto(), category(),cartOwner(), group(), memberCount);
 
         assertEquals(cartEntity.getId(), 1L);
         assertEquals(cartEntity.getTitle(), "TestCart");
         assertEquals(cartEntity.getDescription(), "TestDescription");
         assertEquals(cartEntity.getAmount(), 55.00);
+        assertEquals(cartEntity.getAveragePerMember(), 11);
         assertEquals(cartEntity.getDatePurchased(), dateFromString("2022-10-31"));
         assertEquals(cartEntity.getGroup().getId(), 1L);
         assertEquals(cartEntity.getUser().getId(), 5L);
@@ -38,12 +36,13 @@ class CartDtoMapperTest {
 
     @Test
     void cartDtoToEntity_negative() throws ParseException {
-        var cartEntity = cartDtoMapper.CartDtoToEntity(cartDto(), category(),cartOwner(), group());
+        var cartEntity = cartDtoMapper.CartDtoToEntity(cartDto(), category(),cartOwner(), group(), memberCount);
 
         assertNotEquals(cartEntity.getId(), 10L);
         assertNotEquals(cartEntity.getTitle(), "Cart");
         assertNotEquals(cartEntity.getDescription(), "Description");
         assertNotEquals(cartEntity.getAmount(), 155.00);
+        assertNotEquals(cartEntity.getAveragePerMember(), 31.00);
         assertNotEquals(cartEntity.getDatePurchased(), dateFromString("2022-11-31"));
         assertNotEquals(cartEntity.getGroup().getId(), 10L);
         assertNotEquals(cartEntity.getUser().getId(), 50L);

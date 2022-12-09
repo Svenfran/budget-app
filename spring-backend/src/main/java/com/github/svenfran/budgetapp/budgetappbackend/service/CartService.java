@@ -71,7 +71,9 @@ public class CartService {
         var groupMembers = group.getMembers();
 
         if (groupOwner.equals(user) || groupMembers.contains(user)) {
-            return new CartDto(cartRepository.save(cartDtoMapper.CartDtoToEntity(cartDto, category, user, group)));
+            var groupMemberCount = cartRepository
+                    .getGroupMemberCountForCartDatePurchased(cartDto.getDatePurchased(), group.getId());
+            return new CartDto(cartRepository.save(cartDtoMapper.CartDtoToEntity(cartDto, category, user, group, groupMemberCount)));
         } else throw new NotOwnerOrMemberOfGroupException("Add Cart: You are either a member nor the owner of the group");
     }
 
@@ -92,7 +94,9 @@ public class CartService {
 
         if (groupOwner.equals(user) || groupMembers.contains(user)) {
             if (cartOwner.equals(user)) {
-                return new CartDto(cartRepository.save(cartDtoMapper.CartDtoToEntity(cartDto, category, user, group)));
+                var groupMemberCount = cartRepository
+                        .getGroupMemberCountForCartDatePurchased(cartDto.getDatePurchased(), group.getId());
+                return new CartDto(cartRepository.save(cartDtoMapper.CartDtoToEntity(cartDto, category, user, group, groupMemberCount)));
             } else throw new NotOwnerOfCartException("Update Cart: You are not the owner of the cart");
         } else throw new NotOwnerOrMemberOfGroupException("Update Cart: You are either a member nor the owner of the group");
     }

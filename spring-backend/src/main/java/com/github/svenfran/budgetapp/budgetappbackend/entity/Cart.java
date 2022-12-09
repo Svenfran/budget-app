@@ -34,7 +34,7 @@ public class Cart implements Serializable {
     @Column(name = "date_purchased")
     private Date datePurchased;
 
-    @Column(name = "date_created")
+    @Column(name = "date_created", nullable = false, updatable = false)
     @CreationTimestamp
     private Date dateCreated;
 
