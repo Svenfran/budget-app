@@ -1,4 +1,4 @@
-package com.github.svenfran.budgetapp.budgetappbackend.service.helper;
+package com.github.svenfran.budgetapp.budgetappbackend.service;
 
 import com.github.svenfran.budgetapp.budgetappbackend.constants.TypeEnum;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
 import java.util.Date;
 
 @Service
-public class HandleGroupMembership {
+public class GroupMembershipHistoryService {
 
     @Autowired
     private GroupMembershipHistoryRepository groupMembershipHistoryRepository;

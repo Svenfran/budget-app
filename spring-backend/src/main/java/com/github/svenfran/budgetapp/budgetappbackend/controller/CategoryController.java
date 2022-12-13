@@ -1,8 +1,7 @@
 package com.github.svenfran.budgetapp.budgetappbackend.controller;
 
-import com.github.svenfran.budgetapp.budgetappbackend.Exceptions.*;
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CategoryDto;
-import com.github.svenfran.budgetapp.budgetappbackend.entity.Category;
 import com.github.svenfran.budgetapp.budgetappbackend.service.CategoryService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;

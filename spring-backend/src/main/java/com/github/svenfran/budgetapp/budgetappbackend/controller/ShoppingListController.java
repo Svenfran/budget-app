@@ -1,6 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.controller;
 
-import com.github.svenfran.budgetapp.budgetappbackend.Exceptions.*;
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingListDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingListDto;
 import com.github.svenfran.budgetapp.budgetappbackend.service.ShoppingListService;

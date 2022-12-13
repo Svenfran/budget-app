@@ -1,13 +1,13 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
-import com.github.svenfran.budgetapp.budgetappbackend.Exceptions.*;
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.constants.UserEnum;
+import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto;
+import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CategoryRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository;
-import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto;
-import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
 import com.github.svenfran.budgetapp.budgetappbackend.service.mapper.CartDtoMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -125,4 +125,5 @@ public class CartService {
         return userRepository.findById(userId).
                 orElseThrow(() -> new UserNotFoundException("User with id " + userId + " not found"));
     }
+
 }

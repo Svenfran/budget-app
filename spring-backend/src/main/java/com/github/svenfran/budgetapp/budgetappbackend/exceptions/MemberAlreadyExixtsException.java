@@ -1,4 +1,4 @@
-package com.github.svenfran.budgetapp.budgetappbackend.Exceptions;
+package com.github.svenfran.budgetapp.budgetappbackend.exceptions;
 
 public class MemberAlreadyExixtsException extends Exception {
     public MemberAlreadyExixtsException(String message) {

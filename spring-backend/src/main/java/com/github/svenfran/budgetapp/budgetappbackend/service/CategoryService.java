@@ -1,6 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
-import com.github.svenfran.budgetapp.budgetappbackend.Exceptions.*;
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.constants.UserEnum;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CategoryRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository;

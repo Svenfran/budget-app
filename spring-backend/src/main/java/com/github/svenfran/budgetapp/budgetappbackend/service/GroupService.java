@@ -1,13 +1,12 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
-import com.github.svenfran.budgetapp.budgetappbackend.Exceptions.*;
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.constants.UserEnum;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.*;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Category;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.*;
-import com.github.svenfran.budgetapp.budgetappbackend.service.helper.HandleGroupMembership;
 import com.github.svenfran.budgetapp.budgetappbackend.service.mapper.GroupDtoMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -42,7 +41,7 @@ public class GroupService {
     private ShoppingItemRepository shoppingItemRepository;
 
     @Autowired
-    private HandleGroupMembership handleGroupMembership;
+    private GroupMembershipHistoryService groupMembershipHistoryService;
 
     @Autowired
     private GroupMembershipHistoryRepository groupMembershipHistoryRepository;
@@ -81,7 +80,7 @@ public class GroupService {
         var user = getCurrentUser();
         var group = groupRepository.save(groupDtoMapper.GroupDtoToEntity(groupDto, user));
         createDefaultCategories(group);
-        handleGroupMembership.startGroupMembershipForOwner(user, group);
+        groupMembershipHistoryService.startGroupMembershipForOwner(user, group);
         return new GroupDto(group);
     }
 
@@ -115,7 +114,7 @@ public class GroupService {
             throw new MemberEqualsOwnerException("Add new member: New member equals group owner");
         } else {
             group.addMember(newMember);
-            handleGroupMembership.startGroupMembershipForMember(newMember, group);
+            groupMembershipHistoryService.startGroupMembershipForMember(newMember, group);
             var cartsOfNewMember = cartRepository.findCartsByGroupAndUser(group, newMember);
             if (cartsOfNewMember.size() > 0) {
                 cartsOfNewMember.forEach(cart -> cart.setDeleted(false));
@@ -135,7 +134,7 @@ public class GroupService {
 
         if (user.equals(group.getOwner()) || user.equals(removedMember)) {
             group.removeMember(removedMember);
-            handleGroupMembership.finishGroupMembership(removedMember, group);
+            groupMembershipHistoryService.finishGroupMembership(removedMember, group);
             var cartsOfRemovedMember = cartRepository.findCartsByGroupAndUser(group, removedMember);
             if (cartsOfRemovedMember.size() > 0) {
                 cartsOfRemovedMember.forEach(cart -> cart.setDeleted(true));
@@ -181,8 +180,8 @@ public class GroupService {
             group.removeMember(newGroupOwner);
             group.setOwner(newGroupOwner);
             group.addMember(user);
-            handleGroupMembership.changeGroupOwnerToMember(groupOwner, group);
-            handleGroupMembership.changeGroupMemberToOwner(newGroupOwner, group);
+            groupMembershipHistoryService.changeGroupOwnerToMember(groupOwner, group);
+            groupMembershipHistoryService.changeGroupMemberToOwner(newGroupOwner, group);
             groupRepository.save(group);
         } else throw new NotOwnerOfGroupException("Change Group Owner: You are not the owner of the group");
     }

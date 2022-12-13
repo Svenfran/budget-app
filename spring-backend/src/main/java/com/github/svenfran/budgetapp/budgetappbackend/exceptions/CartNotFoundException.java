@@ -1,4 +1,4 @@
-package com.github.svenfran.budgetapp.budgetappbackend.Exceptions;
+package com.github.svenfran.budgetapp.budgetappbackend.exceptions;
 
 public class CartNotFoundException extends Exception {
     public CartNotFoundException(String message) {

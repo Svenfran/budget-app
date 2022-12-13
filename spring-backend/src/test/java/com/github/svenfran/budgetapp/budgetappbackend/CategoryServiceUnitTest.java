@@ -1,10 +1,9 @@
 package com.github.svenfran.budgetapp.budgetappbackend;
 
-import com.github.svenfran.budgetapp.budgetappbackend.Exceptions.GroupNotFoundException;
-import com.github.svenfran.budgetapp.budgetappbackend.Exceptions.NotOwnerOrMemberOfGroupException;
-import com.github.svenfran.budgetapp.budgetappbackend.Exceptions.UserNotFoundException;
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.GroupNotFoundException;
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOrMemberOfGroupException;
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CategoryDto;
-import com.github.svenfran.budgetapp.budgetappbackend.entity.Category;
 import com.github.svenfran.budgetapp.budgetappbackend.service.CategoryService;
 import org.junit.Assert;
 import org.junit.Test;

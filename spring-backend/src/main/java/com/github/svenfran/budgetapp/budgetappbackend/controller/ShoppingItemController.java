@@ -1,6 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.controller;
 
-import com.github.svenfran.budgetapp.budgetappbackend.Exceptions.*;
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto;
 import com.github.svenfran.budgetapp.budgetappbackend.service.ShoppingItemService;
 import org.springframework.beans.factory.annotation.Autowired;
