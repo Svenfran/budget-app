@@ -1,6 +1,7 @@
 import { Component, Input, OnInit } from '@angular/core';
 import { AlertController, ModalController } from '@ionic/angular';
 import { ChangeGroupOwner } from '../models/change-group-owner';
+import { Group } from '../models/group';
 import { GroupMembers } from '../models/group-members';
 import { GroupSideNav } from '../models/group-side-nav';
 import { RemoveMemberDto } from '../models/remove-member-dto';
@@ -22,7 +23,7 @@ export class GroupMembersPage implements OnInit {
   currentUser: UserDto;
   groupMembers: UserDto[] = [];
   groupsSideNav: GroupSideNav[] = [];
-  activeGroup: GroupSideNav;
+  activeGroup: Group;
   changeOwner: ChangeGroupOwner;
   isSelected: boolean;
   isNotVisible: boolean = true;
@@ -84,9 +85,10 @@ export class GroupMembersPage implements OnInit {
         text: "Ja",
         handler: () => {
           if (this.groupsSideNav.length > 0 && (memberToRemove.id == this.currentUser.id) && this.activeGroup.id == groupWithMembers.id) {
-            this.groupService.setActiveGroup(new GroupSideNav(
+            this.groupService.setActiveGroup(new Group(
               this.groupsSideNav[0].id,
-              this.groupsSideNav[0].name
+              this.groupsSideNav[0].name,
+              this.groupsSideNav[0].dateCreated
             ))
           }
           this.groupService.removeMemberFromGroup(removeGroupMember).subscribe(() => {

@@ -74,9 +74,10 @@ export class GroupoverviewPage implements OnInit {
               this.groupService.setGroupModified(true);
               this.groupService.activeGroup.subscribe(activeGroup => {
                 if(this.groupOverviewList.length > 0 && (activeGroup.id === groupId)) {
-                    this.groupService.setActiveGroup(new GroupSideNav(
+                    this.groupService.setActiveGroup(new Group(
                       this.groupOverviewList[0].id,
-                      this.groupOverviewList[0].name
+                      this.groupOverviewList[0].name,
+                      this.groupOverviewList[0].dateCreated
                     ))
                 } else if (this.groupOverviewList.length <= 0 && activeGroup.id === groupId) {
                   this.groupService.setActiveGroup(null);
@@ -240,7 +241,8 @@ export class GroupoverviewPage implements OnInit {
         groupWithMembers.data.id,
         groupWithMembers.data.name,
         groupWithMembers.data.ownerName,
-        groupWithMembers.data.members.length
+        groupWithMembers.data.members.length,
+        groupWithMembers.data.dateCreated
       )
  
       let index = this.groupOverviewList.indexOf(

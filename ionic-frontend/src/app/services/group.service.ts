@@ -16,7 +16,7 @@ import { UserDto } from '../models/user';
 })
 export class GroupService {
 
-  private _activeGroup = new BehaviorSubject<GroupSideNav>(null);
+  private _activeGroup = new BehaviorSubject<Group>(null);
   private _groupModified = new BehaviorSubject<boolean>(false);
   private _currentUser = new BehaviorSubject<UserDto>(null);
 
@@ -33,8 +33,8 @@ export class GroupService {
 
   constructor(private http: HttpClient) { }
 
-  setActiveGroup(activeGroup: GroupSideNav) {
-    let noGroupAvailable = new GroupSideNav(null, 'Keine Gruppe ausgewählt!')
+  setActiveGroup(activeGroup: Group) {
+    let noGroupAvailable = new Group(null, 'Keine Gruppe ausgewählt!', null)
     if (!activeGroup) {
       // console.log("Active Group not defined!")
       this._activeGroup.next(noGroupAvailable);

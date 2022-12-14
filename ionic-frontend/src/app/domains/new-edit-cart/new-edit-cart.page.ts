@@ -9,6 +9,7 @@ import { CategoryService } from 'src/app/services/category.service';
 import { Cart } from 'src/app/models/cart';
 import { format, parseISO } from 'date-fns'
 import { GroupService } from 'src/app/services/group.service';
+import { Group } from 'src/app/models/group';
 
 
 @Component({
@@ -26,7 +27,9 @@ export class NewEditCartPage implements OnInit {
   showPicker = false;
   dateValue = "";
   formattedString = "";
+  minDate = "";
   activeGroupId: number;
+  activeGroup: Group;
 
   @ViewChild(IonDatetime) datetime: IonDatetime;
   constructor(
@@ -67,7 +70,10 @@ export class NewEditCartPage implements OnInit {
     this.groupService.activeGroup.subscribe(group => {
       this.categoryService.getCategoriesByGroup(group.id).subscribe((categories) => {
         this.activeGroupId = group.id;
+        this.activeGroup = group;
         this.categories = categories;
+        this.minDate = format(new Date(group.dateCreated), 'yyyy-MM-dd') + 'T00:00:00';
+        
       });
     });
   }

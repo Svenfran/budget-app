@@ -1,8 +1,8 @@
-name,owner_id
-Eigene Ausgaben,1
-Meine Ausgaben,2
-Haushalt,2
-Ausgaben,3
-WG,4
-Haushalt,1
-Kaffee mit Kollegen,2
+name,owner_id,date_created,last_update
+Eigene Ausgaben,1,2022-05-29 21:26:47.817000,
+Meine Ausgaben,2,2022-10-29 21:26:47.817000,
+Haushalt,2,2022-06-01 09:16:23.247000,
+Ausgaben,3,2022-07-02 11:26:32.567000,
+WG,4,2022-09-04 14:54:44.298000,
+Haushalt,1,2022-01-27 19:44:49.285000,
+Kaffee mit Kollegen,2,2022-01-10 00:00:00.000000,

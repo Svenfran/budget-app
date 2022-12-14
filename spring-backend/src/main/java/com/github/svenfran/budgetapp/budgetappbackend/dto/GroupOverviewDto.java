@@ -7,6 +7,7 @@ public class GroupOverviewDto extends GroupSideNavDto {
     private String ownerName;
     private int memberCount;
 
+
     public GroupOverviewDto(Group group) {
         super(group);
         this.ownerName = group.getOwner().getUserName();
@@ -31,4 +32,6 @@ public class GroupOverviewDto extends GroupSideNavDto {
     public void setMemberCount(int memberCount) {
         this.memberCount = memberCount;
     }
+
+
 }

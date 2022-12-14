@@ -12,7 +12,6 @@ import org.springframework.stereotype.Service;
 import java.text.DateFormatSymbols;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 public class SpendingsOverviewService {
@@ -34,8 +33,8 @@ public class SpendingsOverviewService {
 
     private List<SpendingsOverviewPerMonthDto> getSpendngsOverviewPerMonthDto(int year, Long groupId) {
         var spendingsPerMonthList = new ArrayList<SpendingsOverviewPerMonthDto>();
-        var spendingsAmountAverageDiffPerMonth = getSpendingsAmountAverageDiffPerMonth(year, groupId);
-        var spendingsMonthly = getSpendingsMonthlyTotalSumAmountPerMonth(year, groupId);
+        var spendingsAmountAverageDiffPerMonth = cartRepository.getSpendingsAmountAverageDiffPerMonth(year, groupId);
+        var spendingsMonthly = cartRepository.getSpendingsMonthlyTotalSumAmount(year, groupId);
 
         for (SpendingsOverviewMonthlyTotalSumAmountDto spendings : spendingsMonthly) {
             var spendingsPerMonth = new SpendingsOverviewPerMonthDto();
@@ -64,12 +63,13 @@ public class SpendingsOverviewService {
 
     private SpendingsOverviewTotalYearDto getSpendngsOverviewTotalYearDto(int year, Long groupId) {
         var spendingsTotalYear = new SpendingsOverviewTotalYearDto();
-        var spendingsSumAverageDiffPerUser = getSpendingsAmountAverageDiffPerUser(year, groupId);
+        var spendingsSumAverageDiffPerUser = cartRepository.getSpendingsAmountAverageDiffPerUser(year, groupId);
         var userList = new ArrayList<SpendingsOverviewUserDto>();
 
         for (SpendingsOverviewAmountAverageDiffPerUserDto spendings : spendingsSumAverageDiffPerUser) {
             var spendingsPerUser = new SpendingsOverviewUserDto();
             spendingsPerUser.setUserId(spendings.getUserId());
+            //TODO: Wenn Nutzer gelöscht wird, schlägt nachfolgende Zeile fehl -> User-Name in membership-history speichern?
             spendingsPerUser.setUserName(userRepository.findById(spendings.getUserId()).get().getUserName());
             spendingsPerUser.setSum(spendings.getSumAmount());
             spendingsPerUser.setDiff(spendings.getDiff());
@@ -81,20 +81,8 @@ public class SpendingsOverviewService {
         return spendingsTotalYear;
     }
 
-    private List<SpendingsOverviewAmountAverageDiffPerMonthDto> getSpendingsAmountAverageDiffPerMonth(int year, Long groupId) {
-        return cartRepository.getSpendingsAmountAverageDiffPerMonth(year, groupId);
-    }
-
-    private List<SpendingsOverviewAmountAverageDiffPerUserDto> getSpendingsAmountAverageDiffPerUser(int year, Long groupId) {
-        return cartRepository.getSpendingsAmountAverageDiffPerUser(year, groupId);
-    }
-
-    private List<SpendingsOverviewMonthlyTotalSumAmountDto> getSpendingsMonthlyTotalSumAmountPerMonth(int year, Long groupId) {
-        return cartRepository.getSpendingsMonthlyTotalSumAmountPerMonth(year, groupId);
-    }
-
     private Double getTotalAmountPerYear(int year, Long groupId) {
-        return getSpendingsMonthlyTotalSumAmountPerMonth(year, groupId)
+        return cartRepository.getSpendingsMonthlyTotalSumAmount(year, groupId)
                 .stream().mapToDouble(SpendingsOverviewMonthlyTotalSumAmountDto::getSumAmountTotalPerMonth).sum();
     }
 

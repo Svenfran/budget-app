@@ -1,9 +1,12 @@
 package com.github.svenfran.budgetapp.budgetappbackend.entity;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import javax.persistence.*;
 import java.io.Serializable;
+import java.util.Date;
 import java.util.Set;
 
 @Entity
@@ -17,6 +20,14 @@ public class Group implements Serializable {
 
     @Column(name = "name")
     private String name;
+
+    @Column(name = "date_created", nullable = false, updatable = false)
+    @CreationTimestamp
+    private Date dateCreated;
+
+    @Column(name = "last_update")
+    @UpdateTimestamp
+    private Date lastUpdate;
 
     @OneToMany(mappedBy = "group")
     @JsonBackReference
@@ -42,9 +53,11 @@ public class Group implements Serializable {
     @JsonBackReference
     private Set<User> memberList;
 
-    public Group(Long id, String name, Set<Cart> carts, Set<ShoppingList> shoppingLists, Set<Category> categories, User owner, Set<User> members, Set<User> memberList) {
+    public Group(Long id, String name, Date dateCreated, Date lastUpdate, Set<Cart> carts, Set<ShoppingList> shoppingLists, Set<Category> categories, User owner, Set<User> members, Set<User> memberList) {
         this.id = id;
         this.name = name;
+        this.dateCreated = dateCreated;
+        this.lastUpdate = lastUpdate;
         this.carts = carts;
         this.shoppingLists = shoppingLists;
         this.categories = categories;
@@ -134,6 +147,19 @@ public class Group implements Serializable {
         for (User member : members) removeMember(member);
     }
 
+    public Date getDateCreated() {
+        return dateCreated;
+    }
 
+    public void setDateCreated(Date dateCreated) {
+        this.dateCreated = dateCreated;
+    }
 
+    public Date getLastUpdate() {
+        return lastUpdate;
+    }
+
+    public void setLastUpdate(Date lastUpdate) {
+        this.lastUpdate = lastUpdate;
+    }
 }

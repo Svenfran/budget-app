@@ -19,7 +19,7 @@ export class AppComponent {
   userName: string;
   grouplistSideNav: GroupSideNav[];
   isOpen = false;
-  activeGroup: GroupSideNav;
+  activeGroup: Group;
   groupModified: boolean;
 
   constructor(

@@ -10,6 +10,8 @@
                 <constraints primaryKey="true" nullable="false"/>
             </column>
             <column name="name" type="VARCHAR(255)"/>
+            <column name="date_created" type="DATETIME"/>
+            <column name="last_update" type="DATETIME"/>
             <column name="owner_id" type="BIGINT"/>
         </createTable>
     </changeSet>

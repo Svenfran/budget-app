@@ -38,7 +38,7 @@ public interface CartRepository extends CrudRepository<Cart, Long> {
             "from Cart as c where year(c.datePurchased) = :year and c.group.id = :groupId " +
             "group by _month, _year " +
             "order by _month asc")
-    List<SpendingsOverviewMonthlyTotalSumAmountDto> getSpendingsMonthlyTotalSumAmountPerMonth(@Param("year") int year, @Param("groupId") Long groupId);
+    List<SpendingsOverviewMonthlyTotalSumAmountDto> getSpendingsMonthlyTotalSumAmount(@Param("year") int year, @Param("groupId") Long groupId);
 
     @Query("select new com.github.svenfran.budgetapp.budgetappbackend.dto.SpendingsOverviewAmountAverageDiffPerMonthDto(" +
             "sum(case when c.user.id = gmh.userId then c.amount else 0 end), sum(c.averagePerMember), sum(case when c.user.id = gmh.userId then c.amount else 0 end) - SUM(c.averagePerMember), " +
