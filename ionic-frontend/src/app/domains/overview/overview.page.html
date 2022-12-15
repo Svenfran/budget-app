@@ -5,11 +5,109 @@
     </ion-buttons>
     <ion-title>Übersicht</ion-title>
     <ion-buttons slot="primary">
-      <ion-text class="ion-padding"><small>{{ activeGroupName }}</small></ion-text>
+      <ion-text class="ion-padding"><small>{{ activeGroup.name }}</small></ion-text>
+      <ion-button id="popover-button" [class.hide]="availableYears.length <= 0">
+        <ion-icon name="ellipsis-vertical"></ion-icon>
+      </ion-button>
+      <ion-popover trigger="popover-button" [dismissOnSelect]="true" side="bottom" alignment="start">
+        <ng-template>
+          <ion-content>
+            <ion-list lines="none">
+              <ion-item *ngFor="let year of availableYears" size="small" [button]="true" [detail]="false" (click)="getSpendingsOverview(year)">{{year}}</ion-item>
+            </ion-list>
+          </ion-content>
+        </ng-template>
+      </ion-popover>
     </ion-buttons>
   </ion-toolbar>
 </ion-header>
 
 <ion-content>
+  <ion-grid class="ion-padding">
+    <ion-row>
+      <ion-col class="ion-text-center" size-md="6" offset-md="3" *ngIf="isLoading">
+        <ion-spinner color="primary"></ion-spinner>
+      </ion-col>
+      <ion-col class="ion-text-center" size-md="6" offset-md="3" *ngIf="!isLoading && (!spendingsPerMonth || spendingsPerMonth.length <= 0)">
+        <p>Keine Ausgaben vorhanden!</p>
+      </ion-col>
+    </ion-row>
+    <ion-row>
+      <ion-col size-md="6" offset-md="3" *ngIf="!isLoading && spendingsTotalYear.spendingsTotalUser && spendingsTotalYear.spendingsTotalUser.length > 0">
+        <ion-list *ngIf="!isLoading && spendingsTotalYear.spendingsTotalUser.length > 0">
+          <ion-item lines="none">
+            <ion-label>
 
+              <div class="spendings-details">
+                <div class="spendings-date">
+                  <ion-text class="month">{{ spendingsPerMonth[spendingsPerMonth.length - 1].monthName }} - {{ spendingsPerMonth[0].monthName }}</ion-text>
+                  <ion-text>{{ year }}</ion-text>
+                </div>
+
+                <div class="spendings-user-details" *ngFor="let userSpendings of spendingsTotalYear.spendingsTotalUser">
+                  <div class="spendings-user-amount">
+                    <div class="space">
+                      <ion-text color="medium">{{ userSpendings.userName | titlecase }}</ion-text>
+                      <ion-text>{{ userSpendings.sum | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
+                    </div>
+                  </div>
+                  <div class="spendings-user-diff">
+                    <ion-text *ngIf="userSpendings.diff >= 0" class="positive bold">{{ userSpendings.diff | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
+                    <ion-text *ngIf="userSpendings.diff < 0" class="negative bold">{{ userSpendings.diff | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
+                  </div>
+                </div>
+
+                <div class="spendings-total">
+                  <ion-text class="bold" color="medium">Gesamt:</ion-text>
+                  <ion-text class="bold">{{ spendingsTotalYear.sumTotalYear | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
+                </div>
+              </div>
+
+            </ion-label>
+          </ion-item>
+        </ion-list>
+      </ion-col>
+    </ion-row>
+    <ion-row>
+      <ion-col size-md="6" offset-md="3" *ngIf="!isLoading && spendingsPerMonth && spendingsPerMonth.length > 0">
+        <ion-list *ngIf="!isLoading && spendingsPerMonth.length > 0">
+          <ion-list-header (click)="hide()">
+            <ion-text class="space-right">Monatliche Ausgaben</ion-text>
+            <ion-icon *ngIf="hidden" name="chevron-down-outline"></ion-icon>
+            <ion-icon *ngIf="!hidden" name="chevron-up-outline"></ion-icon>
+          </ion-list-header>
+          <ion-item [hidden]="hidden" *ngFor="let spendings of spendingsPerMonth">
+            <ion-label>
+
+              <div class="spendings-details">
+                <div class="spendings-date">
+                  <ion-text class="month">{{ spendings.monthName }}</ion-text>
+                  <ion-text>{{ year }}</ion-text>
+                </div>
+
+                <div class="spendings-user-details" *ngFor="let userSpendings of spendings.spendingsMonthlyUser">
+                  <div class="spendings-user-amount">
+                    <div class="space">
+                      <ion-text color="medium">{{ userSpendings.userName | titlecase }}</ion-text>
+                      <ion-text>{{ userSpendings.sum | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
+                    </div>
+                  </div>
+                  <div class="spendings-user-diff">
+                    <ion-text *ngIf="userSpendings.diff >= 0" class="positive bold">{{ userSpendings.diff | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
+                    <ion-text *ngIf="userSpendings.diff < 0" class="negative bold">{{ userSpendings.diff | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
+                  </div>
+                </div>
+
+                <div class="spendings-total">
+                  <ion-text class="bold" color="medium">Gesamt:</ion-text>
+                  <ion-text class="bold">{{ spendings.sumTotalMonth | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
+                </div>
+              </div>
+
+            </ion-label>
+          </ion-item>
+        </ion-list>
+      </ion-col>
+    </ion-row>
+  </ion-grid>
 </ion-content>

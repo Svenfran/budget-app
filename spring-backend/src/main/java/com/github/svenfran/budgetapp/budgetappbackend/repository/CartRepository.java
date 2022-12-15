@@ -37,7 +37,7 @@ public interface CartRepository extends CrudRepository<Cart, Long> {
     @Query("select new com.github.svenfran.budgetapp.budgetappbackend.dto.SpendingsOverviewMonthlyTotalSumAmountDto(year(c.datePurchased) as _year, month(c.datePurchased) as _month, sum(c.amount)) " +
             "from Cart as c where year(c.datePurchased) = :year and c.group.id = :groupId " +
             "group by _month, _year " +
-            "order by _month asc")
+            "order by _month desc")
     List<SpendingsOverviewMonthlyTotalSumAmountDto> getSpendingsMonthlyTotalSumAmount(@Param("year") int year, @Param("groupId") Long groupId);
 
     @Query("select new com.github.svenfran.budgetapp.budgetappbackend.dto.SpendingsOverviewAmountAverageDiffPerMonthDto(" +
@@ -47,7 +47,7 @@ public interface CartRepository extends CrudRepository<Cart, Long> {
             "where year(c.datePurchased) = :year and gmh.groupId = :groupId and cast(gmh.membershipStart as date) <= c.datePurchased " +
             "and (cast(gmh.membershipEnd as date) >= c.datePurchased or gmh.membershipEnd IS NULL) " +
             "group by _month, _year, gmh.userId " +
-            "order by gmh.userId, _month")
+            "order by gmh.userId, _month desc")
     List<SpendingsOverviewAmountAverageDiffPerMonthDto> getSpendingsAmountAverageDiffPerMonth(@Param("year") int year, @Param("groupId") Long groupId);
 
     @Query("select new com.github.svenfran.budgetapp.budgetappbackend.dto.SpendingsOverviewAmountAverageDiffPerUserDto(" +
@@ -59,4 +59,8 @@ public interface CartRepository extends CrudRepository<Cart, Long> {
             "group by _year, gmh.userId " +
             "order by gmh.userId")
     List<SpendingsOverviewAmountAverageDiffPerUserDto> getSpendingsAmountAverageDiffPerUser(@Param("year") int year, @Param("groupId") Long groupId);
+
+    @Query("select year(c.datePurchased) as _year from Cart as c where c.group.id = :groupId group by _year order by _year desc")
+    List<Integer> getAvailableYearsForGroup(@Param("groupId") Long groupId);
+
 }

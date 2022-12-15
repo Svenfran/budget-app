@@ -8,12 +8,14 @@ public class SpendingsOverviewDto {
     private Long groupId;
     private SpendingsOverviewTotalYearDto spendingsTotalYear;
     private List<SpendingsOverviewPerMonthDto> spendingsPerMonth;
+    private List<Integer> availableYears;
 
-    public SpendingsOverviewDto(int year, Long groupId, SpendingsOverviewTotalYearDto spendingsTotalYear, List<SpendingsOverviewPerMonthDto> spendingsPerMonth) {
+    public SpendingsOverviewDto(int year, Long groupId, SpendingsOverviewTotalYearDto spendingsTotalYear, List<SpendingsOverviewPerMonthDto> spendingsPerMonth, List<Integer> availableYears) {
         this.year = year;
         this.groupId = groupId;
         this.spendingsTotalYear = spendingsTotalYear;
         this.spendingsPerMonth = spendingsPerMonth;
+        this.availableYears = availableYears;
     }
 
     public SpendingsOverviewDto() {
@@ -49,5 +51,13 @@ public class SpendingsOverviewDto {
 
     public void setSpendingsPerMonth(List<SpendingsOverviewPerMonthDto> spendingsPerMonth) {
         this.spendingsPerMonth = spendingsPerMonth;
+    }
+
+    public List<Integer> getAvailableYears() {
+        return availableYears;
+    }
+
+    public void setAvailableYears(List<Integer> availableYears) {
+        this.availableYears = availableYears;
     }
 }

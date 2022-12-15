@@ -1,0 +1,65 @@
+ion-popover {
+    --width: 4.5rem;
+}
+
+
+ion-item {
+    --min-height: 2.5rem; 
+}
+
+.hide {
+    display: none;
+}
+
+.spendings-details {
+    display: flex;
+    flex-direction: column;
+    .spendings-date {
+        display: flex;
+        padding-bottom: 6px;
+        .month {
+            font-weight: bold;
+            padding-right: 6px;
+        }
+    }
+    .spendings-user-details {
+        display: flex;
+        justify-content: space-between;
+        // width: 230px;
+        .spendings-user-amount {
+            display: flex;
+            flex-direction: column;
+            .space {
+                display: flex;
+                justify-content: space-between;
+                width: 10rem;
+            }
+        }
+        .spendings-user-diff {
+            display: flex;
+            flex-direction: column;
+        }
+    }
+    .spendings-total {
+        display: flex;
+        justify-content: space-between;
+        width: 10rem;
+        padding-top: 6px;
+    }
+}
+
+.space-right {
+    padding-right: 8px;
+}
+
+.bold {
+    font-weight: bold;
+}
+
+.positive {
+    color: #5da7d5;
+}
+
+.negative {
+    color: #8e5ea2;
+}

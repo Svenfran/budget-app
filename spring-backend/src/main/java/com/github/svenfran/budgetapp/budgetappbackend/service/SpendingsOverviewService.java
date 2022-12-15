@@ -28,6 +28,7 @@ public class SpendingsOverviewService {
         spendingsOverview.setYear(year);
         spendingsOverview.setSpendingsTotalYear(getSpendngsOverviewTotalYearDto(year, groupId));
         spendingsOverview.setSpendingsPerMonth(getSpendngsOverviewPerMonthDto(year, groupId));
+        spendingsOverview.setAvailableYears(cartRepository.getAvailableYearsForGroup(groupId));
         return spendingsOverview;
     }
 
@@ -50,6 +51,7 @@ public class SpendingsOverviewService {
                 if (spendingsPerMonth.getMonth() == spendings.getMonth()) {
                     var spendingsPerUser = new SpendingsOverviewUserDto();
                     spendingsPerUser.setUserId(spendings.getUserId());
+                    //TODO: Wenn Nutzer gelöscht wird, schlägt nachfolgende Zeile fehl -> User-Name in membership-history speichern?
                     spendingsPerUser.setUserName(userRepository.findById(spendings.getUserId()).get().getUserName());
                     spendingsPerUser.setSum(spendings.getSumAmount());
                     spendingsPerUser.setDiff(spendings.getDiff());
