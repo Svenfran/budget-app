@@ -46,13 +46,15 @@ export class OverviewPage implements OnInit {
 
   getSpendingsOverview(year: number) {
     this.isLoading = true;
-    this.spendingsService.getSpendingsOverview(year, this.activeGroup.id).subscribe(res => {
-      this.availableYears = res.availableYears;
-      this.spendingsPerMonth = res.spendingsPerMonth;
-      this.spendingsTotalYear = res.spendingsTotalYear;
-      this.year = res.year;
-      this.isLoading = false;
-      // console.log(res);
+    this.spendingsService.spendingsOverviewModified.subscribe(() => {
+      this.spendingsService.getSpendingsOverview(year, this.activeGroup.id).subscribe(res => {
+        this.availableYears = res.availableYears;
+        this.spendingsPerMonth = res.spendingsPerMonth;
+        this.spendingsTotalYear = res.spendingsTotalYear;
+        this.year = res.year;
+        this.isLoading = false;
+        // console.log(res);
+      })
     })
   }
 

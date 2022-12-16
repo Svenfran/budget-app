@@ -52,8 +52,8 @@
                     </div>
                   </div>
                   <div class="spendings-user-diff">
-                    <ion-text *ngIf="userSpendings.diff >= 0" class="positive bold">{{ userSpendings.diff | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
-                    <ion-text *ngIf="userSpendings.diff < 0" class="negative bold">{{ userSpendings.diff | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
+                    <ion-text *ngIf="userSpendings.diff >= 0" color="primary" class="bold">{{ userSpendings.diff | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
+                    <ion-text *ngIf="userSpendings.diff < 0" color="danger" class="bold">{{ userSpendings.diff | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
                   </div>
                 </div>
 
@@ -93,8 +93,8 @@
                     </div>
                   </div>
                   <div class="spendings-user-diff">
-                    <ion-text *ngIf="userSpendings.diff >= 0" class="positive bold">{{ userSpendings.diff | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
-                    <ion-text *ngIf="userSpendings.diff < 0" class="negative bold">{{ userSpendings.diff | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
+                    <ion-text *ngIf="userSpendings.diff >= 0" color="primary" class="bold">{{ userSpendings.diff | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
+                    <ion-text *ngIf="userSpendings.diff < 0" color="danger" class="bold">{{ userSpendings.diff | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
                   </div>
                 </div>
 

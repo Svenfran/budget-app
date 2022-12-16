@@ -4,4 +4,5 @@ membership_start,membership_end,type,user_id,group_id
 2022-09-25,,OWNER,2,3
 2022-18-25,,OWNER,3,4
 2022-11-15,,OWNER,4,5
-2022-11-20,,OWNER,1,6
+2022-01-14 19:44:49.285000,,OWNER,1,6
+2022-01-15,,MEMBER,7,6

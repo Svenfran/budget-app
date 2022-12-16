@@ -8,6 +8,7 @@ import { RemoveMemberDto } from '../models/remove-member-dto';
 import { UserDto } from '../models/user';
 import { CartService } from '../services/cart.service';
 import { GroupService } from '../services/group.service';
+import { SpendingsOverviewService } from '../services/spendings-overview.service';
 
 @Component({
   selector: 'app-group-members',
@@ -33,7 +34,8 @@ export class GroupMembersPage implements OnInit {
     private groupService: GroupService,
     private alertCtrl: AlertController,
     private modalCtrl: ModalController,
-    private cartService: CartService) { }
+    private cartService: CartService,
+    private spendingsService: SpendingsOverviewService) { }
 
   ngOnInit() {
     this.getCurrentUser();
@@ -114,6 +116,7 @@ export class GroupMembersPage implements OnInit {
       // console.log(this.changeOwner);
     }
     this.cartService.setCartModified(true);
+    this.spendingsService.setSpendingsModified(true);
   }
 
   getSelectedMember(event: any, member: UserDto, groupId: number, index: number) {

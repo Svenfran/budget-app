@@ -1,3 +1,3 @@
-title,description,amount,date_purchased,date_created,last_update,user_id,category_id,group_id
-Supermarkt,Lebensmittel,56.45,2022-09-06,,,1,1,6
-Italien,Zugticket,140.00,2022-07-06,,,7,2,6
+title,description,amount,average_per_member,date_purchased,date_created,last_update,user_id,category_id,group_id,is_deleted
+Supermarkt,Lebensmittel,56.45,28.225,2022-09-06,2022-09-06 00:00:00.000000,,1,1,6,false
+Italien,Zugticket,140,70,2022-07-06,2022-07-06 00:00:00.000000,,7,2,6,false

@@ -26,13 +26,13 @@ public class SpendingsOverviewService {
         var spendingsOverview = new SpendingsOverviewDto();
         spendingsOverview.setGroupId(groupId);
         spendingsOverview.setYear(year);
-        spendingsOverview.setSpendingsTotalYear(getSpendngsOverviewTotalYearDto(year, groupId));
-        spendingsOverview.setSpendingsPerMonth(getSpendngsOverviewPerMonthDto(year, groupId));
+        spendingsOverview.setSpendingsTotalYear(getSpendingsOverviewTotalYearDto(year, groupId));
+        spendingsOverview.setSpendingsPerMonth(getSpendingsOverviewPerMonthDto(year, groupId));
         spendingsOverview.setAvailableYears(cartRepository.getAvailableYearsForGroup(groupId));
         return spendingsOverview;
     }
 
-    private List<SpendingsOverviewPerMonthDto> getSpendngsOverviewPerMonthDto(int year, Long groupId) {
+    private List<SpendingsOverviewPerMonthDto> getSpendingsOverviewPerMonthDto(int year, Long groupId) {
         var spendingsPerMonthList = new ArrayList<SpendingsOverviewPerMonthDto>();
         var spendingsAmountAverageDiffPerMonth = cartRepository.getSpendingsAmountAverageDiffPerMonth(year, groupId);
         var spendingsMonthly = cartRepository.getSpendingsMonthlyTotalSumAmount(year, groupId);
@@ -63,7 +63,7 @@ public class SpendingsOverviewService {
         return spendingsPerMonthList;
     }
 
-    private SpendingsOverviewTotalYearDto getSpendngsOverviewTotalYearDto(int year, Long groupId) {
+    private SpendingsOverviewTotalYearDto getSpendingsOverviewTotalYearDto(int year, Long groupId) {
         var spendingsTotalYear = new SpendingsOverviewTotalYearDto();
         var spendingsSumAverageDiffPerUser = cartRepository.getSpendingsAmountAverageDiffPerUser(year, groupId);
         var userList = new ArrayList<SpendingsOverviewUserDto>();

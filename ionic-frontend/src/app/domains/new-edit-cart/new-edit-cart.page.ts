@@ -74,7 +74,7 @@ export class NewEditCartPage implements OnInit {
         this.activeGroup = group;
         this.categories = categories;
         this.minDate = format(new Date(group.dateCreated), 'yyyy-MM-dd') + 'T00:00:00';
-        this.maxDate = format(new Date(group.dateCreated).setFullYear(new Date(group.dateCreated).getFullYear() + 1), 'yyyy-MM-dd') + 'T00:00:00';
+        this.maxDate = format(new Date().setFullYear(new Date().getFullYear() + 1), 'yyyy-MM-dd') + 'T00:00:00';
       });
     });
   }

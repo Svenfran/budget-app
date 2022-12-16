@@ -9,6 +9,7 @@ import { NewMemberDto } from '../models/new-member-dto';
 import { UserDto } from '../models/user';
 import { CartService } from '../services/cart.service';
 import { GroupService } from '../services/group.service';
+import { SpendingsOverviewService } from '../services/spendings-overview.service';
 
 @Component({
   selector: 'app-groupoverview',
@@ -30,7 +31,8 @@ export class GroupoverviewPage implements OnInit {
     private loadingCtrl: LoadingController,
     private modalCtrl: ModalController,
     private toastCtrl: ToastController,
-    private cartService: CartService
+    private cartService: CartService,
+    private spendingsService: SpendingsOverviewService
     ) { }
 
   ngOnInit() {
@@ -83,6 +85,7 @@ export class GroupoverviewPage implements OnInit {
                   this.groupService.setActiveGroup(null);
                 }
               })
+              this.spendingsService.setSpendingsModified(true);
             })
           })
         }
@@ -144,6 +147,7 @@ export class GroupoverviewPage implements OnInit {
             this.groupService.addMemberToGroup(newMember).subscribe(() => {
               this.getGroupsForOverview();
               this.cartService.setCartModified(true);
+              this.spendingsService.setSpendingsModified(true);
               loadingEl.dismiss();
               let message = "Benutzer wurde zur Gruppe " + groupName + " hinzugefügt"
               this.showToast(message);
