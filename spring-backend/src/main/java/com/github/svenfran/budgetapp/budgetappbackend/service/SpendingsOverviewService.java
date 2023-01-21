@@ -22,17 +22,26 @@ public class SpendingsOverviewService {
     @Autowired
     private UserRepository userRepository;
 
-    public SpendingsOverviewDto getSpendingsForGroupAndYear(int year, Long groupId) {
+    public SpendingsOverviewDto getSpendingsForGroupAndYear(int year, Long groupId) throws UserNotFoundException {
         var spendingsOverview = new SpendingsOverviewDto();
         spendingsOverview.setGroupId(groupId);
         spendingsOverview.setYear(year);
-        spendingsOverview.setSpendingsTotalYear(getSpendingsOverviewTotalYearDto(year, groupId));
-        spendingsOverview.setSpendingsPerMonth(getSpendingsOverviewPerMonthDto(year, groupId));
+        spendingsOverview.setSpendingsTotalYear(getSpendingsOverviewTotalYear(year, groupId));
+        spendingsOverview.setSpendingsPerMonth(getSpendingsOverviewPerMonth(year, groupId));
         spendingsOverview.setAvailableYears(cartRepository.getAvailableYearsForGroup(groupId));
         return spendingsOverview;
     }
 
-    private List<SpendingsOverviewPerMonthDto> getSpendingsOverviewPerMonthDto(int year, Long groupId) {
+    public SpendingsOverviewDto getSpendingsForGroupAndAllYears(Long groupId) throws UserNotFoundException {
+        var spendingsOverview = new SpendingsOverviewDto();
+        spendingsOverview.setGroupId(groupId);
+        spendingsOverview.setSpendingsTotalYear(getSpendingsOverviewTotalAllYears(groupId));
+        spendingsOverview.setSpendingsPerYear(getSpendingsOverviewPerYear(groupId));
+        return spendingsOverview;
+    }
+
+
+    private List<SpendingsOverviewPerMonthDto> getSpendingsOverviewPerMonth(int year, Long groupId) throws UserNotFoundException {
         var spendingsPerMonthList = new ArrayList<SpendingsOverviewPerMonthDto>();
         var spendingsAmountAverageDiffPerMonth = cartRepository.getSpendingsAmountAverageDiffPerMonth(year, groupId);
         var spendingsMonthly = cartRepository.getSpendingsMonthlyTotalSumAmount(year, groupId);
@@ -52,7 +61,8 @@ public class SpendingsOverviewService {
                     var spendingsPerUser = new SpendingsOverviewUserDto();
                     spendingsPerUser.setUserId(spendings.getUserId());
                     //TODO: Wenn Nutzer gelöscht wird, schlägt nachfolgende Zeile fehl -> User-Name in membership-history speichern?
-                    spendingsPerUser.setUserName(userRepository.findById(spendings.getUserId()).get().getUserName());
+                    spendingsPerUser.setUserName(userRepository.findById(spendings.getUserId())
+                            .orElseThrow(() -> new UserNotFoundException("Get SpendingsOverviewPerMonth: User not found")).getUserName());
                     spendingsPerUser.setSum(spendings.getSumAmount());
                     spendingsPerUser.setDiff(spendings.getDiff());
                     userList.add(spendingsPerUser);
@@ -63,7 +73,40 @@ public class SpendingsOverviewService {
         return spendingsPerMonthList;
     }
 
-    private SpendingsOverviewTotalYearDto getSpendingsOverviewTotalYearDto(int year, Long groupId) {
+    private List<SpendingsOverviewPerYearDto> getSpendingsOverviewPerYear(Long groupId) throws UserNotFoundException {
+        var spendingsPerYearList = new ArrayList<SpendingsOverviewPerYearDto>();
+        var spendingsAmountAverageDiffPerYear = cartRepository.getSpendingsAmountAverageDiffPerYear(groupId);
+        var spendingsYearly = cartRepository.getSpendingsYearlyTotalSumAmount(groupId);
+
+        for (SpendingsOverviewYearlyTotalSumAmountDto spendings : spendingsYearly) {
+            var spendingsPerYear = new SpendingsOverviewPerYearDto();
+            spendingsPerYear.setYear(spendings.getYear());
+            spendingsPerYear.setSumTotalYear(spendings.getSumAmountTotalPerYear());
+            spendingsPerYearList.add(spendingsPerYear);
+        }
+
+        for (SpendingsOverviewPerYearDto spendingsPerYear : spendingsPerYearList) {
+            var userList = new ArrayList<SpendingsOverviewUserDto>();
+            for (SpendingsOverviewAmountAverageDiffPerYearDto spendings : spendingsAmountAverageDiffPerYear) {
+                if (spendingsPerYear.getYear() == spendings.getYear()) {
+                    var spendingsPerUser = new SpendingsOverviewUserDto();
+                    spendingsPerUser.setUserId(spendings.getUserId());
+                    //TODO: Wenn Nutzer gelöscht wird, schlägt nachfolgende Zeile fehl -> User-Name in membership-history speichern?
+                    spendingsPerUser.setUserName(userRepository.findById(spendings.getUserId())
+                            .orElseThrow(() -> new UserNotFoundException("Get SpendingsOverviewPerYear: User not found")).getUserName());
+                    spendingsPerUser.setSum(spendings.getSumAmount());
+                    spendingsPerUser.setDiff(spendings.getDiff());
+                    userList.add(spendingsPerUser);
+                    spendingsPerYear.setSpendingsYearlyUser(userList);
+                }
+            }
+        }
+
+        return spendingsPerYearList;
+    }
+
+
+    private SpendingsOverviewTotalYearDto getSpendingsOverviewTotalYear(int year, Long groupId) throws UserNotFoundException {
         var spendingsTotalYear = new SpendingsOverviewTotalYearDto();
         var spendingsSumAverageDiffPerUser = cartRepository.getSpendingsAmountAverageDiffPerUser(year, groupId);
         var userList = new ArrayList<SpendingsOverviewUserDto>();
@@ -72,7 +115,8 @@ public class SpendingsOverviewService {
             var spendingsPerUser = new SpendingsOverviewUserDto();
             spendingsPerUser.setUserId(spendings.getUserId());
             //TODO: Wenn Nutzer gelöscht wird, schlägt nachfolgende Zeile fehl -> User-Name in membership-history speichern?
-            spendingsPerUser.setUserName(userRepository.findById(spendings.getUserId()).get().getUserName());
+            spendingsPerUser.setUserName(userRepository.findById(spendings.getUserId())
+                    .orElseThrow(() -> new UserNotFoundException("Get SpendingsOverviewTotalYearDto: User not found")).getUserName());
             spendingsPerUser.setSum(spendings.getSumAmount());
             spendingsPerUser.setDiff(spendings.getDiff());
             userList.add(spendingsPerUser);
@@ -83,13 +127,44 @@ public class SpendingsOverviewService {
         return spendingsTotalYear;
     }
 
+    private SpendingsOverviewTotalYearDto getSpendingsOverviewTotalAllYears(Long groupId) throws UserNotFoundException {
+        var spendingsTotalAllYears = new SpendingsOverviewTotalYearDto();
+        var spendingsSumAverageDiffPerUserYearly = cartRepository.getSpendingsAmountAverageDiffPerUserYearly(groupId);
+        var userList = new ArrayList<SpendingsOverviewUserDto>();
+
+        for (SpendingsOverviewAmountAverageDiffPerUserDto spendings : spendingsSumAverageDiffPerUserYearly) {
+            var spendingsPerUser = new SpendingsOverviewUserDto();
+            spendingsPerUser.setUserId(spendings.getUserId());
+            //TODO: Wenn Nutzer gelöscht wird, schlägt nachfolgende Zeile fehl -> User-Name in membership-history speichern?
+            spendingsPerUser.setUserName(userRepository.findById(spendings.getUserId())
+                    .orElseThrow(() -> new UserNotFoundException("Get SpendingsOverviewTotalAllYears: User not found")).getUserName());
+            spendingsPerUser.setSum(spendings.getSumAmount());
+            spendingsPerUser.setDiff(spendings.getDiff());
+            userList.add(spendingsPerUser);
+        }
+
+        spendingsTotalAllYears.setSumTotalYear(getTotalAmountForAllYears(groupId));
+        spendingsTotalAllYears.setSpendingsTotalUser(userList);
+        return spendingsTotalAllYears;
+    }
+
+
     private Double getTotalAmountPerYear(int year, Long groupId) {
         return cartRepository.getSpendingsMonthlyTotalSumAmount(year, groupId)
                 .stream().mapToDouble(SpendingsOverviewMonthlyTotalSumAmountDto::getSumAmountTotalPerMonth).sum();
     }
 
+    private Double getTotalAmountForAllYears(Long groupId) {
+        return cartRepository.getTotalAmountAllYears(groupId);
+    }
+
+
     private String getMonthName(int month) {
         return new DateFormatSymbols().getMonths()[month - 1];
+    }
+
+    public List<Integer> getAvailableYears(Long groupId) {
+        return cartRepository.getAvailableYearsForGroup(groupId);
     }
 
     // TODO: Derzeit angemeldete Nutzer -> Spring Security
@@ -99,4 +174,6 @@ public class SpendingsOverviewService {
         return userRepository.findById(userId).
                 orElseThrow(() -> new UserNotFoundException("User with id " + userId + " not found"));
     }
+
+
 }

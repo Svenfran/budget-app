@@ -41,6 +41,13 @@ public interface CartRepository extends CrudRepository<Cart, Long> {
             "order by _month desc")
     List<SpendingsOverviewMonthlyTotalSumAmountDto> getSpendingsMonthlyTotalSumAmount(@Param("year") int year, @Param("groupId") Long groupId);
 
+    @Query("select new com.github.svenfran.budgetapp.budgetappbackend.dto.SpendingsOverviewYearlyTotalSumAmountDto(year(c.datePurchased) as _year, sum(c.amount)) " +
+            "from Cart as c where c.group.id = :groupId " +
+            "and c.isDeleted = false " +
+            "group by _year " +
+            "order by _year desc")
+    List<SpendingsOverviewYearlyTotalSumAmountDto> getSpendingsYearlyTotalSumAmount(@Param("groupId") Long groupId);
+
     @Query("select new com.github.svenfran.budgetapp.budgetappbackend.dto.SpendingsOverviewAmountAverageDiffPerMonthDto(" +
             "sum(case when c.user.id = gmh.userId then c.amount else 0 end), sum(c.averagePerMember), sum(case when c.user.id = gmh.userId then c.amount else 0 end) - SUM(c.averagePerMember), " +
             "gmh.userId, year(c.datePurchased) as _year, month(c.datePurchased) as _month) " +
@@ -51,6 +58,16 @@ public interface CartRepository extends CrudRepository<Cart, Long> {
             "order by gmh.userId, _month desc")
     List<SpendingsOverviewAmountAverageDiffPerMonthDto> getSpendingsAmountAverageDiffPerMonth(@Param("year") int year, @Param("groupId") Long groupId);
 
+    @Query("select new com.github.svenfran.budgetapp.budgetappbackend.dto.SpendingsOverviewAmountAverageDiffPerYearDto(" +
+            "sum(case when c.user.id = gmh.userId then c.amount else 0 end), sum(c.averagePerMember), sum(case when c.user.id = gmh.userId then c.amount else 0 end) - SUM(c.averagePerMember), " +
+            "gmh.userId, year(c.datePurchased) as _year) " +
+            "from GroupMembershipHistory as gmh join Cart as c on gmh.groupId = c.group.id " +
+            "where gmh.groupId = :groupId and c.isDeleted = false and cast(gmh.membershipStart as date) <= c.datePurchased " +
+            "and (cast(gmh.membershipEnd as date) >= c.datePurchased or gmh.membershipEnd IS NULL) " +
+            "group by _year, gmh.userId " +
+            "order by _year desc")
+    List<SpendingsOverviewAmountAverageDiffPerYearDto> getSpendingsAmountAverageDiffPerYear(@Param("groupId") Long groupId);
+
     @Query("select new com.github.svenfran.budgetapp.budgetappbackend.dto.SpendingsOverviewAmountAverageDiffPerUserDto(" +
             "sum(case when c.user.id = gmh.userId then c.amount else 0 end), sum(c.averagePerMember), sum(case when c.user.id = gmh.userId then c.amount else 0 end) - SUM(c.averagePerMember), " +
             "gmh.userId, year(c.datePurchased) as _year) " +
@@ -60,6 +77,23 @@ public interface CartRepository extends CrudRepository<Cart, Long> {
             "group by _year, gmh.userId " +
             "order by gmh.userId")
     List<SpendingsOverviewAmountAverageDiffPerUserDto> getSpendingsAmountAverageDiffPerUser(@Param("year") int year, @Param("groupId") Long groupId);
+
+    @Query("select new com.github.svenfran.budgetapp.budgetappbackend.dto.SpendingsOverviewAmountAverageDiffPerUserDto(" +
+            "sum(case when c.user.id = gmh.userId then c.amount else 0 end), sum(c.averagePerMember), sum(case when c.user.id = gmh.userId then c.amount else 0 end) - SUM(c.averagePerMember), " +
+            "gmh.userId) " +
+            "from GroupMembershipHistory as gmh join Cart as c on gmh.groupId = c.group.id " +
+            "where gmh.groupId = :groupId and c.isDeleted = false and cast(gmh.membershipStart as date) <= c.datePurchased " +
+            "and (cast(gmh.membershipEnd as date) >= c.datePurchased or gmh.membershipEnd IS NULL) " +
+            "group by gmh.userId " +
+            "order by gmh.userId")
+    List<SpendingsOverviewAmountAverageDiffPerUserDto> getSpendingsAmountAverageDiffPerUserYearly(@Param("groupId") Long groupId);
+
+    @Query("select sum(case when c.user.id = gmh.userId then c.amount else 0 end) " +
+            "from GroupMembershipHistory as gmh join Cart as c on gmh.groupId = c.group.id " +
+            "where gmh.groupId = :groupId and c.isDeleted = false and cast(gmh.membershipStart as date) <= c.datePurchased " +
+            "and (cast(gmh.membershipEnd as date) >= c.datePurchased or gmh.membershipEnd IS NULL)")
+    Double getTotalAmountAllYears(@Param("groupId") Long groupId);
+
 
     @Query("select year(c.datePurchased) as _year from Cart as c where c.group.id = :groupId group by _year order by _year desc")
     List<Integer> getAvailableYearsForGroup(@Param("groupId") Long groupId);

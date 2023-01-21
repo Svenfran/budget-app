@@ -1,19 +1,14 @@
 package com.github.svenfran.budgetapp.budgetappbackend.dto;
 
-public class SpendingsOverviewAmountAverageDiffPerUserDto extends SpendingsOverviewAmountAverageDiffDto {
+public class SpendingsOverviewAmountAverageDiffPerYearDto extends SpendingsOverviewAmountAverageDiffDto {
 
     private Long userId;
     private int year;
 
-    public SpendingsOverviewAmountAverageDiffPerUserDto(Double sumAmount, Double sumAveragePerMember, Double diff, Long userId, int year) {
+    public SpendingsOverviewAmountAverageDiffPerYearDto(Double sumAmount, Double sumAveragePerMember, Double diff, Long userId, int year) {
         super(sumAmount, sumAveragePerMember, diff);
         this.userId = userId;
         this.year = year;
-    }
-
-    public SpendingsOverviewAmountAverageDiffPerUserDto(Double sumAmount, Double sumAveragePerMember, Double diff, Long userId) {
-        super(sumAmount, sumAveragePerMember, diff);
-        this.userId = userId;
     }
 
     public Long getUserId() {
@@ -31,6 +26,5 @@ public class SpendingsOverviewAmountAverageDiffPerUserDto extends SpendingsOverv
     public void setYear(int year) {
         this.year = year;
     }
-
 
 }

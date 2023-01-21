@@ -8,14 +8,21 @@ public class SpendingsOverviewDto {
     private Long groupId;
     private SpendingsOverviewTotalYearDto spendingsTotalYear;
     private List<SpendingsOverviewPerMonthDto> spendingsPerMonth;
+    private List<SpendingsOverviewPerYearDto> spendingsPerYear;
     private List<Integer> availableYears;
 
-    public SpendingsOverviewDto(int year, Long groupId, SpendingsOverviewTotalYearDto spendingsTotalYear, List<SpendingsOverviewPerMonthDto> spendingsPerMonth, List<Integer> availableYears) {
+    public SpendingsOverviewDto(int year, Long groupId, List<SpendingsOverviewPerMonthDto> spendingsPerMonth, List<Integer> availableYears) {
+        this.year = year;
+        this.groupId = groupId;
+        this.spendingsPerMonth = spendingsPerMonth;
+        this.availableYears = availableYears;
+    }
+
+    public SpendingsOverviewDto(int year, Long groupId, SpendingsOverviewTotalYearDto spendingsTotalYear, List<SpendingsOverviewPerYearDto> spendingsPerYear) {
         this.year = year;
         this.groupId = groupId;
         this.spendingsTotalYear = spendingsTotalYear;
-        this.spendingsPerMonth = spendingsPerMonth;
-        this.availableYears = availableYears;
+        this.spendingsPerYear = spendingsPerYear;
     }
 
     public SpendingsOverviewDto() {
@@ -51,6 +58,14 @@ public class SpendingsOverviewDto {
 
     public void setSpendingsPerMonth(List<SpendingsOverviewPerMonthDto> spendingsPerMonth) {
         this.spendingsPerMonth = spendingsPerMonth;
+    }
+
+    public List<SpendingsOverviewPerYearDto> getSpendingsPerYear() {
+        return spendingsPerYear;
+    }
+
+    public void setSpendingsPerYear(List<SpendingsOverviewPerYearDto> spendingsPerYear) {
+        this.spendingsPerYear = spendingsPerYear;
     }
 
     public List<Integer> getAvailableYears() {

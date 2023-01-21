@@ -7,6 +7,12 @@ ion-item {
     --min-height: 2.5rem; 
 }
 
+ion-segment {
+    ion-label {
+        font-size: smaller;
+    }
+}
+
 .hide {
     display: none;
 }
