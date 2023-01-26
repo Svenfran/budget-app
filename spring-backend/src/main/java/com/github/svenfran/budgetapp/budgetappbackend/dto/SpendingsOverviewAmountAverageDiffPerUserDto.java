@@ -16,6 +16,10 @@ public class SpendingsOverviewAmountAverageDiffPerUserDto extends SpendingsOverv
         this.userId = userId;
     }
 
+    public SpendingsOverviewAmountAverageDiffPerUserDto() {
+
+    }
+
     public Long getUserId() {
         return userId;
     }

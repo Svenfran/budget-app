@@ -43,7 +43,7 @@ public class SpendingsOverviewService {
 
     private List<SpendingsOverviewPerMonthDto> getSpendingsOverviewPerMonth(int year, Long groupId) throws UserNotFoundException {
         var spendingsPerMonthList = new ArrayList<SpendingsOverviewPerMonthDto>();
-        var spendingsAmountAverageDiffPerMonth = cartRepository.getSpendingsAmountAverageDiffPerMonth(year, groupId);
+        var spendingsAmountAverageDiffPerMonth = getAmountAverageDiffPerUserAndMonth(groupId, year);
         var spendingsMonthly = cartRepository.getSpendingsMonthlyTotalSumAmount(year, groupId);
 
         for (SpendingsOverviewMonthlyTotalSumAmountDto spendings : spendingsMonthly) {
@@ -75,7 +75,8 @@ public class SpendingsOverviewService {
 
     private List<SpendingsOverviewPerYearDto> getSpendingsOverviewPerYear(Long groupId) throws UserNotFoundException {
         var spendingsPerYearList = new ArrayList<SpendingsOverviewPerYearDto>();
-        var spendingsAmountAverageDiffPerYear = cartRepository.getSpendingsAmountAverageDiffPerYear(groupId);
+//        var spendingsAmountAverageDiffPerYear = cartRepository.getSpendingsAmountAverageDiffPerYear(groupId);
+        var spendingsAmountAverageDiffPerYear = getAmountAverageDiffPerUserYearly(groupId);
         var spendingsYearly = cartRepository.getSpendingsYearlyTotalSumAmount(groupId);
 
         for (SpendingsOverviewYearlyTotalSumAmountDto spendings : spendingsYearly) {
@@ -108,7 +109,7 @@ public class SpendingsOverviewService {
 
     private SpendingsOverviewTotalYearDto getSpendingsOverviewTotalYear(int year, Long groupId) throws UserNotFoundException {
         var spendingsTotalYear = new SpendingsOverviewTotalYearDto();
-        var spendingsSumAverageDiffPerUser = cartRepository.getSpendingsAmountAverageDiffPerUser(year, groupId);
+        var spendingsSumAverageDiffPerUser = getAmountAverageDiffPerUserAndYear(groupId, year);
         var userList = new ArrayList<SpendingsOverviewUserDto>();
 
         for (SpendingsOverviewAmountAverageDiffPerUserDto spendings : spendingsSumAverageDiffPerUser) {
@@ -129,7 +130,7 @@ public class SpendingsOverviewService {
 
     private SpendingsOverviewTotalYearDto getSpendingsOverviewTotalAllYears(Long groupId) throws UserNotFoundException {
         var spendingsTotalAllYears = new SpendingsOverviewTotalYearDto();
-        var spendingsSumAverageDiffPerUserYearly = cartRepository.getSpendingsAmountAverageDiffPerUserYearly(groupId);
+        var spendingsSumAverageDiffPerUserYearly = getAmountAverageDiffPerUserAndTotalYears(groupId);
         var userList = new ArrayList<SpendingsOverviewUserDto>();
 
         for (SpendingsOverviewAmountAverageDiffPerUserDto spendings : spendingsSumAverageDiffPerUserYearly) {
@@ -167,6 +168,103 @@ public class SpendingsOverviewService {
         return cartRepository.getAvailableYearsForGroup(groupId);
     }
 
+
+    private List<SpendingsOverviewAmountAverageDiffPerMonthDto> getAmountAverageDiffPerUserAndMonth(Long groupId, int year) {
+        var amount = cartRepository.getSpendingsAmountPerMonthAndUser(year, groupId);
+        var average = cartRepository.getAveragePerUserAndYear(groupId, year);
+
+        var spendingsAmountAverageDiffPerMonthList = new ArrayList<SpendingsOverviewAmountAverageDiffPerMonthDto>();
+
+        for (SpendingsOverviewAmountAverageDiffPerMonthDto amt : amount) {
+            var spendingsAmountAverageDiffPerMonth = new SpendingsOverviewAmountAverageDiffPerMonthDto();
+            Double sumAverage = 0.0;
+            for (SpendingsOverviewAverageDto avg : average) {
+                if (avg.getMonth() == amt.getMonth() && avg.getUserId().equals(amt.getUserId())) {
+                    spendingsAmountAverageDiffPerMonth.setMonth(amt.getMonth());
+                    spendingsAmountAverageDiffPerMonth.setYear(amt.getYear());
+                    spendingsAmountAverageDiffPerMonth.setUserId(amt.getUserId());
+                    spendingsAmountAverageDiffPerMonth.setSumAmount(amt.getSumAmount());
+                    spendingsAmountAverageDiffPerMonth.setSumAveragePerMember(sumAverage += avg.getAveragePerMember());
+                    spendingsAmountAverageDiffPerMonth.setDiff(amt.getSumAmount() - sumAverage);
+                }
+            }
+            spendingsAmountAverageDiffPerMonthList.add(spendingsAmountAverageDiffPerMonth);
+        }
+
+        return spendingsAmountAverageDiffPerMonthList;
+    }
+
+    private List<SpendingsOverviewAmountAverageDiffPerUserDto> getAmountAverageDiffPerUserAndYear(Long groupId, int year) {
+        var amount = cartRepository.getSpendingsAmountPerYearAndUser(year, groupId);
+        var average = cartRepository.getAveragePerUserAndYear(groupId, year);
+
+        var spendingsAmountAverageDiffPerYearList = new ArrayList<SpendingsOverviewAmountAverageDiffPerUserDto>();
+
+        for (SpendingsOverviewAmountAverageDiffPerUserDto amt : amount) {
+            var spendingsAmountAverageDiffPerYear = new SpendingsOverviewAmountAverageDiffPerUserDto();
+            Double sumAverage = 0.0;
+            for (SpendingsOverviewAverageDto avg : average) {
+                if (avg.getUserId().equals(amt.getUserId())) {
+                    spendingsAmountAverageDiffPerYear.setYear(amt.getYear());
+                    spendingsAmountAverageDiffPerYear.setUserId(amt.getUserId());
+                    spendingsAmountAverageDiffPerYear.setSumAmount(amt.getSumAmount());
+                    spendingsAmountAverageDiffPerYear.setSumAveragePerMember(sumAverage += avg.getAveragePerMember());
+                    spendingsAmountAverageDiffPerYear.setDiff(amt.getSumAmount() - sumAverage);
+                }
+            }
+            spendingsAmountAverageDiffPerYearList.add(spendingsAmountAverageDiffPerYear);
+        }
+
+        return spendingsAmountAverageDiffPerYearList;
+    }
+
+    private List<SpendingsOverviewAmountAverageDiffPerYearDto> getAmountAverageDiffPerUserYearly(Long groupId) {
+        var amount = cartRepository.getSpendingsAmountPerUserYearly(groupId);
+        var average = cartRepository.getAveragePerUserAndTotalYears(groupId);
+
+        var spendingsAmountAverageDiffPerYearList = new ArrayList<SpendingsOverviewAmountAverageDiffPerYearDto>();
+
+        for (SpendingsOverviewAmountAverageDiffPerUserDto amt : amount) {
+            var spendingsAmountAverageDiffPerYear = new SpendingsOverviewAmountAverageDiffPerYearDto();
+            Double sumAverage = 0.0;
+            for (SpendingsOverviewAverageDto avg : average) {
+                if (avg.getYear() == amt.getYear() && avg.getUserId().equals(amt.getUserId())) {
+                    spendingsAmountAverageDiffPerYear.setYear(amt.getYear());
+                    spendingsAmountAverageDiffPerYear.setUserId(amt.getUserId());
+                    spendingsAmountAverageDiffPerYear.setSumAmount(amt.getSumAmount());
+                    spendingsAmountAverageDiffPerYear.setSumAveragePerMember(sumAverage += avg.getAveragePerMember());
+                    spendingsAmountAverageDiffPerYear.setDiff(amt.getSumAmount() - sumAverage);
+                }
+            }
+            spendingsAmountAverageDiffPerYearList.add(spendingsAmountAverageDiffPerYear);
+        }
+
+        return spendingsAmountAverageDiffPerYearList;
+    }
+
+    private List<SpendingsOverviewAmountAverageDiffPerUserDto> getAmountAverageDiffPerUserAndTotalYears(Long groupId) {
+        var amount = cartRepository.getSpendingsAmountPerUserAndTotalYears(groupId);
+        var average = cartRepository.getAveragePerUserAndTotalYears(groupId);
+
+        var spendingsAmountAverageDiffTotalYearsList = new ArrayList<SpendingsOverviewAmountAverageDiffPerUserDto>();
+
+        for (SpendingsOverviewAmountAverageDiffPerUserDto amt : amount) {
+            var spendingsAmountAverageDiffTotalYears = new SpendingsOverviewAmountAverageDiffPerUserDto();
+            Double sumAverage = 0.0;
+            for (SpendingsOverviewAverageDto avg : average) {
+                if (avg.getUserId().equals(amt.getUserId())) {
+                    spendingsAmountAverageDiffTotalYears.setUserId(amt.getUserId());
+                    spendingsAmountAverageDiffTotalYears.setSumAmount(amt.getSumAmount());
+                    spendingsAmountAverageDiffTotalYears.setSumAveragePerMember(sumAverage += avg.getAveragePerMember());
+                    spendingsAmountAverageDiffTotalYears.setDiff(amt.getSumAmount() - sumAverage);
+                }
+            }
+            spendingsAmountAverageDiffTotalYearsList.add(spendingsAmountAverageDiffTotalYears);
+        }
+
+        return spendingsAmountAverageDiffTotalYearsList;
+    }
+
     // TODO: Derzeit angemeldete Nutzer -> Spring Security
     private User getCurrentUser() throws UserNotFoundException {
         // Sven als Nutzer, id = 1
@@ -174,6 +272,4 @@ public class SpendingsOverviewService {
         return userRepository.findById(userId).
                 orElseThrow(() -> new UserNotFoundException("User with id " + userId + " not found"));
     }
-
-
 }

@@ -13,6 +13,8 @@ public class SpendingsOverviewAmountAverageDiffPerMonthDto extends SpendingsOver
         this.month = month;
     }
 
+    public SpendingsOverviewAmountAverageDiffPerMonthDto() {}
+
     public Long getUserId() {
         return userId;
     }

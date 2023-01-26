@@ -11,6 +11,10 @@ public class SpendingsOverviewAmountAverageDiffPerYearDto extends SpendingsOverv
         this.year = year;
     }
 
+    public SpendingsOverviewAmountAverageDiffPerYearDto() {
+
+    }
+
     public Long getUserId() {
         return userId;
     }
