@@ -198,6 +198,7 @@ public class GroupService {
 
     private void createDefaultCategories(Group group) {
         categoryRepository.save(new Category(null, "Ausgehen", group, null));
+        categoryRepository.save(new Category(null, "Ausgleichszahlung", group, null));
         categoryRepository.save(new Category(null, "Geschenke", group, null));
         categoryRepository.save(new Category(null, "Lebensmittel", group, null));
         categoryRepository.save(new Category(null, "Restaurant", group, null));

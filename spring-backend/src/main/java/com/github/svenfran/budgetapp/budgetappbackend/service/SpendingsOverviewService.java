@@ -3,8 +3,11 @@ package com.github.svenfran.budgetapp.budgetappbackend.service;
 import com.github.svenfran.budgetapp.budgetappbackend.constants.UserEnum;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.*;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.GroupNotFoundException;
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOrMemberOfGroupException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository;
+import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -22,22 +25,41 @@ public class SpendingsOverviewService {
     @Autowired
     private UserRepository userRepository;
 
-    public SpendingsOverviewDto getSpendingsForGroupAndYear(int year, Long groupId) throws UserNotFoundException {
-        var spendingsOverview = new SpendingsOverviewDto();
-        spendingsOverview.setGroupId(groupId);
-        spendingsOverview.setYear(year);
-        spendingsOverview.setSpendingsTotalYear(getSpendingsOverviewTotalYear(year, groupId));
-        spendingsOverview.setSpendingsPerMonth(getSpendingsOverviewPerMonth(year, groupId));
-        spendingsOverview.setAvailableYears(cartRepository.getAvailableYearsForGroup(groupId));
-        return spendingsOverview;
+    @Autowired
+    private GroupRepository groupRepository;
+
+    public SpendingsOverviewDto getSpendingsForGroupAndYear(int year, Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
+        var user = getCurrentUser();
+        var group = groupRepository.findById(groupId).
+                orElseThrow(() -> new GroupNotFoundException("Get SpendingsForGroupAndYear: Group not found"));
+        var groupOwner = group.getOwner();
+        var groupMembers = group.getMembers();
+
+        if (groupOwner.equals(user) || groupMembers.contains(user)) {
+            var spendingsOverview = new SpendingsOverviewDto();
+            spendingsOverview.setGroupId(groupId);
+            spendingsOverview.setYear(year);
+            spendingsOverview.setSpendingsTotalYear(getSpendingsOverviewTotalYear(year, groupId));
+            spendingsOverview.setSpendingsPerMonth(getSpendingsOverviewPerMonth(year, groupId));
+            spendingsOverview.setAvailableYears(cartRepository.getAvailableYearsForGroup(groupId));
+            return spendingsOverview;
+        } else throw new NotOwnerOrMemberOfGroupException("Get SpendingsForGroupAndYear: You are either a member nor the owner of the group");
     }
 
-    public SpendingsOverviewDto getSpendingsForGroupAndAllYears(Long groupId) throws UserNotFoundException {
-        var spendingsOverview = new SpendingsOverviewDto();
-        spendingsOverview.setGroupId(groupId);
-        spendingsOverview.setSpendingsTotalYear(getSpendingsOverviewTotalAllYears(groupId));
-        spendingsOverview.setSpendingsPerYear(getSpendingsOverviewPerYear(groupId));
-        return spendingsOverview;
+    public SpendingsOverviewDto getSpendingsForGroupAndAllYears(Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
+        var user = getCurrentUser();
+        var group = groupRepository.findById(groupId).
+                orElseThrow(() -> new GroupNotFoundException("Get SpendingsForGroupAndAllYears: Group not found"));
+        var groupOwner = group.getOwner();
+        var groupMembers = group.getMembers();
+
+        if (groupOwner.equals(user) || groupMembers.contains(user)) {
+            var spendingsOverview = new SpendingsOverviewDto();
+            spendingsOverview.setGroupId(groupId);
+            spendingsOverview.setSpendingsTotalYear(getSpendingsOverviewTotalAllYears(groupId));
+            spendingsOverview.setSpendingsPerYear(getSpendingsOverviewPerYear(groupId));
+            return spendingsOverview;
+        } else throw new NotOwnerOrMemberOfGroupException("Get SpendingsForGroupAndAllYears: You are either a member nor the owner of the group");
     }
 
 
