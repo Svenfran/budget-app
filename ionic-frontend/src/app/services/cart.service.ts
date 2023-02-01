@@ -3,6 +3,7 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { environment } from 'src/environments/environment';
 import { Cart } from '../models/cart';
+import { SettlementPaymentDto } from '../models/settlement-payment-dto';
 
 @Injectable({
   providedIn: 'root'
@@ -15,6 +16,7 @@ export class CartService {
   private addCartUrl = `${this.apiBaseUrl}/api/carts/add`;
   private updateCartUrl = `${this.apiBaseUrl}/api/carts/update`;
   private deleteCartUrl = `${this.apiBaseUrl}/api/carts/delete`;
+  private settlementPaymentUrl = `${this.apiBaseUrl}/api/carts/settlement-payment/add`;
 
   private _cartModified = new BehaviorSubject<boolean>(false);
 
@@ -47,6 +49,10 @@ export class CartService {
   deleteCart(cartId: number): Observable<void> {
     const deleteCartUrl = `${this.deleteCartUrl}/${cartId}`;
     return this.http.delete<void>(deleteCartUrl);
+  }
+
+  addSettlementPayment(payment: SettlementPaymentDto): Observable<SettlementPaymentDto> {
+    return this.http.post<SettlementPaymentDto>(this.settlementPaymentUrl, payment);
   }
 
 }

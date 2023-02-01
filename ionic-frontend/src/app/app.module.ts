@@ -21,7 +21,11 @@ registerLocaleData(localDe, 'de');
     HttpClientModule,
     ReactiveFormsModule,
   ],
-  providers: [DatePipe, CurrencyPipe,  { provide: RouteReuseStrategy, useClass: IonicRouteStrategy }],
+  providers: [
+    DatePipe,
+    CurrencyPipe,
+    { provide: RouteReuseStrategy, useClass: IonicRouteStrategy }
+  ],
   bootstrap: [AppComponent],
 })
 export class AppModule {}

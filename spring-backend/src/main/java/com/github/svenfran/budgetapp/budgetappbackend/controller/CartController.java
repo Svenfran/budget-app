@@ -1,5 +1,7 @@
 package com.github.svenfran.budgetapp.budgetappbackend.controller;
 
+import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto;
+import com.github.svenfran.budgetapp.budgetappbackend.entity.Cart;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto;
 import com.github.svenfran.budgetapp.budgetappbackend.service.CartService;
@@ -44,6 +46,12 @@ public class CartController {
     @DeleteMapping("/carts/delete/{id}")
     public ResponseEntity<CartDto> deleteCart(@PathVariable("id") Long id) throws UserNotFoundException, GroupNotFoundException, CartNotFoundException, NotOwnerOfCartException, NotOwnerOrMemberOfGroupException {
         cartService.deleteCart(id);
+        return new ResponseEntity<>(HttpStatus.OK);
+    }
+
+    @PostMapping("/carts/settlement-payment/add")
+    public ResponseEntity<CartDto> addSettlementPayment(@RequestBody SettlementPaymentDto settlementPaymentDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, GroupIdNotFoundException {
+        cartService.addSettlementPayment(settlementPaymentDto);
         return new ResponseEntity<>(HttpStatus.OK);
     }
 }

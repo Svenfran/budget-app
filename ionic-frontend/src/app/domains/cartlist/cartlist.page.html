@@ -9,6 +9,25 @@
       <ion-button *ngIf="activeGroup.id !== null" [routerLink]="['new-edit']">
         <ion-icon name="add" slot="icon-only"></ion-icon>
       </ion-button>
+      <ion-button id="cartlist-popover-button">
+        <ion-icon name="ellipsis-vertical"></ion-icon>
+      </ion-button>
+      <ion-popover trigger="cartlist-popover-button" [dismissOnSelect]="true" side="bottom" alignment="start">
+        <ng-template>
+          <ion-content>
+            <ion-list lines="none">
+              <ion-item size="small" [button]="true" [detail]="false" (click)="download()">
+                <ion-icon class="pop-icon" name="download-outline" slot="start"></ion-icon>
+                <ion-label>Download</ion-label>
+              </ion-item>
+              <ion-item size="small" [button]="true" [detail]="false" (click)="settlementPayment()">
+                <ion-icon class="pop-icon" name="repeat-outline" slot="start"></ion-icon>
+                <ion-label>Ausgleichszahlung</ion-label>
+              </ion-item>
+            </ion-list>
+          </ion-content>
+        </ng-template>
+      </ion-popover>
     </ion-buttons>
   </ion-toolbar>
 </ion-header>
@@ -43,7 +62,7 @@
         <ion-list *ngIf="!isLoading && cartlist.length > 0">
           <ion-item-sliding *ngFor="let cart of cartlist" #slidingItem>
             <ion-item>
-              <!-- <ion-icon slot="start" name="ellipse"></ion-icon> -->
+              <!-- <ion-icon *ngIf="cart.categoryDto.name == 'Ausgleichszahlung'" slot="start" name="repeat-outline"></ion-icon> -->
               <ion-avatar slot="start" (click)="onFilterCategory(cart.categoryDto.name, cart.groupId)">
                 <div class="category-circle">
                   <p>{{ cart.categoryDto.name.substring(0, 2) | uppercase }}</p>

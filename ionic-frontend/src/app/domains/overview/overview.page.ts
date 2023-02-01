@@ -27,6 +27,7 @@ export class OverviewPage implements OnInit {
   spendingsTotalYear: SpendingsOverviewTotalYearDto;
   year: number;
   segment: string;
+  loadedActiveGroup: Promise<boolean>;
 
   constructor(
     private groupService: GroupService,
@@ -42,6 +43,7 @@ export class OverviewPage implements OnInit {
         this.activeGroup = group;
         // this.getAvailableYears(group.id);
         this.getSpendingsOverview(this.currentYear);
+        this.loadedActiveGroup = Promise.resolve(true);
       }
     })
   }

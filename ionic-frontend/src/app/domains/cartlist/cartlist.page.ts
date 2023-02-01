@@ -1,10 +1,11 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
-import { AlertController, IonItemSliding, LoadingController } from '@ionic/angular';
+import { AlertController, IonItemSliding, LoadingController, ModalController } from '@ionic/angular';
 import { Subscription } from 'rxjs';
 import { Cart } from 'src/app/models/cart';
 import { GroupSideNav } from 'src/app/models/group-side-nav';
 import { CartService } from 'src/app/services/cart.service';
 import { GroupService } from 'src/app/services/group.service';
+import { SettlementPaymentPage } from 'src/app/settlement-payment/settlement-payment.page';
 
 @Component({
   selector: 'app-cartlist',
@@ -29,6 +30,7 @@ export class CartlistPage implements OnInit, OnDestroy {
     private cartService: CartService,
     private alertCtrl: AlertController,
     private loadingCtrl: LoadingController,
+    private modalCtrl: ModalController,
     private groupService: GroupService) { }
 
   ngOnInit() {
@@ -123,6 +125,21 @@ export class CartlistPage implements OnInit, OnDestroy {
       this.filterMode = !this.filterMode;
       this.getAllCartsByGroupId(groupId);
     }
+  }
+
+  download() {
+    console.log("Downloading...")
+  }
+
+  async settlementPayment() {
+    const modal = this.modalCtrl.create({
+      component: SettlementPaymentPage
+    });
+
+    (await modal).onDidDismiss().then(() => {
+      this.getAllCartsByGroupId(this.activeGroup.id);
+    });
+    return (await modal).present();
   }
 
   ngOnDestroy(): void {

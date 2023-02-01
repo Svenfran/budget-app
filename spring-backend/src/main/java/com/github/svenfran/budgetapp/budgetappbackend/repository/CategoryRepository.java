@@ -1,6 +1,7 @@
 package com.github.svenfran.budgetapp.budgetappbackend.repository;
 
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Category;
+import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
 import org.springframework.data.repository.CrudRepository;
 
 import java.util.List;
@@ -15,6 +16,8 @@ public interface CategoryRepository extends CrudRepository<Category, Long> {
     Optional<Category> findById(Long id);
 
     Category findCategoryByName(String name);
+
+    Category findCategoryByGroupAndName(Group group, String name);
 
     Category save (Category category);
 

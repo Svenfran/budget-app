@@ -1,5 +1,7 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
+import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto;
+import com.github.svenfran.budgetapp.budgetappbackend.entity.Category;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.constants.UserEnum;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto;
@@ -11,7 +13,9 @@ import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.service.mapper.CartDtoMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Date;
 import java.util.List;
 
 @Service
@@ -118,6 +122,48 @@ public class CartService {
         } else throw new NotOwnerOrMemberOfGroupException("Delete Cart: You are either a member nor the owner of the group");
     }
 
+    @Transactional
+    public void addSettlementPayment(SettlementPaymentDto settlementPaymentDto) throws GroupIdNotFoundException, UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
+        if (settlementPaymentDto.getGroupId() == null) {
+            throw new GroupIdNotFoundException("Add SettlementPayment: Group Id for this cart is null");
+        }
+        var user = getCurrentUser();
+        var member = userRepository.findById(settlementPaymentDto.getMember().getId()).
+                orElseThrow(() -> new UserNotFoundException("Add SettlementPayment: Member not found"));
+        var group = groupRepository.findById(settlementPaymentDto.getGroupId()).
+                orElseThrow(() -> new GroupNotFoundException("Add SettlementPayment: Group not found"));
+        var groupOwner = group.getOwner();
+        var groupMembers = group.getMembers();
+
+        if (groupOwner.equals(user) || groupMembers.contains(user)) {
+            if (groupOwner.equals(member) || groupMembers.contains(member)) {
+                if (categoryRepository.findCategoryByGroupAndName(group,"Ausgleichszahlung") == null) {
+                    categoryRepository.save(new Category(null, "Ausgleichszahlung", group, null));
+                }
+                var category = categoryRepository.findCategoryByGroupAndName(group, "Ausgleichszahlung");
+                var groupMemberCount = cartRepository
+                        .getGroupMemberCountForCartDatePurchased(new Date(), group.getId());
+
+                var cartDtoSender = new CartDto();
+                cartDtoSender.setTitle("Ausgleichszahlung an " + capitalize(member.getUserName()));
+                cartDtoSender.setDatePurchased(new Date());
+                cartDtoSender.setAmount(settlementPaymentDto.getAmount());
+                cartRepository.save(cartDtoMapper.CartDtoToEntity(cartDtoSender, category, user, group, groupMemberCount));
+
+                var cartDtoReceiver = new CartDto();
+                cartDtoReceiver.setTitle("Ausgleichszahlung von " + capitalize(user.getUserName()));
+                cartDtoReceiver.setDatePurchased(new Date());
+                cartDtoReceiver.setAmount(-1 * settlementPaymentDto.getAmount());
+                cartRepository.save(cartDtoMapper.CartDtoToEntity(cartDtoReceiver, category, member, group, groupMemberCount));
+
+            } else throw new NotOwnerOrMemberOfGroupException("Add SettlementPayment: Receiver of the payment is either a member nor the owner of the group");
+        } else throw new NotOwnerOrMemberOfGroupException("Add SettlementPayment: Sender of the payment is either a member nor the owner of the group");
+    }
+
+    private String capitalize(String str) {
+        return str.substring(0, 1).toUpperCase() + str.substring(1);
+    }
+
     // TODO: Derzeit angemeldete Nutzer -> Spring Security
     private User getCurrentUser() throws UserNotFoundException {
         // Sven als Nutzer, id = 1
@@ -125,5 +171,4 @@ public class CartService {
         return userRepository.findById(userId).
                 orElseThrow(() -> new UserNotFoundException("User with id " + userId + " not found"));
     }
-
 }

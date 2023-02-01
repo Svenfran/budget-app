@@ -33,6 +33,10 @@ const routes: Routes = [
     path: 'categoryoverview',
     loadChildren: () => import('./categoryoverview/categoryoverview.module').then( m => m.CategoryoverviewPageModule)
   },
+  {
+    path: 'settlement-payment',
+    loadChildren: () => import('./settlement-payment/settlement-payment.module').then( m => m.SettlementPaymentPageModule)
+  },
 ];
 
 @NgModule({
