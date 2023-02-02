@@ -128,7 +128,8 @@ export class CartlistPage implements OnInit, OnDestroy {
   }
 
   download() {
-    console.log("Downloading...")
+    let filename = "Ausgaben_" + this.activeGroupName.replace(/ /g, "-") + "_" + Date.now() + ".xlsx";
+    this.cartService.getExcelFile(this.activeGroup.id, filename);
   }
 
   async settlementPayment() {

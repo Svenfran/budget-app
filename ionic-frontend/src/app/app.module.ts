@@ -4,7 +4,7 @@ import { RouteReuseStrategy } from '@angular/router';
 
 import { IonicModule, IonicRouteStrategy } from '@ionic/angular';
 import { HttpClientModule } from '@angular/common/http';
-
+import { FileOpener } from '@ionic-native/file-opener/ngx';
 import { AppComponent } from './app.component';
 import { AppRoutingModule } from './app-routing.module';
 import { CurrencyPipe, DatePipe, registerLocaleData } from '@angular/common';
@@ -24,6 +24,7 @@ registerLocaleData(localDe, 'de');
   providers: [
     DatePipe,
     CurrencyPipe,
+    FileOpener,
     { provide: RouteReuseStrategy, useClass: IonicRouteStrategy }
   ],
   bootstrap: [AppComponent],

@@ -6,6 +6,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.constants.UserEnum;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
+import com.github.svenfran.budgetapp.budgetappbackend.helper.ExcelWriter;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CategoryRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository;
@@ -15,6 +16,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import java.util.Date;
 import java.util.List;
 
@@ -158,6 +161,21 @@ public class CartService {
 
             } else throw new NotOwnerOrMemberOfGroupException("Add SettlementPayment: Receiver of the payment is either a member nor the owner of the group");
         } else throw new NotOwnerOrMemberOfGroupException("Add SettlementPayment: Sender of the payment is either a member nor the owner of the group");
+    }
+
+    public void getExcelFile(HttpServletResponse response, Long groupId) throws IOException, GroupNotFoundException, UserNotFoundException, NotOwnerOrMemberOfGroupException {
+        var user = getCurrentUser();
+        var group = groupRepository.findById(groupId).
+                orElseThrow(() -> new GroupNotFoundException("Get Excel File: Group not found"));
+
+        if (group.getOwner().equals(user) || group.getMembers().contains(user)) {
+            response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+            response.setHeader("Expires", "0");
+            var cartlist = cartRepository.findCartsByGroupIdAndIsDeletedFalseOrderByDatePurchasedDesc(groupId);
+            var excelWriter = new ExcelWriter(cartlist);
+            excelWriter.generateExcelFile(response);
+        } else throw new NotOwnerOrMemberOfGroupException("Get Excel File: You are either the owner nor a member of the group");
     }
 
     private String capitalize(String str) {
