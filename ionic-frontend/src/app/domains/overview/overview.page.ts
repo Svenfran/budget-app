@@ -28,6 +28,7 @@ export class OverviewPage implements OnInit {
   year: number;
   segment: string;
   loadedActiveGroup: Promise<boolean>;
+  loadedSpendings: Promise<boolean>
 
   constructor(
     private groupService: GroupService,
@@ -41,7 +42,6 @@ export class OverviewPage implements OnInit {
       this.segment = "month";
       if (group) {
         this.activeGroup = group;
-        // this.getAvailableYears(group.id);
         this.getSpendingsOverview(this.currentYear);
         this.loadedActiveGroup = Promise.resolve(true);
       }
@@ -50,16 +50,9 @@ export class OverviewPage implements OnInit {
 
   ionViewWillEnter() {
     this.segment = "month";
-    // this.getAvailableYears(this.activeGroup.id);
     this.getSpendingsOverview(this.currentYear);
   }
 
-  getAvailableYears(groupId: number) {
-    this.spendingsService.getAvailableYears(groupId).subscribe(res => {
-      this.availableYears = res;
-      console.log(this.availableYears);
-    })
-  }
 
   getSpendingsOverview(year: number) {
     this.isLoading = true;
@@ -70,6 +63,7 @@ export class OverviewPage implements OnInit {
         this.spendingsTotalYear = res.spendingsTotalYear;
         this.year = res.year;
         this.segment = "month";
+        this.loadedSpendings = Promise.resolve(true);
         this.isLoading = false;
       })
     })

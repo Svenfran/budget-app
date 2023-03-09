@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { AlertController, IonItemSliding, LoadingController } from '@ionic/angular';
+import { finalize } from 'rxjs/operators';
 import { AddEditShoppingItemDto } from 'src/app/models/add-edit-shopping-item-dto';
 import { AddEditShoppingListDto } from 'src/app/models/add-edit-shopping-list-dto';
 import { GroupSideNav } from 'src/app/models/group-side-nav';
@@ -51,6 +52,18 @@ export class ShoppinglistPage implements OnInit {
     this.shoppingListService.getShoppingListsWithItems(groupId).subscribe(list => {
       this.shoppingListWithItems = list;
       this.isLoading = false;
+    })
+  }
+
+  async refreshShoppingList(event?: any) {
+    this.shoppingListService.getShoppingListsWithItems(this.activeGroup.id).pipe(
+      finalize(() => {
+        if (event) {
+          event.target.complete();
+        }
+      })
+    ).subscribe(list => {
+      this.shoppingListWithItems = list;
     })
   }
 
@@ -130,10 +143,10 @@ export class ShoppinglistPage implements OnInit {
       header: "Löschen:",
       message: `Möchtest du die Einkaufsliste "${list.name}" wirklich löschen inkl. aller Einträge?`,
       buttons: [{
-        text: "Abbrechen",
+        text: "Nein",
         role: "cancel"
       }, {
-        text: "ok",
+        text: "Ja",
         handler: (data) => {
           this.loadingCtrl.create({
             message: "Lösche Einkaufsliste..."

@@ -1,7 +1,9 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto;
+import com.github.svenfran.budgetapp.budgetappbackend.entity.Cart;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Category;
+import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.constants.UserEnum;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto;
@@ -15,6 +17,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.service.mapper.CartDtoMapp
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.validation.annotation.Validated;
 
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -25,168 +28,119 @@ import java.util.List;
 public class CartService {
 
     @Autowired
-    private GroupRepository groupRepository;
-
-    @Autowired
     private CartRepository cartRepository;
 
     @Autowired
     private CategoryRepository categoryRepository;
 
     @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
     private CartDtoMapper cartDtoMapper;
+    
+    @Autowired
+    private DataLoaderService dataLoaderService;
 
 
     public List<CartDto> getCartsByGroupId(Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
-        var user = getCurrentUser();
-        var group = groupRepository.findById(groupId).
-                orElseThrow(() -> new GroupNotFoundException("Get Carts: Group not found"));
-        var groupOwner = group.getOwner();
-        var groupMembers = group.getMembers();
-
-        if (groupOwner.equals(user) || groupMembers.contains(user)) {
-            var cartList = cartRepository.findCartsByGroupIdAndIsDeletedFalseOrderByDatePurchasedDesc(groupId);
-            return cartList.stream().map(CartDto::new).toList();
-        } else throw new NotOwnerOrMemberOfGroupException("Get Carts: You are either a member nor the owner of the group");
+        var user = dataLoaderService.getCurrentUser();
+        var group = dataLoaderService.loadGroup(groupId);
+        verifyIsPartOfGroup(user, group);
+        var cartList = dataLoaderService.loadCartListForGroup(groupId);
+        return cartList.stream().map(CartDto::new).toList();
     }
 
-    public CartDto getCartById(Long id) throws CartNotFoundException, UserNotFoundException, NotOwnerOrMemberOfGroupException {
-        var user = getCurrentUser();
-        var cart = cartRepository.findById(id).
-                orElseThrow(() -> new CartNotFoundException("Get Cart By Id: Cart not found"));
-        var groupOwner = cart.getGroup().getOwner();
-        var groupMembers = cart.getGroup().getMembers();
-
-        if (groupOwner.equals(user) || groupMembers.contains(user)) {
-            return new CartDto(cart);
-        } else throw new NotOwnerOrMemberOfGroupException("Get Cart By Id: You are either a member nor the owner of the group");
+    public CartDto getCartById(Long id) throws CartNotFoundException, UserNotFoundException, NotOwnerOrMemberOfGroupException, GroupNotFoundException {
+        var user = dataLoaderService.getCurrentUser();
+        var cart = dataLoaderService.loadCart(id);
+        var group = dataLoaderService.loadGroup(cart.getGroup().getId());
+        verifyIsPartOfGroup(user, group);
+        return new CartDto(cart);
     }
 
-    public CartDto addCart(CartDto cartDto) throws AddCartCategoryNotFoundException, UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, GroupIdNotFoundException {
-        if (cartDto.getGroupId() == null) {
-            throw new GroupIdNotFoundException("Add Cart: Group Id for this cart is null");
-        }
-        var user = getCurrentUser();
-        var category = categoryRepository.findById(cartDto.getCategoryDto().getId())
-                .orElseThrow(() -> new AddCartCategoryNotFoundException("Add Cart: Category not found"));
-        var group = groupRepository.findById(cartDto.getGroupId()).
-                orElseThrow(() -> new GroupNotFoundException("Add Cart: Group not found"));
-        var groupOwner = group.getOwner();
-        var groupMembers = group.getMembers();
-
-        if (groupOwner.equals(user) || groupMembers.contains(user)) {
-            var groupMemberCount = cartRepository
-                    .getGroupMemberCountForCartDatePurchased(cartDto.getDatePurchased(), group.getId());
-            return new CartDto(cartRepository.save(cartDtoMapper.CartDtoToEntity(cartDto, category, user, group, groupMemberCount)));
-        } else throw new NotOwnerOrMemberOfGroupException("Add Cart: You are either a member nor the owner of the group");
+    public CartDto addCart(@Validated CartDto cartDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, CategoryNotFoundException {
+        var user = dataLoaderService.getCurrentUser();
+        var category = dataLoaderService.loadCategory(cartDto.getCategoryDto().getId());
+        var group = dataLoaderService.loadGroup(cartDto.getGroupId());
+        verifyIsPartOfGroup(user, group);
+        var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(cartDto.getDatePurchased(), group.getId());
+        return new CartDto(cartRepository.save(cartDtoMapper.CartDtoToEntity(cartDto, category, user, group, groupMemberCount)));
     }
 
-    public CartDto updateCart(CartDto cartDto) throws UpdateCartCategoryNotFoundException, UserNotFoundException, GroupNotFoundException, CartNotFoundException, NotOwnerOfCartException, NotOwnerOrMemberOfGroupException, GroupIdNotFoundException {
-        if (cartDto.getGroupId() == null) {
-            throw new GroupIdNotFoundException("Update Cart: Group Id for this cart is null");
-        }
-        var user = getCurrentUser();
-        var cart = cartRepository.findById(cartDto.getId()).
-                orElseThrow(() -> new CartNotFoundException("Update Cart: Cart not found"));
-        var category = categoryRepository.findById(cartDto.getCategoryDto().getId())
-                .orElseThrow(() -> new UpdateCartCategoryNotFoundException("Update Cart: Category not found"));
-        var group = groupRepository.findById(cartDto.getGroupId()).
-                orElseThrow(() -> new GroupNotFoundException("Update Cart: Group not found"));
-        var groupOwner = group.getOwner();
-        var groupMembers = group.getMembers();
-        var cartOwner = cart.getUser();
-
-        if (groupOwner.equals(user) || groupMembers.contains(user)) {
-            if (cartOwner.equals(user)) {
-                var groupMemberCount = cartRepository
-                        .getGroupMemberCountForCartDatePurchased(cartDto.getDatePurchased(), group.getId());
-                return new CartDto(cartRepository.save(cartDtoMapper.CartDtoToEntity(cartDto, category, user, group, groupMemberCount)));
-            } else throw new NotOwnerOfCartException("Update Cart: You are not the owner of the cart");
-        } else throw new NotOwnerOrMemberOfGroupException("Update Cart: You are either a member nor the owner of the group");
+    public CartDto updateCart(@Validated CartDto cartDto) throws UserNotFoundException, GroupNotFoundException, CartNotFoundException, NotOwnerOfCartException, NotOwnerOrMemberOfGroupException, CategoryNotFoundException {
+        var user = dataLoaderService.getCurrentUser();
+        var cart = dataLoaderService.loadCart(cartDto.getId());
+        var group = dataLoaderService.loadGroup(cartDto.getGroupId());
+        verifyIsPartOfGroup(user, group);
+        verifyIsOwnerOfCart(user, cart);
+        var category = dataLoaderService.loadCategory(cartDto.getCategoryDto().getId());
+        var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(cartDto.getDatePurchased(), group.getId());
+        return new CartDto(cartRepository.save(cartDtoMapper.CartDtoToEntity(cartDto, category, user, group, groupMemberCount)));
     }
 
     public void deleteCart(Long id) throws UserNotFoundException, CartNotFoundException, GroupNotFoundException, NotOwnerOfCartException, NotOwnerOrMemberOfGroupException {
-        var user = getCurrentUser();
-        var cart = cartRepository.findById(id).
-                orElseThrow(() -> new CartNotFoundException("Delete Cart: Cart not found"));
-        var group = groupRepository.findById(cart.getGroup().getId()).
-                orElseThrow(() -> new GroupNotFoundException("Delete Cart: Group not found"));
-        var groupOwner = group.getOwner();
-        var groupMembers = group.getMembers();
-        var cartOwner = cart.getUser();
-
-        if (groupOwner.equals(user) || groupMembers.contains(user)) {
-            if (cartOwner.equals(user)) {
-                cartRepository.deleteById(id);
-            } else throw new NotOwnerOfCartException("Delete Cart: You are not the owner of the cart");
-        } else throw new NotOwnerOrMemberOfGroupException("Delete Cart: You are either a member nor the owner of the group");
+        var user = dataLoaderService.getCurrentUser();
+        var cart = dataLoaderService.loadCart(id);
+        var group = dataLoaderService.loadGroup(cart.getGroup().getId());
+        verifyIsPartOfGroup(user, group);
+        verifyIsOwnerOfCart(user, cart);
+        cartRepository.deleteById(id);
     }
 
     @Transactional
-    public void addSettlementPayment(SettlementPaymentDto settlementPaymentDto) throws GroupIdNotFoundException, UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
-        if (settlementPaymentDto.getGroupId() == null) {
-            throw new GroupIdNotFoundException("Add SettlementPayment: Group Id for this cart is null");
-        }
-        var user = getCurrentUser();
-        var member = userRepository.findById(settlementPaymentDto.getMember().getId()).
-                orElseThrow(() -> new UserNotFoundException("Add SettlementPayment: Member not found"));
-        var group = groupRepository.findById(settlementPaymentDto.getGroupId()).
-                orElseThrow(() -> new GroupNotFoundException("Add SettlementPayment: Group not found"));
-        var groupOwner = group.getOwner();
-        var groupMembers = group.getMembers();
+    public void addSettlementPayment(@Validated SettlementPaymentDto settlementPaymentDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
+        var user = dataLoaderService.getCurrentUser();
+        var group = dataLoaderService.loadGroup(settlementPaymentDto.getGroupId());
+        var member = dataLoaderService.loadUser(settlementPaymentDto.getMember().getId());
+        verifyIsPartOfGroup(user, group);
+        verifyIsPartOfGroup(member, group);
+        createCategoryForSettlementPaymentIfNotExist(group);
+        var category = dataLoaderService.loadCategoryByGroupAndName(group, "Ausgleichszahlung");
+        var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(new Date(), group.getId());
 
-        if (groupOwner.equals(user) || groupMembers.contains(user)) {
-            if (groupOwner.equals(member) || groupMembers.contains(member)) {
-                if (categoryRepository.findCategoryByGroupAndName(group,"Ausgleichszahlung") == null) {
-                    categoryRepository.save(new Category(null, "Ausgleichszahlung", group, null));
-                }
-                var category = categoryRepository.findCategoryByGroupAndName(group, "Ausgleichszahlung");
-                var groupMemberCount = cartRepository
-                        .getGroupMemberCountForCartDatePurchased(new Date(), group.getId());
+        var cartDtoSender = new CartDto();
+        cartDtoSender.setTitle("Ausgleichszahlung an " + capitalize(member.getUserName()));
+        cartDtoSender.setDatePurchased(new Date());
+        cartDtoSender.setAmount(settlementPaymentDto.getAmount());
+        cartRepository.save(cartDtoMapper.CartDtoToEntity(cartDtoSender, category, user, group, groupMemberCount));
 
-                var cartDtoSender = new CartDto();
-                cartDtoSender.setTitle("Ausgleichszahlung an " + capitalize(member.getUserName()));
-                cartDtoSender.setDatePurchased(new Date());
-                cartDtoSender.setAmount(settlementPaymentDto.getAmount());
-                cartRepository.save(cartDtoMapper.CartDtoToEntity(cartDtoSender, category, user, group, groupMemberCount));
-
-                var cartDtoReceiver = new CartDto();
-                cartDtoReceiver.setTitle("Ausgleichszahlung von " + capitalize(user.getUserName()));
-                cartDtoReceiver.setDatePurchased(new Date());
-                cartDtoReceiver.setAmount(-1 * settlementPaymentDto.getAmount());
-                cartRepository.save(cartDtoMapper.CartDtoToEntity(cartDtoReceiver, category, member, group, groupMemberCount));
-
-            } else throw new NotOwnerOrMemberOfGroupException("Add SettlementPayment: Receiver of the payment is either a member nor the owner of the group");
-        } else throw new NotOwnerOrMemberOfGroupException("Add SettlementPayment: Sender of the payment is either a member nor the owner of the group");
+        var cartDtoReceiver = new CartDto();
+        cartDtoReceiver.setTitle("Ausgleichszahlung von " + capitalize(user.getUserName()));
+        cartDtoReceiver.setDatePurchased(new Date());
+        cartDtoReceiver.setAmount((-1) * settlementPaymentDto.getAmount());
+        cartRepository.save(cartDtoMapper.CartDtoToEntity(cartDtoReceiver, category, member, group, groupMemberCount));
     }
 
     public void getExcelFile(HttpServletResponse response, Long groupId) throws IOException, GroupNotFoundException, UserNotFoundException, NotOwnerOrMemberOfGroupException {
-        var user = getCurrentUser();
-        var group = groupRepository.findById(groupId).
-                orElseThrow(() -> new GroupNotFoundException("Get Excel File: Group not found"));
+        var user = dataLoaderService.getCurrentUser();
+        var group = dataLoaderService.loadGroup(groupId);
+        verifyIsPartOfGroup(user, group);
 
-        if (group.getOwner().equals(user) || group.getMembers().contains(user)) {
-            response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-            response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-            response.setHeader("Expires", "0");
-            var cartlist = cartRepository.findCartsByGroupIdAndIsDeletedFalseOrderByDatePurchasedDesc(groupId);
-            var excelWriter = new ExcelWriter(cartlist);
-            excelWriter.generateExcelFile(response);
-        } else throw new NotOwnerOrMemberOfGroupException("Get Excel File: You are either the owner nor a member of the group");
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        response.setHeader("Expires", "0");
+        var cartlist = dataLoaderService.loadCartListForGroup(groupId);
+        var excelWriter = new ExcelWriter(cartlist);
+        excelWriter.generateExcelFile(response);
+    }
+
+    private void verifyIsPartOfGroup(User user, Group group) throws NotOwnerOrMemberOfGroupException {
+        if (!(group.getOwner().equals(user) || group.getMembers().contains(user))) {
+            throw new NotOwnerOrMemberOfGroupException("User with ID " + user.getId() + " is either a member nor the owner of the group");
+        }
+    }
+
+    private void verifyIsOwnerOfCart(User user, Cart cart) throws NotOwnerOfCartException {
+        if (!cart.getUser().equals(user)) {
+            throw new NotOwnerOfCartException("User with ID " + user.getId() + " is not the owner of the cart");
+        }
+    }
+
+    private void createCategoryForSettlementPaymentIfNotExist(Group group) {
+        if (categoryRepository.findCategoryByGroupAndName(group,"Ausgleichszahlung") == null) {
+            categoryRepository.save(new Category(null, "Ausgleichszahlung", group, null));
+        }
     }
 
     private String capitalize(String str) {
         return str.substring(0, 1).toUpperCase() + str.substring(1);
-    }
-
-    // TODO: Derzeit angemeldete Nutzer -> Spring Security
-    private User getCurrentUser() throws UserNotFoundException {
-        // Sven als Nutzer, id = 1
-        var userId = UserEnum.CURRENT_USER.getId();
-        return userRepository.findById(userId).
-                orElseThrow(() -> new UserNotFoundException("User with id " + userId + " not found"));
     }
 }

@@ -5,11 +5,11 @@
     </ion-buttons>
     <ion-title>Ausgaben</ion-title>
     <ion-buttons slot="primary">
-      <ion-text class="ion-padding"><small>{{ activeGroupName }}</small></ion-text>
+      <ion-text class="ion-padding group-name"><small>{{ (activeGroup.name.length > 20)? (activeGroup.name | slice:0:20) + '...' : (activeGroup.name) }}</small></ion-text>
       <ion-button *ngIf="activeGroup.id !== null" [routerLink]="['new-edit']">
         <ion-icon name="add" slot="icon-only"></ion-icon>
       </ion-button>
-      <ion-button id="cartlist-popover-button">
+      <ion-button *ngIf="activeGroup.id !== null" id="cartlist-popover-button">
         <ion-icon name="ellipsis-vertical"></ion-icon>
       </ion-button>
       <ion-popover trigger="cartlist-popover-button" [dismissOnSelect]="true" side="bottom" alignment="start">
@@ -42,12 +42,7 @@
 </ion-list-header>
 
 <ion-content>
-  <!-- <ion-fab vertical="bottom" horizontal="center" slot="fixed">
-    <ion-fab-button color="light" [routerLink]="['new-edit']">
-      <ion-icon name="add"></ion-icon>
-    </ion-fab-button>
-  </ion-fab> -->
-  
+  <!-- <ion-text class="ion-padding group-name"><small>{{ (activeGroup.name.length > 50)? (activeGroup.name | slice:0:50) + '...' : (activeGroup.name) }}</small></ion-text> -->
   <ion-grid class="ion-padding">
     <ion-row>
       <ion-col class="ion-text-center" size-md="6" offset-md="3" *ngIf="isLoading">
@@ -62,16 +57,16 @@
         <ion-list *ngIf="!isLoading && cartlist.length > 0">
           <ion-item-sliding *ngFor="let cart of cartlist" #slidingItem>
             <ion-item>
-              <!-- <ion-icon *ngIf="cart.categoryDto.name == 'Ausgleichszahlung'" slot="start" name="repeat-outline"></ion-icon> -->
               <ion-avatar slot="start" (click)="onFilterCategory(cart.categoryDto.name, cart.groupId)">
                 <div class="category-circle">
-                  <p>{{ cart.categoryDto.name.substring(0, 2) | uppercase }}</p>
+                  <p *ngIf="cart.categoryDto.name != 'Ausgleichszahlung'">{{ cart.categoryDto.name.substring(0, 2) | uppercase }}</p>
+                  <ion-icon *ngIf="cart.categoryDto.name == 'Ausgleichszahlung'" name="repeat-outline" color="medium"></ion-icon>
                   <!-- <p>{{ cart.userDto.userName.substring(0, 2) | uppercase }}</p> -->
                 </div>
               </ion-avatar>
               <ion-label>
                 <div class="cart-details">
-                  <h2 class="ion-text-wrap">{{ cart.title }}</h2>
+                  <h2 class="titlestyle">{{ cart.title }}</h2>
                   <h2>{{ cart.amount | currency: 'EUR': number: '1.2-2': 'de' }}</h2>
                 </div>
                 <div class="cart-details">
@@ -82,7 +77,6 @@
                     <ion-text color="medium">{{ cart.datePurchased | date: "dd.MM.yyyy" }}</ion-text>
                   </div>
                 </div>
-                <!-- <ion-text class="ion-text-wrap" color="medium"><small>{{ cart.description }}</small></ion-text> -->
               </ion-label>
             </ion-item>
             <ion-item-options *ngIf="cart.userDto.userName == userName">

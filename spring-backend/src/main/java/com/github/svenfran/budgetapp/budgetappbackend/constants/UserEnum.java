@@ -1,7 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.constants;
 
 public enum UserEnum {
-    CURRENT_USER(1L),
 
     SVEN(1L),
     SASCHA(2L),
@@ -9,7 +8,8 @@ public enum UserEnum {
     MARTIN(4L),
     SABINE(5L),
     TINA(6L),
-    MONTSE(7L);
+    MONTSE(7L),
+    HUGO(8L);
 
     private final Long id;
 

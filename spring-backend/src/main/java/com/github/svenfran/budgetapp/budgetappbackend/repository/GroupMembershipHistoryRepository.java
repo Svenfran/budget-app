@@ -10,4 +10,6 @@ public interface GroupMembershipHistoryRepository extends CrudRepository<GroupMe
     GroupMembershipHistory findByUserIdAndGroupIdAndMembershipEndIsNull(Long userId, Long groupId);
 
     List<GroupMembershipHistory> findByGroupId(Long groupId);
+
+    List<GroupMembershipHistory> findByGroupIdAndUserId(Long groupId, Long userId);
 }

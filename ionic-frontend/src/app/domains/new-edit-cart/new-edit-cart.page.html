@@ -51,9 +51,12 @@
             <ion-label position="floating">Beschreibung</ion-label>
             <ion-textarea
               type="text"
+              auto-grow="true"
+              maxlength="255"
               formControlName="description"
             ></ion-textarea>
           </ion-item>
+          <span class="ion-padding"><small>{{0 + form.controls['description'].value.length}} / 255</small></span>
         </ion-col>
       </ion-row>
       <ion-row>

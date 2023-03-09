@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild } from '@angular/core';
+import { Component, Input, OnInit, ViewChild } from '@angular/core';
 import { FormGroup, UntypedFormBuilder, Validators } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
 import { IonDatetime, LoadingController, MenuController } from '@ionic/angular';
@@ -53,8 +53,6 @@ export class NewEditCartPage implements OnInit {
       category: ['',[ Validators.required ]]
     });
 
-    this.menuCtrl.enable(false, 'm1');
-
     this.cartId = this.route.snapshot.paramMap.get('id');
     this.isAddMode = !this.cartId;
  
@@ -63,8 +61,12 @@ export class NewEditCartPage implements OnInit {
     this.getActiveGroupId();
   }
 
-  ionViewDidLeave() {
+  ionViewWillLeave() {
     this.menuCtrl.enable(true, 'm1');
+  }
+
+  ionViewWillEnter() {
+    this.menuCtrl.enable(false, 'm1');
   }
 
   getActiveGroupId() {

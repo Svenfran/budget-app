@@ -34,10 +34,10 @@
 
           <div *ngFor="let cat of categories, let i = index">
             <ion-item>
-              <!-- <ion-text slot="start">{{ i + 1 }}</ion-text> -->
               <ion-avatar slot="start">
                 <div class="category-circle">
-                  <p>{{ cat.name.substring(0, 2) | uppercase }}</p>
+                  <p *ngIf="cat.name != 'Ausgleichszahlung'">{{ cat.name.substring(0, 2) | uppercase }}</p>
+                  <ion-icon *ngIf="cat.name == 'Ausgleichszahlung'" name="repeat-outline" color="medium"></ion-icon>
                 </div>
               </ion-avatar>
               <ion-label (click)="onUpdateCategory(cat)">

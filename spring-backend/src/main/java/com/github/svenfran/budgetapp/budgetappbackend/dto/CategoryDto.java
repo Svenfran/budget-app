@@ -2,10 +2,13 @@ package com.github.svenfran.budgetapp.budgetappbackend.dto;
 
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Category;
 
+import javax.validation.constraints.NotNull;
+
 public class CategoryDto {
 
     private Long id;
     private String name;
+    @NotNull
     private Long groupId;
 
     public CategoryDto(Category category) {

@@ -31,13 +31,13 @@ public class ShoppingListController {
     }
 
     @PutMapping("/groups/shopping-list/update")
-    public ResponseEntity<AddEditShoppingListDto> updateShoppingList(@RequestBody AddEditShoppingListDto addEditShoppingListDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingListNotFoundException, ShoppingListDoesNotBelongToGroupException {
+    public ResponseEntity<AddEditShoppingListDto> updateShoppingList(@RequestBody AddEditShoppingListDto addEditShoppingListDto) throws Exception {
         AddEditShoppingListDto updatedShoppingList = shoppingListService.updateShoppingList(addEditShoppingListDto);
         return new ResponseEntity<>(updatedShoppingList, HttpStatus.CREATED);
     }
 
     @PostMapping("/groups/shopping-list/delete")
-    public ResponseEntity<AddEditShoppingListDto> deleteShoppingList(@RequestBody AddEditShoppingListDto addEditShoppingListDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingListNotFoundException, ShoppingListDoesNotBelongToGroupException {
+    public ResponseEntity<AddEditShoppingListDto> deleteShoppingList(@RequestBody AddEditShoppingListDto addEditShoppingListDto) throws Exception {
         shoppingListService.deleteShoppingList(addEditShoppingListDto);
         return new ResponseEntity<>(HttpStatus.OK);
     }

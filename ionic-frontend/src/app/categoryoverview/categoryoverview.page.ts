@@ -115,10 +115,10 @@ export class CategoryoverviewPage implements OnInit {
       header: "Löschen",
       message: `Möchtest du die Kategorie "${category.name}" wirklich löschen?`,
       buttons: [{
-        text: "Abbrechen",
+        text: "Nein",
         role: "cancel"
       }, {
-        text: "ok",
+        text: "Ja",
         handler: () => {
           this.loadingCtrl.create({
             message: "Lösche Kategorie..."

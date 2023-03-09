@@ -2,6 +2,7 @@ package com.github.svenfran.budgetapp.budgetappbackend.dto;
 
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Cart;
 
+import javax.validation.constraints.NotNull;
 import java.util.Date;
 
 public class CartDto {
@@ -11,6 +12,7 @@ public class CartDto {
     private String description;
     private Double amount;
     private Date datePurchased;
+    @NotNull
     private Long groupId;
     private UserDto userDto;
     private CategoryDto categoryDto;

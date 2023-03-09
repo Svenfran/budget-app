@@ -64,6 +64,13 @@ ion-modal {
   }
 }
 
+.group-name {
+    // display: flex;
+    // justify-content: center;
+	font-weight: 600;
+	// margin-bottom: -2rem;
+}
+
 .ion-color-darkgrey {
 	--ion-color-base: var(--ion-color-darkgrey);
 	--ion-color-base-rgb: var(--ion-color-darkgrey-rgb);

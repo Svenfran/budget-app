@@ -1,8 +1,12 @@
 package com.github.svenfran.budgetapp.budgetappbackend.dto;
 
+
+import javax.validation.constraints.NotNull;
+
 public class SettlementPaymentDto {
 
     private Double amount;
+    @NotNull
     private Long groupId;
     private UserDto member;
 

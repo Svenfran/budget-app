@@ -1,5 +1,6 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { AlertController, IonItemSliding, LoadingController, ModalController } from '@ionic/angular';
+import { format } from 'date-fns';
 import { Subscription } from 'rxjs';
 import { Cart } from 'src/app/models/cart';
 import { GroupSideNav } from 'src/app/models/group-side-nav';
@@ -52,6 +53,7 @@ export class CartlistPage implements OnInit, OnDestroy {
       this.filterTerm = "";
     })
   }
+
 
   getAllCartsByGroupId(groupId: number) {
     this.isLoading = true;
@@ -127,8 +129,9 @@ export class CartlistPage implements OnInit, OnDestroy {
     }
   }
 
+
   download() {
-    let filename = "Ausgaben_" + this.activeGroupName.replace(/ /g, "-") + "_" + Date.now() + ".xlsx";
+    let filename = "Ausgaben_" + this.activeGroupName.replace(/ /g, "-") + "_" + format(new Date(), 'yyyyMMddHHmmss') + ".xlsx";
     this.cartService.getExcelFile(this.activeGroup.id, filename);
   }
 

@@ -27,19 +27,19 @@ public class CartController {
     }
 
     @GetMapping("/carts/{id}")
-    public ResponseEntity<CartDto> getCartById(@PathVariable("id") Long id) throws CartNotFoundException, UserNotFoundException, NotOwnerOrMemberOfGroupException {
+    public ResponseEntity<CartDto> getCartById(@PathVariable("id") Long id) throws CartNotFoundException, UserNotFoundException, NotOwnerOrMemberOfGroupException, GroupNotFoundException {
         CartDto cartDto = cartService.getCartById(id);
         return new ResponseEntity<>(cartDto, HttpStatus.OK);
     }
 
     @PostMapping("/carts/add")
-    public ResponseEntity<CartDto> addCart(@RequestBody CartDto cartDto) throws AddCartCategoryNotFoundException, UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, GroupIdNotFoundException {
+    public ResponseEntity<CartDto> addCart(@RequestBody CartDto cartDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, CategoryNotFoundException {
         CartDto newCart = cartService.addCart(cartDto);
         return new ResponseEntity<>(newCart, HttpStatus.CREATED);
     }
 
     @PutMapping("/carts/update")
-    public ResponseEntity<CartDto> updateCart(@RequestBody CartDto cartDto) throws UpdateCartCategoryNotFoundException, UserNotFoundException, GroupNotFoundException, CartNotFoundException, NotOwnerOfCartException, NotOwnerOrMemberOfGroupException, GroupIdNotFoundException {
+    public ResponseEntity<CartDto> updateCart(@RequestBody CartDto cartDto) throws UserNotFoundException, GroupNotFoundException, CartNotFoundException, NotOwnerOfCartException, NotOwnerOrMemberOfGroupException, GroupIdNotFoundException, CategoryNotFoundException {
         CartDto updateCart = cartService.updateCart(cartDto);
         return new ResponseEntity<>(updateCart, HttpStatus.CREATED);
     }
@@ -51,7 +51,7 @@ public class CartController {
     }
 
     @PostMapping("/carts/settlement-payment/add")
-    public ResponseEntity<CartDto> addSettlementPayment(@RequestBody SettlementPaymentDto settlementPaymentDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, GroupIdNotFoundException {
+    public ResponseEntity<CartDto> addSettlementPayment(@RequestBody SettlementPaymentDto settlementPaymentDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
         cartService.addSettlementPayment(settlementPaymentDto);
         return new ResponseEntity<>(HttpStatus.OK);
     }

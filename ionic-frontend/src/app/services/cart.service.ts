@@ -83,15 +83,15 @@ export class CartService {
           directory: Directory.Documents,
         });
         const path = savedFile.uri;
-        const mimeType = this.getMimeType(name);
+        const mimeType = this.getMimeType(filename);
         let message = "Datei erfolgreich heruntergeladen."
         this.showToast(message)
         this.fileOpener.open(path, mimeType)
           .then(() => console.log('File is opended'))
           .catch(error => console.log('Error opening file', error));
-        }
-      });
-    }
+      }
+    });
+  }
 
   private convertBlobToBase64(blob: Blob) {
     return new Promise ((resolve, reject) => {

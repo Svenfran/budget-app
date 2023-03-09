@@ -56,7 +56,7 @@ export class GroupService {
     // this._currentUser.next(new UserDto(5, "sabine"));
     // this._currentUser.next(new UserDto(6, "tina"));
     // this._currentUser.next(new UserDto(7, "montse"));
-    // this._currentUser.next(new UserDto(8, "patrick"));
+    // this._currentUser.next(new UserDto(8, "hugo"));
   }
 
   get activeGroup() {

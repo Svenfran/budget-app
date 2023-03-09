@@ -5,7 +5,7 @@
     </ion-buttons>
     <ion-title>Übersicht</ion-title>
     <ion-buttons slot="primary">
-      <ion-text *ngIf="loadedActiveGroup | async" class="ion-padding"><small>{{ activeGroup.name }}</small></ion-text>
+      <ion-text *ngIf="loadedActiveGroup | async" class="ion-padding group-name"><small>{{ (activeGroup.name.length > 20)? (activeGroup.name | slice:0:20) + '...' : (activeGroup.name) }}</small></ion-text>
       <ion-button id="popover-button" [class.hide]="availableYears.length <= 0">
         <ion-icon name="ellipsis-vertical"></ion-icon>
       </ion-button>
@@ -22,7 +22,8 @@
   </ion-toolbar>
 </ion-header>
 
-<ion-content>
+
+<ion-content *ngIf="loadedSpendings | async">
   <ion-segment [(ngModel)]="segment" (ionChange)="onFilterUpdate($event)">
     <ion-segment-button value="month">
       <ion-label>monatlich</ion-label>
@@ -31,6 +32,7 @@
       <ion-label>jährlich</ion-label>
     </ion-segment-button>
   </ion-segment>
+  <!-- <ion-text *ngIf="loadedActiveGroup | async" class="ion-padding group-name"><small>{{ (activeGroup.name.length > 50)? (activeGroup.name | slice:0:50) + '...' : (activeGroup.name) }}</small></ion-text> -->
   <ion-grid class="ion-padding">
     <ion-row>
       <ion-col class="ion-text-center" size-md="6" offset-md="3" *ngIf="isLoading">
@@ -44,6 +46,7 @@
       </ion-col>
     </ion-row>
     <ion-row>
+      <!-- overview of total spendings (per year & for all years) -->
       <ion-col size-md="6" offset-md="3" *ngIf="!isLoading && spendingsTotalYear.spendingsTotalUser && spendingsTotalYear.spendingsTotalUser.length > 0">
         <ion-list *ngIf="!isLoading && spendingsTotalYear.spendingsTotalUser.length > 0">
           <ion-item lines="none">
@@ -57,19 +60,20 @@
                 </div>
 
                 <div class="spendings-user-details" *ngFor="let userSpendings of spendingsTotalYear.spendingsTotalUser">
-                  <div class="spendings-user-amount">
+                  <div [class.spendings-user-amount-single]="spendingsTotalYear.spendingsTotalUser.length <= 1" 
+                       [class.spendings-user-amount]="spendingsTotalYear.spendingsTotalUser.length > 1">
                     <div class="space">
                       <ion-text color="medium">{{ userSpendings.userName | titlecase }}</ion-text>
                       <ion-text>{{ userSpendings.sum | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
                     </div>
                   </div>
-                  <div class="spendings-user-diff">
+                  <div *ngIf="spendingsTotalYear.spendingsTotalUser.length > 1" class="spendings-user-diff">
                     <ion-text *ngIf="userSpendings.diff >= 0" color="primary" class="bold">{{ userSpendings.diff | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
                     <ion-text *ngIf="userSpendings.diff < 0" color="danger" class="bold">{{ userSpendings.diff | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
                   </div>
                 </div>
 
-                <div class="spendings-total">
+                <div *ngIf="spendingsTotalYear.spendingsTotalUser.length > 1" class="spendings-total">
                   <ion-text class="bold" color="medium">Gesamt:</ion-text>
                   <ion-text class="bold">{{ spendingsTotalYear.sumTotalYear | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
                 </div>
@@ -99,19 +103,20 @@
                 </div>
 
                 <div class="spendings-user-details" *ngFor="let userSpendings of spendings.spendingsMonthlyUser">
-                  <div class="spendings-user-amount">
+                  <div [class.spendings-user-amount-single]="spendingsTotalYear.spendingsTotalUser.length <= 1"
+                       [class.spendings-user-amount]="spendingsTotalYear.spendingsTotalUser.length > 1">
                     <div class="space">
                       <ion-text color="medium">{{ userSpendings.userName | titlecase }}</ion-text>
                       <ion-text>{{ userSpendings.sum | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
                     </div>
                   </div>
-                  <div class="spendings-user-diff">
+                  <div *ngIf="spendingsTotalYear.spendingsTotalUser.length > 1" class="spendings-user-diff">
                     <ion-text *ngIf="userSpendings.diff >= 0" color="primary" class="bold">{{ userSpendings.diff | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
                     <ion-text *ngIf="userSpendings.diff < 0" color="danger" class="bold">{{ userSpendings.diff | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
                   </div>
                 </div>
 
-                <div class="spendings-total">
+                <div *ngIf="spendingsTotalYear.spendingsTotalUser.length > 1" class="spendings-total">
                   <ion-text class="bold" color="medium">Gesamt:</ion-text>
                   <ion-text class="bold">{{ spendings.sumTotalMonth | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
                 </div>
@@ -139,19 +144,21 @@
                 </div>
 
                 <div class="spendings-user-details" *ngFor="let userSpendings of spendings.spendingsYearlyUser">
-                  <div class="spendings-user-amount">
+                  <div [class.spendings-user-amount-single]="spendingsTotalYear.spendingsTotalUser.length <= 1"
+                       [class.spendings-user-amount]="spendingsTotalYear.spendingsTotalUser.length > 1">
                     <div class="space">
                       <ion-text color="medium">{{ userSpendings.userName | titlecase }}</ion-text>
                       <ion-text>{{ userSpendings.sum | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
                     </div>
                   </div>
-                  <div class="spendings-user-diff">
+
+                  <div *ngIf="spendingsTotalYear.spendingsTotalUser.length > 1" class="spendings-user-diff">
                     <ion-text *ngIf="userSpendings.diff >= 0" color="primary" class="bold">{{ userSpendings.diff | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
                     <ion-text *ngIf="userSpendings.diff < 0" color="danger" class="bold">{{ userSpendings.diff | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
                   </div>
                 </div>
 
-                <div class="spendings-total">
+                <div *ngIf="spendingsTotalYear.spendingsTotalUser.length > 1" class="spendings-total">
                   <ion-text class="bold" color="medium">Gesamt:</ion-text>
                   <ion-text class="bold">{{ spendings.sumTotalYear | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
                 </div>

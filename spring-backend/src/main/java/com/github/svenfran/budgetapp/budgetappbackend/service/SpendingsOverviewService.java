@@ -1,20 +1,28 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
-import com.github.svenfran.budgetapp.budgetappbackend.constants.UserEnum;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.*;
+import com.github.svenfran.budgetapp.budgetappbackend.entity.Cart;
+import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
+import com.github.svenfran.budgetapp.budgetappbackend.entity.GroupMembershipHistory;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.GroupNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOrMemberOfGroupException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository;
-import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository;
+import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupMembershipHistoryRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.text.DateFormatSymbols;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
+import java.util.stream.Collectors;
+
+import static java.util.stream.Collectors.*;
 
 @Service
 public class SpendingsOverviewService {
@@ -26,40 +34,36 @@ public class SpendingsOverviewService {
     private UserRepository userRepository;
 
     @Autowired
-    private GroupRepository groupRepository;
+    private DataLoaderService dataLoaderService;
+
+    @Autowired
+    private GroupMembershipHistoryRepository gmhRepository;
+
 
     public SpendingsOverviewDto getSpendingsForGroupAndYear(int year, Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
-        var user = getCurrentUser();
-        var group = groupRepository.findById(groupId).
-                orElseThrow(() -> new GroupNotFoundException("Get SpendingsForGroupAndYear: Group not found"));
-        var groupOwner = group.getOwner();
-        var groupMembers = group.getMembers();
+        var user = dataLoaderService.getCurrentUser();
+        var group = dataLoaderService.loadGroup(groupId);
+        verifyIsPartOfGroup(user, group);
 
-        if (groupOwner.equals(user) || groupMembers.contains(user)) {
-            var spendingsOverview = new SpendingsOverviewDto();
-            spendingsOverview.setGroupId(groupId);
-            spendingsOverview.setYear(year);
-            spendingsOverview.setSpendingsTotalYear(getSpendingsOverviewTotalYear(year, groupId));
-            spendingsOverview.setSpendingsPerMonth(getSpendingsOverviewPerMonth(year, groupId));
-            spendingsOverview.setAvailableYears(cartRepository.getAvailableYearsForGroup(groupId));
-            return spendingsOverview;
-        } else throw new NotOwnerOrMemberOfGroupException("Get SpendingsForGroupAndYear: You are either a member nor the owner of the group");
+        var spendingsOverview = new SpendingsOverviewDto();
+        spendingsOverview.setGroupId(groupId);
+        spendingsOverview.setYear(year);
+        spendingsOverview.setSpendingsTotalYear(getSpendingsOverviewTotalYear(year, groupId));
+        spendingsOverview.setSpendingsPerMonth(getSpendingsOverviewPerMonth(year, groupId));
+        spendingsOverview.setAvailableYears(cartRepository.getAvailableYearsForGroup(groupId));
+        return spendingsOverview;
     }
 
     public SpendingsOverviewDto getSpendingsForGroupAndAllYears(Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
-        var user = getCurrentUser();
-        var group = groupRepository.findById(groupId).
-                orElseThrow(() -> new GroupNotFoundException("Get SpendingsForGroupAndAllYears: Group not found"));
-        var groupOwner = group.getOwner();
-        var groupMembers = group.getMembers();
+        var user = dataLoaderService.getCurrentUser();
+        var group = dataLoaderService.loadGroup(groupId);
+        verifyIsPartOfGroup(user, group);
 
-        if (groupOwner.equals(user) || groupMembers.contains(user)) {
-            var spendingsOverview = new SpendingsOverviewDto();
-            spendingsOverview.setGroupId(groupId);
-            spendingsOverview.setSpendingsTotalYear(getSpendingsOverviewTotalAllYears(groupId));
-            spendingsOverview.setSpendingsPerYear(getSpendingsOverviewPerYear(groupId));
-            return spendingsOverview;
-        } else throw new NotOwnerOrMemberOfGroupException("Get SpendingsForGroupAndAllYears: You are either a member nor the owner of the group");
+        var spendingsOverview = new SpendingsOverviewDto();
+        spendingsOverview.setGroupId(groupId);
+        spendingsOverview.setSpendingsTotalYear(getSpendingsOverviewTotalAllYears(groupId));
+        spendingsOverview.setSpendingsPerYear(getSpendingsOverviewPerYear(groupId));
+        return spendingsOverview;
     }
 
 
@@ -212,7 +216,27 @@ public class SpendingsOverviewService {
             }
             spendingsAmountAverageDiffPerMonthList.add(spendingsAmountAverageDiffPerMonth);
         }
+        return spendingsAmountAverageDiffPerMonthList;
+    }
 
+    // Not finished and not in use
+    private List<SpendingsOverviewAmountAverageDiffPerMonthDto> getAmountAverageDiffPerUserAndMonth_New(Long groupId, int year) {
+
+        var carts = cartRepository.findCartsByGroupIdAndIsDeletedFalseOrderByDatePurchasedDesc(groupId);
+        var spendingsAmountAverageDiffPerMonthList = new ArrayList<SpendingsOverviewAmountAverageDiffPerMonthDto>();
+        var spendingsAmountAverageDiffPerMonth = new SpendingsOverviewAmountAverageDiffPerMonthDto();
+        Double sumAmount = 0.0;
+        Double sumAverage = 0.0;
+
+        for (Cart cart : carts) {
+            if (verifyWasMemberAtDatePurchased(groupId, cart.getUser().getId(), cart.getDatePurchased())) {
+                spendingsAmountAverageDiffPerMonth.setSumAmount(sumAmount += cart.getAmount());
+                spendingsAmountAverageDiffPerMonth.setSumAveragePerMember(sumAverage += cart.getAveragePerMember());
+                spendingsAmountAverageDiffPerMonth.setDiff(sumAmount - sumAverage);
+            }
+        }
+
+        spendingsAmountAverageDiffPerMonthList.add(spendingsAmountAverageDiffPerMonth);
         return spendingsAmountAverageDiffPerMonthList;
     }
 
@@ -287,11 +311,21 @@ public class SpendingsOverviewService {
         return spendingsAmountAverageDiffTotalYearsList;
     }
 
-    // TODO: Derzeit angemeldete Nutzer -> Spring Security
-    private User getCurrentUser() throws UserNotFoundException {
-        // Sven als Nutzer, id = 1
-        var userId = UserEnum.CURRENT_USER.getId();
-        return userRepository.findById(userId).
-                orElseThrow(() -> new UserNotFoundException("User with id " + userId + " not found"));
+
+    private void verifyIsPartOfGroup(User user, Group group) throws NotOwnerOrMemberOfGroupException {
+        if (!(group.getOwner().equals(user) || group.getMembers().contains(user))) {
+            throw new NotOwnerOrMemberOfGroupException("User with ID " + user.getId() + " is either a member nor the owner of the group");
+        }
+    }
+
+    // not in use
+    private boolean verifyWasMemberAtDatePurchased(Long groupId, Long userId, Date datePurchased) {
+        var groupMemberships = gmhRepository.findByGroupIdAndUserId(groupId, userId);
+        for (GroupMembershipHistory gmh : groupMemberships) {
+            if (gmh.getMembershipStart().getTime() <= datePurchased.getTime() && (gmh.getMembershipEnd() == null || gmh.getMembershipEnd().getTime() >= datePurchased.getTime())) {
+                return true;
+            }
+        }
+        return false;
     }
 }

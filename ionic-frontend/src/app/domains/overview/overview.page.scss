@@ -38,7 +38,17 @@ ion-segment {
             .space {
                 display: flex;
                 justify-content: space-between;
-                width: 10rem;
+                width: 11rem;
+            }
+        }
+        .spendings-user-amount-single {
+            display: flex;
+            flex-direction: column;
+            width: 100vw;
+            font-weight: bold;
+            .space {
+                display: flex;
+                justify-content: space-between;
             }
         }
         .spendings-user-diff {
@@ -49,7 +59,7 @@ ion-segment {
     .spendings-total {
         display: flex;
         justify-content: space-between;
-        width: 10rem;
+        width: 11rem;
         padding-top: 6px;
     }
 }
@@ -69,3 +79,4 @@ ion-segment {
 .negative {
     color: #8e5ea2;
 }
+
