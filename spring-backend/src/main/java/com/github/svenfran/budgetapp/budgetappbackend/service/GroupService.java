@@ -1,11 +1,10 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
-import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
-import com.github.svenfran.budgetapp.budgetappbackend.constants.UserEnum;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.*;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Category;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.*;
 import com.github.svenfran.budgetapp.budgetappbackend.service.mapper.GroupDtoMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -100,17 +99,9 @@ public class GroupService {
 
         group.addMember(newMember);
         groupMembershipHistoryService.startGroupMembershipForMember(newMember, group);
+        setIsDeletedForCart(group, newMember, false);
 
-        var cartsOfNewMember = cartRepository.findCartsByGroupAndUser(group, newMember);
-        if (cartsOfNewMember.size() > 0) {
-            cartsOfNewMember.forEach(cart -> cart.setDeleted(false));
-            cartRepository.saveAll(cartsOfNewMember);
-        }
-        var cartsOfGroup = group.getCarts();
-        if (cartsOfGroup.size() > 0) {
-            cartsOfGroup.forEach(cart -> cart.setAveragePerMember(cart.getAmount() / dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(cart.getDatePurchased(), cart.getGroup().getId())));
-            cartRepository.saveAll(cartsOfGroup);
-        }
+        calculateAveragePerMember(group);
         return new GroupMembersDto(groupRepository.save(group));
     }
 
@@ -123,17 +114,9 @@ public class GroupService {
 
         group.removeMember(removedMember);
         groupMembershipHistoryService.finishGroupMembership(removedMember, group);
-        var cartsOfRemovedMember = cartRepository.findCartsByGroupAndUser(group, removedMember);
-        if (cartsOfRemovedMember.size() > 0) {
-            cartsOfRemovedMember.forEach(cart -> cart.setDeleted(true));
-            cartRepository.saveAll(cartsOfRemovedMember);
-        }
-        var cartsOfGroup = group.getCarts();
-        if (cartsOfGroup.size() > 0) {
-            cartsOfGroup.forEach(cart -> cart.setAveragePerMember(cart.getAmount() / dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(cart.getDatePurchased(), cart.getGroup().getId())));
-            cartRepository.saveAll(cartsOfGroup);
-        }
+        setIsDeletedForCart(group, removedMember, true);
 
+        calculateAveragePerMember(group);
         return new GroupMembersDto(groupRepository.save(group));
     }
 
@@ -147,9 +130,9 @@ public class GroupService {
         var membersToRemove = new HashSet<>(group.getMembers());
         group.removeAll(membersToRemove);
         groupMembershipHistoryRepository.deleteAll(groupMembershipToRemove);
-        if (group.getCarts().size() > 0) cartRepository.deleteAll(group.getCarts());
-        if (group.getCategories().size() > 0) categoryRepository.deleteAll(group.getCategories());
-        if (group.getShoppingLists().size() > 0) {
+        if (!group.getCarts().isEmpty()) cartRepository.deleteAll(group.getCarts());
+        if (!group.getCategories().isEmpty()) categoryRepository.deleteAll(group.getCategories());
+        if (!group.getShoppingLists().isEmpty()) {
             group.getShoppingLists().forEach(list -> shoppingItemRepository.deleteAll(list.getShoppingItems()));
             shoppingListRepository.deleteAll(group.getShoppingLists());
         }
@@ -172,13 +155,15 @@ public class GroupService {
     }
 
     private void createDefaultCategories(Group group) {
-        categoryRepository.save(new Category(null, "Ausgehen", group, null));
-        categoryRepository.save(new Category(null, "Ausgleichszahlung", group, null));
-        categoryRepository.save(new Category(null, "Geschenke", group, null));
-        categoryRepository.save(new Category(null, "Lebensmittel", group, null));
-        categoryRepository.save(new Category(null, "Restaurant", group, null));
-        categoryRepository.save(new Category(null, "Wohnung", group, null));
-        categoryRepository.save(new Category(null, "Sonstiges", group, null));
+        var defaultCategories = new String[]{
+                "Ausgehen", "Ausgleichszahlung", "Geschenke", "Lebensmittel",
+                "Restaurant", "Wohnung", "Sonstiges"};
+        for (String categoryName : defaultCategories) {
+            var category = new Category();
+            category.setName(categoryName);
+            category.setGroup(group);
+            categoryRepository.save(category);
+        }
     }
 
     private void verifyIsPartOfGroup(User user, Group group) throws NotOwnerOrMemberOfGroupException {
@@ -212,6 +197,26 @@ public class GroupService {
     private void verifyIsOwnerOrMemberToRemove(User user, User removedMember, Group group) throws NotOwnerOfGroupException {
         if (!(user.equals(group.getOwner()) || user.equals(removedMember))) {
             throw new NotOwnerOfGroupException("User with Id " + user.getId() + " not allowed to remove other members from the group");
+        }
+    }
+
+    private void setIsDeletedForCart(Group group, User member, boolean delete) {
+        var cartsOfMember = cartRepository.findCartsByGroupAndUser(group, member);
+        if (delete && (!cartsOfMember.isEmpty())) {
+            cartsOfMember.forEach(cart -> cart.setDeleted(true));
+            cartRepository.saveAll(cartsOfMember);
+        }
+        if (!delete && (!cartsOfMember.isEmpty())) {
+            cartsOfMember.forEach(cart -> cart.setDeleted(false));
+            cartRepository.saveAll(cartsOfMember);
+        }
+    }
+
+    private void calculateAveragePerMember(Group group) {
+        var cartsOfGroup = group.getCarts();
+        if (!cartsOfGroup.isEmpty()) {
+            cartsOfGroup.forEach(cart -> cart.setAveragePerMember(cart.getAmount() / dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(cart.getDatePurchased(), cart.getGroup().getId())));
+            cartRepository.saveAll(cartsOfGroup);
         }
     }
 }

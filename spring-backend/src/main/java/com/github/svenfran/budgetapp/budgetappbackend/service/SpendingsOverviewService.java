@@ -36,9 +36,6 @@ public class SpendingsOverviewService {
     @Autowired
     private DataLoaderService dataLoaderService;
 
-    @Autowired
-    private GroupMembershipHistoryRepository gmhRepository;
-
 
     public SpendingsOverviewDto getSpendingsForGroupAndYear(int year, Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
         var user = dataLoaderService.getCurrentUser();
@@ -101,7 +98,6 @@ public class SpendingsOverviewService {
 
     private List<SpendingsOverviewPerYearDto> getSpendingsOverviewPerYear(Long groupId) throws UserNotFoundException {
         var spendingsPerYearList = new ArrayList<SpendingsOverviewPerYearDto>();
-//        var spendingsAmountAverageDiffPerYear = cartRepository.getSpendingsAmountAverageDiffPerYear(groupId);
         var spendingsAmountAverageDiffPerYear = getAmountAverageDiffPerUserYearly(groupId);
         var spendingsYearly = cartRepository.getSpendingsYearlyTotalSumAmount(groupId);
 
@@ -128,7 +124,6 @@ public class SpendingsOverviewService {
                 }
             }
         }
-
         return spendingsPerYearList;
     }
 
@@ -219,27 +214,6 @@ public class SpendingsOverviewService {
         return spendingsAmountAverageDiffPerMonthList;
     }
 
-    // Not finished and not in use
-    private List<SpendingsOverviewAmountAverageDiffPerMonthDto> getAmountAverageDiffPerUserAndMonth_New(Long groupId, int year) {
-
-        var carts = cartRepository.findCartsByGroupIdAndIsDeletedFalseOrderByDatePurchasedDesc(groupId);
-        var spendingsAmountAverageDiffPerMonthList = new ArrayList<SpendingsOverviewAmountAverageDiffPerMonthDto>();
-        var spendingsAmountAverageDiffPerMonth = new SpendingsOverviewAmountAverageDiffPerMonthDto();
-        Double sumAmount = 0.0;
-        Double sumAverage = 0.0;
-
-        for (Cart cart : carts) {
-            if (verifyWasMemberAtDatePurchased(groupId, cart.getUser().getId(), cart.getDatePurchased())) {
-                spendingsAmountAverageDiffPerMonth.setSumAmount(sumAmount += cart.getAmount());
-                spendingsAmountAverageDiffPerMonth.setSumAveragePerMember(sumAverage += cart.getAveragePerMember());
-                spendingsAmountAverageDiffPerMonth.setDiff(sumAmount - sumAverage);
-            }
-        }
-
-        spendingsAmountAverageDiffPerMonthList.add(spendingsAmountAverageDiffPerMonth);
-        return spendingsAmountAverageDiffPerMonthList;
-    }
-
     private List<SpendingsOverviewAmountAverageDiffPerUserDto> getAmountAverageDiffPerUserAndYear(Long groupId, int year) {
         var amount = cartRepository.getSpendingsAmountPerYearAndUser(year, groupId);
         var average = cartRepository.getAveragePerUserAndYear(groupId, year);
@@ -260,7 +234,6 @@ public class SpendingsOverviewService {
             }
             spendingsAmountAverageDiffPerYearList.add(spendingsAmountAverageDiffPerYear);
         }
-
         return spendingsAmountAverageDiffPerYearList;
     }
 
@@ -284,7 +257,6 @@ public class SpendingsOverviewService {
             }
             spendingsAmountAverageDiffPerYearList.add(spendingsAmountAverageDiffPerYear);
         }
-
         return spendingsAmountAverageDiffPerYearList;
     }
 
@@ -307,7 +279,6 @@ public class SpendingsOverviewService {
             }
             spendingsAmountAverageDiffTotalYearsList.add(spendingsAmountAverageDiffTotalYears);
         }
-
         return spendingsAmountAverageDiffTotalYearsList;
     }
 
@@ -318,14 +289,4 @@ public class SpendingsOverviewService {
         }
     }
 
-    // not in use
-    private boolean verifyWasMemberAtDatePurchased(Long groupId, Long userId, Date datePurchased) {
-        var groupMemberships = gmhRepository.findByGroupIdAndUserId(groupId, userId);
-        for (GroupMembershipHistory gmh : groupMemberships) {
-            if (gmh.getMembershipStart().getTime() <= datePurchased.getTime() && (gmh.getMembershipEnd() == null || gmh.getMembershipEnd().getTime() >= datePurchased.getTime())) {
-                return true;
-            }
-        }
-        return false;
-    }
 }
