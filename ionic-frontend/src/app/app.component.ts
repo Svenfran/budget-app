@@ -130,9 +130,10 @@ export class AppComponent {
             message: "Erstelle Gruppe..."
           }).then(loadingEl => {
             let newGroup = new Group(null, data.groupName, null);
-            this.groupService.addGroup(newGroup).subscribe(() => {
+            this.groupService.addGroup(newGroup).subscribe((group) => {
               loadingEl.dismiss();
               this.groupService.setGroupModified(true);
+              this.groupService.setActiveGroup(group);
             })
           })
         }

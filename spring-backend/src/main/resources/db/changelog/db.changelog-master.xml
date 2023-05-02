@@ -39,6 +39,10 @@
     <include file="db/changelog/release-1.x/20221201111915-1_addColumnIsDeletedToCartTable.xml" relativeToChangelogFile="false"/>
     <include file="db/changelog/release-1.x/20221201111915-2_addColumnAveragePerMemberToCartTable.xml" relativeToChangelogFile="false"/>
 
+    <include file="db/changelog/release-1.x/20230407111210-1_addColumnForDateCreatedAndLastUpdateToShoppingListTable.xml" relativeToChangelogFile="false"/>
+    <include file="db/changelog/release-1.x/20230407111215-1_addColumnForDateCreatedAndLastUpdateToShoppingItemTable.xml" relativeToChangelogFile="false"/>
+    <include file="db/changelog/release-1.x/20230421170015-1_addColumnForLastUpdateShoppingListToGroupTable.xml" relativeToChangelogFile="false"/>
+
     <include file="db/changelog/release-1.x/20221129153415-2_loadCartData.xml" relativeToChangelogFile="false"/>
     <include file="db/changelog/release-1.x/20221129153415-3_loadMoreCartData.xml" relativeToChangelogFile="false"/>
     <include file="db/changelog/release-1.x/20221202170015-1_loadCoffeegroupMembershipHistory.xml" relativeToChangelogFile="false"/>

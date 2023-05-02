@@ -6,10 +6,14 @@ import com.github.svenfran.budgetapp.budgetappbackend.entity.ShoppingItem;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.ShoppingList;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
+import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingItemRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.service.mapper.ShoppingItemDtoMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Date;
 
 @Service
 public class ShoppingItemService {
@@ -23,16 +27,22 @@ public class ShoppingItemService {
     @Autowired
     private DataLoaderService dataLoaderService;
 
+    @Autowired
+    private GroupRepository groupRepository;
 
+    @Transactional
     public AddEditShoppingItemDto addShoppingItem(AddEditShoppingItemDto dto) throws UserNotFoundException, GroupNotFoundException, ShoppingListNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingListDoesNotBelongToGroupException {
         var user = dataLoaderService.getCurrentUser();
         var group = dataLoaderService.loadGroup(dto.getGroupId());
         verifyIsPartOfGroup(user, group);
         var shoppingList = dataLoaderService.loadShoppingList(dto.getShoppingListId());
         verifyShoppingListIsPartOfGroup(shoppingList, group);
+        group.setLastUpdateShoppingList(new Date());
+        groupRepository.save(group);
         return new AddEditShoppingItemDto(shoppingItemRepository.save(shoppingItemDtoMapper.addEditShoppingItemDtoToEntity(dto, shoppingList)));
     }
 
+    @Transactional
     public AddEditShoppingItemDto updateShoppingItem(AddEditShoppingItemDto dto) throws UserNotFoundException, GroupNotFoundException, ShoppingListNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingItemNotFoundException, ShoppingListDoesNotBelongToGroupException, ShoppingItemDoesNotBelongToShoppingListException {
         var user = dataLoaderService.getCurrentUser();
         var group = dataLoaderService.loadGroup(dto.getGroupId());
@@ -41,9 +51,12 @@ public class ShoppingItemService {
         verifyShoppingListIsPartOfGroup(shoppingList, group);
         var shoppingItem = dataLoaderService.loadShoppingItem(dto.getId());
         verifyShoppingItemIsPartOfShoppingList(shoppingList, shoppingItem);
+        group.setLastUpdateShoppingList(new Date());
+        groupRepository.save(group);
         return new AddEditShoppingItemDto(shoppingItemRepository.save(shoppingItemDtoMapper.addEditShoppingItemDtoToEntity(dto, shoppingList)));
     }
 
+    @Transactional
     public void deleteShoppingItem(AddEditShoppingItemDto dto) throws UserNotFoundException, GroupNotFoundException, ShoppingListNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingItemNotFoundException, ShoppingListDoesNotBelongToGroupException, ShoppingItemDoesNotBelongToShoppingListException {
         var user = dataLoaderService.getCurrentUser();
         var group = dataLoaderService.loadGroup(dto.getGroupId());
@@ -52,6 +65,8 @@ public class ShoppingItemService {
         verifyShoppingListIsPartOfGroup(shoppingList, group);
         var shoppingItem = dataLoaderService.loadShoppingItem(dto.getId());
         verifyShoppingItemIsPartOfShoppingList(shoppingList, shoppingItem);
+        group.setLastUpdateShoppingList(new Date());
+        groupRepository.save(group);
         shoppingItemRepository.deleteById(shoppingItem.getId());
     }
 

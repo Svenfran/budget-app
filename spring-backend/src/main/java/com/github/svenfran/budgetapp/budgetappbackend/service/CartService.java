@@ -39,6 +39,8 @@ public class CartService {
     @Autowired
     private DataLoaderService dataLoaderService;
 
+    private static final String SETTLEMENT_CATEGORY_NAME = "Ausgleichszahlung";
+
 
     public List<CartDto> getCartsByGroupId(Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
         var user = dataLoaderService.getCurrentUser();
@@ -93,33 +95,37 @@ public class CartService {
         verifyIsPartOfGroup(user, group);
         verifyIsPartOfGroup(member, group);
         createCategoryForSettlementPaymentIfNotExist(group);
-        var category = dataLoaderService.loadCategoryByGroupAndName(group, "Ausgleichszahlung");
+        var category = dataLoaderService.loadCategoryByGroupAndName(group, SETTLEMENT_CATEGORY_NAME);
         var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(new Date(), group.getId());
-
-        var cartDtoSender = new CartDto();
-        cartDtoSender.setTitle("Ausgleichszahlung an " + capitalize(member.getUserName()));
-        cartDtoSender.setDatePurchased(new Date());
-        cartDtoSender.setAmount(settlementPaymentDto.getAmount());
-        cartRepository.save(cartDtoMapper.CartDtoToEntity(cartDtoSender, category, user, group, groupMemberCount));
-
-        var cartDtoReceiver = new CartDto();
-        cartDtoReceiver.setTitle("Ausgleichszahlung von " + capitalize(user.getUserName()));
-        cartDtoReceiver.setDatePurchased(new Date());
-        cartDtoReceiver.setAmount((-1) * settlementPaymentDto.getAmount());
-        cartRepository.save(cartDtoMapper.CartDtoToEntity(cartDtoReceiver, category, member, group, groupMemberCount));
+        createSettlementPaymentCarts(category, user, member, group, settlementPaymentDto.getAmount(), groupMemberCount);
     }
 
     public void getExcelFile(HttpServletResponse response, Long groupId) throws IOException, GroupNotFoundException, UserNotFoundException, NotOwnerOrMemberOfGroupException {
         var user = dataLoaderService.getCurrentUser();
         var group = dataLoaderService.loadGroup(groupId);
         verifyIsPartOfGroup(user, group);
-
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
         response.setHeader("Expires", "0");
         var cartlist = dataLoaderService.loadCartListForGroup(groupId);
         var excelWriter = new ExcelWriter(cartlist);
         excelWriter.generateExcelFile(response);
+    }
+
+    private void createSettlementPaymentCarts(Category category, User user, User member, Group group, Double amount, int groupMemberCount) {
+        var cartDtoSender = new CartDto();
+        cartDtoSender.setTitle("Ausgleichszahlung an " + capitalize(member.getUserName()));
+        cartDtoSender.setDescription("");
+        cartDtoSender.setDatePurchased(new Date());
+        cartDtoSender.setAmount(amount);
+        cartRepository.save(cartDtoMapper.CartDtoToEntity(cartDtoSender, category, user, group, groupMemberCount));
+
+        var cartDtoReceiver = new CartDto();
+        cartDtoReceiver.setTitle("Ausgleichszahlung von " + capitalize(user.getUserName()));
+        cartDtoReceiver.setDescription("");
+        cartDtoReceiver.setDatePurchased(new Date());
+        cartDtoReceiver.setAmount((-1) * amount);
+        cartRepository.save(cartDtoMapper.CartDtoToEntity(cartDtoReceiver, category, member, group, groupMemberCount));
     }
 
     private void verifyIsPartOfGroup(User user, Group group) throws NotOwnerOrMemberOfGroupException {
@@ -135,8 +141,8 @@ public class CartService {
     }
 
     private void createCategoryForSettlementPaymentIfNotExist(Group group) {
-        if (categoryRepository.findCategoryByGroupAndName(group,"Ausgleichszahlung") == null) {
-            categoryRepository.save(new Category(null, "Ausgleichszahlung", group, null));
+        if (categoryRepository.findCategoryByGroupAndName(group,SETTLEMENT_CATEGORY_NAME) == null) {
+            categoryRepository.save(new Category(null, SETTLEMENT_CATEGORY_NAME, group, null));
         }
     }
 

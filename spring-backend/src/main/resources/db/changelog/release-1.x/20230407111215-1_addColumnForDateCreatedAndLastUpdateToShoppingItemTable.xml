@@ -1,0 +1,14 @@
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <changeSet author="sven" id="20230407111215-1">
+        <addColumn tableName="shoppingitem">
+            <column name="date_created" type="DATETIME"/>
+            <column name="last_update" type="DATETIME"/>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

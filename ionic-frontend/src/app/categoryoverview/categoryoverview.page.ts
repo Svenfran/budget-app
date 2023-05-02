@@ -54,11 +54,10 @@ export class CategoryoverviewPage implements OnInit {
             message: "Erstelle Kategorie..."
           }).then(loadingEl => {
             let newCategory = new CategoryDto(null, data.categoryName, this.activeGroup.id);
-            this.categoryService.addCategory(newCategory).subscribe(() => {
+            this.categoryService.addCategory(newCategory).subscribe((category) => {
               loadingEl.dismiss();
-              this.categoryService.getCategoriesByGroup(this.activeGroup.id).subscribe(categories => {
-                this.categories = categories;
-              });
+              this.categories.push(category);
+              this.categories.sort((a, b) => (a.name < b.name ? -1 : 1))
             })
           })
         }
@@ -88,11 +87,11 @@ export class CategoryoverviewPage implements OnInit {
             message: "Bearbeite Kategorie..."
           }).then(loadingEl => {
             let updateCategory = new CategoryDto(category.id, data.categoryName, category.groupId);
-            this.categoryService.updateCategory(updateCategory).subscribe(() => {
+            this.categoryService.updateCategory(updateCategory).subscribe((category) => {
               loadingEl.dismiss();
-              this.categoryService.getCategoriesByGroup(this.activeGroup.id).subscribe(categories => {
-                this.categories = categories;
-              });
+              let updateCategory = this.categories.filter(c => c.id == category.id)[0];
+              updateCategory.name = category.name;
+              this.categories.sort((a, b) => (a.name < b.name ? -1 : 1))
               this.cartService.setCartModified(true);
             })
           })

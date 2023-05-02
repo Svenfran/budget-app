@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { BehaviorSubject, Observable } from 'rxjs';
 import { environment } from 'src/environments/environment';
 import { AddEditShoppingListDto } from '../models/add-edit-shopping-list-dto';
 import { ShoppingListDto } from '../models/shopping-list-dto';
@@ -18,8 +18,9 @@ export class ShoppinglistService {
 
   constructor(private http: HttpClient) { }
 
-  getShoppingListsWithItems(groupId: number): Observable<ShoppingListDto[]> {
-    return this.http.get<ShoppingListDto[]>(`${this.shoppingListsWithItemsUrl}/${groupId}`);
+  getShoppingListsWithItems(groupId: number, requestTimeStamp): Observable<ShoppingListDto[]> {
+    let requestParam = `?requestTimeStamp=${requestTimeStamp}`;
+    return this.http.get<ShoppingListDto[]>(`${this.shoppingListsWithItemsUrl}/${groupId}${requestParam}`);
   }
 
   addShoppingList(newShoppingList: AddEditShoppingListDto): Observable<AddEditShoppingListDto> {

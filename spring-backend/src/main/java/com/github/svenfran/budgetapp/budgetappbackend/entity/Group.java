@@ -29,6 +29,9 @@ public class Group implements Serializable {
     @UpdateTimestamp
     private Date lastUpdate;
 
+    @Column(name = "last_update_shoppinglist")
+    private Date lastUpdateShoppingList;
+
     @OneToMany(mappedBy = "group")
     @JsonBackReference
     private Set<Cart> carts;
@@ -53,11 +56,12 @@ public class Group implements Serializable {
     @JsonBackReference
     private Set<User> memberList;
 
-    public Group(Long id, String name, Date dateCreated, Date lastUpdate, Set<Cart> carts, Set<ShoppingList> shoppingLists, Set<Category> categories, User owner, Set<User> members, Set<User> memberList) {
+    public Group(Long id, String name, Date dateCreated, Date lastUpdate, Date lastUpdateShoppingList, Set<Cart> carts, Set<ShoppingList> shoppingLists, Set<Category> categories, User owner, Set<User> members, Set<User> memberList) {
         this.id = id;
         this.name = name;
         this.dateCreated = dateCreated;
         this.lastUpdate = lastUpdate;
+        this.lastUpdateShoppingList = lastUpdateShoppingList;
         this.carts = carts;
         this.shoppingLists = shoppingLists;
         this.categories = categories;
@@ -161,5 +165,13 @@ public class Group implements Serializable {
 
     public void setLastUpdate(Date lastUpdate) {
         this.lastUpdate = lastUpdate;
+    }
+
+    public Date getLastUpdateShoppingList() {
+        return lastUpdateShoppingList;
+    }
+
+    public void setLastUpdateShoppingList(Date lastUpdateShoppingList) {
+        this.lastUpdateShoppingList = lastUpdateShoppingList;
     }
 }

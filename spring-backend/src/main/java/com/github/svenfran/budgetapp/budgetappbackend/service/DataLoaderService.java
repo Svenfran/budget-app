@@ -35,14 +35,27 @@ public class DataLoaderService {
     private GroupMembershipHistoryRepository groupMembershipHistoryRepository;
 
 
+    public DataLoaderService(
+            CategoryRepository categoryRepository,
+            CartRepository cartRepository,
+            UserRepository userRepository,
+            GroupMembershipHistoryRepository gmhRepository
+    ){
+        this.categoryRepository = categoryRepository;
+        this.cartRepository = cartRepository;
+        this.userRepository = userRepository;
+        this.groupMembershipHistoryRepository = gmhRepository;
+    }
+
+
     public Group loadGroup(Long groupId) throws GroupNotFoundException {
-        return groupRepository.findById(groupId).
-                orElseThrow(() -> new GroupNotFoundException("Group wit Id " + groupId + " not found"));
+        return groupRepository.findById(groupId)
+                        .orElseThrow(() -> new GroupNotFoundException("Group wit Id " + groupId + " not found"));
     }
 
     public Cart loadCart(Long cartId) throws CartNotFoundException {
-        return cartRepository.findById(cartId).
-                orElseThrow(() -> new CartNotFoundException("Cart with Id " + cartId + " not found"));
+        return cartRepository.findById(cartId)
+                        .orElseThrow(() -> new CartNotFoundException("Cart with Id " + cartId + " not found"));
     }
 
     public List<Cart> loadCartListForGroup(Long groupId) {
@@ -50,8 +63,8 @@ public class DataLoaderService {
     }
 
     public Category loadCategory(Long categoryId) throws CategoryNotFoundException {
-        return categoryRepository.findById(categoryId).
-                orElseThrow(() -> new CategoryNotFoundException("Category with Id " + categoryId + " not found"));
+        return categoryRepository.findById(categoryId)
+                        .orElseThrow(() -> new CategoryNotFoundException("Category with Id " + categoryId + " not found"));
     }
 
     public List<Category> loadCategoriesForGroup(Long groupId) {
@@ -63,8 +76,8 @@ public class DataLoaderService {
     }
 
     public User loadUser(Long userId) throws UserNotFoundException {
-        return userRepository.findById(userId).
-                orElseThrow(() -> new UserNotFoundException("User with Id " + userId + " not found"));
+        return userRepository.findById(userId)
+                        .orElseThrow(() -> new UserNotFoundException("User with Id " + userId + " not found"));
     }
 
     public User loadUserByEmail(String email) {
@@ -76,13 +89,13 @@ public class DataLoaderService {
     }
 
     public ShoppingList loadShoppingList(Long listId) throws ShoppingListNotFoundException {
-        return shoppingListRepository.findById(listId).
-                orElseThrow(() -> new ShoppingListNotFoundException("Shoppinglist with Id " + listId + " not found"));
+        return shoppingListRepository.findById(listId)
+                        .orElseThrow(() -> new ShoppingListNotFoundException("Shoppinglist with Id " + listId + " not found"));
     }
 
     public ShoppingItem loadShoppingItem(Long itemId) throws ShoppingItemNotFoundException {
-        return shoppingItemRepository.findById(itemId).
-                orElseThrow(() -> new ShoppingItemNotFoundException("Shoppingitem with Id " + itemId + " not found"));
+        return shoppingItemRepository.findById(itemId)
+                        .orElseThrow(() -> new ShoppingItemNotFoundException("Shoppingitem with Id " + itemId + " not found"));
     }
 
     public List<GroupMembershipHistory> loadMembershipHistory(Long groupId) {
@@ -92,8 +105,8 @@ public class DataLoaderService {
     // TODO: Derzeit angemeldete Nutzer -> Spring Security
     public User getCurrentUser() throws UserNotFoundException {
         var userId = UserEnum.SVEN.getId();
-        return userRepository.findById(userId).
-                orElseThrow(() -> new UserNotFoundException("User with Id " + userId + " not found"));
+        return userRepository.findById(userId)
+                        .orElseThrow(() -> new UserNotFoundException("User with Id " + userId + " not found"));
     }
 
 }

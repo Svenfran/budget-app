@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Stream;
 
 @Service
@@ -90,7 +91,7 @@ public class GroupService {
     @Transactional
     public GroupMembersDto addMemberToGroup(AddGroupMemberDto addGroupMemberDto) throws GroupNotFoundException, UserNotFoundException, NotOwnerOfGroupException, MemberAlreadyExixtsException, MemberEqualsOwnerException {
         var user = dataLoaderService.getCurrentUser();
-        var newMember = dataLoaderService.loadUserByEmail(addGroupMemberDto.getNewMemberEmail());
+        var newMember = dataLoaderService.loadUserByEmail(addGroupMemberDto.getNewMemberEmail().trim());
         verifyUserExists(newMember);
         var group = dataLoaderService.loadGroup(addGroupMemberDto.getId());
         verifyIsGroupOwner(user, group);

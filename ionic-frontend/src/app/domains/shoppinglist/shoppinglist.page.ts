@@ -1,5 +1,7 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { AlertController, IonItemSliding, LoadingController } from '@ionic/angular';
+import { element } from 'protractor';
+import { Subscription } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 import { AddEditShoppingItemDto } from 'src/app/models/add-edit-shopping-item-dto';
 import { AddEditShoppingListDto } from 'src/app/models/add-edit-shopping-list-dto';
@@ -15,17 +17,25 @@ import { ShoppinglistService } from 'src/app/services/shoppinglist.service';
   templateUrl: './shoppinglist.page.html',
   styleUrls: ['./shoppinglist.page.scss'],
 })
-export class ShoppinglistPage implements OnInit {
+export class ShoppinglistPage implements OnInit, OnDestroy {
 
   activeGroupName: string;
   activeGroupId: number;
   activeGroup: GroupSideNav;
   userName: string;
   shoppingListWithItems: ShoppingListDto[] = [];
+  shoppingItemsForNewList: ShoppingItemDto[] = [];
+  allShoppingItems: ShoppingItemDto[] = [];
+  allCurrentShoppingItems: ShoppingItemDto[] = [];
   toggleLists: any = {};
   itemName = "";
   isLoading: boolean = false;
   focusIsSet: boolean;
+  requestTimeStamp: number = new Date('1900-01-01').getTime();
+  DEFAULT_REQUEST_TIMESTAMP: number = new Date('1900-01-01').getTime();
+  pollSub: Subscription = new Subscription();
+  loadedActiveGroup: Promise<boolean>;
+
 
   constructor(
     private groupService: GroupService,
@@ -42,21 +52,127 @@ export class ShoppinglistPage implements OnInit {
         this.activeGroupName = group.name;
         this.activeGroupId = group.id;
         this.activeGroup = group;
+        this.loadedActiveGroup = Promise.resolve(true);
         this.getShoppingListWithItems(group.id);
       }
     })
+    this.pollForList();
   }
 
   getShoppingListWithItems(groupId: number) {
     this.isLoading = true;
-    this.shoppingListService.getShoppingListsWithItems(groupId).subscribe(list => {
+    this.shoppingListService.getShoppingListsWithItems(groupId, this.DEFAULT_REQUEST_TIMESTAMP).subscribe(list => {
       this.shoppingListWithItems = list;
       this.isLoading = false;
     })
   }
 
+  getAllListItemsForGroup(listObj: ShoppingListDto[]): ShoppingItemDto[] {
+    let listArray = [];
+    listObj.forEach(subList => {
+      subList.shoppingItems.forEach(listItem => {
+        let shoppingList = new ShoppingItem(
+          subList.id, listItem.id, listItem.name, listItem.completed
+        )
+        listArray.push(shoppingList);
+        shoppingList = null;
+      });
+    });
+    return listArray;
+  }
+
+  getDifferenceList(listObj1: ShoppingListDto[], listObj2: ShoppingListDto[]): ShoppingListDto[] {
+    return listObj1.filter(el1 => listObj2.every(el2 => el2.id !== el1.id));
+  }
+
+  getDifferenceItem(listObj1: ShoppingItemDto[], listObj2: ShoppingItemDto[]): ShoppingItemDto[] {
+    return listObj1.filter(el1 => listObj2.every(el2 => el2.id !== el1.id || el2.name !== el1.name || el2.completed !== el1.completed));
+  }
+
+  updateList(currentList, newList, diffList) {
+    diffList.forEach(entry1 => {
+      if (!newList.includes(entry1)) {
+        let i = currentList.indexOf(entry1);
+        currentList.splice(i, 1);
+      } else if (newList.includes(entry1)) {
+        entry1.shoppingItems = [];
+        currentList.push(entry1);
+      } 
+    });
+
+    currentList.forEach((cList, index) => {
+      newList.forEach((nList) => {
+        if (nList.id === cList.id && nList.name !== cList.name) {
+          currentList[index].name = nList.name;
+        }
+      })
+    });
+  }
+
+  updateItems(currentList, allNewShoppingItems, diffItem) {
+    diffItem.forEach(entry => {
+      let items = currentList.filter(list => list.id === entry.listId)[0];
+      if (typeof items !== 'undefined') {
+        if (!allNewShoppingItems.includes(entry)) {
+          items.shoppingItems.forEach((el, index) => {
+            if (el.id === entry.id) {
+              items.shoppingItems.splice(index, 1);
+            }
+          });
+        } else if (allNewShoppingItems.includes(entry)) {  
+          currentList.forEach(cList => {
+            if (cList.id === entry.listId) {
+              cList.shoppingItems.push(new ShoppingItemDto(entry.id, entry.name, entry.completed));
+            }
+          });
+        }
+        items.shoppingItems.forEach((item, index) => {
+          if ((item.id === entry.id) && (item.name !== entry.name || item.completed !== entry.completed)) {
+            item.shoppingItems[index].name = entry.name;
+            item.shoppingItems[index].completed = entry.completed;
+          }
+        })
+      }
+    });
+  }
+
+  pollForList() {
+    this.pollSub = this.shoppingListService.getShoppingListsWithItems(this.activeGroupId, this.requestTimeStamp).subscribe(list => {  
+      let diffList = [];
+      let diffItem = [];
+      this.allShoppingItems = [];
+      this.allCurrentShoppingItems = [];
+
+      this.allShoppingItems = this.getAllListItemsForGroup(list);
+      this.allCurrentShoppingItems =this.getAllListItemsForGroup(this.shoppingListWithItems);
+
+      diffList = [
+        ...this.getDifferenceList(this.shoppingListWithItems, list),
+        ...this.getDifferenceList(list, this.shoppingListWithItems)
+      ];
+
+      diffItem = [
+        ...this.getDifferenceItem(this.allCurrentShoppingItems, this.allShoppingItems),
+        ...this.getDifferenceItem(this.allShoppingItems, this.allCurrentShoppingItems)
+      ];
+
+      this.updateList(this.shoppingListWithItems, list, diffList);
+
+      this.updateItems(this.shoppingListWithItems, this.allShoppingItems, diffItem);
+
+      this.requestTimeStamp = new Date().getTime();
+      this.pollForList();
+    }, errRes => {
+      this.pollForList();
+    })
+  }
+
+  ngOnDestroy() {
+    this.pollSub.unsubscribe();
+  }
+
   async refreshShoppingList(event?: any) {
-    this.shoppingListService.getShoppingListsWithItems(this.activeGroup.id).pipe(
+    this.shoppingListService.getShoppingListsWithItems(this.activeGroup.id, this.DEFAULT_REQUEST_TIMESTAMP).pipe(
       finalize(() => {
         if (event) {
           event.target.complete();
@@ -84,9 +200,16 @@ export class ShoppinglistPage implements OnInit {
             message: "Erstelle Einkaufsliste..."
           }).then(loadingEl => {
             let newShoppingList = new AddEditShoppingListDto(null, data.listName, this.activeGroupId);
-            this.shoppingListService.addShoppingList(newShoppingList).subscribe(() => {
+            this.shoppingListService.addShoppingList(newShoppingList).subscribe((list) => {
               loadingEl.dismiss();
-              this.getShoppingListWithItems(this.activeGroupId);
+              // this.getShoppingListWithItems(this.activeGroupId);
+              let newShoppingListDto = new ShoppingListDto(
+                list.id,
+                list.name,
+                this.shoppingItemsForNewList
+              )
+              this.shoppingListWithItems.push(newShoppingListDto);
+              this.shoppingItemsForNewList = [];
             })
           })
         }
@@ -118,9 +241,10 @@ export class ShoppinglistPage implements OnInit {
             message: "Bearbeite Einkaufsliste..."
           }).then(loadingEl => {
             let updateShoppingList = new AddEditShoppingListDto(list.id, data.listName, this.activeGroupId);
-            this.shoppingListService.updateShoppingList(updateShoppingList).subscribe(() => {
+            this.shoppingListService.updateShoppingList(updateShoppingList).subscribe((nList) => {
               loadingEl.dismiss();
-              this.getShoppingListWithItems(this.activeGroupId);
+              list.name = nList.name;
+              // this.getShoppingListWithItems(this.activeGroupId);
             })
           })
         }
@@ -170,10 +294,12 @@ export class ShoppinglistPage implements OnInit {
       null, newItemName, false, list.id, this.activeGroupId
     );
     
-    this.shoppingItemService.addItemToShoppingList(newItem).subscribe(() => {
+    this.shoppingItemService.addItemToShoppingList(newItem).subscribe((item) => {
       list.shoppingItems[indexItem + 1] = null;
-      this.getShoppingListWithItems(this.activeGroupId);
+      list.shoppingItems.push(item);
+      // this.getShoppingListWithItems(this.activeGroupId);
       setTimeout(() => document.querySelectorAll('ion-input')[indexList].setFocus(), 300);
+      // document.querySelectorAll('ion-input')[indexList].setFocus();
     })
     
   }
@@ -193,9 +319,12 @@ export class ShoppinglistPage implements OnInit {
             let updateShoppingItem = new AddEditShoppingItemDto(
               item.id, data.itemName, item.completed, list.id, this.activeGroupId
             );
-            this.shoppingItemService.updateItemOfShoppingList(updateShoppingItem).subscribe(() => {
+            this.shoppingItemService.updateItemOfShoppingList(updateShoppingItem).subscribe((item) => {
               loadingEl.dismiss();
-              this.getShoppingListWithItems(this.activeGroupId);
+              let updateItem = list.shoppingItems.filter(i => i.id == item.id)[0];
+              updateItem.name = item.name;
+              // this.getShoppingListWithItems(this.activeGroupId);
+              
             })
           })
         }
@@ -251,4 +380,13 @@ export class ShoppinglistPage implements OnInit {
     })
   }
 
+}
+
+class ShoppingItem {
+  constructor (
+    public listId: number,
+    public id : number,
+    public name: string,
+    public completed: boolean
+  ) {}
 }
