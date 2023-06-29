@@ -5,8 +5,9 @@
         <ion-title class="menu-header-title">Budget App</ion-title>
         <ion-item>
           <div class="menu-header">
-            <ion-label>Hallo {{ userName | titlecase }}!</ion-label>
-            <ion-text color="medium">Gruppe: {{ activeGroup?.name }}</ion-text>
+            <ion-label *ngIf="loadedUser | async">Hallo {{ userName | titlecase }}!</ion-label>
+            <!-- <ion-text color="medium">Schön dich zu sehen 😊</ion-text> -->
+            <ion-text *ngIf="loadedActiveGroup | async" color="medium">Gruppe: {{ activeGroup?.name }}</ion-text>
           </div>
         </ion-item>
       </ion-toolbar>
@@ -72,7 +73,11 @@
         <ion-item lines="none">
           <ion-icon name="moon-outline" slot="start"></ion-icon>
           <ion-label>Dark Mode</ion-label>
-          <ion-toggle slot="end" (ionChange)="onToggleColorTheme($event)"></ion-toggle>
+          <ion-toggle 
+              slot="end"
+              (ionChange)="onToggleColorTheme($event)"
+              checked={{darkMode}}
+          ></ion-toggle>
         </ion-item>
       </ion-list>
     </ion-content>

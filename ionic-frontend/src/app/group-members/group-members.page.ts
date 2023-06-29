@@ -9,6 +9,7 @@ import { UserDto } from '../models/user';
 import { CartService } from '../services/cart.service';
 import { GroupService } from '../services/group.service';
 import { SpendingsOverviewService } from '../services/spendings-overview.service';
+import { StorageService } from '../services/storage.service';
 
 @Component({
   selector: 'app-group-members',
@@ -35,7 +36,8 @@ export class GroupMembersPage implements OnInit {
     private alertCtrl: AlertController,
     private modalCtrl: ModalController,
     private cartService: CartService,
-    private spendingsService: SpendingsOverviewService) { }
+    private spendingsService: SpendingsOverviewService,
+    private storageService: StorageService) { }
 
   ngOnInit() {
     this.getCurrentUser();
@@ -87,12 +89,15 @@ export class GroupMembersPage implements OnInit {
         text: "Ja",
         handler: () => {
           if (this.groupsSideNav.length > 0 && (memberToRemove.id == this.currentUser.id) && this.activeGroup.id == groupWithMembers.id) {
-            this.groupService.setActiveGroup(new Group(
+            const newGroup = new Group(
               this.groupsSideNav[0].id,
               this.groupsSideNav[0].name,
               this.groupsSideNav[0].dateCreated
-            ))
+            );
+            this.groupService.setActiveGroup(newGroup);
+            this.storageService.setActiveGroup(newGroup);
           }
+
           this.groupService.removeMemberFromGroup(removeGroupMember).subscribe(() => {
             this.groupMembers = this.groupWithMembers.members.filter(m => m.id !== member.id);
             this.groupWithMembers = new GroupMembers(
@@ -102,6 +107,14 @@ export class GroupMembersPage implements OnInit {
               this.groupMembers
               );
           })
+
+          if (this.groupsSideNav.length === 1 && memberToRemove.id === this.currentUser.id) {
+            this.groupService.setActiveGroup(null);
+            this.groupService.activeGroup.subscribe(actGroup => {
+              this.storageService.setActiveGroup(actGroup)
+            })
+          }
+
         }
       }]
     }).then(alertEl => alertEl.present());
@@ -113,10 +126,11 @@ export class GroupMembersPage implements OnInit {
       this.groupService.changeGroupOwner(this.changeOwner).subscribe(() => {
         this.groupService.setGroupModified(true);
       });
-      // console.log(this.changeOwner);
     }
-    this.cartService.setCartModified(true);
-    this.spendingsService.setSpendingsModified(true);
+    if (this.changeOwner && this.groupsSideNav.length !== 1 && this.changeOwner.newOwner.id !== this.currentUser.id) {
+      this.cartService.setCartModified(true);
+      this.spendingsService.setSpendingsModified(true);
+    }
   }
 
   getSelectedMember(event: any, member: UserDto, groupId: number, index: number) {

@@ -64,11 +64,19 @@ ion-modal {
   }
 }
 
+ion-button {
+	text-transform: none;
+}
+
 .group-name {
     // display: flex;
     // justify-content: center;
 	font-weight: 600;
 	// margin-bottom: -2rem;
+}
+
+.center-text {
+	margin-top: 40%;
 }
 
 .ion-color-darkgrey {

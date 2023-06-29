@@ -3,9 +3,11 @@ import { AlertController, IonItemSliding, LoadingController, ModalController } f
 import { format } from 'date-fns';
 import { Subscription } from 'rxjs';
 import { Cart } from 'src/app/models/cart';
+import { Group } from 'src/app/models/group';
 import { GroupSideNav } from 'src/app/models/group-side-nav';
 import { CartService } from 'src/app/services/cart.service';
 import { GroupService } from 'src/app/services/group.service';
+import { StorageService } from 'src/app/services/storage.service';
 import { SettlementPaymentPage } from 'src/app/settlement-payment/settlement-payment.page';
 
 @Component({
@@ -19,38 +21,48 @@ export class CartlistPage implements OnInit, OnDestroy {
   isLoading = false;
   userName: string;
   activeGroup: GroupSideNav;
-  activeGroupName: string;
   groupSub: Subscription;
   cartSub: Subscription;
   filterTerm: string;
   filterMode = false;
   sum: number;
   count: number;
+  loadedActiveGroup: Promise<boolean>
 
   constructor(
     private cartService: CartService,
     private alertCtrl: AlertController,
     private loadingCtrl: LoadingController,
     private modalCtrl: ModalController,
-    private groupService: GroupService) { }
+    private groupService: GroupService,
+    private storageService: StorageService) { }
 
   ngOnInit() {
     this.getCurrentUser();
     this.groupSub = this.groupService.activeGroup.subscribe(group => {
-      this.activeGroupName = group.name;
-      this.activeGroup = group;
-      this.getAllCartsByGroupId(group.id);
+      if (group) {
+        // console.log(group);
+        this.loadedActiveGroup = Promise.resolve(true);
+        this.activeGroup = group;
+        this.getAllCartsByGroupId(group.id);
+      } else {
+        this.groupService.setActiveGroup(null);
+      }
     })
     this.filterTerm = "";
   }
   
   ionViewWillEnter() {
     this.groupSub = this.groupService.activeGroup.subscribe(group => {
-      this.activeGroupName = group.name;
-      this.activeGroup = group;
-      this.getAllCartsByGroupId(group.id);
-      this.filterMode = false;
-      this.filterTerm = "";
+      if (group) {
+        this.loadedActiveGroup = Promise.resolve(true);
+        this.activeGroup = group;
+        this.getAllCartsByGroupId(group.id);
+        this.filterMode = false;
+        this.filterTerm = "";
+      } else {
+        this.groupService.setActiveGroup(null);
+      }
     })
   }
 
@@ -131,7 +143,7 @@ export class CartlistPage implements OnInit, OnDestroy {
 
 
   download() {
-    let filename = "Ausgaben_" + this.activeGroupName.replace(/ /g, "-") + "_" + format(new Date(), 'yyyyMMddHHmmss') + ".xlsx";
+    let filename = "Ausgaben_" + this.activeGroup.name.replace(/ /g, "-") + "_" + format(new Date(), 'yyyyMMddHHmmss') + ".xlsx";
     this.cartService.getExcelFile(this.activeGroup.id, filename);
   }
 
@@ -159,5 +171,39 @@ export class CartlistPage implements OnInit, OnDestroy {
     this.groupService.currentUser.subscribe(user => {
       this.userName = user.userName;
     })
+  }
+
+  onCreateGroup() {
+    this.alertCtrl.create({
+      header: "Neue Gruppe:",
+      buttons: [{
+        text: "Abbrechen",
+        role: "cancel"
+      }, {
+        text: "ok",
+        handler: (data) => {
+          this.loadingCtrl.create({
+            message: "Erstelle Gruppe..."
+          }).then(loadingEl => {
+            let newGroup = new Group(null, data.groupName, null);
+            this.groupService.addGroup(newGroup).subscribe((group) => {
+              loadingEl.dismiss();
+              this.groupService.setGroupModified(true);
+              this.groupService.setActiveGroup(group);
+              this.storageService.setActiveGroup(this.activeGroup);
+            })
+          })
+        }
+      }],
+      inputs: [
+        {
+          name: "groupName",
+          placeholder: "Gruppenname"
+        }
+      ]
+    }).then(alertEl => alertEl.present().then(() => {
+      const inputField: HTMLElement = document.querySelector("ion-alert input");
+      inputField.focus();
+    }));
   }
 }

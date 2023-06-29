@@ -11,6 +11,7 @@ import { NewMemberDto } from '../models/new-member-dto';
 import { RemoveMemberDto } from '../models/remove-member-dto';
 import { UserDto } from '../models/user';
 
+
 @Injectable({
   providedIn: 'root'
 })
@@ -34,12 +35,10 @@ export class GroupService {
   constructor(private http: HttpClient) { }
 
   setActiveGroup(activeGroup: Group) {
-    let noGroupAvailable = new Group(null, 'Keine Gruppe ausgewählt!', null)
+    let noGroupAvailable = new Group(null, 'Keine Gruppe vorhanden!', null)
     if (!activeGroup) {
-      // console.log("Active Group not defined!")
       this._activeGroup.next(noGroupAvailable);
     } else {
-      // console.log("Active Group: " + activeGroup.name);
       this._activeGroup.next(activeGroup);
     }
   }
@@ -49,14 +48,14 @@ export class GroupService {
   }
 
   setCurrentUser() {
-    this._currentUser.next(new UserDto(1, "sven"));
+    // this._currentUser.next(new UserDto(1, "sven"));
     // this._currentUser.next(new UserDto(2, "sascha"));
     // this._currentUser.next(new UserDto(3, "basti"));
     // this._currentUser.next(new UserDto(4, "martin"));
     // this._currentUser.next(new UserDto(5, "sabine"));
     // this._currentUser.next(new UserDto(6, "tina"));
     // this._currentUser.next(new UserDto(7, "montse"));
-    // this._currentUser.next(new UserDto(8, "hugo"));
+    this._currentUser.next(new UserDto(8, "hugo"));
   }
 
   get activeGroup() {

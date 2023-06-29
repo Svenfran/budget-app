@@ -1,16 +1,20 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Router } from '@angular/router';
 import { AlertController, IonItemSliding, LoadingController } from '@ionic/angular';
 import { element } from 'protractor';
 import { Subscription } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 import { AddEditShoppingItemDto } from 'src/app/models/add-edit-shopping-item-dto';
 import { AddEditShoppingListDto } from 'src/app/models/add-edit-shopping-list-dto';
+import { Group } from 'src/app/models/group';
 import { GroupSideNav } from 'src/app/models/group-side-nav';
 import { ShoppingItemDto } from 'src/app/models/shopping-item-dto';
 import { ShoppingListDto } from 'src/app/models/shopping-list-dto';
+import { AlertService } from 'src/app/services/alert.service';
 import { GroupService } from 'src/app/services/group.service';
 import { ShoppingitemService } from 'src/app/services/shoppingitem.service';
 import { ShoppinglistService } from 'src/app/services/shoppinglist.service';
+import { StorageService } from 'src/app/services/storage.service';
 
 @Component({
   selector: 'app-shoppinglist',
@@ -35,6 +39,7 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
   DEFAULT_REQUEST_TIMESTAMP: number = new Date('1900-01-01').getTime();
   pollSub: Subscription = new Subscription();
   loadedActiveGroup: Promise<boolean>;
+  pageLeft: boolean = false;
 
 
   constructor(
@@ -42,18 +47,22 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
     private shoppingListService: ShoppinglistService,
     private alertCtrl: AlertController,
     private loadingCtrl: LoadingController,
-    private shoppingItemService: ShoppingitemService
+    private shoppingItemService: ShoppingitemService,
+    private alertService: AlertService
   ) { }
 
   ngOnInit() {
     this.getCurrentUser();
     this.groupService.activeGroup.subscribe(group => {
       if (group) {
+        // console.log(group);
         this.activeGroupName = group.name;
         this.activeGroupId = group.id;
         this.activeGroup = group;
         this.loadedActiveGroup = Promise.resolve(true);
         this.getShoppingListWithItems(group.id);
+      } else {
+        this.groupService.setActiveGroup(null);
       }
     })
     this.pollForList();
@@ -61,10 +70,12 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
 
   getShoppingListWithItems(groupId: number) {
     this.isLoading = true;
-    this.shoppingListService.getShoppingListsWithItems(groupId, this.DEFAULT_REQUEST_TIMESTAMP).subscribe(list => {
-      this.shoppingListWithItems = list;
-      this.isLoading = false;
-    })
+    if (groupId !== null) {
+      this.shoppingListService.getShoppingListsWithItems(groupId, this.DEFAULT_REQUEST_TIMESTAMP).subscribe(list => {
+        this.shoppingListWithItems = list;
+        this.isLoading = false;
+      })
+    }
   }
 
   getAllListItemsForGroup(listObj: ShoppingListDto[]): ShoppingItemDto[] {
@@ -132,39 +143,47 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
             item.shoppingItems[index].completed = entry.completed;
           }
         })
+        items.shoppingItems.sort((a, b) => a.id < b.id ? -1 : 1);
       }
     });
   }
 
   pollForList() {
-    this.pollSub = this.shoppingListService.getShoppingListsWithItems(this.activeGroupId, this.requestTimeStamp).subscribe(list => {  
-      let diffList = [];
-      let diffItem = [];
-      this.allShoppingItems = [];
-      this.allCurrentShoppingItems = [];
+    if (this.activeGroup.id !== null) {
+      this.pollSub = this.shoppingListService.getShoppingListsWithItems(this.activeGroupId, this.requestTimeStamp).subscribe(list => {  
+        let diffList = [];
+        let diffItem = [];
+        this.allShoppingItems = [];
+        this.allCurrentShoppingItems = [];
+  
+        this.allShoppingItems = this.getAllListItemsForGroup(list);
+        this.allCurrentShoppingItems =this.getAllListItemsForGroup(this.shoppingListWithItems);
+  
+        diffList = [
+          ...this.getDifferenceList(this.shoppingListWithItems, list),
+          ...this.getDifferenceList(list, this.shoppingListWithItems)
+        ];
+  
+        diffItem = [
+          ...this.getDifferenceItem(this.allCurrentShoppingItems, this.allShoppingItems),
+          ...this.getDifferenceItem(this.allShoppingItems, this.allCurrentShoppingItems)
+        ];
+  
+        this.updateList(this.shoppingListWithItems, list, diffList);
+  
+        this.updateItems(this.shoppingListWithItems, this.allShoppingItems, diffItem);
+  
+        this.requestTimeStamp = new Date().getTime();
 
-      this.allShoppingItems = this.getAllListItemsForGroup(list);
-      this.allCurrentShoppingItems =this.getAllListItemsForGroup(this.shoppingListWithItems);
-
-      diffList = [
-        ...this.getDifferenceList(this.shoppingListWithItems, list),
-        ...this.getDifferenceList(list, this.shoppingListWithItems)
-      ];
-
-      diffItem = [
-        ...this.getDifferenceItem(this.allCurrentShoppingItems, this.allShoppingItems),
-        ...this.getDifferenceItem(this.allShoppingItems, this.allCurrentShoppingItems)
-      ];
-
-      this.updateList(this.shoppingListWithItems, list, diffList);
-
-      this.updateItems(this.shoppingListWithItems, this.allShoppingItems, diffItem);
-
-      this.requestTimeStamp = new Date().getTime();
-      this.pollForList();
-    }, errRes => {
-      this.pollForList();
-    })
+        if (!this.pageLeft) {
+          this.pollForList();
+        }
+      }, errRes => {
+        if (errRes.status !== 404 && !this.pageLeft) {
+          this.pollForList();
+        }
+      }) 
+    }
   }
 
   ngOnDestroy() {
@@ -184,7 +203,16 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
   }
 
   ionViewWillEnter() {
-    this.getShoppingListWithItems(this.activeGroupId);
+    // console.log(this.activeGroup.id);
+    this.pageLeft = false;
+    if (this.activeGroup.id !== null) {
+      this.getShoppingListWithItems(this.activeGroupId);
+      this.pollForList();
+    }
+  }
+
+  ionViewDidLeave() {
+    this.pageLeft = true;
   }
 
   onCreateList() {
@@ -378,6 +406,10 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
     this.groupService.currentUser.subscribe(user => {
       this.userName = user.userName;
     })
+  }
+
+  onCreateGroup() {
+    this.alertService.createGroup();
   }
 
 }

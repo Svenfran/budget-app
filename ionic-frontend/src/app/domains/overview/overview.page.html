@@ -4,7 +4,7 @@
       <ion-menu-button menu="m1"></ion-menu-button>
     </ion-buttons>
     <ion-title>Übersicht</ion-title>
-    <ion-buttons slot="primary">
+    <ion-buttons *ngIf="activeGroup.id !== null" slot="primary">
       <ion-text *ngIf="loadedActiveGroup | async" class="ion-padding group-name"><small>{{ (activeGroup.name.length > 20)? (activeGroup.name | slice:0:20) + '...' : (activeGroup.name) }}</small></ion-text>
       <ion-button id="popover-button" [class.hide]="availableYears.length <= 0">
         <ion-icon name="ellipsis-vertical"></ion-icon>
@@ -22,8 +22,20 @@
   </ion-toolbar>
 </ion-header>
 
+<ion-content *ngIf="activeGroup.id === null">
+  <ion-grid class="ion-padding center-text">
+    <ion-row>
+      <ion-col class="ion-text-center" size-md="6" offset-md="3">
+        <p>{{activeGroup.name}}</p>
+        <ion-button (click)="onCreateGroup()" color="primary" size="small">Gruppe erstellen</ion-button>
+      </ion-col>
+    </ion-row>
+  </ion-grid>  
+</ion-content>
 
-<ion-content *ngIf="loadedSpendings | async">
+
+<ion-content *ngIf="activeGroup.id !== null">
+<div *ngIf="loadedSpendings | async">
   <ion-segment [(ngModel)]="segment" (ionChange)="onFilterUpdate($event)">
     <ion-segment-button value="month">
       <ion-label>monatlich</ion-label>
@@ -170,4 +182,5 @@
       </ion-col>
     </ion-row>
   </ion-grid>
+</div>
 </ion-content>

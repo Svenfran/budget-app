@@ -4,8 +4,8 @@
       <ion-menu-button menu="m1"></ion-menu-button>
     </ion-buttons>
     <ion-title>Einkaufslisten</ion-title>
-    <ion-buttons slot="primary">
-      <ion-text *ngIf="loadedActiveGroup | async" class="ion-padding group-name"><small>{{ (activeGroup.name.length > 20)? (activeGroup.name | slice:0:20) + '...' : (activeGroup.name) }}</small></ion-text>
+    <ion-buttons *ngIf="loadedActiveGroup | async" slot="primary">
+      <ion-text *ngIf="activeGroup.id !== null" class="ion-padding group-name"><small>{{ (activeGroup.name.length > 20)? (activeGroup.name | slice:0:20) + '...' : (activeGroup.name) }}</small></ion-text>
       <ion-button *ngIf="activeGroup.id !== null" (click)="onCreateList()">
         <ion-icon name="add" slot="icon-only"></ion-icon>
       </ion-button>
@@ -13,7 +13,20 @@
   </ion-toolbar>
 </ion-header>
 
-<ion-content>
+<ion-content *ngIf="activeGroup.id === null">
+  <ion-grid class="ion-padding center-text">
+    <ion-row>
+      <ion-col class="ion-text-center" size-md="6" offset-md="3">
+        <!-- <ion-icon name="folder-outline" size="large"></ion-icon> -->
+        <p>{{activeGroup.name}}</p>
+        <!-- <ion-text (click)="onCreateGroup()" color="medium"><small>Erstelle eine Gruppe</small></ion-text> -->
+        <ion-button (click)="onCreateGroup()" color="primary" size="small">Gruppe erstellen</ion-button>
+      </ion-col>
+    </ion-row>
+  </ion-grid>  
+</ion-content>
+
+<ion-content *ngIf="activeGroup.id !== null">
   <!-- <ion-text class="ion-padding group-name"><small>{{ (activeGroup.name.length > 50)? (activeGroup.name | slice:0:50) + '...' : (activeGroup.name) }}</small></ion-text> -->
   <ion-refresher slot="fixed" (ionRefresh)="refreshShoppingList($event)">
     <ion-refresher-content></ion-refresher-content>

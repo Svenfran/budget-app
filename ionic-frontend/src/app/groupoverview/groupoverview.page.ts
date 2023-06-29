@@ -10,6 +10,10 @@ import { UserDto } from '../models/user';
 import { CartService } from '../services/cart.service';
 import { GroupService } from '../services/group.service';
 import { SpendingsOverviewService } from '../services/spendings-overview.service';
+import { StorageService } from '../services/storage.service';
+import { from, of } from 'rxjs';
+import { Router } from '@angular/router';
+import { NavigationService } from '../services/navigation.service';
 
 @Component({
   selector: 'app-groupoverview',
@@ -24,6 +28,7 @@ export class GroupoverviewPage implements OnInit {
   userName: string;
   currentUser: UserDto;
   activeGroup: GroupSideNav;
+  groupIsDeleted: boolean = false;
 
   constructor(
     private groupService: GroupService,
@@ -32,7 +37,10 @@ export class GroupoverviewPage implements OnInit {
     private modalCtrl: ModalController,
     private toastCtrl: ToastController,
     private cartService: CartService,
-    private spendingsService: SpendingsOverviewService
+    private spendingsService: SpendingsOverviewService,
+    private storageService: StorageService,
+    private navigationService: NavigationService,
+    private router: Router
     ) { }
 
   ngOnInit() {
@@ -55,8 +63,14 @@ export class GroupoverviewPage implements OnInit {
     this.groupService.setGroupModified(false);
   }
 
+  navigate() {
+    if (this.groupIsDeleted && this.navigationService.getPreviousUrl().includes("shoppinglist")) {
+      this.router.navigate(['/domains/tabs/overview']);
+    }
+  }
 
   onDelete(groupId: number, groupName: string, slidingItem: IonItemSliding) {
+    this.groupIsDeleted = true;
     slidingItem.close();
     this.alertCtrl.create({
       header: 'Löschen',
@@ -76,16 +90,25 @@ export class GroupoverviewPage implements OnInit {
               this.groupService.setGroupModified(true);
               this.groupService.activeGroup.subscribe(activeGroup => {
                 if(this.groupOverviewList.length > 0 && (activeGroup.id === groupId)) {
-                    this.groupService.setActiveGroup(new Group(
-                      this.groupOverviewList[0].id,
-                      this.groupOverviewList[0].name,
-                      this.groupOverviewList[0].dateCreated
-                    ))
+                  const newGroup = new Group(
+                    this.groupOverviewList[0].id,
+                    this.groupOverviewList[0].name,
+                    this.groupOverviewList[0].dateCreated
+                  )
+                  this.groupService.setActiveGroup(newGroup);
+                  this.storageService.setActiveGroup(newGroup);
                 } else if (this.groupOverviewList.length <= 0 && activeGroup.id === groupId) {
                   this.groupService.setActiveGroup(null);
+                  this.groupService.activeGroup.subscribe(actGroup => {
+                    this.storageService.setActiveGroup(actGroup)
+                  })
                 }
-              })
-              this.spendingsService.setSpendingsModified(true);
+              });
+              this.groupService.activeGroup.subscribe(group => {
+                if (group.id !== null) {
+                  this.spendingsService.setSpendingsModified(true);
+                }
+              });
             })
           })
         }
@@ -110,6 +133,7 @@ export class GroupoverviewPage implements OnInit {
               loadingEl.dismiss();
               this.groupService.setGroupModified(true);
               this.groupService.setActiveGroup(group);
+              this.activeGroup = group;
             })
           })
         }
@@ -259,9 +283,9 @@ export class GroupoverviewPage implements OnInit {
         this.groupService.setGroupModified(true);
       }
 
-      if ((this.groupOverviewList.length - 1) <= 0 && this.activeGroup.id == group.id) {
-        this.groupService.setActiveGroup(null);
-      }
+      // if ((this.groupOverviewList.length - 1) <= 0 && this.activeGroup.id == group.id) {
+      //   this.groupService.setActiveGroup(null);
+      // }
       
     });
     return (await modal).present();

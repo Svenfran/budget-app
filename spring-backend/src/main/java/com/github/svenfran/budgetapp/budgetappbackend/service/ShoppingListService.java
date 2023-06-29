@@ -40,7 +40,7 @@ public class ShoppingListService {
     @Autowired
     private DataLoaderService dataLoaderService;
 
-    public Optional<List<ShoppingListDto>> getShoppingListsForGroup(Long groupId, Long requestTimeStamp) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, InterruptedException {
+    public Optional<List<ShoppingListDto>> getShoppingListsForGroup(Long groupId, Long requestTimeStamp) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
         var user = dataLoaderService.getCurrentUser();
         var group = dataLoaderService.loadGroup(groupId);
         verifyIsPartOfGroup(user, group);

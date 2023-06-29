@@ -1,5 +1,5 @@
 import { Component, Renderer2 } from '@angular/core';
-import { Router } from '@angular/router';
+import { NavigationEnd, Router } from '@angular/router';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { NavigationBar } from '@hugotomazi/capacitor-navigation-bar';
 import { AlertController, isPlatform, LoadingController, NavController, Platform } from '@ionic/angular';
@@ -8,6 +8,10 @@ import { Group } from './models/group';
 import { GroupSideNav } from './models/group-side-nav';
 import { CategoryService } from './services/category.service';
 import { GroupService } from './services/group.service';
+import { StorageService } from './services/storage.service';
+import { AlertService } from './services/alert.service';
+import { NavigationService } from './services/navigation.service';
+
 
 @Component({
   selector: 'app-root',
@@ -21,6 +25,11 @@ export class AppComponent {
   isOpen = false;
   activeGroup: Group;
   groupModified: boolean;
+  loadedActiveGroup: Promise<boolean>;
+  loadedUser: Promise<boolean>;
+  darkMode: boolean = false;
+  GROUP_ID: string = "groupId";
+  history: string[] = [];
 
   constructor(
     private renderer: Renderer2,
@@ -30,34 +39,60 @@ export class AppComponent {
     private groupService: GroupService,
     private categoryService: CategoryService,
     private alertCtrl: AlertController,
-    private loadingCtrl: LoadingController) {
+    private loadingCtrl: LoadingController,
+    private storageService: StorageService,
+    private alertService: AlertService,
+    private navigationService: NavigationService) {
       this.initializeApp();
       this.getGroupsForSideNav();
       this.groupService.setCurrentUser();
+      this.navigationService.startSaveHistory();
     }
     
     
-    initializeApp() {
+    async initializeApp() {
       this.platform.ready().then(() => {
-        this.lightColorTheme();
+        this.storageService.getDarkMode().then(dMode => {
+          if (dMode !== undefined) {
+            this.darkMode = dMode
+          }
+          
+          if (this.darkMode) {
+            this.renderer.setAttribute(document.body, 'color-theme', 'dark');
+            this.darkColorTheme()
+          } else {
+            this.renderer.setAttribute(document.body, 'color-theme', 'light');
+            this.lightColorTheme();
+          }
+        })
         this.initBackButton();
       })
     }
 
     
-    ngOnInit() {
+  ngOnInit() {
     this.getCurrentUser();
     this.groupService.getGroupsForSideNav().subscribe(groups => {
-      this.activeGroup = groups[0];
-      if (groups.length > 0) {
-        this.groupService.setActiveGroup(this.activeGroup);
-      } else {
-        this.groupService.setActiveGroup(null);
-      }
-    })
+      this.loadedActiveGroup = Promise.resolve(true);
+      
+      this.storageService.getActiveGroup().then(group => {
+        if (group !== null || group !== undefined || group.id != null) {
+          this.activeGroup = group;
+          this.groupService.setActiveGroup(this.activeGroup);
+        } else if (groups.length > 0) {
+          this.activeGroup = groups[0];
+          this.storageService.setActiveGroup(this.activeGroup);
+          this.groupService.setActiveGroup(this.activeGroup);
+        } else {
+          this.activeGroup = null;
+          this.storageService.setActiveGroup(this.activeGroup);
+          this.groupService.setActiveGroup(null);
+        }
+      })
+    });
+    this.checkIfGroupCountHasChanged();
   }
 
-  
   getGroupsForSideNav() {
     this.groupService.groupModified.subscribe(() => {
       this.groupService.getGroupsForSideNav().subscribe(groups => {
@@ -67,7 +102,56 @@ export class AppComponent {
         this.activeGroup = group;
       })
     })
-    this.groupService.setGroupModified(false);
+    this.groupService.setGroupModified(true);
+  }
+
+  checkIfGroupCountHasChanged() {
+    setInterval(() => {
+      // console.log("checking group count...")
+      this.groupService.getGroupsForSideNav().subscribe(groups => {
+        if (this.grouplistSideNav.length !== groups.length) {
+          let diffGroup = [
+            ...this.getDifferenceGroup(this.grouplistSideNav, groups),
+            ...this.getDifferenceGroup(groups, this.grouplistSideNav)
+          ];
+          // console.log("DIFF_GROUP: ");
+          // console.log(diffGroup[0]);
+          this.handleGroupChange(diffGroup, groups);
+          this.groupService.setGroupModified(true);
+        }  
+      })
+    }, 5000);
+  }
+
+  getDifferenceGroup(groupObj1: Group[], groupObj2: Group[]): Group[] {
+    return groupObj1.filter(el1 => groupObj2.every(el2 => el2.id !== el1.id));
+  }
+
+  handleGroupChange(diffGroup: Group[], groupList: Group[]) {
+    // console.log("ACTIVE_GROUP: ");
+    // console.log(this.activeGroup);
+    // console.log("NUMBER_OF_GROUPS: ");
+    // console.log(groupList.length);
+
+    if (this.activeGroup.id === diffGroup[0].id) {
+      if (this.grouplistSideNav.length > 0) {
+        this.groupService.setActiveGroup(groupList[0]);
+        this.storageService.setActiveGroup(groupList[0]);
+      } else {
+        this.activeGroup = null;
+        this.groupService.setActiveGroup(null);
+        this.storageService.setActiveGroup(this.activeGroup);
+      }
+      if (this.router.url.includes("shoppinglist")) {
+        this.router.navigate(['/domains/tabs/overview']);
+      }
+    } else if (this.activeGroup.id === null) {
+      this.groupService.setActiveGroup(groupList[0]);
+      this.storageService.setActiveGroup(groupList[0]);
+      if (this.router.url.includes("shoppinglist")) {
+        this.router.navigate(['/domains/tabs/overview']);
+      }
+    }
   }
 
 
@@ -82,14 +166,18 @@ export class AppComponent {
     })
   }
 
+
   onToggleColorTheme(event) {
-    if (event.detail.checked) {
+    this.darkMode = event.detail.checked;
+    if (this.darkMode) {
       this.renderer.setAttribute(document.body, 'color-theme', 'dark');
       this.darkColorTheme();
     } else {
       this.renderer.setAttribute(document.body, 'color-theme', 'light');
       this.lightColorTheme();
     }
+ 
+    this.storageService.setDarkMode(this.darkMode);
   }
 
   darkColorTheme() {
@@ -115,39 +203,11 @@ export class AppComponent {
   getActiveGroup(id: number) {
     this.activeGroup = this.grouplistSideNav.filter(group => group.id == id)[0];
     this.groupService.setActiveGroup(this.activeGroup);
+    this.storageService.setActiveGroup(this.activeGroup);
   }
 
   onCreateGroup() {
-    this.alertCtrl.create({
-      header: "Neue Gruppe:",
-      buttons: [{
-        text: "Abbrechen",
-        role: "cancel"
-      }, {
-        text: "ok",
-        handler: (data) => {
-          this.loadingCtrl.create({
-            message: "Erstelle Gruppe..."
-          }).then(loadingEl => {
-            let newGroup = new Group(null, data.groupName, null);
-            this.groupService.addGroup(newGroup).subscribe((group) => {
-              loadingEl.dismiss();
-              this.groupService.setGroupModified(true);
-              this.groupService.setActiveGroup(group);
-            })
-          })
-        }
-      }],
-      inputs: [
-        {
-          name: "groupName",
-          placeholder: "Gruppenname"
-        }
-      ]
-    }).then(alertEl => alertEl.present().then(() => {
-      const inputField: HTMLElement = document.querySelector("ion-alert input");
-      inputField.focus();
-    }));
+    this.alertService.createGroup();
   }
 
   onCreateCategory() {
@@ -184,6 +244,7 @@ export class AppComponent {
 
   getCurrentUser() {
     this.groupService.currentUser.subscribe(user => {
+      this.loadedUser = Promise.resolve(true);
       this.userName = user.userName;
     })
   }

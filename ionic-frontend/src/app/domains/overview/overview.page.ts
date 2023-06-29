@@ -5,6 +5,7 @@ import { SpendingsOverviewDto } from 'src/app/models/spendings-overview-dto';
 import { SpendingsOverviewPerMonthDto } from 'src/app/models/spendings-overview-per-month-dto';
 import { SpendingsOverviewPerYearDto } from 'src/app/models/spendings-overview-per-year-dto';
 import { SpendingsOverviewTotalYearDto } from 'src/app/models/spendings-overview-total-year-dto';
+import { AlertService } from 'src/app/services/alert.service';
 import { GroupService } from 'src/app/services/group.service';
 import { SpendingsOverviewService } from 'src/app/services/spendings-overview.service';
 
@@ -28,11 +29,12 @@ export class OverviewPage implements OnInit {
   year: number;
   segment: string;
   loadedActiveGroup: Promise<boolean>;
-  loadedSpendings: Promise<boolean>
+  loadedSpendings: Promise<boolean>;
 
   constructor(
     private groupService: GroupService,
-    private spendingsService: SpendingsOverviewService
+    private spendingsService: SpendingsOverviewService,
+    private alertService: AlertService
   ) { }
 
   ngOnInit() {
@@ -41,9 +43,12 @@ export class OverviewPage implements OnInit {
     this.groupService.activeGroup.subscribe(group => {
       this.segment = "month";
       if (group) {
+        // console.log(group);
         this.activeGroup = group;
         this.getSpendingsOverview(this.currentYear);
         this.loadedActiveGroup = Promise.resolve(true);
+      } else {
+        this.groupService.setActiveGroup(null);
       }
     })
   }
@@ -56,28 +61,32 @@ export class OverviewPage implements OnInit {
 
   getSpendingsOverview(year: number) {
     this.isLoading = true;
-    this.spendingsService.spendingsOverviewModified.subscribe(() => {
-      this.spendingsService.getSpendingsOverview(year, this.activeGroup.id).subscribe(res => {
-        this.availableYears = res.availableYears;
-        this.spendingsPerMonth = res.spendingsPerMonth;
-        this.spendingsTotalYear = res.spendingsTotalYear;
-        this.year = res.year;
-        this.segment = "month";
-        this.loadedSpendings = Promise.resolve(true);
-        this.isLoading = false;
+    if (this.activeGroup.id !== null) {
+      this.spendingsService.spendingsOverviewModified.subscribe(() => {
+        this.spendingsService.getSpendingsOverview(year, this.activeGroup.id).subscribe(res => {
+          this.availableYears = res.availableYears;
+          this.spendingsPerMonth = res.spendingsPerMonth;
+          this.spendingsTotalYear = res.spendingsTotalYear;
+          this.year = res.year;
+          this.segment = "month";
+          this.loadedSpendings = Promise.resolve(true);
+          this.isLoading = false;
+        })
       })
-    })
+    }
   }
 
   getSpendingsOverviewYearly() {
     this.isLoading = true;
-    this.spendingsService.spendingsOverviewModified.subscribe(() => {
-      this.spendingsService.getSpendingsOverviewYearly(this.activeGroup.id).subscribe(res => {
-        this.spendingsPerYear = res.spendingsPerYear;
-        this.spendingsTotalYear = res.spendingsTotalYear;
-        this.isLoading = false;
+    if (this.activeGroup.id !== null) {
+      this.spendingsService.spendingsOverviewModified.subscribe(() => {
+        this.spendingsService.getSpendingsOverviewYearly(this.activeGroup.id).subscribe(res => {
+          this.spendingsPerYear = res.spendingsPerYear;
+          this.spendingsTotalYear = res.spendingsTotalYear;
+          this.isLoading = false;
+        })
       })
-    })
+    }
   }
 
   hide() {
@@ -101,6 +110,10 @@ export class OverviewPage implements OnInit {
       this.segment = "year";
       this.getSpendingsOverviewYearly();
     }
+  }
+
+  onCreateGroup() {
+    this.alertService.createGroup();
   }
 
 }

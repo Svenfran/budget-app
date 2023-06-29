@@ -50,7 +50,7 @@ public class DataLoaderService {
 
     public Group loadGroup(Long groupId) throws GroupNotFoundException {
         return groupRepository.findById(groupId)
-                        .orElseThrow(() -> new GroupNotFoundException("Group wit Id " + groupId + " not found"));
+                        .orElseThrow(() -> new GroupNotFoundException("Group with Id " + groupId + " not found"));
     }
 
     public Cart loadCart(Long cartId) throws CartNotFoundException {
@@ -104,7 +104,7 @@ public class DataLoaderService {
 
     // TODO: Derzeit angemeldete Nutzer -> Spring Security
     public User getCurrentUser() throws UserNotFoundException {
-        var userId = UserEnum.SVEN.getId();
+        var userId = UserEnum.HUGO.getId();
         return userRepository.findById(userId)
                         .orElseThrow(() -> new UserNotFoundException("User with Id " + userId + " not found"));
     }
