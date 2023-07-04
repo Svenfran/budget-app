@@ -1,28 +1,19 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.*;
-import com.github.svenfran.budgetapp.budgetappbackend.entity.Cart;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
-import com.github.svenfran.budgetapp.budgetappbackend.entity.GroupMembershipHistory;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.GroupNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOrMemberOfGroupException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository;
-import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupMembershipHistoryRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.text.DateFormatSymbols;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Date;
 import java.util.List;
-import java.util.stream.Collectors;
-
-import static java.util.stream.Collectors.*;
 
 @Service
 public class SpendingsOverviewService {
@@ -38,7 +29,7 @@ public class SpendingsOverviewService {
 
 
     public SpendingsOverviewDto getSpendingsForGroupAndYear(int year, Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
-        var user = dataLoaderService.getCurrentUser();
+        var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(groupId);
         verifyIsPartOfGroup(user, group);
 
@@ -52,7 +43,7 @@ public class SpendingsOverviewService {
     }
 
     public SpendingsOverviewDto getSpendingsForGroupAndAllYears(Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
-        var user = dataLoaderService.getCurrentUser();
+        var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(groupId);
         verifyIsPartOfGroup(user, group);
 
@@ -85,7 +76,7 @@ public class SpendingsOverviewService {
                     spendingsPerUser.setUserId(spendings.getUserId());
                     //TODO: Wenn Nutzer gelöscht wird, schlägt nachfolgende Zeile fehl -> User-Name in membership-history speichern?
                     spendingsPerUser.setUserName(userRepository.findById(spendings.getUserId())
-                            .orElseThrow(() -> new UserNotFoundException("Get SpendingsOverviewPerMonth: User not found")).getUserName());
+                            .orElseThrow(() -> new UserNotFoundException("Get SpendingsOverviewPerMonth: User not found")).getName());
                     spendingsPerUser.setSum(spendings.getSumAmount());
                     spendingsPerUser.setDiff(spendings.getDiff());
                     userList.add(spendingsPerUser);
@@ -116,7 +107,7 @@ public class SpendingsOverviewService {
                     spendingsPerUser.setUserId(spendings.getUserId());
                     //TODO: Wenn Nutzer gelöscht wird, schlägt nachfolgende Zeile fehl -> User-Name in membership-history speichern?
                     spendingsPerUser.setUserName(userRepository.findById(spendings.getUserId())
-                            .orElseThrow(() -> new UserNotFoundException("Get SpendingsOverviewPerYear: User not found")).getUserName());
+                            .orElseThrow(() -> new UserNotFoundException("Get SpendingsOverviewPerYear: User not found")).getName());
                     spendingsPerUser.setSum(spendings.getSumAmount());
                     spendingsPerUser.setDiff(spendings.getDiff());
                     userList.add(spendingsPerUser);
@@ -138,7 +129,7 @@ public class SpendingsOverviewService {
             spendingsPerUser.setUserId(spendings.getUserId());
             //TODO: Wenn Nutzer gelöscht wird, schlägt nachfolgende Zeile fehl -> User-Name in membership-history speichern?
             spendingsPerUser.setUserName(userRepository.findById(spendings.getUserId())
-                    .orElseThrow(() -> new UserNotFoundException("Get SpendingsOverviewTotalYearDto: User not found")).getUserName());
+                    .orElseThrow(() -> new UserNotFoundException("Get SpendingsOverviewTotalYearDto: User not found")).getName());
             spendingsPerUser.setSum(spendings.getSumAmount());
             spendingsPerUser.setDiff(spendings.getDiff());
             userList.add(spendingsPerUser);
@@ -159,7 +150,7 @@ public class SpendingsOverviewService {
             spendingsPerUser.setUserId(spendings.getUserId());
             //TODO: Wenn Nutzer gelöscht wird, schlägt nachfolgende Zeile fehl -> User-Name in membership-history speichern?
             spendingsPerUser.setUserName(userRepository.findById(spendings.getUserId())
-                    .orElseThrow(() -> new UserNotFoundException("Get SpendingsOverviewTotalAllYears: User not found")).getUserName());
+                    .orElseThrow(() -> new UserNotFoundException("Get SpendingsOverviewTotalAllYears: User not found")).getName());
             spendingsPerUser.setSum(spendings.getSumAmount());
             spendingsPerUser.setDiff(spendings.getDiff());
             userList.add(spendingsPerUser);

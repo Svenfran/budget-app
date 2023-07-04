@@ -29,7 +29,7 @@ class CartDtoMapperTest {
         assertEquals(cartEntity.getDatePurchased(), dateFromString("2022-10-31"));
         assertEquals(cartEntity.getGroup().getId(), 1L);
         assertEquals(cartEntity.getUser().getId(), 5L);
-        assertEquals(cartEntity.getUser().getUserName(), "testUserCart" );
+        assertEquals(cartEntity.getUser().getName(), "testUserCart" );
         assertEquals(cartEntity.getCategory().getId(), 10L);
         assertEquals(cartEntity.getCategory().getName(), "TestCategory");
     }
@@ -46,7 +46,7 @@ class CartDtoMapperTest {
         assertNotEquals(cartEntity.getDatePurchased(), dateFromString("2022-11-31"));
         assertNotEquals(cartEntity.getGroup().getId(), 10L);
         assertNotEquals(cartEntity.getUser().getId(), 50L);
-        assertNotEquals(cartEntity.getUser().getUserName(), "UserCart" );
+        assertNotEquals(cartEntity.getUser().getName(), "UserCart" );
         assertNotEquals(cartEntity.getCategory().getId(), 100L);
         assertNotEquals(cartEntity.getCategory().getName(), "Category");
     }
@@ -64,14 +64,14 @@ class CartDtoMapperTest {
     private User cartOwner() {
         var user = new User();
         user.setId(5L);
-        user.setUserName("testUserCart");
+        user.setName("testUserCart");
         return user;
     }
 
     private User groupOwner() {
         var user = new User();
         user.setId(8L);
-        user.setUserName("testUserGroup");
+        user.setName("testUserGroup");
         return user;
     }
 

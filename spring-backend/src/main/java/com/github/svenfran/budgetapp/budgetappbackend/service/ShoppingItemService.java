@@ -32,7 +32,7 @@ public class ShoppingItemService {
 
     @Transactional
     public AddEditShoppingItemDto addShoppingItem(AddEditShoppingItemDto dto) throws UserNotFoundException, GroupNotFoundException, ShoppingListNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingListDoesNotBelongToGroupException {
-        var user = dataLoaderService.getCurrentUser();
+        var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(dto.getGroupId());
         verifyIsPartOfGroup(user, group);
         var shoppingList = dataLoaderService.loadShoppingList(dto.getShoppingListId());
@@ -44,7 +44,7 @@ public class ShoppingItemService {
 
     @Transactional
     public AddEditShoppingItemDto updateShoppingItem(AddEditShoppingItemDto dto) throws UserNotFoundException, GroupNotFoundException, ShoppingListNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingItemNotFoundException, ShoppingListDoesNotBelongToGroupException, ShoppingItemDoesNotBelongToShoppingListException {
-        var user = dataLoaderService.getCurrentUser();
+        var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(dto.getGroupId());
         verifyIsPartOfGroup(user, group);
         var shoppingList = dataLoaderService.loadShoppingList(dto.getShoppingListId());
@@ -58,7 +58,7 @@ public class ShoppingItemService {
 
     @Transactional
     public void deleteShoppingItem(AddEditShoppingItemDto dto) throws UserNotFoundException, GroupNotFoundException, ShoppingListNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingItemNotFoundException, ShoppingListDoesNotBelongToGroupException, ShoppingItemDoesNotBelongToShoppingListException {
-        var user = dataLoaderService.getCurrentUser();
+        var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(dto.getGroupId());
         verifyIsPartOfGroup(user, group);
         var shoppingList = dataLoaderService.loadShoppingList(dto.getShoppingListId());

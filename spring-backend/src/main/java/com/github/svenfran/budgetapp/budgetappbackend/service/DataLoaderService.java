@@ -1,10 +1,12 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
-import com.github.svenfran.budgetapp.budgetappbackend.constants.UserEnum;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.*;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.stereotype.Service;
 
 import java.util.Date;
@@ -80,8 +82,9 @@ public class DataLoaderService {
                         .orElseThrow(() -> new UserNotFoundException("User with Id " + userId + " not found"));
     }
 
-    public User loadUserByEmail(String email) {
-        return userRepository.findByEmail(email);
+    public User loadUserByEmail(String email) throws UserNotFoundException {
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new UserNotFoundException(String.format("User with email %s not found", email)));
     }
 
     public int getMemberCountForCartByDatePurchasedAndGroup(Date datePurchased, Long groupId) {
@@ -102,11 +105,14 @@ public class DataLoaderService {
         return groupMembershipHistoryRepository.findByGroupId(groupId);
     }
 
-    // TODO: Derzeit angemeldete Nutzer -> Spring Security
-    public User getCurrentUser() throws UserNotFoundException {
-        var userId = UserEnum.HUGO.getId();
-        return userRepository.findById(userId)
-                        .orElseThrow(() -> new UserNotFoundException("User with Id " + userId + " not found"));
+    public User getAuthenticatedUser() throws UserNotFoundException {
+        UserDetails userDetails = (UserDetails) SecurityContextHolder
+                .getContext()
+                .getAuthentication()
+                .getPrincipal();
+
+        return userRepository.findByEmail(userDetails.getUsername())
+                .orElseThrow(() -> new UserNotFoundException(String.format("User with email %s not found", userDetails.getUsername())));
     }
 
 }

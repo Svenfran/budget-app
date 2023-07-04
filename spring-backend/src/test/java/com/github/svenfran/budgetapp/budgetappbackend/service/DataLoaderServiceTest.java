@@ -3,6 +3,7 @@ package com.github.svenfran.budgetapp.budgetappbackend.service;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.CategoryNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.GroupNotFoundException;
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.*;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -74,7 +75,7 @@ class DataLoaderServiceTest {
 
     // User
     @Test
-    void loadUserByEmail() {
+    void loadUserByEmail() throws UserNotFoundException {
         dataLoaderService.loadUserByEmail(EMAIL);
         verify(userRepository).findByEmail(EMAIL);
     }

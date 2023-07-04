@@ -2,14 +2,18 @@ package com.github.svenfran.budgetapp.budgetappbackend.entity;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
 
 import javax.persistence.*;
 import java.io.Serializable;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.Set;
 
 @Entity
 @Table(name = "user_details")
-public class User implements Serializable {
+public class User implements UserDetails {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -17,7 +21,7 @@ public class User implements Serializable {
     private Long id;
 
     @Column(name = "user_name", nullable = false)
-    private String userName;
+    private String name;
 
     @Column(name = "email", nullable = false)
     private String email;
@@ -43,9 +47,9 @@ public class User implements Serializable {
     @JsonBackReference
     private Set<Cart> carts;
 
-    public User(Long id, String userName, String email, String password, Set<Group> groups, Set<Group> groupList, Set<Cart> carts) {
+    public User(Long id, String name, String email, String password, Set<Group> groups, Set<Group> groupList, Set<Cart> carts) {
         this.id = id;
-        this.userName = userName;
+        this.name = name;
         this.email = email;
         this.password = password;
         this.groups = groups;
@@ -64,12 +68,12 @@ public class User implements Serializable {
         this.id = id;
     }
 
-    public String getUserName() {
-        return userName;
+    public String getName() {
+        return name;
     }
 
-    public void setUserName(String userName) {
-        this.userName = userName;
+    public void setName(String name) {
+        this.name = name;
     }
 
     @JsonIgnore
@@ -82,6 +86,7 @@ public class User implements Serializable {
     }
 
     @JsonIgnore
+    @Override
     public String getPassword() {
         return password;
     }
@@ -113,4 +118,36 @@ public class User implements Serializable {
     public void setGroupList(Set<Group> groupList) {
         this.groupList = groupList;
     }
+
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        return new HashSet<>();
+    }
+
+    @Override
+    public String getUsername() {
+        return email;
+    }
+
+    @Override
+    public boolean isAccountNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isAccountNonLocked() {
+        return true;
+    }
+
+    @Override
+    public boolean isCredentialsNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return true;
+    }
+
+
 }

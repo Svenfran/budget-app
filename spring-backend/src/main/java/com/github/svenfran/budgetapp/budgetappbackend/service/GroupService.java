@@ -13,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.stream.Stream;
 
 @Service
@@ -48,7 +47,7 @@ public class GroupService {
 
 
     public Stream<Group> getGroupsByMemberOrOwner() throws UserNotFoundException {
-        var user = dataLoaderService.getCurrentUser();
+        var user = dataLoaderService.getAuthenticatedUser();
         var member = new HashSet<User>();
         member.add(user);
         var groupsMember = groupRepository.findGroupsByMembersInOrderById(member);
@@ -65,7 +64,7 @@ public class GroupService {
     }
 
     public GroupMembersDto getGroupMembers(Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
-        var user = dataLoaderService.getCurrentUser();
+        var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(groupId);
         verifyIsPartOfGroup(user, group);
         return new GroupMembersDto(group);
@@ -73,7 +72,7 @@ public class GroupService {
 
     @Transactional
     public GroupDto addGroup(GroupDto groupDto) throws UserNotFoundException {
-        var user = dataLoaderService.getCurrentUser();
+        var user = dataLoaderService.getAuthenticatedUser();
         var group = groupRepository.save(groupDtoMapper.GroupDtoToEntity(groupDto, user));
         createDefaultCategories(group);
         groupMembershipHistoryService.startGroupMembershipForOwner(user, group);
@@ -81,7 +80,7 @@ public class GroupService {
     }
 
     public GroupDto updateGroup(GroupDto groupDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOfGroupException {
-        var user = dataLoaderService.getCurrentUser();
+        var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(groupDto.getId());
         verifyIsGroupOwner(user, group);
         var groupOwner = dataLoaderService.loadUser(group.getOwner().getId());
@@ -90,7 +89,7 @@ public class GroupService {
 
     @Transactional
     public GroupMembersDto addMemberToGroup(AddGroupMemberDto addGroupMemberDto) throws GroupNotFoundException, UserNotFoundException, NotOwnerOfGroupException, MemberAlreadyExixtsException, MemberEqualsOwnerException {
-        var user = dataLoaderService.getCurrentUser();
+        var user = dataLoaderService.getAuthenticatedUser();
         var newMember = dataLoaderService.loadUserByEmail(addGroupMemberDto.getNewMemberEmail().trim());
         verifyUserExists(newMember);
         var group = dataLoaderService.loadGroup(addGroupMemberDto.getId());
@@ -108,7 +107,7 @@ public class GroupService {
 
     @Transactional
     public GroupMembersDto removeMemberFromGroup(RemoveGroupMemberDto removeGroupMemberDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOfGroupException {
-        var user = dataLoaderService.getCurrentUser();
+        var user = dataLoaderService.getAuthenticatedUser();
         var removedMember = dataLoaderService.loadUser(removeGroupMemberDto.getMember().getId());
         var group = dataLoaderService.loadGroup(removeGroupMemberDto.getId());
         verifyIsOwnerOrMemberToRemove(user, removedMember, group);
@@ -123,7 +122,7 @@ public class GroupService {
 
     @Transactional
     public void deleteGroup(Long id) throws UserNotFoundException, GroupNotFoundException, NotOwnerOfGroupException {
-        var user = dataLoaderService.getCurrentUser();
+        var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(id);
         var groupMembershipToRemove = dataLoaderService.loadMembershipHistory(group.getId());
         verifyIsGroupOwner(user, group);
@@ -142,7 +141,7 @@ public class GroupService {
 
     @Transactional
     public void changeGroupOwner(ChangeGroupOwnerDto changeGroupOwnerDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOfGroupException {
-        var user = dataLoaderService.getCurrentUser();
+        var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(changeGroupOwnerDto.getGroupId());
         var newGroupOwner = dataLoaderService.loadUser(changeGroupOwnerDto.getNewOwner().getId());
         verifyIsGroupOwner(user, group);

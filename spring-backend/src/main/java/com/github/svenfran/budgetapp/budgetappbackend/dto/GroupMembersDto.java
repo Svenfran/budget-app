@@ -11,7 +11,7 @@ public class GroupMembersDto extends GroupSideNavDto{
 
     public GroupMembersDto(Group group) {
         super(group);
-        this.ownerName = group.getOwner().getUserName();
+        this.ownerName = group.getOwner().getName();
         this.members = group.getMembers().stream().map(UserDto::new).toList();
     }
 

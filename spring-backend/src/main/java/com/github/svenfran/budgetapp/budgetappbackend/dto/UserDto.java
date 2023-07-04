@@ -9,7 +9,7 @@ public class UserDto {
 
     public UserDto(User user) {
         this.id = user.getId();
-        this.userName = user.getUserName();
+        this.userName = user.getName();
     }
 
     public UserDto() {

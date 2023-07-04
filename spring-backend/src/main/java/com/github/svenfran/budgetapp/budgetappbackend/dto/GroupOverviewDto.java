@@ -10,7 +10,7 @@ public class GroupOverviewDto extends GroupSideNavDto {
 
     public GroupOverviewDto(Group group) {
         super(group);
-        this.ownerName = group.getOwner().getUserName();
+        this.ownerName = group.getOwner().getName();
         this.memberCount = group.getMembers().size();
     }
 

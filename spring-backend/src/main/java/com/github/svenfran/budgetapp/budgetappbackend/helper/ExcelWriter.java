@@ -37,7 +37,7 @@ public class ExcelWriter {
         for (Cart cart : cartlist) {
             Row row = sheet.createRow(rowNum++);
 
-            row.createCell(0).setCellValue(capitalize(cart.getUser().getUserName()));
+            row.createCell(0).setCellValue(capitalize(cart.getUser().getName()));
             row.createCell(1).setCellValue(cart.getTitle());
             row.createCell(2).setCellValue(cart.getDescription());
             var cell = row.createCell(3);

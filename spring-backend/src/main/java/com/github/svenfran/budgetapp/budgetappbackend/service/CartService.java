@@ -5,14 +5,11 @@ import com.github.svenfran.budgetapp.budgetappbackend.entity.Cart;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Category;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
-import com.github.svenfran.budgetapp.budgetappbackend.constants.UserEnum;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.ExcelWriter;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CategoryRepository;
-import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository;
-import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.service.mapper.CartDtoMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -43,7 +40,7 @@ public class CartService {
 
 
     public List<CartDto> getCartsByGroupId(Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
-        var user = dataLoaderService.getCurrentUser();
+        var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(groupId);
         verifyIsPartOfGroup(user, group);
         var cartList = dataLoaderService.loadCartListForGroup(groupId);
@@ -51,7 +48,7 @@ public class CartService {
     }
 
     public CartDto getCartById(Long id) throws CartNotFoundException, UserNotFoundException, NotOwnerOrMemberOfGroupException, GroupNotFoundException {
-        var user = dataLoaderService.getCurrentUser();
+        var user = dataLoaderService.getAuthenticatedUser();
         var cart = dataLoaderService.loadCart(id);
         var group = dataLoaderService.loadGroup(cart.getGroup().getId());
         verifyIsPartOfGroup(user, group);
@@ -59,7 +56,7 @@ public class CartService {
     }
 
     public CartDto addCart(@Validated CartDto cartDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, CategoryNotFoundException {
-        var user = dataLoaderService.getCurrentUser();
+        var user = dataLoaderService.getAuthenticatedUser();
         var category = dataLoaderService.loadCategory(cartDto.getCategoryDto().getId());
         var group = dataLoaderService.loadGroup(cartDto.getGroupId());
         verifyIsPartOfGroup(user, group);
@@ -68,7 +65,7 @@ public class CartService {
     }
 
     public CartDto updateCart(@Validated CartDto cartDto) throws UserNotFoundException, GroupNotFoundException, CartNotFoundException, NotOwnerOfCartException, NotOwnerOrMemberOfGroupException, CategoryNotFoundException {
-        var user = dataLoaderService.getCurrentUser();
+        var user = dataLoaderService.getAuthenticatedUser();
         var cart = dataLoaderService.loadCart(cartDto.getId());
         var group = dataLoaderService.loadGroup(cartDto.getGroupId());
         verifyIsPartOfGroup(user, group);
@@ -79,7 +76,7 @@ public class CartService {
     }
 
     public void deleteCart(Long id) throws UserNotFoundException, CartNotFoundException, GroupNotFoundException, NotOwnerOfCartException, NotOwnerOrMemberOfGroupException {
-        var user = dataLoaderService.getCurrentUser();
+        var user = dataLoaderService.getAuthenticatedUser();
         var cart = dataLoaderService.loadCart(id);
         var group = dataLoaderService.loadGroup(cart.getGroup().getId());
         verifyIsPartOfGroup(user, group);
@@ -89,7 +86,7 @@ public class CartService {
 
     @Transactional
     public void addSettlementPayment(@Validated SettlementPaymentDto settlementPaymentDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
-        var user = dataLoaderService.getCurrentUser();
+        var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(settlementPaymentDto.getGroupId());
         var member = dataLoaderService.loadUser(settlementPaymentDto.getMember().getId());
         verifyIsPartOfGroup(user, group);
@@ -101,7 +98,7 @@ public class CartService {
     }
 
     public void getExcelFile(HttpServletResponse response, Long groupId) throws IOException, GroupNotFoundException, UserNotFoundException, NotOwnerOrMemberOfGroupException {
-        var user = dataLoaderService.getCurrentUser();
+        var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(groupId);
         verifyIsPartOfGroup(user, group);
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -114,14 +111,14 @@ public class CartService {
 
     private void createSettlementPaymentCarts(Category category, User user, User member, Group group, Double amount, int groupMemberCount) {
         var cartDtoSender = new CartDto();
-        cartDtoSender.setTitle("Ausgleichszahlung an " + capitalize(member.getUserName()));
+        cartDtoSender.setTitle("Ausgleichszahlung an " + capitalize(member.getName()));
         cartDtoSender.setDescription("");
         cartDtoSender.setDatePurchased(new Date());
         cartDtoSender.setAmount(amount);
         cartRepository.save(cartDtoMapper.CartDtoToEntity(cartDtoSender, category, user, group, groupMemberCount));
 
         var cartDtoReceiver = new CartDto();
-        cartDtoReceiver.setTitle("Ausgleichszahlung von " + capitalize(user.getUserName()));
+        cartDtoReceiver.setTitle("Ausgleichszahlung von " + capitalize(user.getName()));
         cartDtoReceiver.setDescription("");
         cartDtoReceiver.setDatePurchased(new Date());
         cartDtoReceiver.setAmount((-1) * amount);

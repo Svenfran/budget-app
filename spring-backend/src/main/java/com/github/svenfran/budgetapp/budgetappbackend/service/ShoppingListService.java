@@ -41,7 +41,7 @@ public class ShoppingListService {
     private DataLoaderService dataLoaderService;
 
     public Optional<List<ShoppingListDto>> getShoppingListsForGroup(Long groupId, Long requestTimeStamp) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
-        var user = dataLoaderService.getCurrentUser();
+        var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(groupId);
         verifyIsPartOfGroup(user, group);
 
@@ -88,7 +88,7 @@ public class ShoppingListService {
 
     @Transactional
     public AddEditShoppingListDto addShoppingList(AddEditShoppingListDto addEditShoppingListDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
-        var user = dataLoaderService.getCurrentUser();
+        var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(addEditShoppingListDto.getGroupId());
         verifyIsPartOfGroup(user, group);
         group.setLastUpdateShoppingList(new Date());
@@ -98,7 +98,7 @@ public class ShoppingListService {
 
     @Transactional
     public AddEditShoppingListDto updateShoppingList(AddEditShoppingListDto addEditShoppingListDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingListDoesNotBelongToGroupException, ShoppingListNotFoundException {
-        var user = dataLoaderService.getCurrentUser();
+        var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(addEditShoppingListDto.getGroupId());
         verifyIsPartOfGroup(user, group);
         var shoppingList = dataLoaderService.loadShoppingList(addEditShoppingListDto.getId());
@@ -110,7 +110,7 @@ public class ShoppingListService {
 
     @Transactional
     public void deleteShoppingList(AddEditShoppingListDto dto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingListDoesNotBelongToGroupException, ShoppingListNotFoundException {
-        var user = dataLoaderService.getCurrentUser();
+        var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(dto.getGroupId());
         verifyIsPartOfGroup(user, group);
         var shoppingList = dataLoaderService.loadShoppingList(dto.getId());

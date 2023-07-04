@@ -27,7 +27,7 @@ public class CategoryService {
 
 
     public List<CategoryDto> getAllCategoriesByGroup(Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
-        var user = dataLoaderService.getCurrentUser();
+        var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(groupId);
         verifyIsPartOfGroup(user, group);
         var categoryList = dataLoaderService.loadCategoriesForGroup(groupId);
@@ -35,14 +35,14 @@ public class CategoryService {
     }
 
     public CategoryDto addCategory(@Validated CategoryDto categoryDto) throws GroupNotFoundException, UserNotFoundException, NotOwnerOrMemberOfGroupException {
-        var user = dataLoaderService.getCurrentUser();
+        var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(categoryDto.getGroupId());
         verifyIsPartOfGroup(user, group);
         return new CategoryDto(categoryRepository.save(categoryDtoMapper.CategoryDtoToEntity(categoryDto, group)));
     }
 
     public CategoryDto updateCategory(@Validated CategoryDto categoryDto) throws GroupNotFoundException, CategoryBelongsNotToGroupException, CategoryNotFoundException, NotOwnerOrMemberOfGroupException, UserNotFoundException {
-        var user = dataLoaderService.getCurrentUser();
+        var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(categoryDto.getGroupId());
         verifyIsPartOfGroup(user, group);
         var category = dataLoaderService.loadCategory(categoryDto.getId());
@@ -51,7 +51,7 @@ public class CategoryService {
     }
 
     public void deleteCategory(@Validated CategoryDto categoryDto) throws GroupNotFoundException, CategoryBelongsNotToGroupException, CategoryNotFoundException, CategoryIsUsedByCartException, NotOwnerOrMemberOfGroupException, UserNotFoundException {
-        var user = dataLoaderService.getCurrentUser();
+        var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(categoryDto.getGroupId());
         verifyIsPartOfGroup(user, group);
         var category = dataLoaderService.loadCategory(categoryDto.getId());

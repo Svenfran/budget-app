@@ -1,12 +1,9 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
-import { Router } from '@angular/router';
 import { AlertController, IonItemSliding, LoadingController } from '@ionic/angular';
-import { element } from 'protractor';
 import { Subscription } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 import { AddEditShoppingItemDto } from 'src/app/models/add-edit-shopping-item-dto';
 import { AddEditShoppingListDto } from 'src/app/models/add-edit-shopping-list-dto';
-import { Group } from 'src/app/models/group';
 import { GroupSideNav } from 'src/app/models/group-side-nav';
 import { ShoppingItemDto } from 'src/app/models/shopping-item-dto';
 import { ShoppingListDto } from 'src/app/models/shopping-list-dto';
@@ -14,7 +11,6 @@ import { AlertService } from 'src/app/services/alert.service';
 import { GroupService } from 'src/app/services/group.service';
 import { ShoppingitemService } from 'src/app/services/shoppingitem.service';
 import { ShoppinglistService } from 'src/app/services/shoppinglist.service';
-import { StorageService } from 'src/app/services/storage.service';
 
 @Component({
   selector: 'app-shoppinglist',
@@ -36,7 +32,7 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
   isLoading: boolean = false;
   focusIsSet: boolean;
   requestTimeStamp: number = new Date('1900-01-01').getTime();
-  DEFAULT_REQUEST_TIMESTAMP: number = new Date('1900-01-01').getTime();
+  INITIAL_REQUEST_TIMESTAMP: number = new Date('1900-01-01').getTime();
   pollSub: Subscription = new Subscription();
   loadedActiveGroup: Promise<boolean>;
   pageLeft: boolean = false;
@@ -71,7 +67,7 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
   getShoppingListWithItems(groupId: number) {
     this.isLoading = true;
     if (groupId !== null) {
-      this.shoppingListService.getShoppingListsWithItems(groupId, this.DEFAULT_REQUEST_TIMESTAMP).subscribe(list => {
+      this.shoppingListService.getShoppingListsWithItems(groupId, this.INITIAL_REQUEST_TIMESTAMP).subscribe(list => {
         this.shoppingListWithItems = list;
         this.isLoading = false;
       })
@@ -191,7 +187,7 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
   }
 
   async refreshShoppingList(event?: any) {
-    this.shoppingListService.getShoppingListsWithItems(this.activeGroup.id, this.DEFAULT_REQUEST_TIMESTAMP).pipe(
+    this.shoppingListService.getShoppingListsWithItems(this.activeGroup.id, this.INITIAL_REQUEST_TIMESTAMP).pipe(
       finalize(() => {
         if (event) {
           event.target.complete();
