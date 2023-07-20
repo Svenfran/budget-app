@@ -33,7 +33,7 @@ public class AuthenticationService {
     @Autowired
     private AuthenticationManager authManager;
 
-    public AuthenticationResponse register(RegisterRequest request, BindingResult bindingResult) throws UserAlreadyExistException, InvalidEmailException {
+    public AuthenticationResponse register(RegisterRequest request, BindingResult bindingResult) throws UserAlreadyExistException, InvalidEmailException, UserNotFoundException {
         verifyEmailIsValid(bindingResult);
         verifyEmailNotExists(request.getEmail());
         var user = new User();
@@ -41,7 +41,10 @@ public class AuthenticationService {
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         userRepository.save(user);
-        return new AuthenticationResponse(jwtService.generateToken(user));
+        var registeredUserId = dataLoaderService.loadUserByEmail(request.getEmail()).getId();
+        var token = jwtService.generateToken(user);
+        var expTime = jwtService.extractExpiration(token).getTime();
+        return new AuthenticationResponse(registeredUserId, request.getName(), expTime, token);
     }
 
     public AuthenticationResponse authenticate(AuthenticationRequest request, BindingResult bindingResult) throws UserNotFoundException, InvalidEmailException {
@@ -54,7 +57,9 @@ public class AuthenticationService {
         );
 
         var user = dataLoaderService.loadUserByEmail(request.getEmail());
-        return new AuthenticationResponse(jwtService.generateToken(user));
+        var token = jwtService.generateToken(user);
+        var expTime = jwtService.extractExpiration(token).getTime();
+        return new AuthenticationResponse(user.getId(), user.getName(), expTime, token);
     }
 
     private boolean emailExists(String email) {

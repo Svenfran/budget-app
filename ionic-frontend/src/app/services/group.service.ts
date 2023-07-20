@@ -19,7 +19,7 @@ export class GroupService {
 
   private _activeGroup = new BehaviorSubject<Group>(null);
   private _groupModified = new BehaviorSubject<boolean>(false);
-  private _currentUser = new BehaviorSubject<UserDto>(null);
+  // private _currentUser = new BehaviorSubject<UserDto>(null);
 
   private apiBaseUrl = environment.apiBaseUrlExternal;
   private groupsSideNavUrl = `${this.apiBaseUrl}/api/groups/sidenav`;
@@ -47,16 +47,16 @@ export class GroupService {
     this._groupModified.next(groupAdded);
   }
 
-  setCurrentUser() {
-    // this._currentUser.next(new UserDto(1, "sven"));
-    // this._currentUser.next(new UserDto(2, "sascha"));
-    // this._currentUser.next(new UserDto(3, "basti"));
-    // this._currentUser.next(new UserDto(4, "martin"));
-    // this._currentUser.next(new UserDto(5, "sabine"));
-    // this._currentUser.next(new UserDto(6, "tina"));
-    // this._currentUser.next(new UserDto(7, "montse"));
-    this._currentUser.next(new UserDto(8, "hugo"));
-  }
+  // setCurrentUser() {
+  //   // this._currentUser.next(new UserDto(1, "sven"));
+  //   // this._currentUser.next(new UserDto(2, "sascha"));
+  //   // this._currentUser.next(new UserDto(3, "basti"));
+  //   // this._currentUser.next(new UserDto(4, "martin"));
+  //   // this._currentUser.next(new UserDto(5, "sabine"));
+  //   // this._currentUser.next(new UserDto(6, "tina"));
+  //   // this._currentUser.next(new UserDto(7, "montse"));
+  //   this._currentUser.next(new UserDto(8, "hugo"));
+  // }
 
   get activeGroup() {
     return this._activeGroup.asObservable();
@@ -66,9 +66,9 @@ export class GroupService {
     return this._groupModified.asObservable();
   }
 
-  get currentUser() {
-    return this._currentUser.asObservable();
-  }
+  // get currentUser() {
+  //   return this._currentUser.asObservable();
+  // }
 
   getGroupsForSideNav(): Observable<GroupSideNav[]> {
     return this.http.get<GroupSideNav[]>(this.groupsSideNavUrl);

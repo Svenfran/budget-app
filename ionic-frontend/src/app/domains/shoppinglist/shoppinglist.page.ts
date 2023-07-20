@@ -2,6 +2,7 @@ import { Component, OnDestroy, OnInit } from '@angular/core';
 import { AlertController, IonItemSliding, LoadingController } from '@ionic/angular';
 import { Subscription } from 'rxjs';
 import { finalize } from 'rxjs/operators';
+import { AuthService } from 'src/app/auth/auth.service';
 import { AddEditShoppingItemDto } from 'src/app/models/add-edit-shopping-item-dto';
 import { AddEditShoppingListDto } from 'src/app/models/add-edit-shopping-list-dto';
 import { GroupSideNav } from 'src/app/models/group-side-nav';
@@ -44,7 +45,8 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
     private alertCtrl: AlertController,
     private loadingCtrl: LoadingController,
     private shoppingItemService: ShoppingitemService,
-    private alertService: AlertService
+    private alertService: AlertService,
+    private authService: AuthService
   ) { }
 
   ngOnInit() {
@@ -399,9 +401,13 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
   }
 
   getCurrentUser() {
-    this.groupService.currentUser.subscribe(user => {
-      this.userName = user.userName;
+    // this.groupService.currentUser.subscribe(user => {
+    //   this.userName = user.userName;
+    // })
+    this.authService.userName.subscribe(name => {
+      this.userName = name;
     })
+    return this.userName;
   }
 
   onCreateGroup() {

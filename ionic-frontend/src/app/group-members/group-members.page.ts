@@ -10,6 +10,7 @@ import { CartService } from '../services/cart.service';
 import { GroupService } from '../services/group.service';
 import { SpendingsOverviewService } from '../services/spendings-overview.service';
 import { StorageService } from '../services/storage.service';
+import { AuthService } from '../auth/auth.service';
 
 @Component({
   selector: 'app-group-members',
@@ -37,7 +38,8 @@ export class GroupMembersPage implements OnInit {
     private modalCtrl: ModalController,
     private cartService: CartService,
     private spendingsService: SpendingsOverviewService,
-    private storageService: StorageService) { }
+    private storageService: StorageService,
+    private authService: AuthService) { }
 
   ngOnInit() {
     this.getCurrentUser();
@@ -103,7 +105,8 @@ export class GroupMembersPage implements OnInit {
             this.groupWithMembers = new GroupMembers(
               groupWithMembers.id, 
               groupWithMembers.name,
-              groupWithMembers.ownerName, 
+              groupWithMembers.ownerName,
+              groupWithMembers.ownerId, 
               this.groupMembers
               );
           })
@@ -156,10 +159,11 @@ export class GroupMembersPage implements OnInit {
   }
 
   getCurrentUser() {
-    this.groupService.currentUser.subscribe(user => {
-      this.userName = user.userName;
-      this.currentUser = user;
+    this.authService.user.subscribe(user => {
+      this.userName = user.name;
+      this.currentUser = new UserDto(user.id, user.name);
     })
+    return this.userName;
   }
 }
 

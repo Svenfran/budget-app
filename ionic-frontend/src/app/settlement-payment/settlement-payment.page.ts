@@ -7,6 +7,7 @@ import { SettlementPaymentDto } from '../models/settlement-payment-dto';
 import { UserDto } from '../models/user';
 import { CartService } from '../services/cart.service';
 import { GroupService } from '../services/group.service';
+import { AuthService } from '../auth/auth.service';
 
 @Component({
   selector: 'app-settlement-payment',
@@ -18,6 +19,7 @@ export class SettlementPaymentPage implements OnInit {
   form: FormGroup;
   members: GroupMembers;
   userName: string;
+  currentUser: UserDto;
   activeGroup: GroupSideNav;
   loadedMembers: Promise<boolean>;
 
@@ -25,7 +27,8 @@ export class SettlementPaymentPage implements OnInit {
     private fb: UntypedFormBuilder,
     private groupService: GroupService,
     private modalCtrl: ModalController,
-    private cartService: CartService
+    private cartService: CartService,
+    private authService: AuthService
   ) { }
 
   ngOnInit() {
@@ -34,7 +37,7 @@ export class SettlementPaymentPage implements OnInit {
 
     this.form = this.fb.group({
       amount: ['',[ Validators.required, Validators.pattern('[+-]?([0-9]*[.])?[0-9]+')]],
-      memberName: ['',[ Validators.required ]]
+      memberId: ['',[ Validators.required ]]
     });
   }
 
@@ -48,10 +51,18 @@ export class SettlementPaymentPage implements OnInit {
     });
   }
 
+
   onSubmit() {
+    let memberName: string;
+    if (this.members.ownerId === this.form.value.memberId) {
+      memberName = this.members.ownerName;
+    } else {
+      memberName = this.members.members.filter(member => member.id == this.form.value.memberId)[0].userName;
+    }
+
     let member = new UserDto(
-      this.members.members.filter(member => member.userName = this.form.value.memberName)[0].id,
-      this.form.value.memberName
+      this.form.value.memberId,
+      memberName
     );
     let settlementPayment = new SettlementPaymentDto(
       this.form.value.amount,
@@ -77,11 +88,13 @@ export class SettlementPaymentPage implements OnInit {
   }
 
   get amount() {return this.form.get('amount');}
-  get memberName() {return this.form.get('memberName');}
+  get memberId() {return this.form.get('memberId');}
 
   getCurrentUser() {
-    this.groupService.currentUser.subscribe(user => {
-      this.userName = user.userName;
+    this.authService.user.subscribe(user => {
+      this.userName = user.name;
+      this.currentUser = new UserDto(user.id, user.name);
     })
+    return this.currentUser;
   }
 }

@@ -14,6 +14,7 @@ import { StorageService } from '../services/storage.service';
 import { from, of } from 'rxjs';
 import { Router } from '@angular/router';
 import { NavigationService } from '../services/navigation.service';
+import { AuthService } from '../auth/auth.service';
 
 @Component({
   selector: 'app-groupoverview',
@@ -40,7 +41,8 @@ export class GroupoverviewPage implements OnInit {
     private spendingsService: SpendingsOverviewService,
     private storageService: StorageService,
     private navigationService: NavigationService,
-    private router: Router
+    private router: Router,
+    private authService: AuthService
     ) { }
 
   ngOnInit() {
@@ -301,9 +303,10 @@ export class GroupoverviewPage implements OnInit {
   }
 
   getCurrentUser() {
-    this.groupService.currentUser.subscribe(user => {
-      this.userName = user.userName;
-      this.currentUser = user;
+    this.authService.user.subscribe(user => {
+      this.userName = user.name;
+      this.currentUser = new UserDto(user.id, user.name);
     })
+    return this.userName;
   }
 }

@@ -2,6 +2,7 @@ import { Component, OnDestroy, OnInit } from '@angular/core';
 import { AlertController, IonItemSliding, LoadingController, ModalController } from '@ionic/angular';
 import { format } from 'date-fns';
 import { Subscription } from 'rxjs';
+import { AuthService } from 'src/app/auth/auth.service';
 import { Cart } from 'src/app/models/cart';
 import { Group } from 'src/app/models/group';
 import { GroupSideNav } from 'src/app/models/group-side-nav';
@@ -35,7 +36,8 @@ export class CartlistPage implements OnInit, OnDestroy {
     private loadingCtrl: LoadingController,
     private modalCtrl: ModalController,
     private groupService: GroupService,
-    private storageService: StorageService) { }
+    private storageService: StorageService,
+    private authService: AuthService) { }
 
   ngOnInit() {
     this.getCurrentUser();
@@ -168,9 +170,10 @@ export class CartlistPage implements OnInit, OnDestroy {
   }
 
   getCurrentUser() {
-    this.groupService.currentUser.subscribe(user => {
-      this.userName = user.userName;
+    this.authService.userName.subscribe(name => {
+      this.userName = name;
     })
+    return this.userName;
   }
 
   onCreateGroup() {

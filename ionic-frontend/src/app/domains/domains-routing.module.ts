@@ -37,11 +37,7 @@ const routes: Routes = [
         path: '', redirectTo: 'domains/tabs/overview', pathMatch: 'full'
       }
     ]
-  },
-  {
-    path: '', redirectTo: 'domains/tabs/overview', pathMatch: 'full'
-  },
-
+  }
 ];
 
 @NgModule({

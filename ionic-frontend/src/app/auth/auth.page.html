@@ -1,0 +1,74 @@
+<ion-content class="ion-text-center ion-padding">
+  <form [formGroup]="form" (ngSubmit)="onSubmit()">
+    <ion-grid>
+      <h3>{{ isLogin ? 'Anmelden' : 'Registrieren' }}</h3>
+      <ion-row>
+      <ion-col size-sm="6" offset-sm="3">
+        <ion-list>
+          <ion-item *ngIf="!isLogin">
+            <ion-label position="floating">Benutzername</ion-label>
+            <ion-input 
+              type="text"
+              formControlName="userName"
+            ></ion-input>
+          </ion-item>
+          <ion-item *ngIf="!isLogin && userName.invalid && userName.touched" lines="none">
+            <ion-label>
+              <small>Pflichtfeld!</small>
+            </ion-label>
+          </ion-item>
+
+          <ion-item>
+            <ion-label position="floating">Email</ion-label>
+            <ion-input 
+              type="text"
+              formControlName="userEmail"
+            ></ion-input>
+          </ion-item>
+          <ion-item *ngIf="userEmail.invalid && (userEmail.dirty || userEmail.touched)" lines="none">
+            <ion-label>
+              <small *ngIf="userEmail.errors.required">Pflichtfeld!</small>
+              <small *ngIf="userEmail.errors.pattern">Keine gültige E-Mail Adresse</small>
+            </ion-label>
+
+          </ion-item>
+          <ion-item>
+            <ion-label position="floating">Passwort</ion-label>
+            <ion-input 
+              [type]="showPassword ? 'text' : 'password'"
+              formControlName="password"  
+            ></ion-input>
+            <ion-button class="icon-eye-btn" slot="end" fill="clear" color="medium" (click)="toggleShow()">
+              <ion-icon [hidden]="showPassword" name="eye-off-outline"></ion-icon>
+              <ion-icon [hidden]="!showPassword" name="eye-outline"></ion-icon>
+            </ion-button>
+          </ion-item>
+          <ion-item *ngIf="password.invalid && (password.dirty || password.touched)" lines="none">
+            <ion-label>
+              <small *ngIf="password.errors.required">Pflichtfeld!</small>
+              <small *ngIf="password.errors.minlength">Mindestens 6 Zeichen erforderlich</small>
+            </ion-label>
+          </ion-item>
+        </ion-list>
+      </ion-col>
+    </ion-row>
+    <ion-row>
+      <ion-col size-sm="6" offset-sm="3">
+        <ion-button
+          type="button"
+          class="ion-margin"
+          fill="clear"
+          color="primary"
+          expand="full"
+          (click)="onSwitchAuthMode()">{{ isLogin ? 'Registrieren' : 'Anmelden' }}</ion-button>
+        <ion-button
+          type="submit" 
+          class="ion-margin" 
+          color="primary" 
+          expand="block" 
+          [disabled]="!form.valid">{{ isLogin ? 'Anmelden' : 'Registrieren' }}</ion-button>
+      </ion-col>
+    </ion-row>
+  </ion-grid>
+</form>
+</ion-content>

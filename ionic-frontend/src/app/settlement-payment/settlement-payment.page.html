@@ -34,11 +34,11 @@
                   <ion-label position="floating">An Mitglied*</ion-label>
                   <ion-select
                     type="text"
-                    formControlName="memberName"
+                    formControlName="memberId"
                     okText="Ok" cancelText="Abbrechen">
-                    <ion-select-option *ngIf="userName != members.ownerName">{{ members.ownerName | titlecase }}</ion-select-option>
+                    <ion-select-option *ngIf="currentUser.id != members.ownerId" [value]="members.ownerId">{{ members.ownerName | titlecase }}</ion-select-option>
                     <div *ngFor="let member of members.members">
-                      <ion-select-option *ngIf="userName != member.userName">{{ member.userName | titlecase }}</ion-select-option>
+                      <ion-select-option *ngIf="currentUser.id != member.id" [value]="member.id">{{ member.userName | titlecase }}</ion-select-option>
                     </div>
                   </ion-select>
                 </ion-item>

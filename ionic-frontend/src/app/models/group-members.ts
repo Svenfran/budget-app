@@ -5,6 +5,7 @@ export class GroupMembers {
         public id: number,
         public name: string,
         public ownerName: string,
+        public ownerId: number,
         public members: UserDto[]
     ) {}
 }

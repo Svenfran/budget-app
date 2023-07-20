@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { SegmentChangeEventDetail } from '@ionic/angular';
+import { AuthService } from 'src/app/auth/auth.service';
 import { Group } from 'src/app/models/group';
 import { SpendingsOverviewDto } from 'src/app/models/spendings-overview-dto';
 import { SpendingsOverviewPerMonthDto } from 'src/app/models/spendings-overview-per-month-dto';
@@ -34,7 +35,8 @@ export class OverviewPage implements OnInit {
   constructor(
     private groupService: GroupService,
     private spendingsService: SpendingsOverviewService,
-    private alertService: AlertService
+    private alertService: AlertService,
+    private authService: AuthService
   ) { }
 
   ngOnInit() {
@@ -94,9 +96,13 @@ export class OverviewPage implements OnInit {
   }
 
   getCurrentUser() {
-    this.groupService.currentUser.subscribe(user => {
-      this.userName = user.userName;
+    // this.groupService.currentUser.subscribe(user => {
+    //   this.userName = user.userName;
+    // })
+    this.authService.userName.subscribe(name => {
+      this.userName = name;
     })
+    return this.userName;
   }
 
   getCurrentYear() {

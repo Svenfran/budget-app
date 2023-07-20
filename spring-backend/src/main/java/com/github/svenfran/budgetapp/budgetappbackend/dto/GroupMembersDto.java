@@ -7,11 +7,13 @@ import java.util.List;
 public class GroupMembersDto extends GroupSideNavDto{
 
     private String ownerName;
+    private Long ownerId;
     private List<UserDto> members;
 
     public GroupMembersDto(Group group) {
         super(group);
         this.ownerName = group.getOwner().getName();
+        this.ownerId = group.getOwner().getId();
         this.members = group.getMembers().stream().map(UserDto::new).toList();
     }
 
@@ -33,6 +35,14 @@ public class GroupMembersDto extends GroupSideNavDto{
 
     public void setMembers(List<UserDto> members) {
         this.members = members;
+    }
+
+    public Long getOwnerId() {
+        return ownerId;
+    }
+
+    public void setOwnerId(Long ownerId) {
+        this.ownerId = ownerId;
     }
 
 }

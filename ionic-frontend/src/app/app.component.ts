@@ -1,8 +1,8 @@
-import { Component, Renderer2 } from '@angular/core';
-import { NavigationEnd, Router } from '@angular/router';
+import { Component, OnDestroy, OnInit, Renderer2, ViewChild } from '@angular/core';
+import { Router } from '@angular/router';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { NavigationBar } from '@hugotomazi/capacitor-navigation-bar';
-import { AlertController, isPlatform, LoadingController, NavController, Platform } from '@ionic/angular';
+import { AlertController, IonRouterOutlet, isPlatform, LoadingController, NavController, Platform } from '@ionic/angular';
 import { CategoryDto } from './models/category';
 import { Group } from './models/group';
 import { GroupSideNav } from './models/group-side-nav';
@@ -11,6 +11,8 @@ import { GroupService } from './services/group.service';
 import { StorageService } from './services/storage.service';
 import { AlertService } from './services/alert.service';
 import { NavigationService } from './services/navigation.service';
+import { AuthService } from './auth/auth.service';
+import { Subscription } from 'rxjs';
 
 
 @Component({
@@ -18,7 +20,8 @@ import { NavigationService } from './services/navigation.service';
   templateUrl: 'app.component.html',
   styleUrls: ['app.component.scss'],
 })
-export class AppComponent {
+export class AppComponent implements OnInit, OnDestroy {
+  @ViewChild (IonRouterOutlet, {static: true}) routerOutlet: IonRouterOutlet;
 
   userName: string;
   grouplistSideNav: GroupSideNav[];
@@ -30,6 +33,9 @@ export class AppComponent {
   darkMode: boolean = false;
   GROUP_ID: string = "groupId";
   history: string[] = [];
+  authSub: Subscription;
+  previousAuthState = false;
+
 
   constructor(
     private renderer: Renderer2,
@@ -42,10 +48,10 @@ export class AppComponent {
     private loadingCtrl: LoadingController,
     private storageService: StorageService,
     private alertService: AlertService,
-    private navigationService: NavigationService) {
+    private navigationService: NavigationService,
+    private authService: AuthService) {
       this.initializeApp();
       this.getGroupsForSideNav();
-      this.groupService.setCurrentUser();
       this.navigationService.startSaveHistory();
     }
     
@@ -53,7 +59,7 @@ export class AppComponent {
     async initializeApp() {
       this.platform.ready().then(() => {
         this.storageService.getDarkMode().then(dMode => {
-          if (dMode !== undefined) {
+          if (dMode !== undefined || dMode !== null) {
             this.darkMode = dMode
           }
           
@@ -71,29 +77,43 @@ export class AppComponent {
 
     
   ngOnInit() {
-    this.getCurrentUser();
-    this.groupService.getGroupsForSideNav().subscribe(groups => {
-      this.loadedActiveGroup = Promise.resolve(true);
-      
-      this.storageService.getActiveGroup().then(group => {
-        if (group !== null || group !== undefined || group.id != null) {
-          this.activeGroup = group;
-          this.groupService.setActiveGroup(this.activeGroup);
-        } else if (groups.length > 0) {
-          this.activeGroup = groups[0];
-          this.storageService.setActiveGroup(this.activeGroup);
-          this.groupService.setActiveGroup(this.activeGroup);
-        } else {
-          this.activeGroup = null;
-          this.storageService.setActiveGroup(this.activeGroup);
-          this.groupService.setActiveGroup(null);
-        }
-      })
-    });
-    this.checkIfGroupCountHasChanged();
+    this.authSub = this.authService.userIsAuthenticated.subscribe(isAuth => {
+      if (!isAuth && this.previousAuthState !== isAuth) {
+        this.router.navigateByUrl('/auth', { replaceUrl: true });
+        // return;
+      }
+      this.previousAuthState = isAuth;
+      this.getCurrentUser();
+      this.groupService.setGroupModified(true);
+
+      this.groupService.getGroupsForSideNav().subscribe(groups => {
+        this.loadedActiveGroup = Promise.resolve(true);
+
+        this.storageService.getActiveGroup().then(group => {
+          if (group !== null || group !== undefined || group.id != null) {
+            this.activeGroup = group;
+            this.groupService.setActiveGroup(this.activeGroup);
+          } else if (groups.length > 0) {
+            this.activeGroup = groups[0];
+            this.storageService.setActiveGroup(this.activeGroup);
+            this.groupService.setActiveGroup(this.activeGroup);
+          } else {
+            this.activeGroup = null;
+            this.storageService.setActiveGroup(this.activeGroup);
+            this.groupService.setActiveGroup(null);
+          }
+        })
+      });
+      this.checkIfGroupCountHasChanged();
+    })
+  }
+
+  ngOnDestroy(): void {
+      this.authSub.unsubscribe();
   }
 
   getGroupsForSideNav() {
+    console.log(this.router.url === '/');
     this.groupService.groupModified.subscribe(() => {
       this.groupService.getGroupsForSideNav().subscribe(groups => {
         this.grouplistSideNav = groups;
@@ -197,7 +217,8 @@ export class AppComponent {
   }
 
   onLogout() {
-    console.log("Logging out...")
+    this.authService.logout();
+    this.router.navigateByUrl("/auth", { replaceUrl: true });
   }
 
   getActiveGroup(id: number) {
@@ -243,9 +264,10 @@ export class AppComponent {
   }
 
   getCurrentUser() {
-    this.groupService.currentUser.subscribe(user => {
+    this.authService.userName.subscribe(name => {
       this.loadedUser = Promise.resolve(true);
-      this.userName = user.userName;
+      this.userName = name;
     })
+    return this.userName;
   }
 }
