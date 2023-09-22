@@ -34,3 +34,6 @@ build/
 
 ### Config Package ###
 **/CorsConfig.java
+
+### Sonar
+.sonar

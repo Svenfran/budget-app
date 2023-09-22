@@ -5,6 +5,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.dto.AuthenticationResponse
 import com.github.svenfran.budgetapp.budgetappbackend.dto.RegisterRequest;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.InvalidEmailException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserAlreadyExistException;
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNameAlreadyExistsException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.service.AuthenticationService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,7 +23,7 @@ public class AuthenticationController {
     private AuthenticationService authenticationService;
 
     @PostMapping("/register")
-    public ResponseEntity<AuthenticationResponse> register(@Valid @RequestBody RegisterRequest request, BindingResult bindingResult) throws UserAlreadyExistException, InvalidEmailException, UserNotFoundException {
+    public ResponseEntity<AuthenticationResponse> register(@Valid @RequestBody RegisterRequest request, BindingResult bindingResult) throws UserAlreadyExistException, InvalidEmailException, UserNotFoundException, UserNameAlreadyExistsException {
         return ResponseEntity.ok(authenticationService.register(request, bindingResult));
     }
 

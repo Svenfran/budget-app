@@ -37,7 +37,7 @@ public class ExcelWriter {
         for (Cart cart : cartlist) {
             Row row = sheet.createRow(rowNum++);
 
-            row.createCell(0).setCellValue(capitalize(cart.getUser().getName()));
+            row.createCell(0).setCellValue(cart.getUser().getName());
             row.createCell(1).setCellValue(cart.getTitle());
             row.createCell(2).setCellValue(cart.getDescription());
             var cell = row.createCell(3);
@@ -59,7 +59,4 @@ public class ExcelWriter {
         outputStream.close();
     }
 
-    private String capitalize(String str) {
-        return str.substring(0, 1).toUpperCase() + str.substring(1);
-    }
 }

@@ -141,4 +141,10 @@ public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionH
         LOG.debug("Exception Message: " + ex.getMessage(), ex);
         return new ResponseEntity<>(ex.getMessage(), HttpStatus.BAD_REQUEST);
     }
+
+    @ExceptionHandler(value = { UserNameAlreadyExistsException.class })
+    protected ResponseEntity<Object> handleUserNameAlreadyExistsException (UserNameAlreadyExistsException ex, WebRequest request) {
+        LOG.debug("Exception Message: " + ex.getMessage(), ex);
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
 }

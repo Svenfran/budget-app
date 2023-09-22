@@ -25,7 +25,7 @@ import { AuthService } from "./auth.service";
           }
         }),
         tap(isAuthenticated => {
-          // console.log("isAuthenticated: " + isAuthenticated);
+          console.log("isAuthenticated: " + isAuthenticated);
           if (!isAuthenticated) {
             this.router.navigateByUrl('/auth', {replaceUrl: true});
           }

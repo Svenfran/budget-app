@@ -6,7 +6,7 @@
         <ion-item>
           <div class="menu-header">
             <ion-label *ngIf="loadedUser | async">Hallo {{ userName | titlecase }}!</ion-label>
-            <!-- <ion-text color="medium">Schön dich zu sehen 😊</ion-text> -->
+            <ion-text>Schön dich zu sehen 😊</ion-text>
             <ion-text *ngIf="loadedActiveGroup | async" color="medium">Gruppe: {{ activeGroup?.name }}</ion-text>
           </div>
         </ion-item>
@@ -55,13 +55,13 @@
           <ion-label color="medium">KATEGORIEN</ion-label>
         </ion-list-header>
         <ion-menu-toggle menu="m1">
-          <ion-item lines="none" routerLink="/categoryoverview" button>
+          <ion-item [disabled]="!grouplistSideNav?.length > 0" lines="none" routerLink="/categoryoverview" button>
             <ion-icon name="ellipsis-horizontal" slot="start"></ion-icon>
             <ion-label>Kategorien bearbeiten</ion-label>
           </ion-item>
         </ion-menu-toggle>
         <ion-menu-toggle menu="m1">
-          <ion-item lines="none" (click)="onCreateCategory()" button>
+          <ion-item [disabled]="!grouplistSideNav?.length > 0" lines="none" (click)="onCreateCategory()" button>
             <ion-icon name="add" slot="start"></ion-icon>
             <ion-label>Kategorie hinzufügen</ion-label>
           </ion-item>

@@ -39,6 +39,11 @@ export class AuthPage implements OnInit {
     this.menuCtrl.enable(true, 'm1');
   }
 
+  passwortReset() {
+    // TODO: implement password reset
+    console.log("Reset password...");
+  }
+
   toggleShow() {
     this.showPassword = !this.showPassword;
   }
@@ -76,6 +81,8 @@ export class AuthPage implements OnInit {
         let message = 'Passwort oder Email falsch.';
         if (errRes.status !== 403 && errRes.error.includes(userEmail)) {
           message = 'Ein Benutzer mit dieser Email-Adresse existiert bereits.';
+        } else if (errRes.status !== 403 && errRes.error.includes(userName)) {
+          message = 'Ein Benutzer mit diesem Benutzernamen existiert bereits.';
         }
         loadingEl.dismiss();
         this.showAlert(message);
@@ -90,7 +97,7 @@ export class AuthPage implements OnInit {
     const userName = this.form.value.userName;
     const userEmail = this.form.value.userEmail;
     const password = this.form.value.password;
-    console.log(this.form.value);
+  
     this.authenticate(userName, userEmail, password)
     this.form.reset();
   }

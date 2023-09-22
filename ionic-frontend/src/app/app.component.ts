@@ -80,7 +80,6 @@ export class AppComponent implements OnInit, OnDestroy {
     this.authSub = this.authService.userIsAuthenticated.subscribe(isAuth => {
       if (!isAuth && this.previousAuthState !== isAuth) {
         this.router.navigateByUrl('/auth', { replaceUrl: true });
-        // return;
       }
       this.previousAuthState = isAuth;
       this.getCurrentUser();
@@ -90,8 +89,17 @@ export class AppComponent implements OnInit, OnDestroy {
         this.loadedActiveGroup = Promise.resolve(true);
 
         this.storageService.getActiveGroup().then(group => {
-          if (group !== null || group !== undefined || group.id != null) {
+          let hasGroup = false;
+          if ((group !== null || group !== undefined) && groups.length > 0) {
+            hasGroup = groups.some(gr => gr.id === group.id);
+          }
+          // console.log("hasGroup: " + hasGroup);
+          // console.log("group from storage: " + group.name);
+          // console.log("number of groups: " + groups.length);
+
+          if (hasGroup) {
             this.activeGroup = group;
+            this.storageService.setActiveGroup(this.activeGroup);
             this.groupService.setActiveGroup(this.activeGroup);
           } else if (groups.length > 0) {
             this.activeGroup = groups[0];
@@ -113,7 +121,6 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   getGroupsForSideNav() {
-    console.log(this.router.url === '/');
     this.groupService.groupModified.subscribe(() => {
       this.groupService.getGroupsForSideNav().subscribe(groups => {
         this.grouplistSideNav = groups;
@@ -126,20 +133,25 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   checkIfGroupCountHasChanged() {
+    let hasError;
     setInterval(() => {
-      // console.log("checking group count...")
-      this.groupService.getGroupsForSideNav().subscribe(groups => {
-        if (this.grouplistSideNav.length !== groups.length) {
-          let diffGroup = [
-            ...this.getDifferenceGroup(this.grouplistSideNav, groups),
-            ...this.getDifferenceGroup(groups, this.grouplistSideNav)
-          ];
-          // console.log("DIFF_GROUP: ");
-          // console.log(diffGroup[0]);
-          this.handleGroupChange(diffGroup, groups);
-          this.groupService.setGroupModified(true);
-        }  
-      })
+      if (hasError !== 403) {
+        // console.log("checking group count...")
+        this.groupService.getGroupsForSideNav().subscribe(groups => {
+          if (this.grouplistSideNav.length !== groups.length) {
+            let diffGroup = [
+              ...this.getDifferenceGroup(this.grouplistSideNav, groups),
+              ...this.getDifferenceGroup(groups, this.grouplistSideNav)
+            ];
+            // console.log("DIFF_GROUP: ");
+            // console.log(diffGroup[0]);
+            this.handleGroupChange(diffGroup, groups);
+            this.groupService.setGroupModified(true);
+          }  
+        }, errRes => {
+          hasError = errRes.error.status;
+        });
+      }
     }, 5000);
   }
 

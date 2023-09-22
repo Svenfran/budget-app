@@ -67,6 +67,7 @@
           color="primary" 
           expand="block" 
           [disabled]="!form.valid">{{ isLogin ? 'Anmelden' : 'Registrieren' }}</ion-button>
+          <ion-text color="primary" (click)="passwortReset()"><small>Passwort vergessen?</small></ion-text>
       </ion-col>
     </ion-row>
   </ion-grid>

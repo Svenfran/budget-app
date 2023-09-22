@@ -6,6 +6,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.dto.RegisterRequest;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.InvalidEmailException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserAlreadyExistException;
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNameAlreadyExistsException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,9 +34,10 @@ public class AuthenticationService {
     @Autowired
     private AuthenticationManager authManager;
 
-    public AuthenticationResponse register(RegisterRequest request, BindingResult bindingResult) throws UserAlreadyExistException, InvalidEmailException, UserNotFoundException {
+    public AuthenticationResponse register(RegisterRequest request, BindingResult bindingResult) throws UserAlreadyExistException, InvalidEmailException, UserNotFoundException, UserNameAlreadyExistsException {
         verifyEmailIsValid(bindingResult);
         verifyEmailNotExists(request.getEmail());
+        verifyUserNameExists(request.getName());
         var user = new User();
         user.setName(request.getName());
         user.setEmail(request.getEmail());
@@ -66,6 +68,10 @@ public class AuthenticationService {
         return userRepository.findByEmail(email).isPresent();
     }
 
+    private boolean userNameExists(String userNAme) {
+        return userRepository.findByName(userNAme).isPresent();
+    }
+
     private void verifyEmailNotExists(String email) throws UserAlreadyExistException {
         if (emailExists(email)) {
             throw new UserAlreadyExistException(String.format("User with email %s already exists", email));
@@ -75,6 +81,12 @@ public class AuthenticationService {
     private void verifyEmailIsValid(BindingResult bindingResult) throws InvalidEmailException {
         if (bindingResult.hasErrors()) {
             throw new InvalidEmailException("Invalid Email");
+        }
+    }
+
+    private void verifyUserNameExists(String userName) throws UserNameAlreadyExistsException {
+        if (userNameExists(userName)) {
+            throw new UserNameAlreadyExistsException(String.format("User with name %s already exists", userName));
         }
     }
 }

@@ -181,7 +181,7 @@ export class GroupoverviewPage implements OnInit {
             }, errRes => {
               loadingEl.dismiss();
               let message: string;
-              if (errRes.error.includes("User not found")) {
+              if (errRes.error.includes(newMember.newMemberEmail)) {
                 message = "Benutzer existiert nicht."
               } else if (errRes.error.includes("New member equals group owner")) {
                 message = "Neues Mitglied und Gruppenersteller sind identisch"
