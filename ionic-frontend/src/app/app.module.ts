@@ -13,6 +13,7 @@ import { ReactiveFormsModule } from '@angular/forms';
 import { AuthHttpInterceptorService } from './auth/auth-http-interceptor.service';
 import { SettlementPaymentPage } from './settlement-payment/settlement-payment.page';
 import { GroupMembersPage } from './group-members/group-members.page';
+import { ScrollingModule } from '@angular/cdk/scrolling';
 registerLocaleData(localDe, 'de');
 
 @NgModule({
@@ -24,6 +25,7 @@ registerLocaleData(localDe, 'de');
     AppRoutingModule,
     HttpClientModule,
     ReactiveFormsModule,
+    ScrollingModule
   ],
   providers: [
     DatePipe,

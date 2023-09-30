@@ -93,8 +93,8 @@ public class CartService {
         verifyIsPartOfGroup(member, group);
         createCategoryForSettlementPaymentIfNotExist(group);
         var category = dataLoaderService.loadCategoryByGroupAndName(group, SETTLEMENT_CATEGORY_NAME);
-        var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(new Date(), group.getId());
-        createSettlementPaymentCarts(category, user, member, group, settlementPaymentDto.getAmount(), groupMemberCount);
+        var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(settlementPaymentDto.getDatePurchased(), group.getId());
+        createSettlementPaymentCarts(category, user, member, group, settlementPaymentDto.getAmount(), groupMemberCount, settlementPaymentDto.getDatePurchased());
     }
 
     public void getExcelFile(HttpServletResponse response, Long groupId) throws IOException, GroupNotFoundException, UserNotFoundException, NotOwnerOrMemberOfGroupException {
@@ -109,18 +109,18 @@ public class CartService {
         excelWriter.generateExcelFile(response);
     }
 
-    private void createSettlementPaymentCarts(Category category, User user, User member, Group group, Double amount, int groupMemberCount) {
+    private void createSettlementPaymentCarts(Category category, User user, User member, Group group, Double amount, int groupMemberCount, Date datePurchased) {
         var cartDtoSender = new CartDto();
         cartDtoSender.setTitle("Ausgleichszahlung an " + capitalize(member.getName()));
         cartDtoSender.setDescription("");
-        cartDtoSender.setDatePurchased(new Date());
+        cartDtoSender.setDatePurchased(datePurchased);
         cartDtoSender.setAmount(amount);
         cartRepository.save(cartDtoMapper.CartDtoToEntity(cartDtoSender, category, user, group, groupMemberCount));
 
         var cartDtoReceiver = new CartDto();
         cartDtoReceiver.setTitle("Ausgleichszahlung von " + capitalize(user.getName()));
         cartDtoReceiver.setDescription("");
-        cartDtoReceiver.setDatePurchased(new Date());
+        cartDtoReceiver.setDatePurchased(datePurchased);
         cartDtoReceiver.setAmount((-1) * amount);
         cartRepository.save(cartDtoMapper.CartDtoToEntity(cartDtoReceiver, category, member, group, groupMemberCount));
     }
