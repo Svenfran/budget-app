@@ -111,9 +111,9 @@ export class AppComponent implements OnInit, OnDestroy {
             this.groupService.setActiveGroup(null);
           }
         })
-      });
+      }, () => { return; });
       this.checkIfGroupCountHasChanged();
-    })
+    });
   }
 
   ngOnDestroy(): void {
@@ -124,16 +124,16 @@ export class AppComponent implements OnInit, OnDestroy {
     this.groupService.groupModified.subscribe(() => {
       this.groupService.getGroupsForSideNav().subscribe(groups => {
         this.grouplistSideNav = groups;
-      })
+      }, () => { return; });
       this.groupService.activeGroup.subscribe(group => {
         this.activeGroup = group;
       })
-    })
+    });
     this.groupService.setGroupModified(true);
   }
 
   checkIfGroupCountHasChanged() {
-    let hasError;
+    let hasError: number;
     setInterval(() => {
       if (hasError !== 403) {
         // console.log("checking group count...")
@@ -152,7 +152,7 @@ export class AppComponent implements OnInit, OnDestroy {
           hasError = errRes.error.status;
         });
       }
-    }, 5000);
+    }, 10000);
   }
 
   getDifferenceGroup(groupObj1: Group[], groupObj2: Group[]): Group[] {

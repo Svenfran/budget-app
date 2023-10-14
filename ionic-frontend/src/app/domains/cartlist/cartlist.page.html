@@ -87,8 +87,8 @@
                     <h2>{{ cart.amount | currency: 'EUR': number: '1.2-2': 'de' }}</h2>
                   </div>
                   <div class="cart-details">
-                    <ion-text *ngIf="cart.userDto.userName !== userName" color="medium" (click)="onFilterUserName(cart.userDto.userName, cart.groupId)">{{ cart.userDto.userName | titlecase }}</ion-text>
-                    <ion-text *ngIf="cart.userDto.userName === userName" color="primary" (click)="onFilterUserName(cart.userDto.userName, cart.groupId)"><strong>{{ cart.userDto.userName | titlecase }}</strong></ion-text>
+                    <ion-text *ngIf="cart.userDto.userName !== userName" color="medium" (click)="onFilterUserName(cart.userDto.userName, cart.groupId)">{{ cart.userDto.userName }}</ion-text>
+                    <ion-text *ngIf="cart.userDto.userName === userName" color="primary" (click)="onFilterUserName(cart.userDto.userName, cart.groupId)"><strong>{{ cart.userDto.userName }}</strong></ion-text>
                     <!-- <ion-text color="medium">{{ cart.categoryDto.name }}</ion-text> -->
                     <div class="cart-name-date">
                       <ion-text color="medium">{{ cart.datePurchased | date: "dd.MM.yyyy" }}</ion-text>

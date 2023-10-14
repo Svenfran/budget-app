@@ -6,12 +6,14 @@ public class AuthenticationResponse {
 
     private Long id;
     private String name;
+    private String email;
     private Long expirationDate;
     private String token;
 
-    public AuthenticationResponse(Long id, String name, Long expirationDate, String token) {
+    public AuthenticationResponse(Long id, String name, String email, Long expirationDate, String token) {
         this.id = id;
         this.name = name;
+        this.email = email;
         this.expirationDate = expirationDate;
         this.token = token;
     }
@@ -49,5 +51,13 @@ public class AuthenticationResponse {
 
     public void setExpirationDate(Long expirationDate) {
         this.expirationDate = expirationDate;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
     }
 }

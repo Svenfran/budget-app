@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.Date;
+import java.util.List;
 
 @Service
 public class GroupMembershipHistoryService {
@@ -49,6 +50,10 @@ public class GroupMembershipHistoryService {
         groupMembershipHistoryRepository.save(groupMembership);
     }
 
+    public void deleteGroupMemberShip(List<GroupMembershipHistory> gmhList) {
+        groupMembershipHistoryRepository.deleteAll(gmhList);
+    }
+
     private GroupMembershipHistory getGroupMembershipByUserIdAndGroupIdAndMembershipEndIsNull(User user, Group group) {
         return groupMembershipHistoryRepository.findByUserIdAndGroupIdAndMembershipEndIsNull(user.getId(), group.getId());
     }
@@ -60,5 +65,14 @@ public class GroupMembershipHistoryService {
         groupMembership.setUserId(user.getId());
         groupMembership.setGroupId(group.getId());
         return groupMembership;
+    }
+
+    public void deleteGroupMembershipHistoryWhereGroupIdIsNull() {
+        var totalHistory = groupMembershipHistoryRepository.findAll();
+        for (GroupMembershipHistory history : totalHistory) {
+            if (history.getGroupId() == null) {
+                groupMembershipHistoryRepository.delete(history);
+            }
+        }
     }
 }

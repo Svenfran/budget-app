@@ -147,4 +147,10 @@ public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionH
         LOG.debug("Exception Message: " + ex.getMessage(), ex);
         return new ResponseEntity<>(ex.getMessage(), HttpStatus.BAD_REQUEST);
     }
+
+    @ExceptionHandler(value = { UserIsNotAuthenticatedUser.class })
+    protected ResponseEntity<Object> handleUserIsNotAuthenticatedUserExistsException (UserIsNotAuthenticatedUser ex, WebRequest request) {
+        LOG.debug("Exception Message: " + ex.getMessage(), ex);
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
 }

@@ -147,8 +147,11 @@ public class Group implements Serializable {
         member.getGroups().remove(this);
     }
 
-    public void removeAll(Set<User> members) {
-        for (User member : members) removeMember(member);
+    @PreRemove
+    public void removeAllMembers() {
+        for (User member : this.getMembers()) {
+            member.getGroups().remove(this);
+        }
     }
 
     public Date getDateCreated() {

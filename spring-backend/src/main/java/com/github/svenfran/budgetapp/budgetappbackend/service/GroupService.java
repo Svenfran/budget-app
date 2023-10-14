@@ -40,7 +40,7 @@ public class GroupService {
     private GroupMembershipHistoryService groupMembershipHistoryService;
 
     @Autowired
-    private GroupMembershipHistoryRepository groupMembershipHistoryRepository;
+    private GroupMembershipHistoryRepository gmhRepository;
 
     @Autowired
     private DataLoaderService dataLoaderService;
@@ -124,12 +124,10 @@ public class GroupService {
     public void deleteGroup(Long id) throws UserNotFoundException, GroupNotFoundException, NotOwnerOfGroupException {
         var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(id);
-        var groupMembershipToRemove = dataLoaderService.loadMembershipHistory(group.getId());
         verifyIsGroupOwner(user, group);
-
-        var membersToRemove = new HashSet<>(group.getMembers());
-        group.removeAll(membersToRemove);
-        groupMembershipHistoryRepository.deleteAll(groupMembershipToRemove);
+        var groupMembershipToRemove = dataLoaderService.loadMembershipHistory(group.getId());
+        if (!group.getMembers().isEmpty()) group.removeAllMembers();
+        if (!groupMembershipToRemove.isEmpty()) gmhRepository.deleteAll(groupMembershipToRemove);
         if (!group.getCarts().isEmpty()) cartRepository.deleteAll(group.getCarts());
         if (!group.getCategories().isEmpty()) categoryRepository.deleteAll(group.getCategories());
         if (!group.getShoppingLists().isEmpty()) {
@@ -149,7 +147,7 @@ public class GroupService {
         group.removeMember(newGroupOwner);
         group.setOwner(newGroupOwner);
         group.addMember(user);
-        groupMembershipHistoryService.changeGroupOwnerToMember(group.getOwner(), group);
+        groupMembershipHistoryService.changeGroupOwnerToMember(user, group);
         groupMembershipHistoryService.changeGroupMemberToOwner(newGroupOwner, group);
         groupRepository.save(group);
     }
@@ -200,7 +198,7 @@ public class GroupService {
         }
     }
 
-    private void setIsDeletedForCart(Group group, User member, boolean delete) {
+    public void setIsDeletedForCart(Group group, User member, boolean delete) {
         var cartsOfMember = cartRepository.findCartsByGroupAndUser(group, member);
         if (delete && (!cartsOfMember.isEmpty())) {
             cartsOfMember.forEach(cart -> cart.setDeleted(true));
@@ -212,7 +210,7 @@ public class GroupService {
         }
     }
 
-    private void calculateAveragePerMember(Group group) {
+    public void calculateAveragePerMember(Group group) {
         var cartsOfGroup = group.getCarts();
         if (!cartsOfGroup.isEmpty()) {
             cartsOfGroup.forEach(cart -> cart.setAveragePerMember(cart.getAmount() / dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(cart.getDatePurchased(), cart.getGroup().getId())));

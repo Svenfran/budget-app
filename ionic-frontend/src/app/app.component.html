@@ -5,7 +5,7 @@
         <ion-title class="menu-header-title">Budget App</ion-title>
         <ion-item>
           <div class="menu-header">
-            <ion-label *ngIf="loadedUser | async">Hallo {{ userName | titlecase }}!</ion-label>
+            <ion-label *ngIf="loadedUser | async">Hallo {{ userName }}!</ion-label>
             <ion-text>Schön dich zu sehen 😊</ion-text>
             <ion-text *ngIf="loadedActiveGroup | async" color="medium">Gruppe: {{ activeGroup?.name }}</ion-text>
           </div>
@@ -30,7 +30,7 @@
             <ion-item *ngFor="let group of grouplistSideNav" 
                       class="sub-item"
                       (click)="getActiveGroup(group.id)"
-                      [class.active]="group.name == activeGroup.name"
+                      [class.active]="group.id == activeGroup.id"
                       lines="none" 
                       button>
               <ion-icon name="folder-outline" slot="start"></ion-icon>
@@ -70,6 +70,12 @@
         <ion-list-header>
           <ion-label color="medium">EINSTELLUNGEN</ion-label>
         </ion-list-header>
+        <ion-menu-toggle menu="m1">
+          <ion-item lines="none" routerLink="/userprofile" button>
+            <ion-icon name="person-outline" slot="start"></ion-icon>
+            <ion-label>Profil bearbeiten</ion-label>
+          </ion-item>
+        </ion-menu-toggle>
         <ion-item lines="none">
           <ion-icon name="moon-outline" slot="start"></ion-icon>
           <ion-label>Dark Mode</ion-label>

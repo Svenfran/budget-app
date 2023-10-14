@@ -78,6 +78,7 @@ export class AuthPage implements OnInit {
         let message = 'Erfolgreich angemeldet!'
         this.showToast(message);
       }, errRes => {
+        // console.log(errRes);
         let message = 'Passwort oder Email falsch.';
         if (errRes.status !== 403 && errRes.error.includes(userEmail)) {
           message = 'Ein Benutzer mit dieser Email-Adresse existiert bereits.';

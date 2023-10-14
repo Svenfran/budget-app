@@ -46,7 +46,7 @@ public class AuthenticationService {
         var registeredUserId = dataLoaderService.loadUserByEmail(request.getEmail()).getId();
         var token = jwtService.generateToken(user);
         var expTime = jwtService.extractExpiration(token).getTime();
-        return new AuthenticationResponse(registeredUserId, request.getName(), expTime, token);
+        return new AuthenticationResponse(registeredUserId, request.getName(), request.getEmail(), expTime, token);
     }
 
     public AuthenticationResponse authenticate(AuthenticationRequest request, BindingResult bindingResult) throws UserNotFoundException, InvalidEmailException {
@@ -61,7 +61,7 @@ public class AuthenticationService {
         var user = dataLoaderService.loadUserByEmail(request.getEmail());
         var token = jwtService.generateToken(user);
         var expTime = jwtService.extractExpiration(token).getTime();
-        return new AuthenticationResponse(user.getId(), user.getName(), expTime, token);
+        return new AuthenticationResponse(user.getId(), user.getName(), user.getEmail(), expTime, token);
     }
 
     private boolean emailExists(String email) {

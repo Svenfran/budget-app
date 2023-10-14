@@ -1,3 +1,3 @@
 user_name,email,password
-sven,sven@test.com,password
-sascha,sascha@dev.com,password
+sven,sven@test.com,$2a$12$1wirofuOlyiHILIuiFnbkevJFDC3GdQThDaHjUW4pPru2QjWMZXoG
+sascha,sascha@dev.com,$2a$12$1wirofuOlyiHILIuiFnbkevJFDC3GdQThDaHjUW4pPru2QjWMZXoG

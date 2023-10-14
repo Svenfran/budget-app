@@ -143,6 +143,15 @@ public class CartService {
         }
     }
 
+    public void deleteCartsForUserWhereIsDeletedTrue(User user) {
+        var carts = cartRepository.findCartsByUser(user);
+        for (Cart cart : carts) {
+            if (cart.isDeleted()) {
+                cartRepository.delete(cart);
+            }
+        }
+    }
+
     private String capitalize(String str) {
         return str.substring(0, 1).toUpperCase() + str.substring(1);
     }

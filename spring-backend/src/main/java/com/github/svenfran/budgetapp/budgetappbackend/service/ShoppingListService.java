@@ -65,9 +65,11 @@ public class ShoppingListService {
         var group = dataLoaderService.loadGroup(groupId);
         var lastUpdate = group.getLastUpdateShoppingList();
 
+        if (lastUpdate == null) lastUpdate = group.getDateCreated();
+
         if (lastUpdate != null && requestTimeStamp != null) {
             logger.info("request time: {}", requestTimeStamp);
-            logger.info("last update : {}", group.getLastUpdateShoppingList().getTime());
+            logger.info("last update : {}", lastUpdate);
         }
 
         if (requestTimeStamp != null && lastUpdate != null && requestTimeStamp > lastUpdate.getTime()) {

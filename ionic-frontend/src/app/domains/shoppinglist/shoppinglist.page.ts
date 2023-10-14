@@ -63,6 +63,7 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
         this.groupService.setActiveGroup(null);
       }
     })
+    console.log("Poll I");
     this.pollForList();
   }
 
@@ -174,10 +175,13 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
         this.requestTimeStamp = new Date().getTime();
 
         if (!this.pageLeft) {
-          this.pollForList();
+          console.log("Poll II");
+          this.pollForList()
         }
+
       }, errRes => {
-        if (errRes.status !== 404 && !this.pageLeft) {
+        if (errRes.status == 304 && !this.pageLeft) {
+          console.log("Poll III");
           this.pollForList();
         }
       }) 
@@ -205,6 +209,7 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
     this.pageLeft = false;
     if (this.activeGroup.id !== null) {
       this.getShoppingListWithItems(this.activeGroupId);
+      console.log("Poll IV");
       this.pollForList();
     }
   }

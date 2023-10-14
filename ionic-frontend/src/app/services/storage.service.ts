@@ -48,6 +48,10 @@ export class StorageService {
     return await Preferences.get({ key: key });
   }
 
+  async clearStorage() {
+    return await Preferences.clear();
+  }
+
 }
 
 

@@ -1,0 +1,73 @@
+<ion-header class="ion-no-border">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/domains/tabs/cartlist"></ion-back-button>
+    </ion-buttons>
+    <ion-title>Profil bearbeiten</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <ion-grid class="ion-padding">
+    <ion-row>
+      <ion-col>
+       
+          <ion-list-header>
+            <div class="profil-header">
+              <ion-text color="medium">Profil von: {{ userName }}</ion-text>
+            </div>
+          </ion-list-header>
+
+          <ion-item>
+            <ion-icon name="person-outline" slot="start"></ion-icon>
+            <ion-label>
+              <p class="ion-text-wrap">{{ userName }}</p>
+            </ion-label>
+            <ion-buttons>
+              <ion-button (click)="changeUsername()">
+                <ion-icon name="pencil-outline" slot="icon-only" size="small"></ion-icon>
+              </ion-button>
+            </ion-buttons>
+          </ion-item>
+
+          <ion-item>
+            <ion-icon name="mail-outline" slot="start"></ion-icon>
+            <ion-label>
+              <p class="ion-text-wrap">{{ userEmail }}</p>
+            </ion-label>
+            <ion-buttons>
+              <ion-button (click)="changeEmail()">
+                <ion-icon name="pencil-outline" slot="icon-only" size="small"></ion-icon>
+              </ion-button>
+            </ion-buttons>
+          </ion-item>
+
+          <ion-item>
+            <ion-icon name="lock-closed-outline" slot="start"></ion-icon>
+            <ion-label>
+              <p class="ion-text-wrap">********</p>
+            </ion-label>
+            <ion-buttons>
+              <ion-button (click)="changePassword()">
+                <ion-icon name="pencil-outline" slot="icon-only" size="small"></ion-icon>
+              </ion-button>
+            </ion-buttons>
+          </ion-item>
+
+          <ion-item>
+            <ion-icon name="person-outline" slot="start"></ion-icon>
+            <ion-label>
+              <p class="ion-text-wrap">Profil löschen</p>
+            </ion-label>
+            <ion-buttons>
+              <ion-button (click)="deleteProfile()">
+                <ion-icon name="trash-outline" slot="icon-only" size="small" color="danger"></ion-icon>
+              </ion-button>
+            </ion-buttons>
+          </ion-item>
+   
+      </ion-col>
+    </ion-row>
+  </ion-grid>
+
+</ion-content>

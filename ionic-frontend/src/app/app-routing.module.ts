@@ -51,6 +51,11 @@ const routes: Routes = [
     loadChildren: () => import('./settlement-payment/settlement-payment.module').then( m => m.SettlementPaymentPageModule),
     canLoad: [AuthGuard]
   },
+  {
+    path: 'userprofile',
+    loadChildren: () => import('./userprofile/userprofile.module').then( m => m.UserprofilePageModule),
+    canLoad: [AuthGuard]
+  },
 ];
 
 @NgModule({

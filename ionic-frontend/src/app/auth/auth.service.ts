@@ -9,6 +9,7 @@ import { User } from './user';
 export interface AuthResponseData {
   id: number,
   name: string,
+  email: string,
   expirationDate: number,
   token: string
 }
@@ -109,7 +110,7 @@ export class AuthService implements OnDestroy {
         if (!storedData || !storedData.value) {
           return null;
         }
-        const parsedData = JSON.parse(storedData.value) as {id: number, name: string, expirationDate: number, token: string};
+        const parsedData = JSON.parse(storedData.value) as {id: number, name: string, email: string, expirationDate: number, token: string};
         const parsedObject = JSON.parse(parsedData['data']);
 
         if (parsedObject.expirationDate <= new Date().getTime()) {
@@ -119,6 +120,7 @@ export class AuthService implements OnDestroy {
         const user = new User(
           parsedObject.id,
           parsedObject.name,
+          parsedObject.email,
           parsedObject.expirationDate,
           parsedObject.token
           );
@@ -150,18 +152,20 @@ export class AuthService implements OnDestroy {
     const user = new User(
       userData.id,
       userData.name,
+      userData.email,
       userData.expirationDate,
       "Bearer " + userData.token
     );
     this._user.next(user);
     this.autoLogout(user.tokenDuration);
-    this.storeAuthData(userData.id, userData.name, userData.expirationDate, userData.token);
+    this.storeAuthData(userData.id, userData.name, userData.email, userData.expirationDate, userData.token);
   }
 
-  private storeAuthData(userId: number, name: string, expirationDate: number, token: string) {
+  private storeAuthData(userId: number, name: string, email: string, expirationDate: number, token: string) {
     const data = JSON.stringify({
       id: userId,
       name: name,
+      email: email,
       expirationDate: expirationDate,
       token: "Bearer " + token
     });
