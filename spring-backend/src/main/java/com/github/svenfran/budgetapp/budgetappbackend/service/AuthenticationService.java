@@ -37,7 +37,7 @@ public class AuthenticationService {
     public AuthenticationResponse register(RegisterRequest request, BindingResult bindingResult) throws UserAlreadyExistException, InvalidEmailException, UserNotFoundException, UserNameAlreadyExistsException {
         verifyEmailIsValid(bindingResult);
         verifyEmailNotExists(request.getEmail());
-        verifyUserNameExists(request.getName());
+        verifyUserNameNotExists(request.getName());
         var user = new User();
         user.setName(request.getName());
         user.setEmail(request.getEmail());
@@ -72,19 +72,19 @@ public class AuthenticationService {
         return userRepository.findByName(userNAme).isPresent();
     }
 
-    private void verifyEmailNotExists(String email) throws UserAlreadyExistException {
+    public void verifyEmailNotExists(String email) throws UserAlreadyExistException {
         if (emailExists(email)) {
             throw new UserAlreadyExistException(String.format("User with email %s already exists", email));
         }
     }
 
-    private void verifyEmailIsValid(BindingResult bindingResult) throws InvalidEmailException {
+    public void verifyEmailIsValid(BindingResult bindingResult) throws InvalidEmailException {
         if (bindingResult.hasErrors()) {
             throw new InvalidEmailException("Invalid Email");
         }
     }
 
-    private void verifyUserNameExists(String userName) throws UserNameAlreadyExistsException {
+    public void verifyUserNameNotExists(String userName) throws UserNameAlreadyExistsException {
         if (userNameExists(userName)) {
             throw new UserNameAlreadyExistsException(String.format("User with name %s already exists", userName));
         }

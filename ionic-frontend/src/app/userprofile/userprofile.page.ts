@@ -4,6 +4,10 @@ import { UserprofileService } from '../services/userprofile.service';
 import { AuthService } from '../auth/auth.service';
 import { User } from '../auth/user';
 import { Router } from '@angular/router';
+import { UserDto } from '../models/user';
+import { StorageService } from '../services/storage.service';
+import { MinLengthValidator, Validators } from '@angular/forms';
+
 
 @Component({
   selector: 'app-userprofile',
@@ -22,7 +26,8 @@ export class UserprofilePage implements OnInit {
     private loadingCtrl: LoadingController,
     private userProfileService: UserprofileService,
     private authService: AuthService,
-    private router: Router) { }
+    private router: Router,
+    private storageService: StorageService) { }
 
   ngOnInit() {
     this.getCurrentUser();
@@ -37,14 +42,28 @@ export class UserprofilePage implements OnInit {
       }, {
         text: "ok",
         handler: (data) => {
+          if (data.userName === "" || data.userName === undefined || data.userName === null) {
+            let header = "Fehlerhafter Benutzername!";
+            let message = `Der Benutzername darf nicht leer sein.`
+            this.showAlert(header, message);
+            return
+          }
           this.loadingCtrl.create({
             message: "Ändere Benutzername..."
           }).then(loadingEl => {
             loadingEl.present(),
-            setTimeout("", 3000);
-            loadingEl.dismiss();
-            this.userName = data.userName;
-            // TODO: write new user name into storage
+            this.userProfileService.changeUserName(new UserDto(this.user.id, data.userName)).subscribe(res => {
+              this.userName = res.userName;
+              this.setUserData();
+              loadingEl.dismiss();
+            }, errRes => {
+              if (errRes.error.includes(data.userName)) {
+                loadingEl.dismiss();
+                let header = "Fehlerhafter Benutzername!";
+                let message = `Der Benutzername "${data.userName}" existiert bereits.`
+                this.showAlert(header, message);
+              }
+            });          
           })
         }
       }],
@@ -62,27 +81,44 @@ export class UserprofilePage implements OnInit {
 
   changeEmail() {
     this.alertCtrl.create({
-      header: "E-Mail Adresse ändern",
+      header: "E-Mail-Adresse ändern",
       buttons: [{
         text: "Abbrechen",
         role: "cancel"
       }, {
         text: "ok",
         handler: (data) => {
+          let email = data.email.trim();
+          if (EmailValidator.isNotValid(email)) {
+            let header = "Fehlerhafte E-Mail-Adresse!";
+            let message = "Bitte gib eine gültige E-mail-Adresse an.";
+            this.showAlert(header, message);
+            return
+          }
           this.loadingCtrl.create({
             message: "Ändere Email..."
           }).then(loadingEl => {
             loadingEl.present(),
-            setTimeout("", 3000);
-            loadingEl.dismiss();
-            this.userEmail = data.email;
+            this.userProfileService.changeUserEmail(new UserDto(this.user.id, this.user.name, email)).subscribe(res => {
+              console.log(res);
+              this.userEmail = email;
+              loadingEl.dismiss();
+              this.authService.logout();
+            }, errRes => {
+              if (errRes.error.includes(email) || errRes.error === "Invalid Email") {
+                loadingEl.dismiss();
+                let header = "Fehlerhafte E-Mail-Adresse!";
+                let message = `Die E-Mail-Adresse "${email}" existiert bereits.`
+                this.showAlert(header, message);
+              }
+            })
           })
         }
       }],
       inputs: [
         {
           name: "email",
-          placeholder: "E-Mail"
+          placeholder: "E-Mail-Adresse"
         }
       ]
     }).then(alertEl => alertEl.present().then(() => {
@@ -114,11 +150,13 @@ export class UserprofilePage implements OnInit {
       inputs: [
         {
           name: "passwordOld",
-          placeholder: "Altes Passwort"
+          placeholder: "Altes Passwort",
+          type: "password"
         },
         {
           name: "passwordNew",
-          placeholder: "Neues Passwort"
+          placeholder: "Neues Passwort",
+          type: "password"
         }
 
       ]
@@ -161,4 +199,53 @@ export class UserprofilePage implements OnInit {
     return this.user;
   }
 
+  private setUserData() {
+    this.storageService.getData('authData').then(storedData => {
+      const parsedData = JSON.parse(storedData.value) as {id: number, name: string, email: string, expirationDate: number, token: string};
+      const parsedObject = JSON.parse(parsedData['data']);
+      const authRes = new AuthResponseData(
+        parsedObject.id,
+        this.userName,
+        parsedObject.email,
+        parsedObject.expirationDate,
+        parsedObject.token.substring(7)
+      )
+      this.authService.setUserData(authRes);
+    });
+  }
+
+  // alerts in alert.service umziehen
+  private showAlert(header: string, message: string) {
+    this.alertCtrl
+      .create({
+        header:  header,
+        message: message,
+        buttons: ['Ok']
+      })
+      .then(alertEl => alertEl.present());
+  }
+}
+
+class EmailValidator {
+  static isNotValid(email: string){
+    let pattern = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
+    let result = pattern.test(email);
+    
+    if (!result) {
+      return {
+        'email:validation:fail' : true
+      }
+    }
+    return null;
+  }
+}
+
+class AuthResponseData {
+  constructor(
+    public id: number,
+    public name: string,
+    public email: string,
+    public expirationDate: number,
+    public token: string
+  ) {}
 }

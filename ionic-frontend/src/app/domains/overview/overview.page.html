@@ -75,7 +75,7 @@
                   <div [class.spendings-user-amount-single]="spendingsTotalYear.spendingsTotalUser.length <= 1" 
                        [class.spendings-user-amount]="spendingsTotalYear.spendingsTotalUser.length > 1">
                     <div class="space">
-                      <ion-text color="medium">{{ userSpendings.userName | titlecase }}</ion-text>
+                      <ion-text color="medium">{{ (userSpendings.userName.length > 12) ? (userSpendings.userName | slice:0:12) + '...' : (userSpendings.userName) }}</ion-text>
                       <ion-text>{{ userSpendings.sum | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
                     </div>
                   </div>

@@ -4,12 +4,12 @@ import com.github.svenfran.budgetapp.budgetappbackend.dto.RemoveGroupMemberDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
-import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserIsNotAuthenticatedUser;
-import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException;
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.validation.BindingResult;
 
 @Service
 public class UserProfileService {
@@ -43,6 +43,9 @@ public class UserProfileService {
 
     @Autowired
     private CartService cartService;
+
+    @Autowired
+    private AuthenticationService authenticationService;
 
 
     @Transactional
@@ -80,9 +83,32 @@ public class UserProfileService {
         gmhService.deleteGroupMembershipHistoryWhereGroupIdIsNull();
 
     }
-    private void verifyIsAuthenticatedUser(User userDelete, User authUser) throws UserIsNotAuthenticatedUser {
-        if (!userDelete.equals(authUser)) {
-            throw new UserIsNotAuthenticatedUser("User to delete is not authenticated user");
+
+    @Transactional
+    public UserDto changeUserName(UserDto userDto) throws UserNotFoundException, UserIsNotAuthenticatedUser, UserNameAlreadyExistsException {
+        var userAuth = dataLoaderService.getAuthenticatedUser();
+        var userChange = dataLoaderService.loadUser(userDto.getId());
+        verifyIsAuthenticatedUser(userChange, userAuth);
+        authenticationService.verifyUserNameNotExists(userDto.getUserName());
+        userChange.setName(userDto.getUserName());
+        return new UserDto(userRepository.save(userChange), userChange.getEmail());
+    }
+
+    @Transactional
+    public UserDto changeUserEmail(UserDto userDto, BindingResult bindingResult) throws UserNotFoundException, UserIsNotAuthenticatedUser, UserAlreadyExistException, InvalidEmailException {
+        var userAuth = dataLoaderService.getAuthenticatedUser();
+        var userChange = dataLoaderService.loadUser(userDto.getId());
+        verifyIsAuthenticatedUser(userChange, userAuth);
+        authenticationService.verifyEmailIsValid(bindingResult);
+        authenticationService.verifyEmailNotExists(userDto.getUserEmail());
+        userChange.setEmail(userDto.getUserEmail());
+        return new UserDto(userRepository.save(userChange), userDto.getUserEmail());
+    }
+
+    private void verifyIsAuthenticatedUser(User user, User authUser) throws UserIsNotAuthenticatedUser {
+        if (!user.equals(authUser)) {
+            throw new UserIsNotAuthenticatedUser("User to edit or delete is not authenticated user");
         }
     }
+
 }

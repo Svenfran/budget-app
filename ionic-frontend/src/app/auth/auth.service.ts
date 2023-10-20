@@ -148,7 +148,7 @@ export class AuthService implements OnDestroy {
     }, duration);
   }
 
-  private setUserData(userData: AuthResponseData) {
+  setUserData(userData: AuthResponseData) {
     const user = new User(
       userData.id,
       userData.name,

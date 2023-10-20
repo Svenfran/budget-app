@@ -1,6 +1,17 @@
 export class UserDto {
-    constructor(
-        public id: number,
-        public userName: string
-    ) {}
+    id: number;
+    userName: string;
+    userEmail: string;
+
+    constructor(id: number, userName: string, userEmail?: string) {
+        if (userEmail) {
+            this.id = id;
+            this.userName = userName;
+            this.userEmail = userEmail;
+        }
+        if (!userEmail) {
+            this.id = id;
+            this.userName = userName;
+        }
+    }
 }
