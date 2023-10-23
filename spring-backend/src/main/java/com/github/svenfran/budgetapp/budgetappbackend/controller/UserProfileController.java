@@ -1,5 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.controller;
 
+import com.github.svenfran.budgetapp.budgetappbackend.dto.PasswordChangeDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.service.UserProfileService;
@@ -34,5 +35,11 @@ public class UserProfileController {
     public ResponseEntity<UserDto> changeUserEmail(@Valid @RequestBody UserDto userDto, BindingResult bindingResult) throws UserNotFoundException, UserIsNotAuthenticatedUser, UserAlreadyExistException, InvalidEmailException {
         UserDto changedUser = userProfileService.changeUserEmail(userDto, bindingResult);
         return new ResponseEntity<>(changedUser, HttpStatus.CREATED);
+    }
+
+    @PutMapping("/userprofile/update-password")
+    public ResponseEntity<Void> changePassword(@RequestBody PasswordChangeDto passwordChangeDto) throws UserNotFoundException, UserIsNotAuthenticatedUser, UserAlreadyExistException, InvalidEmailException, WrongPasswordException {
+        userProfileService.changePassword(passwordChangeDto);
+        return new ResponseEntity<>(HttpStatus.CREATED);
     }
 }

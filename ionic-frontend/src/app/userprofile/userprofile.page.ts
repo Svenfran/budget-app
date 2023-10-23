@@ -6,7 +6,7 @@ import { User } from '../auth/user';
 import { Router } from '@angular/router';
 import { UserDto } from '../models/user';
 import { StorageService } from '../services/storage.service';
-import { MinLengthValidator, Validators } from '@angular/forms';
+import { AlertService } from '../services/alert.service';
 
 
 @Component({
@@ -27,7 +27,9 @@ export class UserprofilePage implements OnInit {
     private userProfileService: UserprofileService,
     private authService: AuthService,
     private router: Router,
-    private storageService: StorageService) { }
+    private storageService: StorageService,
+    private alertService: AlertService
+    ) { }
 
   ngOnInit() {
     this.getCurrentUser();
@@ -45,7 +47,7 @@ export class UserprofilePage implements OnInit {
           if (data.userName === "" || data.userName === undefined || data.userName === null) {
             let header = "Fehlerhafter Benutzername!";
             let message = `Der Benutzername darf nicht leer sein.`
-            this.showAlert(header, message);
+            this.alertService.showAlert(header, message);
             return
           }
           this.loadingCtrl.create({
@@ -61,7 +63,7 @@ export class UserprofilePage implements OnInit {
                 loadingEl.dismiss();
                 let header = "Fehlerhafter Benutzername!";
                 let message = `Der Benutzername "${data.userName}" existiert bereits.`
-                this.showAlert(header, message);
+                this.alertService.showAlert(header, message);
               }
             });          
           })
@@ -92,7 +94,7 @@ export class UserprofilePage implements OnInit {
           if (EmailValidator.isNotValid(email)) {
             let header = "Fehlerhafte E-Mail-Adresse!";
             let message = "Bitte gib eine gültige E-mail-Adresse an.";
-            this.showAlert(header, message);
+            this.alertService.showAlert(header, message);
             return
           }
           this.loadingCtrl.create({
@@ -109,7 +111,7 @@ export class UserprofilePage implements OnInit {
                 loadingEl.dismiss();
                 let header = "Fehlerhafte E-Mail-Adresse!";
                 let message = `Die E-Mail-Adresse "${email}" existiert bereits.`
-                this.showAlert(header, message);
+                this.alertService.showAlert(header, message);
               }
             })
           })
@@ -120,45 +122,6 @@ export class UserprofilePage implements OnInit {
           name: "email",
           placeholder: "E-Mail-Adresse"
         }
-      ]
-    }).then(alertEl => alertEl.present().then(() => {
-      const inputField: HTMLElement = document.querySelector("ion-alert input");
-      inputField.focus();
-    }));
-  }
-  
-  changePassword() {
-    this.alertCtrl.create({
-      header: "Passwort ändern",
-      buttons: [{
-        text: "Abbrechen",
-        role: "cancel"
-      }, {
-        text: "ok",
-        handler: (data) => {
-          this.loadingCtrl.create({
-            message: "Ändere Passwort..."
-          }).then(loadingEl => {
-            loadingEl.present(),
-            setTimeout("", 3000);
-            loadingEl.dismiss();
-            console.log(data.passwordOld);
-            console.log(data.passwordNew);
-          })
-        }
-      }],
-      inputs: [
-        {
-          name: "passwordOld",
-          placeholder: "Altes Passwort",
-          type: "password"
-        },
-        {
-          name: "passwordNew",
-          placeholder: "Neues Passwort",
-          type: "password"
-        }
-
       ]
     }).then(alertEl => alertEl.present().then(() => {
       const inputField: HTMLElement = document.querySelector("ion-alert input");
@@ -213,17 +176,7 @@ export class UserprofilePage implements OnInit {
       this.authService.setUserData(authRes);
     });
   }
-
-  // alerts in alert.service umziehen
-  private showAlert(header: string, message: string) {
-    this.alertCtrl
-      .create({
-        header:  header,
-        message: message,
-        buttons: ['Ok']
-      })
-      .then(alertEl => alertEl.present());
-  }
+  
 }
 
 class EmailValidator {

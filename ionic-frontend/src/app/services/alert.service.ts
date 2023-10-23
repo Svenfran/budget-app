@@ -61,5 +61,14 @@ export class AlertService {
     }));
   }
 
+  showAlert(header: string, message: string) {
+    this.alertCtrl
+      .create({
+        header: header,
+        message: message,
+        buttons: ['Ok']
+      })
+      .then(alertEl => alertEl.present());
+  }
 }
 

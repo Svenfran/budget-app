@@ -56,6 +56,11 @@ const routes: Routes = [
     loadChildren: () => import('./userprofile/userprofile.module').then( m => m.UserprofilePageModule),
     canLoad: [AuthGuard]
   },
+  {
+    path: 'passwordchange',
+    loadChildren: () => import('./passwordchange/passwordchange.module').then( m => m.PasswordchangePageModule),
+    canLoad: [AuthGuard]
+  },
 ];
 
 @NgModule({

@@ -1,9 +1,10 @@
-import { Component, ContentChild, OnInit } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { AuthResponseData, AuthService } from './auth.service';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
-import { LoadingController, AlertController, MenuController, ToastController, IonInput } from '@ionic/angular';
+import { LoadingController, MenuController, ToastController } from '@ionic/angular';
 import { Observable } from 'rxjs';
+import { AlertService } from '../services/alert.service';
 
 @Component({
   selector: 'app-auth',
@@ -19,11 +20,11 @@ export class AuthPage implements OnInit {
 
   constructor(private authService: AuthService,
               private loadingCtrl: LoadingController,
-              private alertCtrl: AlertController, 
               private router: Router,
               private fb: FormBuilder,
               private menuCtrl: MenuController,
-              private toastCtrl: ToastController) { }
+              private toastCtrl: ToastController,
+              private alertService: AlertService) { }
 
   ngOnInit() {
     this.form = this.fb.group({
@@ -79,6 +80,7 @@ export class AuthPage implements OnInit {
         this.showToast(message);
       }, errRes => {
         // console.log(errRes);
+        let header = !this.isLogin ? 'Registrierung fehlgeschlagen' : 'Anmeldung fehlgeschlagen';
         let message = 'Passwort oder Email falsch.';
         if (errRes.status !== 403 && errRes.error.includes(userEmail)) {
           message = 'Ein Benutzer mit dieser Email-Adresse existiert bereits.';
@@ -86,7 +88,7 @@ export class AuthPage implements OnInit {
           message = 'Ein Benutzer mit diesem Benutzernamen existiert bereits.';
         }
         loadingEl.dismiss();
-        this.showAlert(message);
+        this.alertService.showAlert(header, message);
       });
     });
   }
@@ -101,16 +103,6 @@ export class AuthPage implements OnInit {
   
     this.authenticate(userName, userEmail, password)
     this.form.reset();
-  }
-
-  private showAlert(message: string) {
-    this.alertCtrl
-      .create({
-        header: !this.isLogin ? 'Registrierung fehlgeschlagen' : 'Anmeldung fehlgeschlagen',
-        message: message,
-        buttons: ['Ok']
-      })
-      .then(alertEl => alertEl.present());
   }
 
   private showToast(message: string) {

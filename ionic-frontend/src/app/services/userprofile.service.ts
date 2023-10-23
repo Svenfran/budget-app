@@ -3,6 +3,7 @@ import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from 'src/environments/environment';
 import { UserDto } from '../models/user';
+import { PasswordChangeDto } from '../models/password-change-dto';
 
 @Injectable({
   providedIn: 'root'
@@ -13,8 +14,7 @@ export class UserprofileService {
   private deleteUserUrl = `${this.apiBaseUrl}/api/userprofile/delete`;
   private changeUserNameUrl = `${this.apiBaseUrl}/api/userprofile/update-username`;
   private changeUserEmailUrl = `${this.apiBaseUrl}/api/userprofile/update-usermail`;
-
-
+  private changePasswordUrl = `${this.apiBaseUrl}/api/userprofile/update-password`;
 
   constructor(private http: HttpClient) { }
 
@@ -30,5 +30,9 @@ export class UserprofileService {
 
   changeUserEmail(userDto: UserDto): Observable<UserDto> {
     return this.http.put<UserDto>(this.changeUserEmailUrl, userDto);
+  }
+
+  changeUserPassword(paswordChangeData: PasswordChangeDto): Observable<any> {
+    return this.http.put<any>(this.changePasswordUrl, paswordChangeData);
   }
 }
