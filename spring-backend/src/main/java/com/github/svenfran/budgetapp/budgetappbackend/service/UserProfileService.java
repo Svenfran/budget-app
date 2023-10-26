@@ -53,6 +53,9 @@ public class UserProfileService {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private TokenRepository tokenRepository;
+
 
     @Transactional
     public void deleteUserProfile(Long userId) throws UserNotFoundException, UserIsNotAuthenticatedUser {
@@ -85,6 +88,7 @@ public class UserProfileService {
             }
         }
         cartService.deleteCartsForUserWhereIsDeletedTrue(userDelete);
+        tokenRepository.deleteAll(tokenRepository.findAllByUserId(userDelete.getId()));
         userRepository.deleteById(userDelete.getId());
         gmhService.deleteGroupMembershipHistoryWhereGroupIdIsNull();
 
@@ -99,7 +103,6 @@ public class UserProfileService {
         userChange.setName(userDto.getUserName());
         return new UserDto(userRepository.save(userChange), userChange.getEmail());
     }
-
 
     public UserDto changeUserEmail(UserDto userDto, BindingResult bindingResult) throws UserNotFoundException, UserIsNotAuthenticatedUser, UserAlreadyExistException, InvalidEmailException {
         var userAuth = dataLoaderService.getAuthenticatedUser();

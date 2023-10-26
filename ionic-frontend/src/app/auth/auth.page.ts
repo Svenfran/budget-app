@@ -86,6 +86,8 @@ export class AuthPage implements OnInit {
           message = 'Ein Benutzer mit dieser Email-Adresse existiert bereits.';
         } else if (errRes.status !== 403 && errRes.error.includes(userName)) {
           message = 'Ein Benutzer mit diesem Benutzernamen existiert bereits.';
+        } else {
+          message = "Es ist ein allgemeiner Fehler aufgetreten. Versuche es bitte noch einmal.";
         }
         loadingEl.dismiss();
         this.alertService.showAlert(header, message);

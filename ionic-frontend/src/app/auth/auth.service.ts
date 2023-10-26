@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, OnDestroy } from '@angular/core';
-import { BehaviorSubject, from } from 'rxjs';
-import { map, tap } from 'rxjs/operators';
+import { BehaviorSubject, Observable, from } from 'rxjs';
+import { finalize, map, tap } from 'rxjs/operators';
 import { environment } from 'src/environments/environment';
 import { StorageService } from '../services/storage.service';
 import { User } from './user';
@@ -23,6 +23,7 @@ export class AuthService implements OnDestroy {
   private apiBaseUrl = environment.apiBaseUrlExternal;
   private authUrl = `${this.apiBaseUrl}/api/auth/authenticate`;
   private registerUrl = `${this.apiBaseUrl}/api/auth/register`;
+  private logoutUrl = `${this.apiBaseUrl}/api/auth/logout`;
   
   private activeLogoutTimer: any;
   
@@ -53,10 +54,15 @@ export class AuthService implements OnDestroy {
       { name: userName, email: userEmail, password: password} ).pipe(tap(this.setUserData.bind(this)));
   }
 
+  userLogout(): Observable<any>{
+    return this.http.post<any>(this.logoutUrl, null)
+  }
+
   logout() {
     if (this.activeLogoutTimer) {
       clearTimeout(this.activeLogoutTimer);
     }
+    this.userLogout().subscribe();
     this._user.next(null);
     this.storageService.removeData('authData');
   }
