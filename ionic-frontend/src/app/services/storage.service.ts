@@ -48,6 +48,11 @@ export class StorageService {
     return await Preferences.get({ key: key });
   }
 
+  async getParsedData(key: string) {
+    const parsedData = await Preferences.get({ key: key });
+    return JSON.parse(parsedData.value);
+  }
+
   async clearStorage() {
     return await Preferences.clear();
   }

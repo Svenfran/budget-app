@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject, Observable, from } from 'rxjs';
-import { finalize, map, tap } from 'rxjs/operators';
+import { map, tap } from 'rxjs/operators';
 import { environment } from 'src/environments/environment';
 import { StorageService } from '../services/storage.service';
 import { User } from './user';
@@ -55,7 +55,11 @@ export class AuthService implements OnDestroy {
   }
 
   userLogout(): Observable<any>{
-    return this.http.post<any>(this.logoutUrl, null)
+    console.log("userLogout() was called!")
+    let header = {};
+    let token = localStorage.getItem('token');
+    header = { "Authorization" : token };
+    return this.http.post<any>(this.logoutUrl, null, { headers: header });
   }
 
   logout() {
@@ -65,6 +69,7 @@ export class AuthService implements OnDestroy {
     this.userLogout().subscribe();
     this._user.next(null);
     this.storageService.removeData('authData');
+    localStorage.removeItem('token');
   }
 
   ngOnDestroy(): void {
@@ -80,7 +85,6 @@ export class AuthService implements OnDestroy {
           return user.token;
         } else {
           return null;
-
         }
       })
     );
@@ -176,6 +180,6 @@ export class AuthService implements OnDestroy {
       token: "Bearer " + token
     });
     this.storageService.setData('authData', data);
-    // console.log(data);
+    localStorage.setItem("token", "Bearer " + token);
   }
 }
