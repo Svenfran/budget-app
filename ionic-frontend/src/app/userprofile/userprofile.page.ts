@@ -107,10 +107,16 @@ export class UserprofilePage implements OnInit {
               loadingEl.dismiss();
               this.authService.logout();
             }, errRes => {
-              if (errRes.error.includes(email) || errRes.error === "Invalid Email") {
+              if (errRes.error.includes(email)) {
                 loadingEl.dismiss();
                 let header = "Fehlerhafte E-Mail-Adresse!";
-                let message = `Die E-Mail-Adresse "${email}" existiert bereits.`
+                let message = `Die E-Mail-Adresse "${email}" existiert bereits.`;
+                this.alertService.showAlert(header, message);
+              }
+              if (errRes.error === "Invalid Email") {
+                loadingEl.dismiss();
+                let header = "Fehlerhafte E-Mail-Adresse!";
+                let message = "Bitte gib eine gültige E-Mail-Adresse an.";
                 this.alertService.showAlert(header, message);
               }
             })
@@ -120,7 +126,8 @@ export class UserprofilePage implements OnInit {
       inputs: [
         {
           name: "email",
-          placeholder: "E-Mail-Adresse"
+          placeholder: "E-Mail-Adresse",
+          type: "email"
         }
       ]
     }).then(alertEl => alertEl.present().then(() => {

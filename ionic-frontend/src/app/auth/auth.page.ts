@@ -5,6 +5,8 @@ import { Router } from '@angular/router';
 import { AlertController, LoadingController, MenuController, ToastController } from '@ionic/angular';
 import { Observable } from 'rxjs';
 import { AlertService } from '../services/alert.service';
+import { UserprofileService } from '../services/userprofile.service';
+import { ResetPasswordDto } from '../models/reset-password-dto';
 
 @Component({
   selector: 'app-auth',
@@ -25,7 +27,8 @@ export class AuthPage implements OnInit {
               private menuCtrl: MenuController,
               private toastCtrl: ToastController,
               private alertCtrl: AlertController,
-              private alertService: AlertService) { }
+              private alertService: AlertService,
+              private userprofileService: UserprofileService) { }
 
   ngOnInit() {
     this.form = this.fb.group({
@@ -53,6 +56,7 @@ export class AuthPage implements OnInit {
         text: "reset",
         handler: (data) => {
           let email = data.email.trim();
+          const resetDto = new ResetPasswordDto(email);
           if (EmailValidator.isNotValid(email)) {
             let header = "Fehlerhafte E-Mail-Adresse!";
             let message = "Bitte gib eine gültige E-mail-Adresse an.";
@@ -63,19 +67,36 @@ export class AuthPage implements OnInit {
             message: "Passwort Reset..."
           }).then(loadingEl => {
             loadingEl.present(),
-            console.log("Passwort Reset für " + email);
-            loadingEl.dismiss();
-            let header = "Passwort Reset";
-            let message = "Wir haben eine E-Mail mit einem temporären Passwort (Gültig für 15 min) an die E-Mail-Adresse "
-                          + email + " gesendet. Bitte melde dich an und ändere dein Passwort.";
-            this.alertService.showAlert(header, message);
+            this.userprofileService.resetUserPassword(resetDto).subscribe(() => {
+              loadingEl.dismiss();
+              console.log("Passwort Reset für " + email);
+              let header = "Passwort Reset";
+              let message = "Wir haben eine E-Mail mit einem temporären Passwort an die E-Mail-Adresse "
+                            + email + " gesendet. Bitte melde dich an und ändere dein Passwort.";
+              this.alertService.showAlert(header, message);
+            }, errRes => {
+              loadingEl.dismiss();
+              if (errRes.error.includes(email)) {
+                loadingEl.dismiss();
+                let header = "Fehlerhafte E-Mail-Adresse!";
+                let message = `Ein Benutzer mit der E-Mail-Adresse "${email}" existiert nicht.`
+                this.alertService.showAlert(header, message);
+              }
+              if (errRes.error === "Invalid Email") {
+                loadingEl.dismiss();
+                let header = "Fehlerhafte E-Mail-Adresse!";
+                let message = "Bitte gib eine gültige E-Mail-Adresse an.";
+                this.alertService.showAlert(header, message);
+              }
+            });
           })
         }
       }],
       inputs: [
         {
           name: "email",
-          placeholder: "E-Mail-Adresse"
+          placeholder: "E-Mail-Adresse",
+          type: "email"
         }
       ]
     }).then(alertEl => alertEl.present().then(() => {
@@ -118,15 +139,15 @@ export class AuthPage implements OnInit {
         let message = 'Erfolgreich angemeldet!'
         this.showToast(message);
       }, errRes => {
-        // console.log(errRes);
+        // console.log(errRes.error);
         let header = !this.isLogin ? 'Registrierung fehlgeschlagen' : 'Anmeldung fehlgeschlagen';
+        // for Authentication
         let message = 'Passwort oder Email falsch.';
+        // for Registration
         if (errRes.status !== 403 && errRes.error.includes(userEmail)) {
           message = 'Ein Benutzer mit dieser Email-Adresse existiert bereits.';
         } else if (errRes.status !== 403 && errRes.error.includes(userName)) {
           message = 'Ein Benutzer mit diesem Benutzernamen existiert bereits.';
-        } else {
-          message = "Es ist ein allgemeiner Fehler aufgetreten. Versuche es bitte noch einmal.";
         }
         loadingEl.dismiss();
         this.alertService.showAlert(header, message);

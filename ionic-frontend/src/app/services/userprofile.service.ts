@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 import { environment } from 'src/environments/environment';
 import { UserDto } from '../models/user';
 import { PasswordChangeDto } from '../models/password-change-dto';
+import { ResetPasswordDto } from '../models/reset-password-dto';
 
 @Injectable({
   providedIn: 'root'
@@ -15,6 +16,7 @@ export class UserprofileService {
   private changeUserNameUrl = `${this.apiBaseUrl}/api/userprofile/update-username`;
   private changeUserEmailUrl = `${this.apiBaseUrl}/api/userprofile/update-usermail`;
   private changePasswordUrl = `${this.apiBaseUrl}/api/userprofile/update-password`;
+  private resetPasswordUrl = `${this.apiBaseUrl}/api/userprofile/password-reset`;
 
   constructor(private http: HttpClient) { }
 
@@ -34,5 +36,9 @@ export class UserprofileService {
 
   changeUserPassword(paswordChangeData: PasswordChangeDto): Observable<any> {
     return this.http.put<any>(this.changePasswordUrl, paswordChangeData);
+  }
+
+  resetUserPassword(resetPasswordDto: ResetPasswordDto): Observable<any> {
+    return this.http.put<any>(this.resetPasswordUrl, resetPasswordDto);
   }
 }

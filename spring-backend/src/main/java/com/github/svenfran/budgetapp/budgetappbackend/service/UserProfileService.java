@@ -56,6 +56,9 @@ public class UserProfileService {
     @Autowired
     private TokenRepository tokenRepository;
 
+    @Autowired
+    private EmailSenderService senderService;
+
 
     @Transactional
     public void deleteUserProfile(Long userId) throws UserNotFoundException, UserIsNotAuthenticatedUser {
@@ -121,6 +124,20 @@ public class UserProfileService {
         verifyIsCorrectPassword(userPwChange, passwordChangeDto.getOldPassword());
         userPwChange.setPassword(passwordEncoder.encode(passwordChangeDto.getNewPassword()));
         userRepository.save(userPwChange);
+    }
+
+    public void passwordReset(String email, BindingResult bindingResult) throws UserNotFoundException, InvalidEmailException {
+        authenticationService.verifyEmailIsValid(bindingResult);
+        var user = dataLoaderService.loadUserByEmail(email);
+        var generatedPassword = RandomStringUtils.randomAlphanumeric(8);
+        var subject = "Passwort zurücksetzen";
+        var body = "Hallo " + user.getName() + "," +
+                "\n\ndein temporäres Passwort lautet: " + generatedPassword +
+                "\n\nBitte melde dich an und ändere dein Passwort." +
+                "\n\nBeste Grüße!" ;
+        user.setPassword(passwordEncoder.encode(generatedPassword));
+        userRepository.save(user);
+        senderService.sendEmail(email, body, subject);
     }
 
     private void verifyIsAuthenticatedUser(User user, User authUser) throws UserIsNotAuthenticatedUser {
