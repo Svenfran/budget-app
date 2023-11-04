@@ -16,25 +16,25 @@ class GroupDtoMapperTest {
     void groupDtoToEntity_positive() {
         var groupEntity = groupDtoMapper.GroupDtoToEntity(groupDto(), groupOwner());
 
-        assertEquals(groupEntity.getId(), groupDto().getId(), "GroupId should be: 1");
-        assertEquals(groupEntity.getName(), groupDto().getName(), "GroupName should be: New Group");
-        assertEquals(groupEntity.getOwner().getId(), groupOwner().getId(), "groupOwnerId should be: 5");
-        assertEquals(groupEntity.getOwner().getName(), groupOwner().getName(), "Name of groupOwner should be: testUser");
+        assertEquals(groupDto().getId(), groupEntity.getId(),"GroupId should be: 1");
+        assertEquals(groupDto().getName(), groupEntity.getName(),"GroupName should be: New Group");
+        assertEquals(groupOwner().getId(), groupEntity.getOwner().getId(),"groupOwnerId should be: 5");
+        assertEquals(groupOwner().getName(), groupEntity.getOwner().getName(),"Name of groupOwner should be: testUser");
 
-        assertEquals(groupEntity.getId(), 1L, "Group Id should be: 1");
-        assertEquals(groupEntity.getName(), "New Group", "Group Name should be: New Group");
-        assertEquals(groupEntity.getOwner().getId(), 5L, "Group Owner Id should be: 5");
-        assertEquals(groupEntity.getOwner().getName(), "testUser", "Name of Group Owner should be: testUser");
+        assertEquals(1L, groupEntity.getId(), "Group Id should be: 1");
+        assertEquals("New Group", groupEntity.getName(), "Group Name should be: New Group");
+        assertEquals(5L, groupEntity.getOwner().getId(), "Group Owner Id should be: 5");
+        assertEquals("testUser", groupEntity.getOwner().getName(), "Name of Group Owner should be: testUser");
     }
 
     @Test
     void groupDtoToEntity_negative() {
         var groupEntity = groupDtoMapper.GroupDtoToEntity(groupDto(), groupOwner());
 
-        assertNotEquals(groupEntity.getId(), 5L);
-        assertNotEquals(groupEntity.getName(), "Test Group");
-        assertNotEquals(groupEntity.getOwner().getId(), 10L);
-        assertNotEquals(groupEntity.getOwner().getName(), "owner");
+        assertNotEquals(5L, groupEntity.getId());
+        assertNotEquals("Test Group", groupEntity.getName());
+        assertNotEquals(10L, groupEntity.getOwner().getId());
+        assertNotEquals("owner", groupEntity.getOwner().getName());
     }
 
     private User groupOwner() {

@@ -21,34 +21,34 @@ class CartDtoMapperTest {
     void cartDtoToEntity_positive() throws ParseException {
         var cartEntity = cartDtoMapper.CartDtoToEntity(cartDto(), category(),cartOwner(), group(), memberCount);
 
-        assertEquals(cartEntity.getId(), 1L);
-        assertEquals(cartEntity.getTitle(), "TestCart");
-        assertEquals(cartEntity.getDescription(), "TestDescription");
-        assertEquals(cartEntity.getAmount(), 55.00);
-        assertEquals(cartEntity.getAveragePerMember(), 11);
-        assertEquals(cartEntity.getDatePurchased(), dateFromString("2022-10-31"));
-        assertEquals(cartEntity.getGroup().getId(), 1L);
-        assertEquals(cartEntity.getUser().getId(), 5L);
-        assertEquals(cartEntity.getUser().getName(), "testUserCart" );
-        assertEquals(cartEntity.getCategory().getId(), 10L);
-        assertEquals(cartEntity.getCategory().getName(), "TestCategory");
+        assertEquals(1L, cartEntity.getId());
+        assertEquals("TestCart", cartEntity.getTitle());
+        assertEquals("TestDescription", cartEntity.getDescription());
+        assertEquals(55.00, cartEntity.getAmount());
+        assertEquals(11, cartEntity.getAveragePerMember());
+        assertEquals(dateFromString("2022-10-31"), cartEntity.getDatePurchased());
+        assertEquals(1L, cartEntity.getGroup().getId());
+        assertEquals(5L, cartEntity.getUser().getId());
+        assertEquals("testUserCart", cartEntity.getUser().getName() );
+        assertEquals(10L, cartEntity.getCategory().getId());
+        assertEquals("TestCategory", cartEntity.getCategory().getName());
     }
 
     @Test
     void cartDtoToEntity_negative() throws ParseException {
         var cartEntity = cartDtoMapper.CartDtoToEntity(cartDto(), category(),cartOwner(), group(), memberCount);
 
-        assertNotEquals(cartEntity.getId(), 10L);
-        assertNotEquals(cartEntity.getTitle(), "Cart");
-        assertNotEquals(cartEntity.getDescription(), "Description");
-        assertNotEquals(cartEntity.getAmount(), 155.00);
-        assertNotEquals(cartEntity.getAveragePerMember(), 31.00);
-        assertNotEquals(cartEntity.getDatePurchased(), dateFromString("2022-11-31"));
-        assertNotEquals(cartEntity.getGroup().getId(), 10L);
-        assertNotEquals(cartEntity.getUser().getId(), 50L);
-        assertNotEquals(cartEntity.getUser().getName(), "UserCart" );
-        assertNotEquals(cartEntity.getCategory().getId(), 100L);
-        assertNotEquals(cartEntity.getCategory().getName(), "Category");
+        assertNotEquals(10L, cartEntity.getId());
+        assertNotEquals("Cart", cartEntity.getTitle());
+        assertNotEquals("Description", cartEntity.getDescription());
+        assertNotEquals(155.00, cartEntity.getAmount());
+        assertNotEquals(31.00, cartEntity.getAveragePerMember());
+        assertNotEquals(dateFromString("2022-11-31"), cartEntity.getDatePurchased());
+        assertNotEquals(10L, cartEntity.getGroup().getId());
+        assertNotEquals(50L, cartEntity.getUser().getId());
+        assertNotEquals("UserCart", cartEntity.getUser().getName() );
+        assertNotEquals(100L, cartEntity.getCategory().getId());
+        assertNotEquals("Category", cartEntity.getCategory().getName());
     }
 
     private CartDto cartDto() throws ParseException {

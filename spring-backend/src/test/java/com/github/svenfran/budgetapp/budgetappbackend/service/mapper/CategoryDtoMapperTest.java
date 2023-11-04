@@ -1,11 +1,11 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service.mapper;
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CategoryDto;
-import com.github.svenfran.budgetapp.budgetappbackend.entity.Category;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 class CategoryDtoMapperTest {
 
@@ -15,20 +15,20 @@ class CategoryDtoMapperTest {
     void categoryDtoToEntity_positive() {
         var categoryEntity = categoryDtoMapper.CategoryDtoToEntity(category(), group());
 
-        assertEquals(categoryEntity.getId(), 1L);
-        assertEquals(categoryEntity.getGroup().getId(), 10L);
-        assertEquals(categoryEntity.getGroup().getName(), "NewGroup");
-        assertEquals(categoryEntity.getName(), "TestCategory");
+        assertEquals(1L, categoryEntity.getId());
+        assertEquals(10L, categoryEntity.getGroup().getId());
+        assertEquals("NewGroup", categoryEntity.getGroup().getName());
+        assertEquals("TestCategory", categoryEntity.getName());
     }
 
     @Test
     void categoryDtoToEntity_negative() {
         var categoryEntity = categoryDtoMapper.CategoryDtoToEntity(category(), group());
 
-        assertNotEquals(categoryEntity.getId(), 5L);
-        assertNotEquals(categoryEntity.getGroup().getId(), 15L);
-        assertNotEquals(categoryEntity.getGroup().getName(), "TestGroup");
-        assertNotEquals(categoryEntity.getName(), "NewCategory");
+        assertNotEquals(5L, categoryEntity.getId());
+        assertNotEquals(15L, categoryEntity.getGroup().getId());
+        assertNotEquals("TestGroup", categoryEntity.getGroup().getName());
+        assertNotEquals("NewCategory", categoryEntity.getName());
     }
 
     private CategoryDto category() {

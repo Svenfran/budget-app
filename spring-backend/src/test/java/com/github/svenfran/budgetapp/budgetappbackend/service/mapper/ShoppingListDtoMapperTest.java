@@ -1,11 +1,11 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service.mapper;
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingListDto;
-import com.github.svenfran.budgetapp.budgetappbackend.dto.CategoryDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 class ShoppingListDtoMapperTest {
 
@@ -15,18 +15,18 @@ class ShoppingListDtoMapperTest {
     void addEditShoppingListDtoToEntity_positive() {
         var entity = shoppingListDtoMapper.addEditShoppingListDtoToEntity(shoppingListDto(), group());
 
-        assertEquals(entity.getId(), 1L);
-        assertEquals(entity.getName(), "Einkaufsliste");
-        assertEquals(entity.getGroup().getId(), 10L);
+        assertEquals(1L, entity.getId());
+        assertEquals("Einkaufsliste", entity.getName());
+        assertEquals(10L, entity.getGroup().getId());
     }
 
    @Test
     void addEditShoppingListDtoToEntity_negative() {
         var entity = shoppingListDtoMapper.addEditShoppingListDtoToEntity(shoppingListDto(), group());
 
-        assertNotEquals(entity.getId(), 5L);
-        assertNotEquals(entity.getName(), "Shoppinglist");
-        assertNotEquals(entity.getGroup().getId(), 1L);
+        assertNotEquals(5L, entity.getId());
+        assertNotEquals("Shoppinglist", entity.getName());
+        assertNotEquals(1L, entity.getGroup().getId());
     }
 
     private AddEditShoppingListDto shoppingListDto() {

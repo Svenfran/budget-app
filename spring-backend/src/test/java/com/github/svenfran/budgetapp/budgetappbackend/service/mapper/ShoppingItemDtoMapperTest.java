@@ -1,13 +1,9 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service.mapper;
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto;
-import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingListDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
-import com.github.svenfran.budgetapp.budgetappbackend.entity.ShoppingItem;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.ShoppingList;
 import org.junit.jupiter.api.Test;
-
-import java.util.ArrayList;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -19,24 +15,24 @@ class ShoppingItemDtoMapperTest {
     void addEditShoppingItemDtoToEntity_positive() {
         var entity = shoppingItemDtoMapper.addEditShoppingItemDtoToEntity(shoppingItemDto(), shoppingList());
 
-        assertEquals(entity.getId(), 2L);
-        assertEquals(entity.getName(), "Milk");
-        assertEquals(entity.isCompleted(), false);
-        assertEquals(entity.getShoppingList().getId(), 1L);
-        assertEquals(entity.getShoppingList().getName(), "Einkaufsliste");
-        assertEquals(entity.getShoppingList().getGroup().getId(), 10L);
+        assertEquals(2L, entity.getId());
+        assertEquals("Milk", entity.getName());
+        assertFalse(entity.isCompleted());
+        assertEquals(1L, entity.getShoppingList().getId());
+        assertEquals("Einkaufsliste", entity.getShoppingList().getName());
+        assertEquals(10L, entity.getShoppingList().getGroup().getId());
     }
 
     @Test
     void addEditShoppingItemDtoToEntity_negative() {
         var entity = shoppingItemDtoMapper.addEditShoppingItemDtoToEntity(shoppingItemDto(), shoppingList());
 
-        assertNotEquals(entity.getId(), 22L);
-        assertNotEquals(entity.getName(), "Honey");
-        assertNotEquals(entity.isCompleted(), true);
-        assertNotEquals(entity.getShoppingList().getId(), 10L);
-        assertNotEquals(entity.getShoppingList().getName(), "Shoppinglist");
-        assertNotEquals(entity.getShoppingList().getGroup().getId(), 1L);
+        assertNotEquals(22L, entity.getId());
+        assertNotEquals("Honey", entity.getName());
+        assertNotEquals(true, entity.isCompleted());
+        assertNotEquals(10L, entity.getShoppingList().getId());
+        assertNotEquals("Shoppinglist", entity.getShoppingList().getName());
+        assertNotEquals(1L, entity.getShoppingList().getGroup().getId());
     }
 
     private ShoppingList shoppingList() {
