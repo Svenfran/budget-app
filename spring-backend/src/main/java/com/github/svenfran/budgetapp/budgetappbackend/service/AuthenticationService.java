@@ -40,11 +40,14 @@ public class AuthenticationService {
     @Autowired
     private TokenRepository tokenRepository;
 
+    @Autowired
+    private VerificationService verificationService;
+
 
     public AuthenticationResponse register(RegisterRequest request, BindingResult bindingResult) throws UserAlreadyExistException, InvalidEmailException, UserNotFoundException, UserNameAlreadyExistsException {
-        verifyEmailIsValid(bindingResult);
-        verifyEmailNotExists(request.getEmail());
-        verifyUserNameNotExists(request.getName());
+        verificationService.verifyEmailIsValid(bindingResult);
+        verificationService.verifyEmailNotExists(request.getEmail());
+        verificationService.verifyUserNameNotExists(request.getName());
         var user = new User();
         user.setName(request.getName());
         user.setEmail(request.getEmail());
@@ -59,7 +62,7 @@ public class AuthenticationService {
 
 
     public AuthenticationResponse authenticate(AuthenticationRequest request, BindingResult bindingResult) throws UserNotFoundException, InvalidEmailException {
-        verifyEmailIsValid(bindingResult);
+        verificationService.verifyEmailIsValid(bindingResult);
         authManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
                         request.getEmail(),
@@ -73,32 +76,6 @@ public class AuthenticationService {
         revokeAllUserTokens(user);
         saveUserToken(user, token);
         return new AuthenticationResponse(user.getId(), user.getName(), user.getEmail(), expTime, token);
-    }
-
-    private boolean emailExists(String email) {
-        return userRepository.findByEmail(email).isPresent();
-    }
-
-    private boolean userNameExists(String userNAme) {
-        return userRepository.findByName(userNAme).isPresent();
-    }
-
-    public void verifyEmailNotExists(String email) throws UserAlreadyExistException {
-        if (emailExists(email)) {
-            throw new UserAlreadyExistException(String.format("User with email %s already exists", email));
-        }
-    }
-
-    public void verifyEmailIsValid(BindingResult bindingResult) throws InvalidEmailException {
-        if (bindingResult.hasErrors()) {
-            throw new InvalidEmailException("Invalid Email");
-        }
-    }
-
-    public void verifyUserNameNotExists(String userName) throws UserNameAlreadyExistsException {
-        if (userNameExists(userName)) {
-            throw new UserNameAlreadyExistsException(String.format("User with name %s already exists", userName));
-        }
     }
 
     private void revokeAllUserTokens(User user) {

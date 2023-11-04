@@ -4,7 +4,6 @@ import com.github.svenfran.budgetapp.budgetappbackend.dto.PasswordChangeDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.RemoveGroupMemberDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
-import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.*;
 import liquibase.repackaged.org.apache.commons.lang3.RandomStringUtils;
@@ -48,9 +47,6 @@ public class UserProfileService {
     private CartService cartService;
 
     @Autowired
-    private AuthenticationService authenticationService;
-
-    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Autowired
@@ -59,12 +55,15 @@ public class UserProfileService {
     @Autowired
     private EmailSenderService senderService;
 
+    @Autowired
+    private VerificationService verificationService;
+
 
     @Transactional
     public void deleteUserProfile(Long userId) throws UserNotFoundException, UserIsNotAuthenticatedUser {
         var userAuth = dataLoaderService.getAuthenticatedUser();
         var userDelete = dataLoaderService.loadUser(userId);
-        verifyIsAuthenticatedUser(userDelete, userAuth);
+        verificationService.verifyIsAuthenticatedUser(userDelete, userAuth);
         var allUserGroups = userDelete.getGroupList();
         for (Group group : allUserGroups) {
             if (group.getOwner().equals(userDelete)) {
@@ -101,8 +100,8 @@ public class UserProfileService {
     public UserDto changeUserName(UserDto userDto) throws UserNotFoundException, UserIsNotAuthenticatedUser, UserNameAlreadyExistsException {
         var userAuth = dataLoaderService.getAuthenticatedUser();
         var userChange = dataLoaderService.loadUser(userDto.getId());
-        verifyIsAuthenticatedUser(userChange, userAuth);
-        authenticationService.verifyUserNameNotExists(userDto.getUserName());
+        verificationService.verifyIsAuthenticatedUser(userChange, userAuth);
+        verificationService.verifyUserNameNotExists(userDto.getUserName());
         userChange.setName(userDto.getUserName());
         return new UserDto(userRepository.save(userChange), userChange.getEmail());
     }
@@ -110,9 +109,9 @@ public class UserProfileService {
     public UserDto changeUserEmail(UserDto userDto, BindingResult bindingResult) throws UserNotFoundException, UserIsNotAuthenticatedUser, UserAlreadyExistException, InvalidEmailException {
         var userAuth = dataLoaderService.getAuthenticatedUser();
         var userChange = dataLoaderService.loadUser(userDto.getId());
-        verifyIsAuthenticatedUser(userChange, userAuth);
-        authenticationService.verifyEmailIsValid(bindingResult);
-        authenticationService.verifyEmailNotExists(userDto.getUserEmail());
+        verificationService.verifyIsAuthenticatedUser(userChange, userAuth);
+        verificationService.verifyEmailIsValid(bindingResult);
+        verificationService.verifyEmailNotExists(userDto.getUserEmail());
         userChange.setEmail(userDto.getUserEmail());
         return new UserDto(userRepository.save(userChange), userDto.getUserEmail());
     }
@@ -120,14 +119,14 @@ public class UserProfileService {
     public void changePassword(PasswordChangeDto passwordChangeDto) throws UserNotFoundException, UserIsNotAuthenticatedUser, WrongPasswordException {
         var userAuth = dataLoaderService.getAuthenticatedUser();
         var userPwChange = dataLoaderService.loadUser(passwordChangeDto.getUserId());
-        verifyIsAuthenticatedUser(userPwChange, userAuth);
-        verifyIsCorrectPassword(userPwChange, passwordChangeDto.getOldPassword());
+        verificationService.verifyIsAuthenticatedUser(userPwChange, userAuth);
+        verificationService.verifyIsCorrectPassword(userPwChange, passwordChangeDto.getOldPassword());
         userPwChange.setPassword(passwordEncoder.encode(passwordChangeDto.getNewPassword()));
         userRepository.save(userPwChange);
     }
 
     public void passwordReset(String email, BindingResult bindingResult) throws UserNotFoundException, InvalidEmailException {
-        authenticationService.verifyEmailIsValid(bindingResult);
+        verificationService.verifyEmailIsValid(bindingResult);
         var user = dataLoaderService.loadUserByEmail(email);
         var generatedPassword = RandomStringUtils.randomAlphanumeric(8);
         var subject = "Passwort zurücksetzen";
@@ -139,19 +138,4 @@ public class UserProfileService {
         userRepository.save(user);
         senderService.sendEmail(email, body, subject);
     }
-
-    private void verifyIsAuthenticatedUser(User user, User authUser) throws UserIsNotAuthenticatedUser {
-        if (!user.equals(authUser)) {
-            throw new UserIsNotAuthenticatedUser("User to edit or delete is not authenticated user");
-        }
-    }
-
-    private void verifyIsCorrectPassword(User user, String password) throws WrongPasswordException {
-        if (!passwordEncoder.matches(password, user.getPassword())) {
-            throw new WrongPasswordException("Incorrect password");
-        }
-
-    }
-
-
 }

@@ -126,9 +126,6 @@ export class AppComponent implements OnInit, OnDestroy {
         this.grouplistSideNav = groups;
       }, errRes => {
         // console.log(errRes.error);
-        if (errRes.status === 403) {
-          this.router.navigateByUrl('/auth', { replaceUrl: true });
-        }
         return;
       });
       this.groupService.activeGroup.subscribe(group => {

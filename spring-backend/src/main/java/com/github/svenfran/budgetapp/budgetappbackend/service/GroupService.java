@@ -45,6 +45,9 @@ public class GroupService {
     @Autowired
     private DataLoaderService dataLoaderService;
 
+    @Autowired
+    private VerificationService verificationService;
+
 
     public Stream<Group> getGroupsByMemberOrOwner() throws UserNotFoundException {
         var user = dataLoaderService.getAuthenticatedUser();
@@ -66,7 +69,7 @@ public class GroupService {
     public GroupMembersDto getGroupMembers(Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
         var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(groupId);
-        verifyIsPartOfGroup(user, group);
+        verificationService.verifyIsPartOfGroup(user, group);
         return new GroupMembersDto(group);
     }
 
@@ -82,7 +85,7 @@ public class GroupService {
     public GroupDto updateGroup(GroupDto groupDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOfGroupException {
         var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(groupDto.getId());
-        verifyIsGroupOwner(user, group);
+        verificationService.verifyIsGroupOwner(user, group);
         var groupOwner = dataLoaderService.loadUser(group.getOwner().getId());
         return new GroupDto(groupRepository.save(groupDtoMapper.GroupDtoToEntity(groupDto, groupOwner)));
     }
@@ -91,11 +94,11 @@ public class GroupService {
     public GroupMembersDto addMemberToGroup(AddGroupMemberDto addGroupMemberDto) throws GroupNotFoundException, UserNotFoundException, NotOwnerOfGroupException, MemberAlreadyExixtsException, MemberEqualsOwnerException {
         var user = dataLoaderService.getAuthenticatedUser();
         var newMember = dataLoaderService.loadUserByEmail(addGroupMemberDto.getNewMemberEmail().trim());
-        verifyUserExists(newMember);
+        verificationService.verifyUserExists(newMember);
         var group = dataLoaderService.loadGroup(addGroupMemberDto.getId());
-        verifyIsGroupOwner(user, group);
-        verifyCurrentlyNoGroupMember(newMember, group);
-        verifyMemberNotGroupOwner(newMember, user);
+        verificationService.verifyIsGroupOwner(user, group);
+        verificationService.verifyCurrentlyNoGroupMember(newMember, group);
+        verificationService.verifyMemberNotGroupOwner(newMember, user);
 
         group.addMember(newMember);
         groupMembershipHistoryService.startGroupMembershipForMember(newMember, group);
@@ -110,7 +113,7 @@ public class GroupService {
         var user = dataLoaderService.getAuthenticatedUser();
         var removedMember = dataLoaderService.loadUser(removeGroupMemberDto.getMember().getId());
         var group = dataLoaderService.loadGroup(removeGroupMemberDto.getId());
-        verifyIsOwnerOrMemberToRemove(user, removedMember, group);
+        verificationService.verifyIsOwnerOrMemberToRemove(user, removedMember, group);
 
         group.removeMember(removedMember);
         groupMembershipHistoryService.finishGroupMembership(removedMember, group);
@@ -124,7 +127,7 @@ public class GroupService {
     public void deleteGroup(Long id) throws UserNotFoundException, GroupNotFoundException, NotOwnerOfGroupException {
         var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(id);
-        verifyIsGroupOwner(user, group);
+        verificationService.verifyIsGroupOwner(user, group);
         var groupMembershipToRemove = dataLoaderService.loadMembershipHistory(group.getId());
         if (!group.getMembers().isEmpty()) group.removeAllMembers();
         if (!groupMembershipToRemove.isEmpty()) gmhRepository.deleteAll(groupMembershipToRemove);
@@ -142,7 +145,7 @@ public class GroupService {
         var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(changeGroupOwnerDto.getGroupId());
         var newGroupOwner = dataLoaderService.loadUser(changeGroupOwnerDto.getNewOwner().getId());
-        verifyIsGroupOwner(user, group);
+        verificationService.verifyIsGroupOwner(user, group);
 
         group.removeMember(newGroupOwner);
         group.setOwner(newGroupOwner);
@@ -161,40 +164,6 @@ public class GroupService {
             category.setName(categoryName);
             category.setGroup(group);
             categoryRepository.save(category);
-        }
-    }
-
-    private void verifyIsPartOfGroup(User user, Group group) throws NotOwnerOrMemberOfGroupException {
-        if (!(group.getOwner().equals(user) || group.getMembers().contains(user))) {
-            throw new NotOwnerOrMemberOfGroupException("User with ID " + user.getId() + " is either a member nor the owner of the group");
-        }
-    }
-
-    private void verifyIsGroupOwner(User user, Group group) throws NotOwnerOfGroupException {
-        if (!group.getOwner().equals(user)) {
-            throw new NotOwnerOfGroupException("User with Id " + user.getId() + " is not the owner of the Group");
-        }
-    }
-
-    private void verifyUserExists(User user) throws UserNotFoundException {
-        if (user == null) throw new UserNotFoundException("User not found");
-    }
-
-    private void verifyCurrentlyNoGroupMember(User user, Group group) throws MemberAlreadyExixtsException {
-        if (group.getMembers().contains(user)) {
-            throw new MemberAlreadyExixtsException("Member already exists");
-        }
-    }
-
-    private void verifyMemberNotGroupOwner(User newMember, User user) throws MemberEqualsOwnerException {
-        if (newMember.equals(user)) {
-            throw new MemberEqualsOwnerException("New member equals group owner");
-        }
-    }
-
-    private void verifyIsOwnerOrMemberToRemove(User user, User removedMember, Group group) throws NotOwnerOfGroupException {
-        if (!(user.equals(group.getOwner()) || user.equals(removedMember))) {
-            throw new NotOwnerOfGroupException("User with Id " + user.getId() + " not allowed to remove other members from the group");
         }
     }
 

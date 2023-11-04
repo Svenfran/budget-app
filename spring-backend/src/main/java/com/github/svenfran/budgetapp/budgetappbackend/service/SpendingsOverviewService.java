@@ -1,8 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.*;
-import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
-import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.GroupNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOrMemberOfGroupException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException;
@@ -27,11 +25,14 @@ public class SpendingsOverviewService {
     @Autowired
     private DataLoaderService dataLoaderService;
 
+    @Autowired
+    private VerificationService verificationService;
+
 
     public SpendingsOverviewDto getSpendingsForGroupAndYear(int year, Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
         var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(groupId);
-        verifyIsPartOfGroup(user, group);
+        verificationService.verifyIsPartOfGroup(user, group);
 
         var spendingsOverview = new SpendingsOverviewDto();
         spendingsOverview.setGroupId(groupId);
@@ -45,7 +46,7 @@ public class SpendingsOverviewService {
     public SpendingsOverviewDto getSpendingsForGroupAndAllYears(Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
         var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(groupId);
-        verifyIsPartOfGroup(user, group);
+        verificationService.verifyIsPartOfGroup(user, group);
 
         var spendingsOverview = new SpendingsOverviewDto();
         spendingsOverview.setGroupId(groupId);
@@ -271,13 +272,6 @@ public class SpendingsOverviewService {
             spendingsAmountAverageDiffTotalYearsList.add(spendingsAmountAverageDiffTotalYears);
         }
         return spendingsAmountAverageDiffTotalYearsList;
-    }
-
-
-    private void verifyIsPartOfGroup(User user, Group group) throws NotOwnerOrMemberOfGroupException {
-        if (!(group.getOwner().equals(user) || group.getMembers().contains(user))) {
-            throw new NotOwnerOrMemberOfGroupException("User with ID " + user.getId() + " is either a member nor the owner of the group");
-        }
     }
 
 }

@@ -2,9 +2,6 @@ package com.github.svenfran.budgetapp.budgetappbackend.service;
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingListDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingListDto;
-import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
-import com.github.svenfran.budgetapp.budgetappbackend.entity.ShoppingList;
-import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingItemRepository;
@@ -40,10 +37,13 @@ public class ShoppingListService {
     @Autowired
     private DataLoaderService dataLoaderService;
 
+    @Autowired
+    private VerificationService verificationService;
+
     public Optional<List<ShoppingListDto>> getShoppingListsForGroup(Long groupId, Long requestTimeStamp) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
         var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(groupId);
-        verifyIsPartOfGroup(user, group);
+        verificationService.verifyIsPartOfGroup(user, group);
 
         int pauseTime = 3000;
         int timeout = 9000;
@@ -92,7 +92,7 @@ public class ShoppingListService {
     public AddEditShoppingListDto addShoppingList(AddEditShoppingListDto addEditShoppingListDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
         var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(addEditShoppingListDto.getGroupId());
-        verifyIsPartOfGroup(user, group);
+        verificationService.verifyIsPartOfGroup(user, group);
         group.setLastUpdateShoppingList(new Date());
         groupRepository.save(group);
         return new AddEditShoppingListDto(shoppingListRepository.save(shoppingListDtoMapper.addEditShoppingListDtoToEntity(addEditShoppingListDto, group)));
@@ -102,9 +102,9 @@ public class ShoppingListService {
     public AddEditShoppingListDto updateShoppingList(AddEditShoppingListDto addEditShoppingListDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingListDoesNotBelongToGroupException, ShoppingListNotFoundException {
         var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(addEditShoppingListDto.getGroupId());
-        verifyIsPartOfGroup(user, group);
+        verificationService.verifyIsPartOfGroup(user, group);
         var shoppingList = dataLoaderService.loadShoppingList(addEditShoppingListDto.getId());
-        verifyShoppingListIsPartOfGroup(shoppingList, group);
+        verificationService.verifyShoppingListIsPartOfGroup(shoppingList, group);
         group.setLastUpdateShoppingList(new Date());
         groupRepository.save(group);
         return new AddEditShoppingListDto(shoppingListRepository.save(shoppingListDtoMapper.addEditShoppingListDtoToEntity(addEditShoppingListDto, group)));
@@ -114,25 +114,13 @@ public class ShoppingListService {
     public void deleteShoppingList(AddEditShoppingListDto dto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingListDoesNotBelongToGroupException, ShoppingListNotFoundException {
         var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(dto.getGroupId());
-        verifyIsPartOfGroup(user, group);
+        verificationService.verifyIsPartOfGroup(user, group);
         var shoppingList = dataLoaderService.loadShoppingList(dto.getId());
-        verifyShoppingListIsPartOfGroup(shoppingList, group);
+        verificationService.verifyShoppingListIsPartOfGroup(shoppingList, group);
         shoppingItemRepository.deleteAll(shoppingList.getShoppingItems());
         shoppingListRepository.deleteById(shoppingList.getId());
         group.setLastUpdateShoppingList(new Date());
         groupRepository.save(group);
-    }
-
-    private void verifyIsPartOfGroup(User user, Group group) throws NotOwnerOrMemberOfGroupException {
-        if (!(group.getOwner().equals(user) || group.getMembers().contains(user))) {
-            throw new NotOwnerOrMemberOfGroupException("User with ID " + user.getId() + " is either a member nor the owner of the group");
-        }
-    }
-
-    private void verifyShoppingListIsPartOfGroup(ShoppingList shoppingList, Group group) throws ShoppingListDoesNotBelongToGroupException {
-        if (!shoppingList.getGroup().equals(group)) {
-            throw new ShoppingListDoesNotBelongToGroupException("Shoppinglist with Id " + shoppingList.getId() + " does not belong to group wiht Id " + group.getId());
-        }
     }
 
 }

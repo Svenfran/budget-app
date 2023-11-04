@@ -9,7 +9,6 @@ public class EmailValidator implements ConstraintValidator<ValidEmail, String> {
 
     private Pattern pattern;
     private Matcher matcher;
-//    private static final String EMAIL_PATTERN = "^[\\w\\.]+@([\\w-]+\\.)+[\\w-]{2,}$";
     private static final String EMAIL_PATTERN = "^[\\w\\.-]+@([\\w-]+\\.)+[\\w-]{2,}$";
 
     @Override
