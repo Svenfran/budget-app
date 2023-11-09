@@ -5,51 +5,48 @@
         xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
 
-<!--    <include file="db/changelog/release-1.x/20220903112614-1_dropCategoryTable.xml" relativeToChangelogFile="false"/>-->
-    <include file="db/changelog/release-1.x/20220903112615-1_createCategoryTable.xml" relativeToChangelogFile="false"/>
-<!--    <include file="db/changelog/release-1.x/20220906083113-1_dropCartTable.xml" relativeToChangelogFile="false"/>-->
-<!--    <include file="db/changelog/release-1.x/20220906083113-2_dropUserDetailsTable.xml" relativeToChangelogFile="false"/>-->
-    <include file="db/changelog/release-1.x/20220906083114-1_createCartTable.xml" relativeToChangelogFile="false"/>
-    <include file="db/changelog/release-1.x/20220906083115-1_createUserTable.xml" relativeToChangelogFile="false"/>
-    <include file="db/changelog/release-1.x/20220906083116-1_addForeignKeysToCartTable.xml" relativeToChangelogFile="false"/>
-    <include file="db/changelog/release-1.x/20220906085515-1_loadUserData.xml" relativeToChangelogFile="false"/>
-    <include file="db/changelog/release-1.x/20220920162315-1_loadMoreUserData.xml" relativeToChangelogFile="false"/>
+    <include context="dev,test" file="db/changelog/release-1.x/20220903112615-1_createCategoryTable.xml" relativeToChangelogFile="false"/>
+    <include context="dev,test" file="db/changelog/release-1.x/20220906083114-1_createCartTable.xml" relativeToChangelogFile="false"/>
+    <include context="dev,test" file="db/changelog/release-1.x/20220906083115-1_createUserTable.xml" relativeToChangelogFile="false"/>
+    <include context="dev,test" file="db/changelog/release-1.x/20220906083116-1_addForeignKeysToCartTable.xml" relativeToChangelogFile="false"/>
+    <include context="dev,!test" file="db/changelog/release-1.x/20220906085515-1_loadUserData.xml" relativeToChangelogFile="false"/>
+    <include context="dev,!test" file="db/changelog/release-1.x/20220920162315-1_loadMoreUserData.xml" relativeToChangelogFile="false"/>
     <!-- Group related changes -->
-    <include file="db/changelog/release-1.x/20221015161815-1_createGroupTable.xml" relativeToChangelogFile="false"/>
-    <include file="db/changelog/release-1.x/20221015161815-2_addForeignKeyToGroupTable.xml" relativeToChangelogFile="false"/>
-    <include file="db/changelog/release-1.x/20221017143315-1_createGroupMembersTable.xml" relativeToChangelogFile="false"/>
-    <include file="db/changelog/release-1.x/20221017143315-2_addForeignKeysToGroupMembersTable.xml" relativeToChangelogFile="false"/>
-    <include file="db/changelog/release-1.x/20221017143316-1_createGroupMembershipHistoryTable.xml" relativeToChangelogFile="false"/>
-    <include file="db/changelog/release-1.x/20221017143316-2_addForeignKeysToGroupMembershipHistoryTable.xml" relativeToChangelogFile="false"/>
-    <include file="db/changelog/release-1.x/20221017151815-1_addColumnForGroupIdToCartTable.xml" relativeToChangelogFile="false"/>
-    <include file="db/changelog/release-1.x/20221017151815-2_addForeignKeyForGroupToCartTable.xml" relativeToChangelogFile="false"/>
-    <include file="db/changelog/release-1.x/20221018141715-1_loadGroupData.xml" relativeToChangelogFile="false"/>
-    <include file="db/changelog/release-1.x/20221019121215-1_renameTableNameToGroupDetails.xml" relativeToChangelogFile="false"/>
-    <include file="db/changelog/release-1.x/20221122190010-1_addColumnForGroupIdToCategoryTable.xml" relativeToChangelogFile="false"/>
-    <include file="db/changelog/release-1.x/20221122190015-1_addForeignKeyToCategoryTable.xml" relativeToChangelogFile="false"/>
+    <include context="dev,test" file="db/changelog/release-1.x/20221015161815-1_createGroupTable.xml" relativeToChangelogFile="false"/>
+    <include context="dev,test" file="db/changelog/release-1.x/20221015161815-2_addForeignKeyToGroupTable.xml" relativeToChangelogFile="false"/>
+    <include context="dev,test" file="db/changelog/release-1.x/20221017143315-1_createGroupMembersTable.xml" relativeToChangelogFile="false"/>
+    <include context="dev,test" file="db/changelog/release-1.x/20221017143315-2_addForeignKeysToGroupMembersTable.xml" relativeToChangelogFile="false"/>
+    <include context="dev,test" file="db/changelog/release-1.x/20221017143316-1_createGroupMembershipHistoryTable.xml" relativeToChangelogFile="false"/>
+    <include context="dev,test" file="db/changelog/release-1.x/20221017143316-2_addForeignKeysToGroupMembershipHistoryTable.xml" relativeToChangelogFile="false"/>
+    <include context="dev,test" file="db/changelog/release-1.x/20221017151815-1_addColumnForGroupIdToCartTable.xml" relativeToChangelogFile="false"/>
+    <include context="dev,test" file="db/changelog/release-1.x/20221017151815-2_addForeignKeyForGroupToCartTable.xml" relativeToChangelogFile="false"/>
+    <include context="dev,!test" file="db/changelog/release-1.x/20221018141715-1_loadGroupData.xml" relativeToChangelogFile="false"/>
+    <include context="dev,test" file="db/changelog/release-1.x/20221019121215-1_renameTableNameToGroupDetails.xml" relativeToChangelogFile="false"/>
+    <include context="dev,test" file="db/changelog/release-1.x/20221122190010-1_addColumnForGroupIdToCategoryTable.xml" relativeToChangelogFile="false"/>
+    <include context="dev,test" file="db/changelog/release-1.x/20221122190015-1_addForeignKeyToCategoryTable.xml" relativeToChangelogFile="false"/>
     <!-- Shoppinglist related changes  -->
-    <include file="db/changelog/release-1.x/20221107190115-1_createShoppingListTable.xml" relativeToChangelogFile="false"/>
-    <include file="db/changelog/release-1.x/20221107190515-1_createShoppingItemTable.xml" relativeToChangelogFile="false"/>
-    <include file="db/changelog/release-1.x/20221107191015-1_addForeignKeyToShoppingListTable.xml" relativeToChangelogFile="false"/>
-    <include file="db/changelog/release-1.x/20221107191515-1_addForeignKeyToShoppingItemTable.xml" relativeToChangelogFile="false"/>
+    <include context="dev,test" file="db/changelog/release-1.x/20221107190115-1_createShoppingListTable.xml" relativeToChangelogFile="false"/>
+    <include context="dev,test" file="db/changelog/release-1.x/20221107190515-1_createShoppingItemTable.xml" relativeToChangelogFile="false"/>
+    <include context="dev,test" file="db/changelog/release-1.x/20221107191015-1_addForeignKeyToShoppingListTable.xml" relativeToChangelogFile="false"/>
+    <include context="dev,test" file="db/changelog/release-1.x/20221107191515-1_addForeignKeyToShoppingItemTable.xml" relativeToChangelogFile="false"/>
     <!--  Token related  -->
-    <include file="db/changelog/release-1.x/20231023180015-1_createTokenTable.xml" relativeToChangelogFile="false"/>
-    <include file="db/changelog/release-1.x/20231023180015-2_addForeignKeyToTokenTable.xml" relativeToChangelogFile="false"/>
+    <include context="dev,test" file="db/changelog/release-1.x/20231023180015-1_createTokenTable.xml" relativeToChangelogFile="false"/>
+    <include context="dev,test" file="db/changelog/release-1.x/20231023180015-2_addForeignKeyToTokenTable.xml" relativeToChangelogFile="false"/>
     <!-- Load Data -->
-    <include file="db/changelog/release-1.x/20221129153415-1_loadCategoryData.xml" relativeToChangelogFile="false"/>
-    <include file="db/changelog/release-1.x/20221130183615-1_loadMembershipHistory.xml" relativeToChangelogFile="false"/>
+    <include context="dev,!test" file="db/changelog/release-1.x/20221129153415-1_loadCategoryData.xml" relativeToChangelogFile="false"/>
+    <include context="dev,!test" file="db/changelog/release-1.x/20221130183615-1_loadMembershipHistory.xml" relativeToChangelogFile="false"/>
 
-    <include file="db/changelog/release-1.x/20221201111915-1_addColumnIsDeletedToCartTable.xml" relativeToChangelogFile="false"/>
-    <include file="db/changelog/release-1.x/20221201111915-2_addColumnAveragePerMemberToCartTable.xml" relativeToChangelogFile="false"/>
+    <include context="dev,test" file="db/changelog/release-1.x/20221201111915-1_addColumnIsDeletedToCartTable.xml" relativeToChangelogFile="false"/>
+    <include context="dev,test" file="db/changelog/release-1.x/20221201111915-2_addColumnAveragePerMemberToCartTable.xml" relativeToChangelogFile="false"/>
 
-    <include file="db/changelog/release-1.x/20230407111210-1_addColumnForDateCreatedAndLastUpdateToShoppingListTable.xml" relativeToChangelogFile="false"/>
-    <include file="db/changelog/release-1.x/20230407111215-1_addColumnForDateCreatedAndLastUpdateToShoppingItemTable.xml" relativeToChangelogFile="false"/>
-    <include file="db/changelog/release-1.x/20230421170015-1_addColumnForLastUpdateShoppingListToGroupTable.xml" relativeToChangelogFile="false"/>
+    <include context="dev,test" file="db/changelog/release-1.x/20230407111210-1_addColumnForDateCreatedAndLastUpdateToShoppingListTable.xml" relativeToChangelogFile="false"/>
+    <include context="dev,test" file="db/changelog/release-1.x/20230407111215-1_addColumnForDateCreatedAndLastUpdateToShoppingItemTable.xml" relativeToChangelogFile="false"/>
+    <include context="dev,test" file="db/changelog/release-1.x/20230421170015-1_addColumnForLastUpdateShoppingListToGroupTable.xml" relativeToChangelogFile="false"/>
 
-    <include file="db/changelog/release-1.x/20221129153415-2_loadCartData.xml" relativeToChangelogFile="false"/>
-    <include file="db/changelog/release-1.x/20221129153415-3_loadMoreCartData.xml" relativeToChangelogFile="false"/>
-    <include file="db/changelog/release-1.x/20221202170015-1_loadCoffeegroupMembershipHistory.xml" relativeToChangelogFile="false"/>
-    <include file="db/changelog/release-1.x/20221202170015-2_loadCoffeegroupCartData.xml" relativeToChangelogFile="false"/>
-    <include file="db/changelog/release-1.x/20221202170015-3_loadCoffeegroupGroupMembers.xml" relativeToChangelogFile="false"/>
+    <include context="dev,!test" file="db/changelog/release-1.x/20221129153415-2_loadCartData.xml" relativeToChangelogFile="false"/>
+    <include context="dev,!test" file="db/changelog/release-1.x/20221129153415-3_loadMoreCartData.xml" relativeToChangelogFile="false"/>
+    <include context="dev,!test" file="db/changelog/release-1.x/20221202170015-1_loadCoffeegroupMembershipHistory.xml" relativeToChangelogFile="false"/>
+    <include context="dev,!test" file="db/changelog/release-1.x/20221202170015-2_loadCoffeegroupCartData.xml" relativeToChangelogFile="false"/>
+    <include context="dev,!test" file="db/changelog/release-1.x/20221202170015-3_loadCoffeegroupGroupMembers.xml" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>

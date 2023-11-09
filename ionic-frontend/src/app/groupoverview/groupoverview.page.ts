@@ -198,7 +198,8 @@ export class GroupoverviewPage implements OnInit {
       inputs: [
         {
           placeholder: "E-Mail Adresse",
-          name: "memberEmail"
+          name: "memberEmail",
+          type: "email"
         }
       ]
     }).then(alertEl => alertEl.present().then(() => {

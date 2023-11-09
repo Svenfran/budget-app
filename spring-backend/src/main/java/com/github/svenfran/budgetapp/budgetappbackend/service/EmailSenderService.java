@@ -12,12 +12,9 @@ public class EmailSenderService {
     @Autowired
     private JavaMailSender mailSender;
 
-    @Autowired
-    private Environment environment;
-
     public void sendEmail(String recipient, String body, String subject) {
         SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom(environment.getProperty("email_username"));
+        message.setFrom(System.getenv("email_username"));
         message.setTo(recipient);
         message.setText(body);
         message.setSubject(subject);

@@ -20,7 +20,7 @@ import java.util.function.Function;
 @Service
 public class JwtService {
 
-    private final String secretKey = getSecretKey();
+    private final String secretKey = System.getenv("secret_key");
 
     public String extractUsername(String token) {
         return extractClaims(token, Claims::getSubject);
