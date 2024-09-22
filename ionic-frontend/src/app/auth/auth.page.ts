@@ -7,6 +7,7 @@ import { Observable } from 'rxjs';
 import { AlertService } from '../services/alert.service';
 import { UserprofileService } from '../services/userprofile.service';
 import { ResetPasswordDto } from '../models/reset-password-dto';
+import { timeout } from 'rxjs/operators';
 
 @Component({
   selector: 'app-auth',
@@ -45,7 +46,6 @@ export class AuthPage implements OnInit {
   }
 
   passwortReset() {
-    // TODO: implement password reset
     this.alertCtrl.create({
       header: "Passwort vergessen?",
       message: "Bitte gib eine gültige E-Mail-Adresse an.",
@@ -64,7 +64,7 @@ export class AuthPage implements OnInit {
             return
           }
           this.loadingCtrl.create({
-            message: "Passwort Reset..."
+            message: "Reset Passwort..."
           }).then(loadingEl => {
             loadingEl.present(),
             this.userprofileService.resetUserPassword(resetDto).subscribe(() => {
@@ -75,7 +75,10 @@ export class AuthPage implements OnInit {
                             + email + " gesendet. Bitte melde dich an und ändere dein Passwort.";
               this.alertService.showAlert(header, message);
             }, errRes => {
-              loadingEl.dismiss();
+              if (errRes.status === 0) {
+                loadingEl.dismiss();
+                this.alertService.showAlertSeverUnavailable();
+              }
               if (errRes.error.includes(email)) {
                 loadingEl.dismiss();
                 let header = "Fehlerhafte E-Mail-Adresse!";
@@ -144,7 +147,10 @@ export class AuthPage implements OnInit {
         // for Authentication
         let message = 'Passwort oder Email falsch.';
         // for Registration
-        if (errRes.status !== 403 && errRes.error.includes(userEmail)) {
+        if (errRes.status === 0) {
+          loadingEl.dismiss();
+          this.alertService.showAlertSeverUnavailable();
+        } else if (errRes.status !== 403 && errRes.error.includes(userEmail)) {
           message = 'Ein Benutzer mit dieser Email-Adresse existiert bereits.';
         } else if (errRes.status !== 403 && errRes.error.includes(userName)) {
           message = 'Ein Benutzer mit diesem Benutzernamen existiert bereits.';

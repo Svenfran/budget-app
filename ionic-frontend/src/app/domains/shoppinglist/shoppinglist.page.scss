@@ -1,8 +1,8 @@
-.list-header {
-    ion-item {
-        --background: var(--ion-color-light);
-    }
-}
+// .list-header {
+//     ion-item {
+//         --background: var(--ion-color-light);
+//     }
+// }
 
 .done {
     text-decoration: line-through;
@@ -28,4 +28,10 @@ ion-item-sliding {
 
 .bold {
     font-weight: bold;
+}
+
+ion-list {
+    margin-bottom: 12px;
+    padding-top: 0;
+    padding-bottom: 0;
 }

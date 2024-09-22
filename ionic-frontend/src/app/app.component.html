@@ -27,7 +27,18 @@
             <p>Keine Gruppen gefunden.</p>
           </ion-item>
           <ion-menu-toggle>
-            <ion-item *ngFor="let group of grouplistSideNav" 
+            <ion-text *ngIf="grouplistSideNavOwner.length > 0" class="sub-item">Admin</ion-text>
+            <ion-item *ngFor="let group of grouplistSideNavOwner" 
+                      class="sub-item"
+                      (click)="getActiveGroup(group.id)"
+                      [class.active]="group.id == activeGroup.id"
+                      lines="none" 
+                      button>
+              <ion-icon name="folder-outline" slot="start"></ion-icon>
+              <ion-label>{{ group.name }}</ion-label>
+            </ion-item>
+            <ion-text *ngIf="grouplistSideNavMember.length > 0" class="sub-item">Mitglied</ion-text>
+            <ion-item *ngFor="let group of grouplistSideNavMember" 
                       class="sub-item"
                       (click)="getActiveGroup(group.id)"
                       [class.active]="group.id == activeGroup.id"

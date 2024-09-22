@@ -4,7 +4,11 @@ ion-popover {
 
 
 ion-item {
-    --min-height: 2.5rem; 
+    --min-height: 2.5rem;
+}
+
+ion-item:last-child {
+    --inner-border-width: 0 !important;
 }
 
 ion-segment {

@@ -81,6 +81,10 @@ export class PasswordchangePage implements OnInit {
         loadingEl.dismiss();
         this.authService.logout();
       }, errRes => {
+        if (errRes.status === 0) {
+          loadingEl.dismiss();
+          this.alertService.showAlertSeverUnavailable();
+        }
         if (errRes.error === "Incorrect password") {
           loadingEl.dismiss();
           this.isLoading = false;

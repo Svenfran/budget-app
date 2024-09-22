@@ -5,3 +5,8 @@
         padding: 0.8rem 0;
     }
 }
+
+ion-item {
+    margin-bottom: 12px;
+    --inner-border-width: 0;
+}

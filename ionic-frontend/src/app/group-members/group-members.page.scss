@@ -19,6 +19,11 @@ ion-item {
     }
 }
 
+ion-list {
+    border-top-right-radius: 0;
+    border-top-left-radius: 0;
+}
+
 ion-radio::part(mark) {
     background: none;
     transition: none;

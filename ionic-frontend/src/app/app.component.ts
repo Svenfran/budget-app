@@ -13,6 +13,7 @@ import { AlertService } from './services/alert.service';
 import { NavigationService } from './services/navigation.service';
 import { AuthService } from './auth/auth.service';
 import { Subscription } from 'rxjs';
+import { UserDto } from './models/user';
 
 
 @Component({
@@ -25,6 +26,8 @@ export class AppComponent implements OnInit, OnDestroy {
 
   userName: string;
   grouplistSideNav: GroupSideNav[];
+  grouplistSideNavOwner: GroupSideNav[];
+  grouplistSideNavMember: GroupSideNav[];
   isOpen = false;
   activeGroup: Group;
   groupModified: boolean;
@@ -35,6 +38,7 @@ export class AppComponent implements OnInit, OnDestroy {
   history: string[] = [];
   authSub: Subscription;
   previousAuthState = false;
+  userDto: UserDto;
 
 
   constructor(
@@ -124,6 +128,8 @@ export class AppComponent implements OnInit, OnDestroy {
     this.groupService.groupModified.subscribe(() => {
       this.groupService.getGroupsForSideNav().subscribe(groups => {
         this.grouplistSideNav = groups;
+        this.grouplistSideNavOwner = groups.filter(group => group.userDto.userName === this.userName);
+        this.grouplistSideNavMember = groups.filter(group => group.userDto.userName !== this.userName);
       }, errRes => {
         // console.log(errRes.error);
         return;

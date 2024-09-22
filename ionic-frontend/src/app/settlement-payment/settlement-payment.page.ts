@@ -119,7 +119,6 @@ export class SettlementPaymentPage implements OnInit {
   }
 
   onDismiss() {
-    this.modalCtrl.dismiss();
     if (this.form.invalid) {
       // this.form.markAllAsTouched();
       return;

@@ -44,7 +44,7 @@ export class UserprofilePage implements OnInit {
       }, {
         text: "ok",
         handler: (data) => {
-          if (data.userName === "" || data.userName === undefined || data.userName === null) {
+          if (data.userName === undefined || data.userName === null || data.userName.trim() === "") {
             let header = "Fehlerhafter Benutzername!";
             let message = `Der Benutzername darf nicht leer sein.`
             this.alertService.showAlert(header, message);
@@ -53,16 +53,19 @@ export class UserprofilePage implements OnInit {
           this.loadingCtrl.create({
             message: "Ändere Benutzername..."
           }).then(loadingEl => {
-            loadingEl.present(),
-            this.userProfileService.changeUserName(new UserDto(this.user.id, data.userName)).subscribe(res => {
+            loadingEl.present();
+            this.userProfileService.changeUserName(new UserDto(this.user.id, data.userName.trim())).subscribe(res => {
               this.userName = res.userName;
               this.setUserData();
               loadingEl.dismiss();
             }, errRes => {
-              if (errRes.error.includes(data.userName)) {
+              if (errRes.status === 0) {
+                loadingEl.dismiss();
+                this.alertService.showAlertSeverUnavailable();
+              } else if (errRes.error.includes(data.userName.trim())) {
                 loadingEl.dismiss();
                 let header = "Fehlerhafter Benutzername!";
-                let message = `Der Benutzername "${data.userName}" existiert bereits.`
+                let message = `Der Benutzername "${data.userName.trim()}" existiert bereits.`
                 this.alertService.showAlert(header, message);
               }
             });          
@@ -107,6 +110,10 @@ export class UserprofilePage implements OnInit {
               loadingEl.dismiss();
               this.authService.logout();
             }, errRes => {
+              if (errRes.status === 0) {
+                loadingEl.dismiss();
+                this.alertService.showAlertSeverUnavailable();
+              }
               if (errRes.error.includes(email)) {
                 loadingEl.dismiss();
                 let header = "Fehlerhafte E-Mail-Adresse!";
@@ -153,6 +160,11 @@ export class UserprofilePage implements OnInit {
               loadingEl.dismiss();
               this.authService.logout();
               this.router.navigateByUrl("/auth", { replaceUrl: true });
+            }, errRes => {
+              if (errRes.status === 0) {
+                loadingEl.dismiss();
+                this.alertService.showAlertSeverUnavailable();
+              }
             })
           })
         }

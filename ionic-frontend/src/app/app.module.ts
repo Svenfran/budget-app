@@ -14,10 +14,11 @@ import { AuthHttpInterceptorService } from './auth/auth-http-interceptor.service
 import { SettlementPaymentPage } from './settlement-payment/settlement-payment.page';
 import { GroupMembersPage } from './group-members/group-members.page';
 import { ScrollingModule } from '@angular/cdk/scrolling';
+import { FilterModalPage } from './filter-modal/filter-modal.page';
 registerLocaleData(localDe, 'de');
 
 @NgModule({
-  declarations: [AppComponent, SettlementPaymentPage, GroupMembersPage],
+  declarations: [AppComponent, SettlementPaymentPage, GroupMembersPage, FilterModalPage],
   imports: [
     BrowserModule,
     CommonModule,

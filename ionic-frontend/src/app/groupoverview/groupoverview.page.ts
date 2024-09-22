@@ -15,6 +15,7 @@ import { from, of } from 'rxjs';
 import { Router } from '@angular/router';
 import { NavigationService } from '../services/navigation.service';
 import { AuthService } from '../auth/auth.service';
+import { AlertService } from '../services/alert.service';
 
 @Component({
   selector: 'app-groupoverview',
@@ -42,7 +43,8 @@ export class GroupoverviewPage implements OnInit {
     private storageService: StorageService,
     private navigationService: NavigationService,
     private router: Router,
-    private authService: AuthService
+    private authService: AuthService,
+    private alertService: AlertService
     ) { }
 
   ngOnInit() {
@@ -60,6 +62,11 @@ export class GroupoverviewPage implements OnInit {
       this.groupService.getGroupsForOverview().subscribe(groups => {
         this.groupOverviewList = groups;
         this.isLoading = false;
+      }, errRes => {
+        this.isLoading = false;
+        if (errRes.status === 0) {
+          this.alertService.showAlertSeverUnavailable();
+        }
       })
     })
     this.groupService.setGroupModified(false);
@@ -111,6 +118,11 @@ export class GroupoverviewPage implements OnInit {
                   this.spendingsService.setSpendingsModified(true);
                 }
               });
+            }, errRes => {
+              if (errRes.status === 0) {
+                loadingEl.dismiss();
+                this.alertService.showAlertSeverUnavailable();
+              }
             })
           })
         }
@@ -136,6 +148,11 @@ export class GroupoverviewPage implements OnInit {
               this.groupService.setGroupModified(true);
               this.groupService.setActiveGroup(group);
               this.activeGroup = group;
+            }, errRes => {
+              if (errRes.status === 0) {
+                loadingEl.dismiss();
+                this.alertService.showAlertSeverUnavailable();
+              }
             })
           })
         }
@@ -179,9 +196,11 @@ export class GroupoverviewPage implements OnInit {
               let message = "Benutzer wurde zur Gruppe " + groupName + " hinzugefügt"
               this.showToast(message);
             }, errRes => {
-              loadingEl.dismiss();
               let message: string;
-              if (errRes.error.includes(newMember.newMemberEmail)) {
+              if (errRes.status === 0) {
+                loadingEl.dismiss();
+                this.alertService.showAlertSeverUnavailable();
+              } else if (errRes.error.includes(newMember.newMemberEmail)) {
                 message = "Benutzer existiert nicht."
               } else if (errRes.error.includes("New member equals group owner")) {
                 message = "Neues Mitglied und Gruppenersteller sind identisch"
@@ -242,6 +261,11 @@ export class GroupoverviewPage implements OnInit {
               //   this.groupOverviewList[index] = group;
               // }
               
+            }, errRes => {
+              if (errRes.status === 0) {
+                loadingEl.dismiss();
+                this.alertService.showAlertSeverUnavailable();
+              }
             })
           })
         }

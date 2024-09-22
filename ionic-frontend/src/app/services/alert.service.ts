@@ -10,6 +10,9 @@ import { Router } from '@angular/router';
 })
 export class AlertService {
 
+  private HEADER_SERVER_UNAVAILABLE: string = "Es ist ein Fehler aufgetreten";
+  private MESSAGE_SERVER_UNAVAILABLE: string = "Der Server ist momentan nicht erreichbar. Bitte versuche es in ein paar Minuten noch einmal.";
+
   activeGroup: Group;
 
   constructor(
@@ -66,6 +69,16 @@ export class AlertService {
       .create({
         header: header,
         message: message,
+        buttons: ['Ok']
+      })
+      .then(alertEl => alertEl.present());
+  }
+
+  showAlertSeverUnavailable() {
+    this.alertCtrl
+      .create({
+        header: this.HEADER_SERVER_UNAVAILABLE,
+        message: this.MESSAGE_SERVER_UNAVAILABLE,
         buttons: ['Ok']
       })
       .then(alertEl => alertEl.present());

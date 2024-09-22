@@ -61,6 +61,11 @@ const routes: Routes = [
     loadChildren: () => import('./passwordchange/passwordchange.module').then( m => m.PasswordchangePageModule),
     canLoad: [AuthGuard]
   },
+  {
+    path: 'filter-modal',
+    loadChildren: () => import('./filter-modal/filter-modal.module').then( m => m.FilterModalPageModule),
+    canLoad: [AuthGuard]
+  },
 ];
 
 @NgModule({

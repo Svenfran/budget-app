@@ -27,6 +27,10 @@
                 <ion-icon class="pop-icon" name="repeat-outline" slot="start"></ion-icon>
                 <ion-label>Ausgleichszahlung</ion-label>
               </ion-item>
+              <ion-item size="small" [button]="true" [detail]="false" (click)="filterModal()">
+                <ion-icon class="pop-icon" name="filter-circle-outline" slot="start"></ion-icon>
+                <ion-label>Filter</ion-label>
+              </ion-item>
             </ion-list>
           </ion-content>
         </ng-template>
@@ -40,6 +44,10 @@
     <ion-label>
       <div class="total">
         <ion-text>{{ filterTerm == "" ? "Gesamt" : filterTerm | titlecase }} ({{ count }})</ion-text>
+          <ion-chip color="primary" *ngIf="filterMode">
+            <ion-label (click)="filterModal()">filter</ion-label>
+            <ion-icon name="close" (click)="deleteFilter(activeGroup.id)"></ion-icon>
+          </ion-chip>
         <ion-text>{{ sum | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
       </div>
     </ion-label>
@@ -72,7 +80,7 @@
       <ion-col size-md="6" offset-md="3" *ngIf="!isLoading && cartlist && cartlist.length > 0">
         <cdk-virtual-scroll-viewport itemSize="56" minBufferPx="900" maxBufferPx="1350">
           <ion-list *ngIf="!isLoading && cartlist.length > 0">
-            <ion-item-sliding *cdkVirtualFor="let cart of cartlist" #slidingItem>
+            <ion-item-sliding *cdkVirtualFor="let cart of cartlist, let i = index" #slidingItem>
               <ion-item>
                 <ion-avatar slot="start" (click)="onFilterCategory(cart.categoryDto.name, cart.groupId)">
                   <div class="category-circle">
@@ -83,9 +91,10 @@
                 </ion-avatar>
                 <ion-label>
                   <div class="cart-details">
-                    <h2 class="titlestyle ion-text-wrap">{{ cart.title }}</h2>
+                    <h2 (click)="toggleDescriptionVisibility(i)" class="titlestyle ion-text-wrap">{{ cart.title }}</h2>
                     <h2>{{ cart.amount | currency: 'EUR': number: '1.2-2': 'de' }}</h2>
                   </div>
+                  <p [hidden]="!isDescriptionVisible(i)" class="ion-text-wrap">{{cart.description}}</p>
                   <div class="cart-details">
                     <ion-text *ngIf="cart.userDto.userName !== userName" color="medium" (click)="onFilterUserName(cart.userDto.userName, cart.groupId)">{{ cart.userDto.userName }}</ion-text>
                     <ion-text *ngIf="cart.userDto.userName === userName" color="primary" (click)="onFilterUserName(cart.userDto.userName, cart.groupId)"><strong>{{ cart.userDto.userName }}</strong></ion-text>

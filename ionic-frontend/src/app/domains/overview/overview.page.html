@@ -118,7 +118,7 @@
                   <div [class.spendings-user-amount-single]="spendingsTotalYear.spendingsTotalUser.length <= 1"
                        [class.spendings-user-amount]="spendingsTotalYear.spendingsTotalUser.length > 1">
                     <div class="space">
-                      <ion-text color="medium">{{ userSpendings.userName | titlecase }}</ion-text>
+                      <ion-text color="medium">{{ userSpendings.userName }}</ion-text>
                       <ion-text>{{ userSpendings.sum | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
                     </div>
                   </div>
@@ -159,7 +159,7 @@
                   <div [class.spendings-user-amount-single]="spendingsTotalYear.spendingsTotalUser.length <= 1"
                        [class.spendings-user-amount]="spendingsTotalYear.spendingsTotalUser.length > 1">
                     <div class="space">
-                      <ion-text color="medium">{{ userSpendings.userName | titlecase }}</ion-text>
+                      <ion-text color="medium">{{ userSpendings.userName }}</ion-text>
                       <ion-text>{{ userSpendings.sum | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
                     </div>
                   </div>

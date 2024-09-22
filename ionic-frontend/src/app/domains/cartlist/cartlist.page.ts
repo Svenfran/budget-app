@@ -3,7 +3,9 @@ import { AlertController, IonItemSliding, LoadingController, ModalController } f
 import { format } from 'date-fns';
 import { Subscription } from 'rxjs';
 import { AuthService } from 'src/app/auth/auth.service';
+import { FilterModalPage } from 'src/app/filter-modal/filter-modal.page';
 import { Cart } from 'src/app/models/cart';
+import { CartFilter } from 'src/app/models/cartFilter';
 import { Group } from 'src/app/models/group';
 import { GroupSideNav } from 'src/app/models/group-side-nav';
 import { CartService } from 'src/app/services/cart.service';
@@ -19,6 +21,7 @@ import { SettlementPaymentPage } from 'src/app/settlement-payment/settlement-pay
 export class CartlistPage implements OnInit, OnDestroy {
 
   cartlist: Cart[] = [];
+  cartlistInit: Cart[] = [];
   isLoading = false;
   userName: string;
   activeGroup: GroupSideNav;
@@ -28,7 +31,10 @@ export class CartlistPage implements OnInit, OnDestroy {
   filterMode = false;
   sum: number;
   count: number;
-  loadedActiveGroup: Promise<boolean>
+  loadedActiveGroup: Promise<boolean>;
+  cartFilter: CartFilter = {};
+  hidden: boolean = true;
+  visibleItems: Set<number> = new Set<number>();
 
   constructor(
     private cartService: CartService,
@@ -62,6 +68,7 @@ export class CartlistPage implements OnInit, OnDestroy {
         this.getAllCartsByGroupId(group.id);
         this.filterMode = false;
         this.filterTerm = "";
+        this.visibleItems = new Set<number>();
       } else {
         this.groupService.setActiveGroup(null);
       }
@@ -81,6 +88,7 @@ export class CartlistPage implements OnInit, OnDestroy {
         this.cartSub = this.cartService.getCartListByGroupId(groupId).subscribe(carts => {
           this.isLoading = false;
           this.cartlist = carts;
+          this.cartlistInit = carts;
           this.sum = this.cartlist.reduce((s, c) => s + (+c.amount), 0);
           this.count = this.cartlist.length;
         });
@@ -121,6 +129,7 @@ export class CartlistPage implements OnInit, OnDestroy {
       this.cartlist = this.cartlist.filter(c => c.categoryDto.name == filterTerm);
       this.sum = this.cartlist.reduce((s, c) => s + (+c.amount), 0);
       this.count = this.cartlist.length;
+      this.cartFilter.category = [filterTerm];
     } else {
       this.filterTerm = ""
       this.filterMode = !this.filterMode;
@@ -136,6 +145,7 @@ export class CartlistPage implements OnInit, OnDestroy {
       this.cartlist = this.cartlist.filter(c => c.userDto.userName == filterTerm);
       this.sum = this.cartlist.reduce((s, c) => s + (+c.amount), 0);
       this.count = this.cartlist.length;
+      this.cartFilter.userName = [filterTerm];
     } else {
       this.filterTerm = ""
       this.filterMode = !this.filterMode;
@@ -143,10 +153,61 @@ export class CartlistPage implements OnInit, OnDestroy {
     }
   }
 
+  deleteFilter(groupId: number) {
+    this.filterTerm = "";
+    this.filterMode = false;
+    this.getAllCartsByGroupId(groupId);
+    this.cartFilter = {};
+  }
+
+  onFilter(cartfilter: CartFilter) {
+    if (Object.values(cartfilter).every(field => field == null)) {
+      this.cartlist = this.cartlistInit;
+      this.filterMode = false;
+      this.filterTerm = '';
+      this.sum = this.cartlist.reduce((s, c) => s + (+c.amount), 0);
+      this.count = this.cartlist.length;
+      return;
+    }
+    this.filterTerm = '';
+    this.cartlist = this.cartlistInit;
+    this.cartlist = this.cartlist.filter(item => 
+      (cartfilter.title ? item.title.toLowerCase().includes(cartfilter.title.toLowerCase()) : true) &&
+      (cartfilter.description ? item.description.toLowerCase().includes(cartfilter.description.toLowerCase()) : true) &&
+      (cartfilter.category?.length > 0 ? cartfilter.category.includes(item.categoryDto.name) : true) &&
+      (cartfilter.userName?.length > 0 ? cartfilter.userName.includes(item.userDto.userName) : true) &&
+      (cartfilter.startDate ? new Date(item.datePurchased) >= cartfilter.startDate : true) &&
+      (cartfilter.endDate ? new Date(item.datePurchased) <= cartfilter.endDate : true) 
+    );
+
+    this.filterMode = true;
+    this.sum = this.cartlist.reduce((s, c) => s + (+c.amount), 0);
+    this.count = this.cartlist.length;
+    // console.log(this.cartlist);
+  }
 
   download() {
     let filename = "Ausgaben_" + this.activeGroup.name.replace(/ /g, "-") + "_" + format(new Date(), 'yyyyMMddHHmmss') + ".xlsx";
     this.cartService.getExcelFile(this.activeGroup.id, filename);
+  }
+
+  async filterModal() {
+    const modal = this.modalCtrl.create({
+      component: FilterModalPage,
+      componentProps: { 
+        activeGroupId: this.activeGroup.id,
+        cartFilter: this.cartFilter
+      }
+    });
+
+    (await modal).onDidDismiss().then((response) => {
+      if (response.data) {
+        this.onFilter(response.data);
+        this.cartFilter = response.data;
+      }
+    });
+
+    return (await modal).present();
   }
 
   async settlementPayment() {
@@ -167,6 +228,20 @@ export class CartlistPage implements OnInit, OnDestroy {
     if (this.cartSub) {
       this.cartSub.unsubscribe();
     }
+  }
+
+  // Methode zum Umschalten der Sichtbarkeit
+  toggleDescriptionVisibility(index: number) {
+    if (this.visibleItems.has(index)) {
+      this.visibleItems.delete(index);  // Wenn es sichtbar ist, verstecken
+    } else {
+      this.visibleItems.add(index);  // Wenn es nicht sichtbar ist, anzeigen
+    }
+  }
+
+  // Methode zur Überprüfung, ob die Beschreibung sichtbar ist
+  isDescriptionVisible(index: number): boolean {
+    return this.visibleItems.has(index);
   }
 
   getCurrentUser() {
