@@ -128,7 +128,7 @@ public class GroupService {
         var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(id);
         verificationService.verifyIsGroupOwner(user, group);
-        var groupMembershipToRemove = dataLoaderService.loadMembershipHistory(group.getId());
+        var groupMembershipToRemove = dataLoaderService.loadMembershipHistoryForGroup(group.getId());
         if (!group.getMembers().isEmpty()) group.removeAllMembers();
         if (!groupMembershipToRemove.isEmpty()) gmhRepository.deleteAll(groupMembershipToRemove);
         if (!group.getCarts().isEmpty()) cartRepository.deleteAll(group.getCarts());

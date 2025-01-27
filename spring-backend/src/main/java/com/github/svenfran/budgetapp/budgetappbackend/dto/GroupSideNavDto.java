@@ -10,12 +10,14 @@ public class GroupSideNavDto {
     private Long id;
     private String name;
     private Date dateCreated;
+    private UserDto userDto;
 
 
     public GroupSideNavDto(Group group) {
         this.id = group.getId();
         this.name = group.getName();
         this.dateCreated = group.getDateCreated();
+        this.userDto = new UserDto(group.getOwner());
     }
 
     public GroupSideNavDto() {
@@ -43,5 +45,13 @@ public class GroupSideNavDto {
 
     public void setDateCreated(Date dateCreated) {
         this.dateCreated = dateCreated;
+    }
+
+    public UserDto getUserDto() {
+        return userDto;
+    }
+
+    public void setUserDto(UserDto userDto) {
+        this.userDto = userDto;
     }
 }

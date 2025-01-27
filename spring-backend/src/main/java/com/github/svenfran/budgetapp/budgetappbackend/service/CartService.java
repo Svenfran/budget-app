@@ -1,12 +1,12 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
+import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Cart;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Category;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
-import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
-import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.ExcelWriter;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CategoryRepository;
@@ -58,21 +58,25 @@ public class CartService {
         return new CartDto(cart);
     }
 
-    public CartDto addCart(@Validated CartDto cartDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, CategoryNotFoundException {
+    public CartDto addCart(@Validated CartDto cartDto) throws Exception {
         var user = dataLoaderService.getAuthenticatedUser();
         var category = dataLoaderService.loadCategory(cartDto.getCategoryDto().getId());
         var group = dataLoaderService.loadGroup(cartDto.getGroupId());
+        var gmh = dataLoaderService.loadMembershipHistoryForGroupAndUser(group.getId(), user.getId());
         verificationService.verifyIsPartOfGroup(user, group);
+        verificationService.verifyDatePurchasedWithinMembershipPeriod(gmh, cartDto.getDatePurchased());
         var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(cartDto.getDatePurchased(), group.getId());
         return new CartDto(cartRepository.save(cartDtoMapper.CartDtoToEntity(cartDto, category, user, group, groupMemberCount)));
     }
 
-    public CartDto updateCart(@Validated CartDto cartDto) throws UserNotFoundException, GroupNotFoundException, CartNotFoundException, NotOwnerOfCartException, NotOwnerOrMemberOfGroupException, CategoryNotFoundException {
+    public CartDto updateCart(@Validated CartDto cartDto) throws Exception {
         var user = dataLoaderService.getAuthenticatedUser();
         var cart = dataLoaderService.loadCart(cartDto.getId());
         var group = dataLoaderService.loadGroup(cartDto.getGroupId());
+        var gmh = dataLoaderService.loadMembershipHistoryForGroupAndUser(group.getId(), user.getId());
         verificationService.verifyIsPartOfGroup(user, group);
         verificationService.verifyIsOwnerOfCart(user, cart);
+        verificationService.verifyDatePurchasedWithinMembershipPeriod(gmh, cartDto.getDatePurchased());
         var category = dataLoaderService.loadCategory(cartDto.getCategoryDto().getId());
         var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(cartDto.getDatePurchased(), group.getId());
         return new CartDto(cartRepository.save(cartDtoMapper.CartDtoToEntity(cartDto, category, user, group, groupMemberCount)));
@@ -88,19 +92,23 @@ public class CartService {
     }
 
     @Transactional
-    public void addSettlementPayment(@Validated SettlementPaymentDto settlementPaymentDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
+    public void addSettlementPayment(@Validated SettlementPaymentDto settlementPaymentDto) throws Exception {
         var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(settlementPaymentDto.getGroupId());
         var member = dataLoaderService.loadUser(settlementPaymentDto.getMember().getId());
+        var gmhUser = dataLoaderService.loadMembershipHistoryForGroupAndUser(group.getId(), user.getId());
+        var gmhMember = dataLoaderService.loadMembershipHistoryForGroupAndUser(group.getId(), member.getId());
         verificationService.verifyIsPartOfGroup(user, group);
         verificationService.verifyIsPartOfGroup(member, group);
+        verificationService.verifyDatePurchasedWithinMembershipPeriod(gmhUser, settlementPaymentDto.getDatePurchased());
+        verificationService.verifyDatePurchasedWithinMembershipPeriod(gmhMember, settlementPaymentDto.getDatePurchased());
         createCategoryForSettlementPaymentIfNotExist(group);
         var category = dataLoaderService.loadCategoryByGroupAndName(group, SETTLEMENT_CATEGORY_NAME);
         var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(settlementPaymentDto.getDatePurchased(), group.getId());
         createSettlementPaymentCarts(category, user, member, group, settlementPaymentDto.getAmount(), groupMemberCount, settlementPaymentDto.getDatePurchased());
     }
 
-    public void getExcelFile(HttpServletResponse response, Long groupId) throws IOException, GroupNotFoundException, UserNotFoundException, NotOwnerOrMemberOfGroupException {
+    public void getExcelFile(HttpServletResponse response, Long groupId) throws IOException, GroupNotFoundException, UserNotFoundException, NotOwnerOrMemberOfGroupException, IllegalAccessException {
         var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(groupId);
         verificationService.verifyIsPartOfGroup(user, group);
@@ -130,7 +138,7 @@ public class CartService {
 
 
     private void createCategoryForSettlementPaymentIfNotExist(Group group) {
-        if (categoryRepository.findCategoryByGroupAndName(group,SETTLEMENT_CATEGORY_NAME) == null) {
+        if (categoryRepository.findCategoryByGroupAndName(group, SETTLEMENT_CATEGORY_NAME) == null) {
             categoryRepository.save(new Category(null, SETTLEMENT_CATEGORY_NAME, group, null));
         }
     }
@@ -144,7 +152,4 @@ public class CartService {
         }
     }
 
-    private String capitalize(String str) {
-        return str.substring(0, 1).toUpperCase() + str.substring(1);
-    }
 }

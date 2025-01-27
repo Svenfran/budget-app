@@ -40,23 +40,26 @@ public class DataLoaderService {
             CategoryRepository categoryRepository,
             CartRepository cartRepository,
             UserRepository userRepository,
-            GroupMembershipHistoryRepository gmhRepository
-    ){
+            GroupRepository groupRepository,
+            ShoppingListRepository shoppingListRepository,
+            ShoppingItemRepository shoppingItemRepository){
         this.categoryRepository = categoryRepository;
         this.cartRepository = cartRepository;
         this.userRepository = userRepository;
-        this.groupMembershipHistoryRepository = gmhRepository;
+        this.groupRepository = groupRepository;
+        this.shoppingListRepository = shoppingListRepository;
+        this.shoppingItemRepository = shoppingItemRepository;
     }
 
 
     public Group loadGroup(Long groupId) throws GroupNotFoundException {
         return groupRepository.findById(groupId)
-                        .orElseThrow(() -> new GroupNotFoundException("Group with Id " + groupId + " not found"));
+                        .orElseThrow(() -> new GroupNotFoundException(String.format("Group with Id %s not found", groupId)));
     }
 
     public Cart loadCart(Long cartId) throws CartNotFoundException {
         return cartRepository.findById(cartId)
-                        .orElseThrow(() -> new CartNotFoundException("Cart with Id " + cartId + " not found"));
+                        .orElseThrow(() -> new CartNotFoundException(String.format("Cart with Id %s not found", cartId)));
     }
 
     public List<Cart> loadCartListForGroup(Long groupId) {
@@ -65,7 +68,7 @@ public class DataLoaderService {
 
     public Category loadCategory(Long categoryId) throws CategoryNotFoundException {
         return categoryRepository.findById(categoryId)
-                        .orElseThrow(() -> new CategoryNotFoundException("Category with Id " + categoryId + " not found"));
+                        .orElseThrow(() -> new CategoryNotFoundException(String.format("Category with Id %s not found", categoryId)));
     }
 
     public List<Category> loadCategoriesForGroup(Long groupId) {
@@ -78,7 +81,7 @@ public class DataLoaderService {
 
     public User loadUser(Long userId) throws UserNotFoundException {
         return userRepository.findById(userId)
-                        .orElseThrow(() -> new UserNotFoundException("User with Id " + userId + " not found"));
+                        .orElseThrow(() -> new UserNotFoundException(String.format("User with Id %s not found", userId)));
     }
 
     public User loadUserByEmail(String email) throws UserNotFoundException {
@@ -92,16 +95,20 @@ public class DataLoaderService {
 
     public ShoppingList loadShoppingList(Long listId) throws ShoppingListNotFoundException {
         return shoppingListRepository.findById(listId)
-                        .orElseThrow(() -> new ShoppingListNotFoundException("Shoppinglist with Id " + listId + " not found"));
+                        .orElseThrow(() -> new ShoppingListNotFoundException(String.format("Shoppinglist with Id %s not found", listId)));
     }
 
     public ShoppingItem loadShoppingItem(Long itemId) throws ShoppingItemNotFoundException {
         return shoppingItemRepository.findById(itemId)
-                        .orElseThrow(() -> new ShoppingItemNotFoundException("Shoppingitem with Id " + itemId + " not found"));
+                        .orElseThrow(() -> new ShoppingItemNotFoundException(String.format("Shoppingitem with Id %s not found", itemId)));
     }
 
-    public List<GroupMembershipHistory> loadMembershipHistory(Long groupId) {
+    public List<GroupMembershipHistory> loadMembershipHistoryForGroup(Long groupId) {
         return groupMembershipHistoryRepository.findByGroupId(groupId);
+    }
+
+    public List<GroupMembershipHistory> loadMembershipHistoryForGroupAndUser(Long groupId, Long userId) {
+        return groupMembershipHistoryRepository.findByGroupIdAndUserId(groupId, userId);
     }
 
     public User getAuthenticatedUser() throws UserNotFoundException {

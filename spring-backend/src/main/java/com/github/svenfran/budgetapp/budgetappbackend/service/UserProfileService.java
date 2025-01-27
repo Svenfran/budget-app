@@ -67,7 +67,7 @@ public class UserProfileService {
         var allUserGroups = userDelete.getGroupList();
         for (Group group : allUserGroups) {
             if (group.getOwner().equals(userDelete)) {
-                var groupMembershipToRemove = dataLoaderService.loadMembershipHistory(group.getId());
+                var groupMembershipToRemove = dataLoaderService.loadMembershipHistoryForGroup(group.getId());
                 if (!group.getMembers().isEmpty()) group.removeAllMembers();
                 if (!groupMembershipToRemove.isEmpty()) groupMembershipToRemove.forEach(gmh -> gmh.setGroupId(null));
                 if (!group.getCarts().isEmpty()) cartRepository.deleteAll(group.getCarts());

@@ -33,13 +33,13 @@ public class CartController {
     }
 
     @PostMapping("/carts/add")
-    public ResponseEntity<CartDto> addCart(@RequestBody CartDto cartDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, CategoryNotFoundException {
+    public ResponseEntity<CartDto> addCart(@RequestBody CartDto cartDto) throws Exception {
         CartDto newCart = cartService.addCart(cartDto);
         return new ResponseEntity<>(newCart, HttpStatus.CREATED);
     }
 
     @PutMapping("/carts/update")
-    public ResponseEntity<CartDto> updateCart(@RequestBody CartDto cartDto) throws UserNotFoundException, GroupNotFoundException, CartNotFoundException, NotOwnerOfCartException, NotOwnerOrMemberOfGroupException, GroupIdNotFoundException, CategoryNotFoundException {
+    public ResponseEntity<CartDto> updateCart(@RequestBody CartDto cartDto) throws Exception {
         CartDto updateCart = cartService.updateCart(cartDto);
         return new ResponseEntity<>(updateCart, HttpStatus.CREATED);
     }
@@ -51,13 +51,13 @@ public class CartController {
     }
 
     @PostMapping("/carts/settlement-payment/add")
-    public ResponseEntity<CartDto> addSettlementPayment(@RequestBody SettlementPaymentDto settlementPaymentDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
+    public ResponseEntity<CartDto> addSettlementPayment(@RequestBody SettlementPaymentDto settlementPaymentDto) throws Exception {
         cartService.addSettlementPayment(settlementPaymentDto);
         return new ResponseEntity<>(HttpStatus.OK);
     }
 
     @GetMapping("/carts/download/{groupId}")
-    public void getExcelFile(@PathVariable("groupId") Long groupId, HttpServletResponse response) throws IOException, UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
+    public void getExcelFile(@PathVariable("groupId") Long groupId, HttpServletResponse response) throws IOException, UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, IllegalAccessException {
         cartService.getExcelFile(response, groupId);
     }
 }

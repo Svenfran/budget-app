@@ -8,6 +8,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.BindingResult;
 
+import java.time.ZoneId;
+import java.util.Date;
+import java.util.List;
+
 @Service
 public class VerificationService {
 
@@ -109,6 +113,20 @@ public class VerificationService {
         if (!shoppingList.getId().equals(shoppingItem.getShoppingList().getId())) {
             throw new ShoppingItemDoesNotBelongToShoppingListException("Shoppingitem with Id " + shoppingItem.getId() + " does not belong to shoppinglist with Id " + shoppingList.getId());
         }
+    }
+
+    public void verifyDatePurchasedWithinMembershipPeriod (List<GroupMembershipHistory> gmh, Date datePurchased) throws DatePurchasedNotWithinMembershipPeriodException {
+        for (var timePeriod : gmh) {
+            var startDate = timePeriod.getMembershipStart().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+            var endDate = timePeriod.getMembershipEnd() != null ? timePeriod.getMembershipEnd().toInstant().atZone(ZoneId.systemDefault()).toLocalDate() : null;
+
+            var isAfterStart = !datePurchased.toInstant().atZone(ZoneId.systemDefault()).toLocalDate().isBefore(startDate);
+            var isBeforeEnd = (endDate == null) || !datePurchased.toInstant().atZone(ZoneId.systemDefault()).toLocalDate().isAfter(endDate);
+
+            if (isAfterStart && isBeforeEnd) {
+                return;
+            }
+        } throw new DatePurchasedNotWithinMembershipPeriodException("Date purchased is not within membership period");
     }
 
     private boolean emailExists(String email) {

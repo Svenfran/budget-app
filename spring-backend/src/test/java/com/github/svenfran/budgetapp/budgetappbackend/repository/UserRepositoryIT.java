@@ -1,5 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.repository;
 
+import com.github.svenfran.budgetapp.budgetappbackend.CreateDataService;
 import com.github.svenfran.budgetapp.budgetappbackend.container.TestContainerEnv;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
 import org.junit.jupiter.api.AfterEach;
@@ -19,6 +20,9 @@ class UserRepositoryIT extends TestContainerEnv {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private CreateDataService createDataService;
+
 
     @AfterEach
     void cleanUp() {
@@ -26,8 +30,8 @@ class UserRepositoryIT extends TestContainerEnv {
     }
 
     @Test
-    void findById() {
-        var loadedUser = loadUser("Test-User", "querz123", "tom@tester.com");
+    void testFindUserById() {
+        var loadedUser = createDataService.createUser("Test-User");
         logger.info(loadedUser.toString());
         Optional<User> result = userRepository.findById(loadedUser.getId());
         assertTrue(result.isPresent());
@@ -35,13 +39,13 @@ class UserRepositoryIT extends TestContainerEnv {
         var user = result.get();
 
         assertEquals("Test-User", user.getName());
-        assertTrue(passwordEncoder.matches("querz123", user.getPassword()));
-        assertEquals("tom@tester.com", user.getEmail());
+        assertTrue(passwordEncoder.matches("!!Test-User!!", user.getPassword()));
+        assertEquals("Test-User@tester.de", user.getEmail());
     }
 
     @Test
-    void findByEmail() {
-        var loadedUser = loadUser("Test-Alfred", "password", "alfred@tester.com");
+    void testFindUserByEmail() {
+        var loadedUser = createDataService.createUser("Test-Alfred");
         logger.info(loadedUser.toString());
         Optional<User> result = userRepository.findByEmail(loadedUser.getEmail());
         assertTrue(result.isPresent());
@@ -49,13 +53,13 @@ class UserRepositoryIT extends TestContainerEnv {
         var user = result.get();
 
         assertEquals("Test-Alfred", user.getName());
-        assertTrue(passwordEncoder.matches("password", user.getPassword()));
-        assertEquals("alfred@tester.com", user.getEmail());
+        assertTrue(passwordEncoder.matches("!!Test-Alfred!!", user.getPassword()));
+        assertEquals("Test-Alfred@tester.de", user.getEmail());
     }
 
     @Test
-    void findByName() {
-        var loadedUser = loadUser("Test-Meier", "123456", "meier@tester.com");
+    void testFindUserByName() {
+        var loadedUser = createDataService.createUser("Test-Meier");
         logger.info(loadedUser.toString());
         Optional<User> result = userRepository.findByName(loadedUser.getName());
         assertTrue(result.isPresent());
@@ -63,13 +67,13 @@ class UserRepositoryIT extends TestContainerEnv {
         var user = result.get();
 
         assertEquals("Test-Meier", user.getName());
-        assertTrue(passwordEncoder.matches("123456", user.getPassword()));
-        assertEquals("meier@tester.com", user.getEmail());
+        assertTrue(passwordEncoder.matches("!!Test-Meier!!", user.getPassword()));
+        assertEquals("Test-Meier@tester.de", user.getEmail());
     }
 
     @Test
-    void findByEmailNegative() {
-        var loadedUser = loadUser("Test-Paul", "kdSWk12l", "paul@tester.com");
+    void testFindUserByEmailNegative() {
+        var loadedUser = createDataService.createUser("Test-Paul");
         logger.info(loadedUser.toString());
         Optional<User> result = userRepository.findByEmail(loadedUser.getEmail());
         assertTrue(result.isPresent());
@@ -78,23 +82,15 @@ class UserRepositoryIT extends TestContainerEnv {
 
         assertNotEquals("Test-Alfred", user.getName());
         assertFalse(passwordEncoder.matches("password", user.getPassword()));
-        assertNotEquals("alfred@tester.com", user.getEmail());
+        assertNotEquals("alfred@tester.de", user.getEmail());
     }
 
     @Test
-    void findNotByEmail() {
-        var loadedUser = loadUser("Test-Sven", "kdJF5§§", "sven@tester.com");
+    void testFindUserNotByEmail() {
+        var loadedUser = createDataService.createUser("Test-Sven");
         logger.info(loadedUser.toString());
         Optional<User> result = userRepository.findByEmail("sven@tester.de");
         assertFalse(result.isPresent());
-    }
-
-    private User loadUser(String name, String password, String email) {
-        User user = new User();
-        user.setName(name);
-        user.setPassword(passwordEncoder.encode(password));
-        user.setEmail(email);
-        return userRepository.save(user);
     }
 
 }

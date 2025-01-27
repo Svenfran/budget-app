@@ -1,20 +1,31 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
 import com.github.svenfran.budgetapp.budgetappbackend.constants.TypeEnum;
+import com.github.svenfran.budgetapp.budgetappbackend.dto.GroupMembershipHistoryDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.GroupMembershipHistory;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.GroupNotFoundException;
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOrMemberOfGroupException;
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupMembershipHistoryRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.Date;
+import java.util.List;
 
 @Service
 public class GroupMembershipHistoryService {
 
     @Autowired
     private GroupMembershipHistoryRepository groupMembershipHistoryRepository;
+
+    @Autowired
+    private DataLoaderService dataLoaderService;
+
+    @Autowired
+    private VerificationService verificationService;
 
     // Eine neue Gruppe wird erstellt
     public void startGroupMembershipForOwner(User user, Group group) {
@@ -40,6 +51,14 @@ public class GroupMembershipHistoryService {
     public void changeGroupMemberToOwner(User user, Group group) {
         finishGroupMembership(user, group);
         startGroupMembershipForOwner(user, group);
+    }
+
+    public List<GroupMembershipHistoryDto> getGroupHistoryForGroupAndUser(Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
+        var user = dataLoaderService.getAuthenticatedUser();
+        var group = dataLoaderService.loadGroup(groupId);
+        verificationService.verifyIsPartOfGroup(user, group);
+        var gmh = groupMembershipHistoryRepository.findByGroupIdAndUserId(groupId, user.getId());
+        return gmh.stream().map(GroupMembershipHistoryDto::new).toList();
     }
 
     // Benutzer wird aus Gruppe entfernt

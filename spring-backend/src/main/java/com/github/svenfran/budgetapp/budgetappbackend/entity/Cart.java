@@ -167,4 +167,22 @@ public class Cart implements Serializable {
     public void setAveragePerMember(Double averagePerMember) {
         this.averagePerMember = averagePerMember;
     }
+
+    @Override
+    public String toString() {
+        return "Cart{" +
+                "id=" + id +
+                ", title='" + title + '\'' +
+                ", description='" + description + '\'' +
+                ", amount=" + amount +
+                ", averagePerMember=" + averagePerMember +
+                ", isDeleted=" + isDeleted +
+                ", datePurchased=" + datePurchased +
+                ", dateCreated=" + dateCreated +
+                ", lastUpdate=" + lastUpdate +
+                ", group=" + group +
+                ", user=" + user +
+                ", category=" + category +
+                '}';
+    }
 }

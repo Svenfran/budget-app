@@ -149,8 +149,10 @@ public class Group implements Serializable {
 
     @PreRemove
     public void removeAllMembers() {
-        for (User member : this.getMembers()) {
-            member.getGroups().remove(this);
+        if (this.getMembers() != null) {
+            for (User member : this.getMembers()) {
+                member.getGroups().remove(this);
+            }
         }
     }
 
@@ -176,5 +178,22 @@ public class Group implements Serializable {
 
     public void setLastUpdateShoppingList(Date lastUpdateShoppingList) {
         this.lastUpdateShoppingList = lastUpdateShoppingList;
+    }
+
+    @Override
+    public String toString() {
+        return "Group{" +
+                "id=" + id +
+                ", name='" + name + '\'' +
+                ", dateCreated=" + dateCreated +
+                ", lastUpdate=" + lastUpdate +
+                ", lastUpdateShoppingList=" + lastUpdateShoppingList +
+                ", carts=" + carts +
+                ", shoppingLists=" + shoppingLists +
+                ", categories=" + categories +
+                ", owner=" + owner +
+                ", members=" + members +
+                ", memberList=" + memberList +
+                '}';
     }
 }

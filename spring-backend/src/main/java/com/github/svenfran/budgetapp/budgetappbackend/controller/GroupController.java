@@ -2,6 +2,7 @@ package com.github.svenfran.budgetapp.budgetappbackend.controller;
 
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.*;
+import com.github.svenfran.budgetapp.budgetappbackend.service.GroupMembershipHistoryService;
 import com.github.svenfran.budgetapp.budgetappbackend.service.GroupService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -17,6 +18,9 @@ public class GroupController {
     @Autowired
     private GroupService groupService;
 
+    @Autowired
+    private GroupMembershipHistoryService gmhService;
+
     @GetMapping("/groups/sidenav")
     public ResponseEntity<List<GroupSideNavDto>> getGroupsForSideNav() throws UserNotFoundException {
         List<GroupSideNavDto> groups = groupService.getGroupsForSideNav();
@@ -29,8 +33,14 @@ public class GroupController {
         return new ResponseEntity<>(groups, HttpStatus.OK);
     }
 
+    @GetMapping("/groups/history-by-group-and-user/{groupId}")
+    public ResponseEntity<List<GroupMembershipHistoryDto>> getGroupHistoryForGroupAndUser(@PathVariable("groupId") Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
+        List<GroupMembershipHistoryDto> gmh = gmhService.getGroupHistoryForGroupAndUser(groupId);
+        return new ResponseEntity<>(gmh, HttpStatus.OK);
+    }
+
     @GetMapping("/groups/members/{groupId}")
-    public ResponseEntity<GroupMembersDto> getGroupMembers(@PathVariable("groupId") Long groupId) throws UserNotFoundException, NotOwnerOfGroupException, GroupNotFoundException, NotMemberOfGroupException, NotOwnerOrMemberOfGroupException {
+    public ResponseEntity<GroupMembersDto> getGroupMembers(@PathVariable("groupId") Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
         GroupMembersDto groups = groupService.getGroupMembers(groupId);
         return new ResponseEntity<>(groups, HttpStatus.OK);
     }

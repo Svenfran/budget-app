@@ -63,7 +63,7 @@ public interface CartRepository extends CrudRepository<Cart, Long> {
     Double getTotalAmountAllYears(@Param("groupId") Long groupId);
 
     @Query("""
-            select year(c.datePurchased) as _year from Cart as c where c.group.id = :groupId group by _year order by _year desc
+            select year(c.datePurchased) as _year from Cart as c where c.group.id = :groupId and c.isDeleted = false group by _year order by _year desc
             """)
     List<Integer> getAvailableYearsForGroup(@Param("groupId") Long groupId);
 

@@ -52,6 +52,7 @@ public class SpendingsOverviewService {
         spendingsOverview.setGroupId(groupId);
         spendingsOverview.setSpendingsTotalYear(getSpendingsOverviewTotalAllYears(groupId));
         spendingsOverview.setSpendingsPerYear(getSpendingsOverviewPerYear(groupId));
+        spendingsOverview.setAvailableYears(cartRepository.getAvailableYearsForGroup(groupId));
         return spendingsOverview;
     }
 

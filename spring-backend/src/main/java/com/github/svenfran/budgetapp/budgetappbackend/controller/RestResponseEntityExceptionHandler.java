@@ -159,4 +159,10 @@ public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionH
         LOG.debug("Exception Message: " + ex.getMessage(), ex);
         return new ResponseEntity<>(ex.getMessage(), HttpStatus.BAD_REQUEST);
     }
+
+    @ExceptionHandler(value = { DatePurchasedNotWithinMembershipPeriodException.class })
+    protected ResponseEntity<Object> handleDatePurchasedNotWithinMembershipPeriodException (DatePurchasedNotWithinMembershipPeriodException ex, WebRequest request) {
+        LOG.debug("Exception Message: " + ex.getMessage(), ex);
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
 }
