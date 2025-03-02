@@ -1,7 +1,5 @@
 package com.github.svenfran.budgetapp.budgetappbackend.dto;
 
-import java.util.Date;
-
 public class AuthenticationResponse {
 
     private Long id;

@@ -9,12 +9,21 @@ public class GroupMembersDto extends GroupSideNavDto{
     private String ownerName;
     private Long ownerId;
     private List<UserDto> members;
+    private UserDto updatedMember;
 
     public GroupMembersDto(Group group) {
         super(group);
         this.ownerName = group.getOwner().getName();
         this.ownerId = group.getOwner().getId();
         this.members = group.getMembers().stream().map(UserDto::new).toList();
+    }
+
+    public GroupMembersDto(Group group, UserDto updatedMember) {
+        super(group);
+        this.ownerName = group.getOwner().getName();
+        this.ownerId = group.getOwner().getId();
+        this.members = group.getMembers().stream().map(UserDto::new).toList();
+        this.updatedMember = updatedMember;
     }
 
     public GroupMembersDto() {
@@ -45,4 +54,11 @@ public class GroupMembersDto extends GroupSideNavDto{
         this.ownerId = ownerId;
     }
 
+    public UserDto getUpdatedMember() {
+        return updatedMember;
+    }
+
+    public void setUpdatedMember(UserDto updatedMember) {
+        this.updatedMember = updatedMember;
+    }
 }

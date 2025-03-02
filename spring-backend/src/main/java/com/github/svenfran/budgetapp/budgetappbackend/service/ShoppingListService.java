@@ -40,6 +40,9 @@ public class ShoppingListService {
     @Autowired
     private VerificationService verificationService;
 
+    @Autowired
+    private NotificationService notificationService;
+
     public Optional<List<ShoppingListDto>> getShoppingListsForGroup(Long groupId, Long requestTimeStamp) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
         var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(groupId);
@@ -95,7 +98,16 @@ public class ShoppingListService {
         verificationService.verifyIsPartOfGroup(user, group);
         group.setLastUpdateShoppingList(new Date());
         groupRepository.save(group);
-        return new AddEditShoppingListDto(shoppingListRepository.save(shoppingListDtoMapper.addEditShoppingListDtoToEntity(addEditShoppingListDto, group)));
+
+        var addedList = new AddEditShoppingListDto(shoppingListRepository.save(shoppingListDtoMapper.addEditShoppingListDtoToEntity(addEditShoppingListDto, group)));
+
+        notificationService.sendShoppingListNotification(
+                group.getId(),
+                addedList,
+                "add"
+        );
+
+        return addedList;
     }
 
     @Transactional
@@ -107,7 +119,16 @@ public class ShoppingListService {
         verificationService.verifyShoppingListIsPartOfGroup(shoppingList, group);
         group.setLastUpdateShoppingList(new Date());
         groupRepository.save(group);
-        return new AddEditShoppingListDto(shoppingListRepository.save(shoppingListDtoMapper.addEditShoppingListDtoToEntity(addEditShoppingListDto, group)));
+
+        var updatedList = new AddEditShoppingListDto(shoppingListRepository.save(shoppingListDtoMapper.addEditShoppingListDtoToEntity(addEditShoppingListDto, group)));
+
+        notificationService.sendShoppingListNotification(
+                group.getId(),
+                updatedList,
+                "update"
+        );
+
+        return updatedList;
     }
 
     @Transactional
@@ -121,6 +142,11 @@ public class ShoppingListService {
         shoppingListRepository.deleteById(shoppingList.getId());
         group.setLastUpdateShoppingList(new Date());
         groupRepository.save(group);
+        notificationService.sendShoppingListNotification(
+                group.getId(),
+                dto,
+                "delete"
+        );
     }
 
 }

@@ -29,6 +29,9 @@ public class ShoppingItemService {
     @Autowired
     private VerificationService verificationService;
 
+    @Autowired
+    private NotificationService notificationService;
+
     @Transactional
     public AddEditShoppingItemDto addShoppingItem(AddEditShoppingItemDto dto) throws UserNotFoundException, GroupNotFoundException, ShoppingListNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingListDoesNotBelongToGroupException {
         var user = dataLoaderService.getAuthenticatedUser();
@@ -38,7 +41,15 @@ public class ShoppingItemService {
         verificationService.verifyShoppingListIsPartOfGroup(shoppingList, group);
         group.setLastUpdateShoppingList(new Date());
         groupRepository.save(group);
-        return new AddEditShoppingItemDto(shoppingItemRepository.save(shoppingItemDtoMapper.addEditShoppingItemDtoToEntity(dto, shoppingList)));
+        var addedItem =  new AddEditShoppingItemDto(shoppingItemRepository.save(shoppingItemDtoMapper.addEditShoppingItemDtoToEntity(dto, shoppingList)));
+
+        notificationService.sendShoppingItemNotification(
+                group.getId(),
+                addedItem,
+                "add"
+        );
+
+        return addedItem;
     }
 
     @Transactional
@@ -52,7 +63,15 @@ public class ShoppingItemService {
         verificationService.verifyShoppingItemIsPartOfShoppingList(shoppingList, shoppingItem);
         group.setLastUpdateShoppingList(new Date());
         groupRepository.save(group);
-        return new AddEditShoppingItemDto(shoppingItemRepository.save(shoppingItemDtoMapper.addEditShoppingItemDtoToEntity(dto, shoppingList)));
+        var updatedItem = new AddEditShoppingItemDto(shoppingItemRepository.save(shoppingItemDtoMapper.addEditShoppingItemDtoToEntity(dto, shoppingList)));
+
+        notificationService.sendShoppingItemNotification(
+                group.getId(),
+                updatedItem,
+                "update"
+        );
+
+        return updatedItem;
     }
 
     @Transactional
@@ -67,6 +86,11 @@ public class ShoppingItemService {
         group.setLastUpdateShoppingList(new Date());
         groupRepository.save(group);
         shoppingItemRepository.deleteById(shoppingItem.getId());
+        notificationService.sendShoppingItemNotification(
+                group.getId(),
+                dto,
+                "delete"
+        );
     }
 
 }

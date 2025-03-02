@@ -89,4 +89,8 @@ public class GroupMembershipHistoryService {
             }
         }
     }
+
+    public List<GroupMembershipHistory> getGroupMembersAndOwner(Long groupId) {
+        return groupMembershipHistoryRepository.findByGroupIdAndMembershipEndIsNull(groupId);
+    }
 }

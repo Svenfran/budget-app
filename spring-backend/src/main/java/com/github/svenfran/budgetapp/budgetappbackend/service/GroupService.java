@@ -1,6 +1,7 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.*;
+import com.github.svenfran.budgetapp.budgetappbackend.entity.Cart;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Category;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
@@ -8,6 +9,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.*;
 import com.github.svenfran.budgetapp.budgetappbackend.service.mapper.GroupDtoMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,6 +50,9 @@ public class GroupService {
     @Autowired
     private VerificationService verificationService;
 
+    @Autowired
+    private NotificationService notificationService;
+
 
     public Stream<Group> getGroupsByMemberOrOwner() throws UserNotFoundException {
         var user = dataLoaderService.getAuthenticatedUser();
@@ -87,7 +92,9 @@ public class GroupService {
         var group = dataLoaderService.loadGroup(groupDto.getId());
         verificationService.verifyIsGroupOwner(user, group);
         var groupOwner = dataLoaderService.loadUser(group.getOwner().getId());
-        return new GroupDto(groupRepository.save(groupDtoMapper.GroupDtoToEntity(groupDto, groupOwner)));
+        var updatedGroup = new GroupDto(groupRepository.save(groupDtoMapper.GroupDtoToEntity(groupDto, groupOwner)));
+        notificationService.sendGroupUpdateNotification(group.getId(), updatedGroup);
+        return updatedGroup;
     }
 
     @Transactional
@@ -105,7 +112,12 @@ public class GroupService {
         setIsDeletedForCart(group, newMember, false);
 
         calculateAveragePerMember(group);
-        return new GroupMembersDto(groupRepository.save(group));
+        var groupMemberDto = new GroupMembersDto(groupRepository.save(group), new UserDto(newMember));
+        notificationService.sendGroupMemberAddedNotification(
+                group.getId(),
+                groupMemberDto
+        );
+        return groupMemberDto;
     }
 
     @Transactional
@@ -113,6 +125,7 @@ public class GroupService {
         var user = dataLoaderService.getAuthenticatedUser();
         var removedMember = dataLoaderService.loadUser(removeGroupMemberDto.getMember().getId());
         var group = dataLoaderService.loadGroup(removeGroupMemberDto.getId());
+        var history = gmhRepository.findByGroupIdAndMembershipEndIsNull(group.getId());
         verificationService.verifyIsOwnerOrMemberToRemove(user, removedMember, group);
 
         group.removeMember(removedMember);
@@ -120,13 +133,19 @@ public class GroupService {
         setIsDeletedForCart(group, removedMember, true);
 
         calculateAveragePerMember(group);
-        return new GroupMembersDto(groupRepository.save(group));
+        var groupMemberDto = new GroupMembersDto(groupRepository.save(group), new UserDto(removedMember));
+        notificationService.sendGroupMemberRemovedNotification(
+                history,
+                groupMemberDto
+        );
+        return groupMemberDto;
     }
 
     @Transactional
     public void deleteGroup(Long id) throws UserNotFoundException, GroupNotFoundException, NotOwnerOfGroupException {
         var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(id);
+        var history = gmhRepository.findByGroupIdAndMembershipEndIsNull(group.getId());
         verificationService.verifyIsGroupOwner(user, group);
         var groupMembershipToRemove = dataLoaderService.loadMembershipHistoryForGroup(group.getId());
         if (!group.getMembers().isEmpty()) group.removeAllMembers();
@@ -138,6 +157,7 @@ public class GroupService {
             shoppingListRepository.deleteAll(group.getShoppingLists());
         }
         groupRepository.deleteById(id);
+        notificationService.sendGroupDeletedNotification(history, new GroupDto(group));
     }
 
     @Transactional
@@ -153,6 +173,7 @@ public class GroupService {
         groupMembershipHistoryService.changeGroupOwnerToMember(user, group);
         groupMembershipHistoryService.changeGroupMemberToOwner(newGroupOwner, group);
         groupRepository.save(group);
+        notificationService.sendGroupOwnerChangedNotification(group.getId(), newGroupOwner);
     }
 
     private void createDefaultCategories(Group group) {
@@ -179,11 +200,33 @@ public class GroupService {
         }
     }
 
-    public void calculateAveragePerMember(Group group) {
+    public void calculateAveragePerMember(@NonNull Group group) {
         var cartsOfGroup = group.getCarts();
+
         if (!cartsOfGroup.isEmpty()) {
-            cartsOfGroup.forEach(cart -> cart.setAveragePerMember(cart.getAmount() / dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(cart.getDatePurchased(), cart.getGroup().getId())));
-            cartRepository.saveAll(cartsOfGroup);
+            calculateCarts(cartsOfGroup);
         }
+    }
+
+    public void calculateAveragePerMemberForAllCarts() {
+        var carts = cartRepository.findAll();
+        calculateCarts(carts);
+    }
+
+    private void calculateCarts(Iterable<Cart> carts) {
+        carts.forEach(cart -> {
+            int memberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(
+                    cart.getDatePurchased(),
+                    cart.getGroup().getId()
+            );
+
+            if (memberCount > 0) {
+                cart.setAveragePerMember(cart.getAmount() / memberCount);
+            } else {
+                cart.setAveragePerMember(0.0);
+            }
+        });
+
+        cartRepository.saveAll(carts);
     }
 }

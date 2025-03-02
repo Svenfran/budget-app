@@ -34,7 +34,7 @@ public class SecurityConfiguration {
                 .csrf()
                 .disable()
                 .authorizeHttpRequests()
-                .antMatchers("/api/auth/**", "/api/userprofile/password-reset")
+                .antMatchers("/api/auth/**", "/api/userprofile/password-reset", "/ws/**")
                 .permitAll()
                 .antMatchers(HttpMethod.OPTIONS, "/**")
                 .permitAll()
@@ -58,4 +58,5 @@ public class SecurityConfiguration {
 
         return http.build();
     }
+
 }
