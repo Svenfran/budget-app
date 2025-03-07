@@ -1,5 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
+import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.*;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository;
@@ -11,6 +12,7 @@ import org.springframework.validation.BindingResult;
 import java.time.ZoneId;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class VerificationService {
@@ -112,6 +114,15 @@ public class VerificationService {
     public void verifyShoppingItemIsPartOfShoppingList(ShoppingList shoppingList, ShoppingItem shoppingItem) throws ShoppingItemDoesNotBelongToShoppingListException {
         if (!shoppingList.getId().equals(shoppingItem.getShoppingList().getId())) {
             throw new ShoppingItemDoesNotBelongToShoppingListException("Shoppingitem with Id " + shoppingItem.getId() + " does not belong to shoppinglist with Id " + shoppingList.getId());
+        }
+    }
+
+    public void verifyAllShoppingItemsBelongToSameShoppingListAndGroup(List<AddEditShoppingItemDto> shoppingItems) {
+        if (shoppingItems.stream()
+                .map(shoppingItem -> Map.entry(shoppingItem.getGroupId(), shoppingItem.getShoppingListId()))
+                .distinct()
+                .count() > 1) {
+            throw new IllegalArgumentException("One of the shoppingitems does not belong to the shoppinglist or group ");
         }
     }
 

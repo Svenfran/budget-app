@@ -188,6 +188,15 @@ public class GroupService {
         }
     }
 
+    @Transactional
+    public void createDefaultGroup(User user) {
+        var groupDto = new GroupDto();
+        groupDto.setName("Meine Ausgaben");
+        var group = groupRepository.save(groupDtoMapper.GroupDtoToEntity(groupDto, user));
+        createDefaultCategories(group);
+        groupMembershipHistoryService.startGroupMembershipForOwner(user, group);
+    }
+
     public void setIsDeletedForCart(Group group, User member, boolean delete) {
         var cartsOfMember = cartRepository.findCartsByGroupAndUser(group, member);
         if (delete && (!cartsOfMember.isEmpty())) {

@@ -9,7 +9,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 
 @Service
 public class ShoppingItemService {
@@ -90,6 +92,29 @@ public class ShoppingItemService {
                 group.getId(),
                 dto,
                 "delete"
+        );
+    }
+
+    @Transactional
+    public void deleteAllCompletedShoppingItems(List<AddEditShoppingItemDto> dtos) throws GroupNotFoundException, UserNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingListNotFoundException, ShoppingListDoesNotBelongToGroupException, ShoppingItemNotFoundException, ShoppingItemDoesNotBelongToShoppingListException {
+        verificationService.verifyAllShoppingItemsBelongToSameShoppingListAndGroup(dtos);
+        var user = dataLoaderService.getAuthenticatedUser();
+        var group = dataLoaderService.loadGroup(dtos.get(0).getGroupId());
+        verificationService.verifyIsPartOfGroup(user, group);
+        var shoppingList = dataLoaderService.loadShoppingList(dtos.get(0).getShoppingListId());
+        verificationService.verifyShoppingListIsPartOfGroup(shoppingList, group);
+        var shoppingItem = dataLoaderService.loadShoppingItem(dtos.get(0).getId());
+        verificationService.verifyShoppingItemIsPartOfShoppingList(shoppingList, shoppingItem);
+        var itemIds = new ArrayList<Long>(dtos.stream()
+                .filter(AddEditShoppingItemDto::isCompleted)
+                .map(AddEditShoppingItemDto::getId)
+                .toList());
+        group.setLastUpdateShoppingList(new Date());
+        groupRepository.save(group);
+        shoppingItemRepository.deleteAllById(itemIds);
+        notificationService.sendShoppingItemDeleteAllNotification(
+                group.getId(),
+                dtos
         );
     }
 

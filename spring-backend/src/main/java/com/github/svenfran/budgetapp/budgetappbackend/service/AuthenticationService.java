@@ -17,6 +17,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.BindingResult;
 
 @Service
@@ -43,7 +44,10 @@ public class AuthenticationService {
     @Autowired
     private VerificationService verificationService;
 
+    @Autowired
+    private GroupService groupService;
 
+    @Transactional
     public AuthenticationResponse register(RegisterRequest request, BindingResult bindingResult) throws UserAlreadyExistException, InvalidEmailException, UserNotFoundException, UserNameAlreadyExistsException {
         verificationService.verifyEmailIsValid(bindingResult);
         verificationService.verifyEmailNotExists(request.getEmail());
@@ -57,10 +61,11 @@ public class AuthenticationService {
         var token = jwtService.generateToken(user);
         var expTime = jwtService.extractExpiration(token).getTime();
         saveUserToken(savedUser, token);
+        groupService.createDefaultGroup(savedUser);
         return new AuthenticationResponse(registeredUserId, request.getName(), request.getEmail(), expTime, token);
     }
 
-
+    @Transactional
     public AuthenticationResponse authenticate(AuthenticationRequest request, BindingResult bindingResult) throws UserNotFoundException, InvalidEmailException {
         verificationService.verifyEmailIsValid(bindingResult);
         authManager.authenticate(

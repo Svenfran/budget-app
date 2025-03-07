@@ -51,9 +51,9 @@ public class CartController {
     }
 
     @PostMapping("/carts/settlement-payment/add")
-    public ResponseEntity<CartDto> addSettlementPayment(@RequestBody SettlementPaymentDto settlementPaymentDto) throws Exception {
-        cartService.addSettlementPayment(settlementPaymentDto);
-        return new ResponseEntity<>(HttpStatus.OK);
+    public ResponseEntity<List<CartDto>> addSettlementPayment(@RequestBody SettlementPaymentDto settlementPaymentDto) throws Exception {
+        var payment = cartService.addSettlementPayment(settlementPaymentDto);
+        return new ResponseEntity<>(payment, HttpStatus.OK);
     }
 
     @GetMapping("/carts/download/{groupId}")

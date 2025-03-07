@@ -15,4 +15,7 @@ public interface ShoppingItemRepository extends CrudRepository<ShoppingItem, Lon
 
     @Override
     void deleteById(Long aLong);
+
+    @Override
+    void deleteAllById(Iterable<? extends Long> longs);
 }

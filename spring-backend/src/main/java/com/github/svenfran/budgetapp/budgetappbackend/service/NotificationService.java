@@ -66,6 +66,23 @@ public class NotificationService {
         }
     }
 
+    public void sendShoppingItemDeleteAllNotification(Long groupId, List<AddEditShoppingItemDto> dtos) throws UserNotFoundException {
+        var history = gmhService.getGroupMembersAndOwner(groupId);
+        var user = dataLoaderService.getAuthenticatedUser();
+        var destination = "/notification/delete-all-items";
+
+        for (var gmh : history) {
+            if (!gmh.getUserId().equals(user.getId())) {
+                logger.info("Notify User with id {} | deleted all shopping items of list with id {} and group with id {}", gmh.getUserId(), dtos.get(0).getShoppingListId(), dtos.get(0).getGroupId());
+                messagingTemplate.convertAndSendToUser(
+                        gmh.getUserId().toString(),
+                        destination,
+                        dtos
+                );
+            }
+        }
+    }
+
     public void sendGroupUpdateNotification(Long groupId, GroupDto groupDto) throws UserNotFoundException {
         var history = gmhService.getGroupMembersAndOwner(groupId);
         var user = dataLoaderService.getAuthenticatedUser();
@@ -148,5 +165,5 @@ public class NotificationService {
             }
         }
     }
-    
+
 }

@@ -1,7 +1,9 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto;
+import com.github.svenfran.budgetapp.budgetappbackend.dto.CategoryDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto;
+import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Cart;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Category;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
@@ -18,6 +20,7 @@ import org.springframework.validation.annotation.Validated;
 
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 
@@ -92,7 +95,7 @@ public class CartService {
     }
 
     @Transactional
-    public void addSettlementPayment(@Validated SettlementPaymentDto settlementPaymentDto) throws Exception {
+    public List<CartDto> addSettlementPayment(@Validated SettlementPaymentDto settlementPaymentDto) throws Exception {
         var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(settlementPaymentDto.getGroupId());
         var member = dataLoaderService.loadUser(settlementPaymentDto.getMember().getId());
@@ -105,7 +108,7 @@ public class CartService {
         createCategoryForSettlementPaymentIfNotExist(group);
         var category = dataLoaderService.loadCategoryByGroupAndName(group, SETTLEMENT_CATEGORY_NAME);
         var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(settlementPaymentDto.getDatePurchased(), group.getId());
-        createSettlementPaymentCarts(category, user, member, group, settlementPaymentDto.getAmount(), groupMemberCount, settlementPaymentDto.getDatePurchased());
+        return createSettlementPaymentCarts(category, user, member, group, settlementPaymentDto.getAmount(), groupMemberCount, settlementPaymentDto.getDatePurchased());
     }
 
     public void getExcelFile(HttpServletResponse response, Long groupId) throws IOException, GroupNotFoundException, UserNotFoundException, NotOwnerOrMemberOfGroupException, IllegalAccessException {
@@ -120,20 +123,37 @@ public class CartService {
         excelWriter.generateExcelFile(response);
     }
 
-    private void createSettlementPaymentCarts(Category category, User user, User member, Group group, Double amount, int groupMemberCount, Date datePurchased) {
+    private List<CartDto> createSettlementPaymentCarts(Category category, User user, User member, Group group, Double amount, int groupMemberCount, Date datePurchased) {
         var cartDtoSender = new CartDto();
-        cartDtoSender.setTitle("Ausgleichszahlung an " + member.getName());
+        cartDtoSender.setTitle("Ausgleichszahlung an " + formatUsername(member.getName()));
         cartDtoSender.setDescription("");
         cartDtoSender.setDatePurchased(datePurchased);
         cartDtoSender.setAmount(amount);
-        cartRepository.save(cartDtoMapper.CartDtoToEntity(cartDtoSender, category, user, group, groupMemberCount));
+        cartDtoSender.setUserDto(new UserDto(user));
+        cartDtoSender.setGroupId(group.getId());
+        cartDtoSender.setCategoryDto(new CategoryDto(category));
+        var cartSender = cartRepository.save(cartDtoMapper.CartDtoToEntity(cartDtoSender, category, user, group, groupMemberCount));
+        cartDtoSender.setId(cartSender.getId());
 
         var cartDtoReceiver = new CartDto();
-        cartDtoReceiver.setTitle("Ausgleichszahlung von " + user.getName());
+        cartDtoReceiver.setTitle("Ausgleichszahlung von " + formatUsername(user.getName()));
         cartDtoReceiver.setDescription("");
         cartDtoReceiver.setDatePurchased(datePurchased);
         cartDtoReceiver.setAmount((-1) * amount);
-        cartRepository.save(cartDtoMapper.CartDtoToEntity(cartDtoReceiver, category, member, group, groupMemberCount));
+        cartDtoReceiver.setUserDto(new UserDto(member));
+        cartDtoReceiver.setGroupId(group.getId());
+        cartDtoReceiver.setCategoryDto(new CategoryDto(category));
+        var cartReceiver = cartRepository.save(cartDtoMapper.CartDtoToEntity(cartDtoReceiver, category, member, group, groupMemberCount));
+        cartDtoReceiver.setId(cartReceiver.getId());
+
+        return Arrays.asList(cartDtoSender, cartDtoReceiver);
+    }
+
+    private String formatUsername(String name) {
+        if (name != null && name.length() > 10) {
+            return name.substring(0, 10) + "...";
+        }
+        return name;
     }
 
 
