@@ -293,27 +293,11 @@ export class GroupoverviewPage implements OnInit {
     });
 
     (await modal).onDidDismiss().then((groupWithMembers) => {
-      let group = new GroupOverview(
-        groupWithMembers.data.id,
-        groupWithMembers.data.name,
-        groupWithMembers.data.ownerName,
-        groupWithMembers.data.members.length,
-        groupWithMembers.data.dateCreated
-      )
- 
-      let index = this.groupOverviewList.indexOf(
-        this.groupOverviewList.filter(g => g.id == group.id)[0]
-      )
-
-      if (this.groupOverviewList[index].memberCount !== group.memberCount) {
-        // this.groupOverviewList[index] = group;
-        this.groupService.setGroupModified(true);
+      if (!groupWithMembers.data) {
+        return;
       }
 
-      // if ((this.groupOverviewList.length - 1) <= 0 && this.activeGroup.id == group.id) {
-      //   this.groupService.setActiveGroup(null);
-      // }
-      
+      this.groupService.setGroupModified(true);
     });
     return (await modal).present();
   }

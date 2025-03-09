@@ -1,4 +1,4 @@
-import {Component, OnInit, ViewChild} from '@angular/core';
+import {ChangeDetectorRef, Component, OnInit, ViewChild} from '@angular/core';
 import {FormBuilder, FormGroup} from '@angular/forms';
 import {IonDatetime, ModalController} from '@ionic/angular';
 import {UserDto} from '../models/user';
@@ -23,6 +23,7 @@ export class FilterModalPage implements OnInit {
   activeGroupId: number;
   today = new Date();
   showPicker = false;
+  dateValue: string = '';
   formattedDateFrom: string = '';
   formattedDateTo: string = '';
   cartFilter: CartFilter = {};
@@ -35,7 +36,8 @@ export class FilterModalPage implements OnInit {
     private authService: AuthService,
     private fb: FormBuilder,
     private categoryService: CategoryService,
-    private groupService: GroupService
+    private groupService: GroupService,
+    private cdRef: ChangeDetectorRef
 
   ) { }
 
@@ -117,14 +119,15 @@ export class FilterModalPage implements OnInit {
   }
 
   clearInput(controlName: string) {
-    console.log(controlName);
     this.form.get(controlName).setValue(null);
+    this.cdRef.detectChanges();
     if (controlName === 'startDate') {
-      this.closeDatePickerStart();
+      this.formattedDateFrom = null;
+      this.closeDatePicker(controlName);
     }
-
     if (controlName === 'endDate') {
-      this.closeDatePickerEnd();
+      this.formattedDateTo = null;
+      this.closeDatePicker(controlName);
     }
   }
 
@@ -159,28 +162,37 @@ export class FilterModalPage implements OnInit {
     return `${day}.${month}.${year}`;
   }
 
-  closeDatePickerStart() {
-    this.datetimeStart.cancel(true);
+  closeDatePicker(controlName: string) {
+    if (controlName === 'startDate') {
+      this.datetimeStart.cancel(true);
+    } else if (controlName === 'endDate') {
+      this.datetimeEnd.cancel(true);
+    }
   }
 
-  closeDatePickerEnd() {
-    this.datetimeEnd.cancel(true);
+  select(controlName: string) {
+    if (controlName === 'startDate') {
+      // Manuelles Setzen des aktuellen Datums, falls der Wert noch nicht gesetzt wurde
+      if (!this.form.get('startDate').value) {
+        const currentDate = new Date(this.getDateValue('startDate'));
+        this.onDateChange({ detail: { value: currentDate.toISOString() } }, 'startDate');
+      }
+      this.datetimeStart.confirm(true);
+    } else if (controlName === 'endDate') {
+      if (!this.form.get('endDate').value) {
+        const currentDate = new Date(this.getDateValue('endDate'));
+        this.onDateChange({ detail: { value: currentDate.toISOString() } }, 'endDate');
+      }
+      this.datetimeEnd.confirm(true);
+    }
   }
-
-  selectStart() {
-    this.datetimeStart.confirm(true);
-  }
-
-  selectEnd() {
-    this.datetimeEnd.confirm(true);
-  }
-
+  
   getDateValue(controlName: string): string {
     const dateValue = this.form.get(controlName).value;
     if (dateValue) {
       // Wenn ein Datum im Feld steht, verwenden wir es
       const parts = dateValue.split('.');
-       // Konvertiere in yyyy-MM-dd (ISO-Format)
+      // Konvertiere in yyyy-MM-dd (ISO-Format)
       return `${parts[2]}-${parts[1]}-${parts[0]}`;
     } else {
       // Wenn kein Datum vorhanden ist, das aktuelle Datum verwenden

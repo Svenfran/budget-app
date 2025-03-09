@@ -15,6 +15,7 @@ import { SettlementPaymentPage } from './settlement-payment/settlement-payment.p
 import { GroupMembersPage } from './group-members/group-members.page';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { FilterModalPage } from './filter-modal/filter-modal.page';
+import { ScientificCurrencyPipe } from './pipe/scientific.pipe';
 registerLocaleData(localDe, 'de');
 
 @NgModule({
@@ -32,6 +33,7 @@ registerLocaleData(localDe, 'de');
     DatePipe,
     CurrencyPipe,
     AsyncPipe,
+    ScientificCurrencyPipe,
     FileOpener,
     { provide: HTTP_INTERCEPTORS, useClass: AuthHttpInterceptorService, multi: true },
     { provide: RouteReuseStrategy, useClass: IonicRouteStrategy }

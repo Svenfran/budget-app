@@ -26,8 +26,6 @@ export class AppComponent implements OnInit, OnDestroy {
 
   userName: string;
   grouplistSideNav: GroupSideNav[];
-  grouplistSideNavOwner: GroupSideNav[];
-  grouplistSideNavMember: GroupSideNav[];
   isOpen = false;
   activeGroup: Group;
   groupModified: boolean;
@@ -39,6 +37,10 @@ export class AppComponent implements OnInit, OnDestroy {
   authSub: Subscription;
   previousAuthState = false;
   userDto: UserDto;
+  hasGroupOwner: boolean;
+  hasGroupMember: boolean;
+  numberGroupOwner: number;
+  numberGroupMember: number;
 
 
   constructor(
@@ -128,8 +130,10 @@ export class AppComponent implements OnInit, OnDestroy {
     this.groupService.groupModified.subscribe(() => {
       this.groupService.getGroupsForSideNav().subscribe(groups => {
         this.grouplistSideNav = groups;
-        this.grouplistSideNavOwner = groups.filter(group => group.userDto.userName === this.userName);
-        this.grouplistSideNavMember = groups.filter(group => group.userDto.userName !== this.userName);
+        this.hasGroupOwner = this.grouplistSideNav.some(group => group.userDto.userName == this.userName);
+        this.hasGroupMember = this.grouplistSideNav.some(group => group.userDto.userName != this.userName);
+        this.numberGroupOwner = this.grouplistSideNav.filter(item => item.userDto.userName == this.userName).length;
+        this.numberGroupMember = this.grouplistSideNav.filter(item => item.userDto.userName != this.userName).length;
       }, errRes => {
         // console.log(errRes.error);
         return;
@@ -139,6 +143,7 @@ export class AppComponent implements OnInit, OnDestroy {
       })
     });
     this.groupService.setGroupModified(true);
+    // this.groupService.loadGroups();
   }
 
   checkIfGroupCountHasChanged() {
@@ -208,7 +213,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
 
-  onToggleColorTheme(event) {
+  onToggleColorTheme(event: any) {
     this.darkMode = event.detail.checked;
     if (this.darkMode) {
       this.renderer.setAttribute(document.body, 'color-theme', 'dark');

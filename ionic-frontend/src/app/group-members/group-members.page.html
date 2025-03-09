@@ -9,40 +9,45 @@
     </ion-buttons>
   </ion-toolbar>
   <ion-list class="ion-text-center" *ngIf="groupWithMembers?.members.length <= 0">
-    <ion-text>{{ groupWithMembers?.name }}</ion-text>
+    <ion-text class="ion-text-wrap">{{ groupWithMembers?.name }}</ion-text>
     <ion-item class="ion-text-center" lines="none">
       <ion-label><small>Keine Mitglieder vorhanden!</small></ion-label>
     </ion-item>
   </ion-list>
   <ion-list class="ion-text-center ion-padding" *ngIf="groupWithMembers?.members.length > 0">
-    <ion-text>{{ groupWithMembers?.name }}</ion-text>
+    <ion-text class="ion-text-wrap">{{ groupWithMembers?.name }}</ion-text>
     <div *ngIf="groupOwnerName === userName" (click)="toggleVisability()" class="select-owner">
       <ion-text><small>Gruppenadmin ändern</small></ion-text>
       <ion-icon *ngIf="isNotVisible" name="chevron-forward-outline" slot="icon-only" size="small"></ion-icon>
       <ion-icon *ngIf="!isNotVisible" name="chevron-back-outline" slot="icon-only" size="small"></ion-icon>
     </div>
-    <ion-radio-group [allowEmptySelection]="true">
-      <ion-item *ngFor="let member of groupWithMembers?.members, let i = index">
-        <ion-icon slot="start" name="person"></ion-icon>
-        <ion-label>
-          <div class="owner">
-              <ion-radio 
-                color="success"
-                (click)="getSelectedMember($event, member, groupWithMembers.id, i)"
-                *ngIf="groupOwnerName === userName"
-                [class.isNotVisible]="isNotVisible"
-              ></ion-radio>
-              <h2>{{ member.userName | titlecase }}</h2>
-              <ion-text color="medium" *ngIf="isSelected && memberIndex === i"><small>(neuer Grupenadmin)</small></ion-text>
-            </div>
-          </ion-label>
-          <ion-icon 
-            *ngIf="member.userName === userName || groupOwnerName === userName"
-            (click)="onDelete(member, groupWithMembers)"
-            slot="end"
-            name="close-circle-outline">
-        </ion-icon>
-      </ion-item>
-    </ion-radio-group>
+    <form [formGroup]="form">
+      <ion-radio-group 
+        [allowEmptySelection]="true"
+        formControlName="selectedOption">
+        <ion-item *ngFor="let member of groupWithMembers?.members, let i = index">
+          <ion-icon slot="start" name="person"></ion-icon>
+          <ion-label>
+            <div class="owner">
+                <ion-radio 
+                  color="success"
+                  [value]="selectedOption"
+                  (click)="getSelectedMember($event, member, groupWithMembers.id, i)"
+                  *ngIf="groupOwnerName === userName"
+                  [class.isNotVisible]="isNotVisible"
+                ></ion-radio>
+                <h2 class="ion-text-wrap">{{ member.userName | titlecase }}</h2>
+                <ion-text class="ion-text-wrap" color="medium" *ngIf="isSelected && memberIndex === i"><small>(Admin)</small></ion-text>
+              </div>
+            </ion-label>
+            <ion-icon 
+              *ngIf="member.userName === userName || groupOwnerName === userName"
+              (click)="onDelete(member, groupWithMembers)"
+              slot="end"
+              name="close-circle-outline">
+          </ion-icon>
+        </ion-item>
+      </ion-radio-group>
+    </form>
   </ion-list>
 </ion-content>

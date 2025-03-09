@@ -7,6 +7,7 @@ import { IonicModule } from '@ionic/angular';
 import { OverviewPageRoutingModule } from './overview-routing.module';
 
 import { OverviewPage } from './overview.page';
+import { ScientificCurrencyPipe } from 'src/app/pipe/scientific.pipe';
 
 @NgModule({
   imports: [
@@ -15,6 +16,6 @@ import { OverviewPage } from './overview.page';
     IonicModule,
     OverviewPageRoutingModule
   ],
-  declarations: [OverviewPage]
+  declarations: [OverviewPage, ScientificCurrencyPipe]
 })
 export class OverviewPageModule {}

@@ -7,7 +7,7 @@
     
     <ion-buttons *ngIf="loadedActiveGroup | async" slot="primary">
       <div *ngIf="activeGroup.id !== null">
-        <ion-text class="ion-padding group-name"><small>{{ (activeGroup.name.length > 20)? (activeGroup.name | slice:0:20) + '...' : (activeGroup.name) }}</small></ion-text>
+        <ion-text class="ion-padding group-name" routerLink="/groupoverview"><small>{{ (activeGroup.name.length > 20)? (activeGroup.name | slice:0:20) + '...' : (activeGroup.name) }}</small></ion-text>
       </div>
       <ion-button *ngIf="activeGroup.id !== null" [routerLink]="['new-edit']">
         <ion-icon name="add" slot="icon-only"></ion-icon>
@@ -43,12 +43,12 @@
   <ion-list-header color="light">
     <ion-label>
       <div class="total">
-        <ion-text>{{ filterTerm == "" ? "Gesamt" : filterTerm | titlecase }} ({{ count }})</ion-text>
+        <ion-text>{{ filterTerm == "" ? "Gesamt" : (filterTerm.length > 12 ? (filterTerm | slice:0:12) + '...' : (filterTerm))  }} ({{ count }})</ion-text>
           <ion-chip color="primary" *ngIf="filterMode">
             <ion-label (click)="filterModal()">filter</ion-label>
             <ion-icon name="close" (click)="deleteFilter(activeGroup.id)"></ion-icon>
           </ion-chip>
-        <ion-text>{{ sum | currency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
+        <ion-text>{{ sum | scientificCurrency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
       </div>
     </ion-label>
   </ion-list-header>
@@ -92,7 +92,7 @@
                 <ion-label>
                   <div class="cart-details">
                     <h2 (click)="toggleDescriptionVisibility(i)" class="titlestyle ion-text-wrap">{{ cart.title }}</h2>
-                    <h2>{{ cart.amount | currency: 'EUR': number: '1.2-2': 'de' }}</h2>
+                    <h2>{{ cart.amount | scientificCurrency: 'EUR': number: '1.2-2': 'de' }}</h2>
                   </div>
                   <p [hidden]="!isDescriptionVisible(i)" class="ion-text-wrap">{{cart.description}}</p>
                   <div class="cart-details">

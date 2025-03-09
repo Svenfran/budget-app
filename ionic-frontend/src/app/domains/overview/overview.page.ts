@@ -43,35 +43,36 @@ export class OverviewPage implements OnInit {
     this.getCurrentUser();
     this.getCurrentYear();
     this.groupService.activeGroup.subscribe(group => {
-      this.segment = "month";
       if (group) {
         // console.log(group);
         this.activeGroup = group;
-        this.getSpendingsOverview(this.currentYear);
+        this.getSpendingsOverviewYearly();
         this.loadedActiveGroup = Promise.resolve(true);
       } else {
         this.groupService.setActiveGroup(null);
       }
     })
   }
-
+  
   ionViewWillEnter() {
-    this.segment = "month";
-    this.getSpendingsOverview(this.currentYear);
+    this.getSpendingsOverviewYearly();
   }
+  
 
 
   getSpendingsOverview(year: number) {
+    if (!year) {
+      year = this.currentYear;
+    };
+
     this.isLoading = true;
     if (this.activeGroup.id !== null) {
       this.spendingsService.spendingsOverviewModified.subscribe(() => {
         this.spendingsService.getSpendingsOverview(year, this.activeGroup.id).subscribe(res => {
-          this.availableYears = res.availableYears;
           this.spendingsPerMonth = res.spendingsPerMonth;
           this.spendingsTotalYear = res.spendingsTotalYear;
+          this.segment = 'month';
           this.year = res.year;
-          this.segment = "month";
-          this.loadedSpendings = Promise.resolve(true);
           this.isLoading = false;
         })
       })
@@ -85,6 +86,9 @@ export class OverviewPage implements OnInit {
         this.spendingsService.getSpendingsOverviewYearly(this.activeGroup.id).subscribe(res => {
           this.spendingsPerYear = res.spendingsPerYear;
           this.spendingsTotalYear = res.spendingsTotalYear;
+          this.availableYears = res.availableYears;
+          this.segment = 'year';
+          this.loadedSpendings = Promise.resolve(true);
           this.isLoading = false;
         })
       })

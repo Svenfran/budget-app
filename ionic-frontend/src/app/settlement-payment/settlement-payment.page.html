@@ -1,5 +1,5 @@
 <ion-content>
-  <ion-toolbar>
+  <ion-toolbar *ngIf="loadedMembers | async">
     <ion-title>Ausgleichszahlung</ion-title>
     <ion-buttons slot="end">
       <ion-button (click)="onDismiss()" [disabled]="!form.valid">
@@ -67,6 +67,7 @@
                         #datetime
                         size="cover"
                         presentation="date"
+                        [isDateEnabled]="isDateSelectable"
                         [min]="minDate"
                         [max]="maxDate"
                         [firstDayOfWeek]="1"

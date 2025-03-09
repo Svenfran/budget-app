@@ -7,6 +7,7 @@ import { IonicModule } from '@ionic/angular';
 import { CartlistPageRoutingModule } from './cartlist-routing.module';
 
 import { CartlistPage } from './cartlist.page';
+import { ScientificCurrencyPipe } from 'src/app/pipe/scientific.pipe';
 
 @NgModule({
   imports: [
@@ -17,6 +18,6 @@ import { CartlistPage } from './cartlist.page';
     CartlistPageRoutingModule
   ],
 
-  declarations: [CartlistPage]
+  declarations: [CartlistPage, ScientificCurrencyPipe]
 })
 export class CartlistPageModule {}

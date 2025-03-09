@@ -3,7 +3,9 @@
     <ion-title>Filter</ion-title>
     <ion-buttons slot="end">
       <ion-button (click)="onDismiss()" [disabled]="!form.valid">
+      <!-- <ion-button (click)="close()"> -->
         <ion-icon name="checkmark-outline" slot="icon-only"></ion-icon>
+        <!-- <ion-icon name="close-outline" slot="icon-only"></ion-icon> -->
       </ion-button>
     </ion-buttons>
   </ion-toolbar>
@@ -84,14 +86,15 @@
                         #datetimeStart
                         size="cover"
                         presentation="date"
-                        [firstDayOfWeek]="1"          
+                        [firstDayOfWeek]="1"
+                        [value]="getDateValue('startDate')"       
                         [preferWheel]="false"
                         (ionChange)="onDateChange($event, 'startDate')"
                         (ionCancel)="showPicker = false;">
                         <ion-buttons slot="buttons">
                           <ion-button color="primary" (click)="clearInput('startDate')">Reset</ion-button>
-                          <ion-button color="primary" (click)="closeDatePickerStart()">Abbrechen</ion-button>
-                          <ion-button color="primary" (click)="selectStart()">Speichern</ion-button>
+                          <ion-button color="primary" (click)="closeDatePicker('startDate')">Abbrechen</ion-button>
+                          <ion-button color="primary" (click)="select('startDate')">Speichern</ion-button>
                         </ion-buttons>
                       </ion-datetime>
                     </ion-content>
@@ -115,13 +118,14 @@
                         size="cover"
                         presentation="date"
                         [firstDayOfWeek]="1"
+                        [value]="getDateValue('endDate')"
                         [preferWheel]="false"
                         (ionChange)="onDateChange($event, 'endDate')"
                         (ionCancel)="showPicker = false;">
                         <ion-buttons slot="buttons">
                           <ion-button color="primary" (click)="clearInput('endDate')">Reset</ion-button>
-                          <ion-button color="primary" (click)="closeDatePickerEnd()">Abbrechen</ion-button>
-                          <ion-button color="primary" (click)="selectEnd()">Speichern</ion-button>
+                          <ion-button color="primary" (click)="closeDatePicker('endDate')">Abbrechen</ion-button>
+                          <ion-button color="primary" (click)="select('endDate')">Speichern</ion-button>
                         </ion-buttons>
                       </ion-datetime>
                     </ion-content>
@@ -129,11 +133,16 @@
                 </ion-modal>
               </ion-col>
             </ion-row>
-            <ion-row>
+            <ion-row>          
               <ion-col>
                 <ion-toolbar>
-                  <ion-buttons slot="end" >
+                  <ion-buttons slot="start">
                     <ion-button (click)="reset()" color="primary">RESET</ion-button>
+                    <!-- <ion-button (click)="close()" color="primary">ABBRECHEN</ion-button> -->
+                  </ion-buttons>
+                  <ion-buttons slot="end">
+                    <!-- <ion-button (click)="reset()" color="primary">RESET</ion-button> -->
+                    <!-- <ion-button (click)="onDismiss()" [disabled]="!form.valid" color="primary">SPEICHERN</ion-button> -->
                     <ion-button (click)="close()" color="primary">ABBRECHEN</ion-button>
                   </ion-buttons>
                 </ion-toolbar>

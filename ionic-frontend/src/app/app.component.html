@@ -5,7 +5,7 @@
         <ion-title class="menu-header-title">Budget App</ion-title>
         <ion-item>
           <div class="menu-header">
-            <ion-label *ngIf="loadedUser | async">Hallo {{ userName }}!</ion-label>
+            <ion-label class="ion-text-wrap" *ngIf="loadedUser | async">Hallo {{ userName }}!</ion-label>
             <ion-text>Schön dich zu sehen 😊</ion-text>
             <ion-text *ngIf="loadedActiveGroup | async" color="medium">Gruppe: {{ activeGroup?.name }}</ion-text>
           </div>
@@ -20,33 +20,37 @@
         <ion-item button lines="none" (click)="isOpen = !isOpen" [class.active-parent]="isOpen" detail="false">
           <ion-icon slot="start" name="chevron-up" *ngIf="!isOpen"></ion-icon>
           <ion-icon slot="start" name="chevron-down" *ngIf="isOpen"></ion-icon>
-          <ion-label>Meine Gruppen</ion-label>
+          <ion-label>Meine Gruppen ({{grouplistSideNav?.length}})</ion-label>
         </ion-item>
         <ion-list *ngIf="isOpen">
           <ion-item *ngIf="grouplistSideNav?.length <= 0" class="sub-item" lines="none">
             <p>Keine Gruppen gefunden.</p>
           </ion-item>
           <ion-menu-toggle>
-            <ion-text *ngIf="grouplistSideNavOwner.length > 0" class="sub-item">Admin</ion-text>
-            <ion-item *ngFor="let group of grouplistSideNavOwner" 
-                      class="sub-item"
-                      (click)="getActiveGroup(group.id)"
-                      [class.active]="group.id == activeGroup.id"
-                      lines="none" 
-                      button>
-              <ion-icon name="folder-outline" slot="start"></ion-icon>
-              <ion-label>{{ group.name }}</ion-label>
-            </ion-item>
-            <ion-text *ngIf="grouplistSideNavMember.length > 0" class="sub-item">Mitglied</ion-text>
-            <ion-item *ngFor="let group of grouplistSideNavMember" 
-                      class="sub-item"
-                      (click)="getActiveGroup(group.id)"
-                      [class.active]="group.id == activeGroup.id"
-                      lines="none" 
-                      button>
-              <ion-icon name="folder-outline" slot="start"></ion-icon>
-              <ion-label>{{ group.name }}</ion-label>
-            </ion-item>
+            <ion-text *ngIf="grouplistSideNav.length > 0 && hasGroupOwner" class="sub-item">Admin ({{numberGroupOwner}})</ion-text>
+            <ng-container *ngFor="let group of grouplistSideNav">
+              <ion-item *ngIf="group.userDto.userName == userName" 
+                        class="sub-item"
+                        (click)="getActiveGroup(group.id)"
+                        [class.active]="group.id == activeGroup.id"
+                        lines="none" 
+                        button>
+                <ion-icon name="folder-outline" slot="start"></ion-icon>
+                <ion-label class="ion-text-wrap">{{ group.name }}</ion-label>
+              </ion-item>
+            </ng-container>
+            <ion-text *ngIf="grouplistSideNav.length > 0 && hasGroupMember" class="sub-item">Mitglied ({{numberGroupMember}})</ion-text>
+            <ng-container *ngFor="let group of grouplistSideNav">
+              <ion-item *ngIf="group.userDto.userName != userName"
+                        class="sub-item"
+                        (click)="getActiveGroup(group.id)"
+                        [class.active]="group.id == activeGroup.id"
+                        lines="none" 
+                        button>
+                <ion-icon name="folder-outline" slot="start"></ion-icon>
+                <ion-label class="ion-text-wrap">{{ group.name }}</ion-label>
+              </ion-item>
+            </ng-container>
           </ion-menu-toggle>
         </ion-list>
         <ion-menu-toggle menu="m1">
@@ -55,6 +59,12 @@
             <ion-label>Gruppen bearbeiten</ion-label>
           </ion-item>
         </ion-menu-toggle>
+        <!-- <ion-menu-toggle menu="m1">
+          <ion-item lines="none" button>
+            <ion-icon name="stats-chart-outline" slot="start"></ion-icon>
+            <ion-label>Gruppenstatistik</ion-label>
+          </ion-item>
+        </ion-menu-toggle> -->
         <ion-menu-toggle menu="m1">
           <ion-item lines="none" (click)="onCreateGroup()" button>
             <ion-icon name="add" slot="start"></ion-icon>

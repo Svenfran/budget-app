@@ -9,6 +9,7 @@ import { CartService } from '../services/cart.service';
 import { GroupService } from '../services/group.service';
 import { AuthService } from '../auth/auth.service';
 import { format, parseISO } from 'date-fns';
+import { Zeitraum } from '../models/zeitraum';
 
 @Component({
   selector: 'app-settlement-payment',
@@ -16,7 +17,6 @@ import { format, parseISO } from 'date-fns';
   styleUrls: ['./settlement-payment.page.scss'],
 })
 export class SettlementPaymentPage implements OnInit {
-
   form: FormGroup;
   members: GroupMembers;
   userName: string;
@@ -29,13 +29,13 @@ export class SettlementPaymentPage implements OnInit {
   formattedString = "";
   minDate = "";
   maxDate = "";
+  zeitraeume: Zeitraum[] = [];
 
   @ViewChild(IonDatetime) datetime: IonDatetime;
   constructor(
     private fb: UntypedFormBuilder,
     private groupService: GroupService,
     private modalCtrl: ModalController,
-    private cartService: CartService,
     private authService: AuthService
   ) { }
 
@@ -63,8 +63,20 @@ export class SettlementPaymentPage implements OnInit {
         this.maxDate = format(new Date().setFullYear(new Date().getFullYear() + 1), 'yyyy-MM-dd') + 'T00:00:00';
         this.members = res;
         this.loadedMembers = Promise.resolve(true);
+        this.groupService.getGroupMembershipHistoryForGroupAndUser(group.id).subscribe(gmh => {
+          this.zeitraeume = gmh.map(item => ({ 
+            startDate: new Date(this.removeTimeFromDate(item.startDate)),
+            endDate: item.endDate ? new Date(this.removeTimeFromDate(item.endDate)) : null, 
+            groupId: item.groupId, 
+            userId: item.userId
+          }));
+        });
       })
     });
+  }
+
+  removeTimeFromDate(date: Date): string {
+    return date.toString().split('T')[0] + 'T00:00:00';
   }
 
   setToday() {
@@ -95,6 +107,25 @@ export class SettlementPaymentPage implements OnInit {
     return new Date(formattedString.replace(/(\d{2}).(\d{2}).(\d{4})/, "$3-$2-$1"));
   }
 
+  // Diese Methode prüft, ob ein Datum innerhalb der erlaubten Zeiträume liegt
+  isDateSelectable = (dateIsoString: string) => {
+    const date = new Date(this.formatDateString(dateIsoString));
+    // Durchlaufe alle Zeiträume und prüfe, ob das Datum in einem der Zeiträume liegt
+    return this.zeitraeume.some(zeitraum => {
+      return date >= zeitraum.startDate && (date <= zeitraum.endDate || this.dateIsNull(zeitraum.endDate)) && zeitraum.userId == this.currentUser.id && zeitraum.groupId == this.activeGroup.id;
+    });
+  };
+
+  formatDateString(dateString: string) {
+    const [day, month, year] = dateString.split('.');
+    return `${year}-${month}-${day}`
+  }
+
+  dateIsNull(date: Date) {
+    if (date == null) {
+      return true
+    };
+  }
 
   onSubmit() {
     let memberName: string;
@@ -114,8 +145,8 @@ export class SettlementPaymentPage implements OnInit {
       member,
       this.getDateFromString(this.form.value.datePurchased)
     );
-    // console.log(settlementPayment);
-    this.cartService.addSettlementPayment(settlementPayment).subscribe();
+    
+    this.modalCtrl.dismiss(settlementPayment);
   }
 
   onDismiss() {

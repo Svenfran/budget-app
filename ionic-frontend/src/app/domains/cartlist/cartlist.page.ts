@@ -8,6 +8,7 @@ import { Cart } from 'src/app/models/cart';
 import { CartFilter } from 'src/app/models/cartFilter';
 import { Group } from 'src/app/models/group';
 import { GroupSideNav } from 'src/app/models/group-side-nav';
+import { AlertService } from 'src/app/services/alert.service';
 import { CartService } from 'src/app/services/cart.service';
 import { GroupService } from 'src/app/services/group.service';
 import { StorageService } from 'src/app/services/storage.service';
@@ -43,7 +44,8 @@ export class CartlistPage implements OnInit, OnDestroy {
     private modalCtrl: ModalController,
     private groupService: GroupService,
     private storageService: StorageService,
-    private authService: AuthService) { }
+    private authService: AuthService,
+    private alertService: AlertService) { }
 
   ngOnInit() {
     this.getCurrentUser();
@@ -66,9 +68,6 @@ export class CartlistPage implements OnInit, OnDestroy {
         this.loadedActiveGroup = Promise.resolve(true);
         this.activeGroup = group;
         this.getAllCartsByGroupId(group.id);
-        this.filterMode = false;
-        this.filterTerm = "";
-        this.visibleItems = new Set<number>();
       } else {
         this.groupService.setActiveGroup(null);
       }
@@ -91,6 +90,10 @@ export class CartlistPage implements OnInit, OnDestroy {
           this.cartlistInit = carts;
           this.sum = this.cartlist.reduce((s, c) => s + (+c.amount), 0);
           this.count = this.cartlist.length;
+          this.filterMode = false;
+          this.filterTerm = "";
+          this.visibleItems = new Set<number>();
+          this.cartFilter = {};
         });
       })
     }
@@ -131,7 +134,6 @@ export class CartlistPage implements OnInit, OnDestroy {
       this.count = this.cartlist.length;
       this.cartFilter.category = [filterTerm];
     } else {
-      this.filterTerm = ""
       this.filterMode = !this.filterMode;
       this.getAllCartsByGroupId(groupId);
     }
@@ -147,17 +149,13 @@ export class CartlistPage implements OnInit, OnDestroy {
       this.count = this.cartlist.length;
       this.cartFilter.userName = [filterTerm];
     } else {
-      this.filterTerm = ""
       this.filterMode = !this.filterMode;
       this.getAllCartsByGroupId(groupId);
     }
   }
 
   deleteFilter(groupId: number) {
-    this.filterTerm = "";
-    this.filterMode = false;
     this.getAllCartsByGroupId(groupId);
-    this.cartFilter = {};
   }
 
   onFilter(cartfilter: CartFilter) {
@@ -172,8 +170,8 @@ export class CartlistPage implements OnInit, OnDestroy {
     this.filterTerm = '';
     this.cartlist = this.cartlistInit;
     this.cartlist = this.cartlist.filter(item => 
-      (cartfilter.title ? item.title.toLowerCase().includes(cartfilter.title.toLowerCase()) : true) &&
-      (cartfilter.description ? item.description.toLowerCase().includes(cartfilter.description.toLowerCase()) : true) &&
+      (cartfilter.title ? item.title?.toLowerCase().includes(cartfilter.title.toLowerCase()) : true) &&
+      (cartfilter.description ? item.description?.toLowerCase().includes(cartfilter.description.toLowerCase()) : true) &&
       (cartfilter.category?.length > 0 ? cartfilter.category.includes(item.categoryDto.name) : true) &&
       (cartfilter.userName?.length > 0 ? cartfilter.userName.includes(item.userDto.userName) : true) &&
       (cartfilter.startDate ? new Date(item.datePurchased) >= cartfilter.startDate : true) &&
@@ -215,8 +213,19 @@ export class CartlistPage implements OnInit, OnDestroy {
       component: SettlementPaymentPage
     });
 
-    (await modal).onDidDismiss().then(() => {
-      this.getAllCartsByGroupId(this.activeGroup.id);
+    (await modal).onDidDismiss().then((response) => {
+      if (response.data) {
+        this.cartService.addSettlementPayment(response.data).subscribe(() => {
+          this.getAllCartsByGroupId(this.activeGroup.id);
+        }, errRes => {
+          if (errRes.error.includes('not within membership period')) {
+            this.alertService.showAlert(
+              'Datum nicht im Zeitraum der Mitgliedschaft',
+              `Der Nutzer "${response.data.member.userName}" war zu dem gewählten Zeitpunkt kein Mitglied der Gruppe. Bitte wähle ein anderes Datum.`
+            )
+          }
+        })
+      }
     });
     return (await modal).present();
   }

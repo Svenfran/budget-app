@@ -25,7 +25,9 @@ export class StorageService {
 
   async getDarkMode() {
     const darkMode = await Preferences.get({ key: 'darkMode' });
-    return JSON.parse(darkMode.value).darkMode;
+    if (darkMode.value) {
+      return JSON.parse(darkMode.value).darkMode;
+    }
   }
 
   async getActiveGroup() {

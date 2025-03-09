@@ -11,6 +11,7 @@ import { GroupService } from '../services/group.service';
 import { SpendingsOverviewService } from '../services/spendings-overview.service';
 import { StorageService } from '../services/storage.service';
 import { AuthService } from '../auth/auth.service';
+import { FormBuilder, FormGroup } from '@angular/forms';
 
 @Component({
   selector: 'app-group-members',
@@ -27,10 +28,11 @@ export class GroupMembersPage implements OnInit {
   groupMembers: UserDto[] = [];
   groupsSideNav: GroupSideNav[] = [];
   activeGroup: Group;
-  changeOwner: ChangeGroupOwner;
+  changeOwner: ChangeGroupOwner = null;
   isSelected: boolean;
   isNotVisible: boolean = true;
   memberIndex: number;
+  form: FormGroup;
 
   constructor(
     private groupService: GroupService,
@@ -39,11 +41,17 @@ export class GroupMembersPage implements OnInit {
     private cartService: CartService,
     private spendingsService: SpendingsOverviewService,
     private storageService: StorageService,
-    private authService: AuthService) { }
+    private authService: AuthService,
+    private fb: FormBuilder
+  ) { }
 
   ngOnInit() {
     this.getCurrentUser();
     this.getGroupMembers();
+
+    this.form = this.fb.group({
+      selectedOption: ['']
+    })
   }
 
   getGroupMembers() {
@@ -81,7 +89,7 @@ export class GroupMembersPage implements OnInit {
 
     this.alertCtrl.create({
       header: "Löschen",
-      message: `Möchtest du den Nutzer "${this.toTitleCase(member.userName)}" 
+      message: `Möchtest du den Nutzer "${member.userName}" 
                 wirklich aus der Gruppe "${groupWithMembers.name}" entfernen 
                 inkl. aller gespeicherten Ausgaben?`,
       buttons: [{
@@ -124,7 +132,11 @@ export class GroupMembersPage implements OnInit {
   }
 
   onDismiss() {
-    this.modalCtrl.dismiss(this.groupWithMembers);
+    if (!this.isSelected) {
+      this.modalCtrl.dismiss();
+      return;
+    }
+    
     if (this.changeOwner) {
       this.groupService.changeGroupOwner(this.changeOwner).subscribe(() => {
         this.groupService.setGroupModified(true);
@@ -134,11 +146,14 @@ export class GroupMembersPage implements OnInit {
       this.cartService.setCartModified(true);
       this.spendingsService.setSpendingsModified(true);
     }
+
+    this.modalCtrl.dismiss();
   }
 
   getSelectedMember(event: any, member: UserDto, groupId: number, index: number) {
     this.memberIndex = index;
     this.isSelected = !event.target.attributes['class'].value.includes('checked');
+    
     if (this.isSelected) {
       this.changeOwner = new ChangeGroupOwner(
         new UserDto(member.id, member.userName),
@@ -151,12 +166,12 @@ export class GroupMembersPage implements OnInit {
 
   toggleVisability() {
     this.isNotVisible = !this.isNotVisible;
+    if (this.isNotVisible) {
+      this.isSelected = false;
+      this.form.reset();
+    }
   }
 
-
-  private toTitleCase(text: string) {
-    return text.charAt(0).toUpperCase() + text.substring(1).toLowerCase();
-  }
 
   getCurrentUser() {
     this.authService.user.subscribe(user => {

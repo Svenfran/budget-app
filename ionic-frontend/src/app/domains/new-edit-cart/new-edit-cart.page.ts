@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, ViewChild } from '@angular/core';
+import { Component, OnInit, ViewChild } from '@angular/core';
 import { FormGroup, UntypedFormBuilder, Validators } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
 import { IonDatetime, LoadingController, MenuController } from '@ionic/angular';
@@ -10,6 +10,10 @@ import { Cart } from 'src/app/models/cart';
 import { format, parseISO } from 'date-fns'
 import { GroupService } from 'src/app/services/group.service';
 import { Group } from 'src/app/models/group';
+import { AuthService } from 'src/app/auth/auth.service';
+import { User } from 'src/app/auth/user';
+import { Zeitraum } from 'src/app/models/zeitraum';
+import { AlertService } from 'src/app/services/alert.service';
 
 
 @Component({
@@ -31,6 +35,9 @@ export class NewEditCartPage implements OnInit {
   maxDate = "";
   activeGroupId: number;
   activeGroup: Group;
+  selectedDate: string;
+  user: User;
+  zeitraeume: Zeitraum[] = [];
 
   @ViewChild(IonDatetime) datetime: IonDatetime;
   constructor(
@@ -41,7 +48,10 @@ export class NewEditCartPage implements OnInit {
     private loadingCtrl: LoadingController,
     private route: ActivatedRoute,
     private groupService: GroupService,
-    private menuCtrl: MenuController) { }
+    private menuCtrl: MenuController,
+    private authService: AuthService,
+    private alertService: AlertService
+  ) { }
 
   ngOnInit() {
     this.form = this.fb.group({
@@ -59,6 +69,7 @@ export class NewEditCartPage implements OnInit {
     this.setToday();
     this.setInitialFormValues();
     this.getActiveGroupId();
+    this.currentUser();
   }
 
   ionViewWillLeave() {
@@ -77,8 +88,20 @@ export class NewEditCartPage implements OnInit {
         this.categories = categories;
         this.minDate = format(new Date(group.dateCreated), 'yyyy-MM-dd') + 'T00:00:00';
         this.maxDate = format(new Date().setFullYear(new Date().getFullYear() + 1), 'yyyy-MM-dd') + 'T00:00:00';
+        this.groupService.getGroupMembershipHistoryForGroupAndUser(group.id).subscribe(gmh => {
+          this.zeitraeume = gmh.map(item => ({ 
+            startDate: new Date(this.removeTimeFromDate(item.startDate)),
+            endDate: item.endDate ? new Date(this.removeTimeFromDate(item.endDate)) : null, 
+            groupId: item.groupId, 
+            userId: item.userId
+          }));
+        });
       });
     });
+  }
+
+  removeTimeFromDate(date: Date): string {
+    return date.toString().split('T')[0] + 'T00:00:00';
   }
 
   setInitialFormValues() {
@@ -131,6 +154,27 @@ export class NewEditCartPage implements OnInit {
     return new Date(formattedString.replace(/(\d{2}).(\d{2}).(\d{4})/, "$3-$2-$1"));
   }
 
+
+  // Diese Methode prüft, ob ein Datum innerhalb der erlaubten Zeiträume liegt
+  isDateSelectable = (dateIsoString: string) => {
+    const date = new Date(this.formatDateString(dateIsoString));
+    // Durchlaufe alle Zeiträume und prüfe, ob das Datum in einem der Zeiträume liegt
+    return this.zeitraeume.some(zeitraum => {
+      return date >= zeitraum.startDate && (date <= zeitraum.endDate || this.dateIsNull(zeitraum.endDate)) && zeitraum.userId == this.user.id && zeitraum.groupId == this.activeGroupId;
+    });
+  };
+
+  formatDateString(dateString: string) {
+    const [day, month, year] = dateString.split('.');
+    return `${year}-${month}-${day}`
+  }
+
+  dateIsNull(date: Date) {
+    if (date == null) {
+      return true
+    };
+  }
+
   onCreateCart() {
     this.loadingCtrl.create({
       message: 'Füge Einkauf hinzu...'
@@ -155,9 +199,13 @@ export class NewEditCartPage implements OnInit {
           loadingEl.dismiss();
           this.form.reset();
           this.router.navigate(['domains/tabs/cartlist']);
-        },
-        error => {
-          console.log(error);
+        }, errRes => {
+          if (errRes.error.includes('not within membership period')) {
+            this.alertService.showAlert(
+              'Datum nicht im Zeitraum der Mitgliedschaft',
+              'Du warst zu dem gewählten Zeitpunkt kein Mitglied der Gruppe. Bitte wähle ein anderes Datum.'
+            )
+          }
         }
       )
     })
@@ -186,6 +234,13 @@ export class NewEditCartPage implements OnInit {
         loadingEl.dismiss();
         this.form.reset();
         this.router.navigate(['domains/tabs/cartlist']);
+      }, errRes => {
+        if (errRes.error.includes('not within membership period')) {
+          this.alertService.showAlert(
+            'Datum nicht im Zeitraum der Mitgliedschaft',
+            'Du warst zu dem gewählten Zeitpunkt kein Mitglied der Gruppe. Bitte wähle ein anderes Datum.'
+          )
+        }
       })
     })
   }
@@ -203,6 +258,11 @@ export class NewEditCartPage implements OnInit {
     }
   }
 
+  currentUser() {
+    this.authService.user.subscribe(user => {
+      this.user = user;
+    })
+  }
 
   get title() {return this.form.get('title');}
   get description() {return this.form.get('description');}

@@ -7,7 +7,6 @@ import { Observable } from 'rxjs';
 import { AlertService } from '../services/alert.service';
 import { UserprofileService } from '../services/userprofile.service';
 import { ResetPasswordDto } from '../models/reset-password-dto';
-import { timeout } from 'rxjs/operators';
 
 @Component({
   selector: 'app-auth',

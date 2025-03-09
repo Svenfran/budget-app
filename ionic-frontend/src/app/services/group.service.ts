@@ -10,6 +10,7 @@ import { GroupSideNav } from '../models/group-side-nav';
 import { NewMemberDto } from '../models/new-member-dto';
 import { RemoveMemberDto } from '../models/remove-member-dto';
 import { UserDto } from '../models/user';
+import { Zeitraum } from '../models/zeitraum';
 
 
 @Injectable({
@@ -31,6 +32,7 @@ export class GroupService {
   private addNewMemberUrl = `${this.apiBaseUrl}/api/groups/add-new-member`;
   private removeMemberUrl = `${this.apiBaseUrl}/api/groups/remove-member-from-group`;
   private changeGroupOwnerUrl = `${this.apiBaseUrl}/api/groups/change-groupowner`;
+  private gmhUrl = `${this.apiBaseUrl}/api/groups/history-by-group-and-user`;
 
   constructor(private http: HttpClient) { }
 
@@ -47,17 +49,6 @@ export class GroupService {
     this._groupModified.next(groupAdded);
   }
 
-  // setCurrentUser() {
-  //   // this._currentUser.next(new UserDto(1, "sven"));
-  //   // this._currentUser.next(new UserDto(2, "sascha"));
-  //   // this._currentUser.next(new UserDto(3, "basti"));
-  //   // this._currentUser.next(new UserDto(4, "martin"));
-  //   // this._currentUser.next(new UserDto(5, "sabine"));
-  //   // this._currentUser.next(new UserDto(6, "tina"));
-  //   // this._currentUser.next(new UserDto(7, "montse"));
-  //   this._currentUser.next(new UserDto(8, "hugo"));
-  // }
-
   get activeGroup() {
     return this._activeGroup.asObservable();
   }
@@ -73,6 +64,15 @@ export class GroupService {
   getGroupsForSideNav(): Observable<GroupSideNav[]> {
     return this.http.get<GroupSideNav[]>(this.groupsSideNavUrl);
   }
+
+  // private groupListSubject = new BehaviorSubject<GroupSideNav[]>([]);
+  // groupListSideNav$ = this.groupListSubject.asObservable();
+
+  // loadGroups() {
+  //   this.getGroupsForSideNav().subscribe(groups => {
+  //     this.groupListSubject.next(groups); // Die neue Liste in das Subject setzen
+  //   });
+  // }
   
   getGroupsForOverview(): Observable<GroupOverview[]> {
     return this.http.get<GroupOverview[]>(this.groupsOverviewUrl);
@@ -105,5 +105,10 @@ export class GroupService {
 
   changeGroupOwner(changeGroupOwner: ChangeGroupOwner): Observable<void> {
     return this.http.post<void>(this.changeGroupOwnerUrl, changeGroupOwner);
+  }
+
+  getGroupMembershipHistoryForGroupAndUser(groupId: number): Observable<Zeitraum[]> {
+    const gmhUrl = `${this.gmhUrl}/${groupId}`;
+    return this.http.get<Zeitraum[]>(gmhUrl)
   }
 }
