@@ -353,15 +353,13 @@ public class SpendingsOverviewService {
 
     private boolean userIsCurrentlyMember(Long userId, Long groupId) throws UserNotFoundException {
         var user = dataLoaderService.loadUser(userId);
-        var membership = dataLoaderService.loadMembershipHistoryForGroupAndUser(groupId, userId);
-        var isCurrentlyMember = membership.stream().anyMatch(gmh -> gmh.getMembershipEnd() == null);
-
-        if (!user.getName().equals(UserEnum.USER_DELETED.getName())) {
-            if (!isCurrentlyMember) {
-                return false;
-            }
+        if (user.getName().equals(UserEnum.USER_DELETED.getName())) {
+            return true;
         }
 
-        return true;
+        return dataLoaderService.loadMembershipHistoryForGroupAndUser(groupId, userId)
+                .stream()
+                .anyMatch(gmh -> gmh.getMembershipEnd() == null);
     }
+
 }
