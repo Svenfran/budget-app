@@ -4,7 +4,6 @@ import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CategoryDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto;
-import com.github.svenfran.budgetapp.budgetappbackend.entity.Cart;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Category;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
@@ -162,14 +161,4 @@ public class CartService {
             categoryRepository.save(new Category(null, SETTLEMENT_CATEGORY_NAME, group, null));
         }
     }
-
-    public void deleteCartsForUserWhereIsDeletedTrue(User user) {
-        var carts = cartRepository.findCartsByUser(user);
-        for (Cart cart : carts) {
-            if (cart.isDeleted()) {
-                cartRepository.delete(cart);
-            }
-        }
-    }
-
 }

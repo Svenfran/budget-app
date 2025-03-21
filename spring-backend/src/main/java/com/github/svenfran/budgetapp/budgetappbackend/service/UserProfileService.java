@@ -1,9 +1,10 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
+import com.github.svenfran.budgetapp.budgetappbackend.constants.UserEnum;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.PasswordChangeDto;
-import com.github.svenfran.budgetapp.budgetappbackend.dto.RemoveGroupMemberDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
+import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.*;
 import liquibase.repackaged.org.apache.commons.lang3.RandomStringUtils;
@@ -64,38 +65,49 @@ public class UserProfileService {
         var userAuth = dataLoaderService.getAuthenticatedUser();
         var userDelete = dataLoaderService.loadUser(userId);
         verificationService.verifyIsAuthenticatedUser(userDelete, userAuth);
-        var allUserGroups = userDelete.getGroupList();
-        for (Group group : allUserGroups) {
+
+        userDelete.getGroupList().forEach(group -> {
             if (group.getOwner().equals(userDelete)) {
-                var groupMembershipToRemove = dataLoaderService.loadMembershipHistoryForGroup(group.getId());
-                if (!group.getMembers().isEmpty()) group.removeAllMembers();
-                if (!groupMembershipToRemove.isEmpty()) groupMembershipToRemove.forEach(gmh -> gmh.setGroupId(null));
-                if (!group.getCarts().isEmpty()) cartRepository.deleteAll(group.getCarts());
-                if (!group.getCategories().isEmpty()) categoryRepository.deleteAll(group.getCategories());
-                if (!group.getShoppingLists().isEmpty()) {
-                    group.getShoppingLists().forEach(list -> shoppingItemRepository.deleteAll(list.getShoppingItems()));
-                    shoppingListRepository.deleteAll(group.getShoppingLists());
-                }
-                groupRepository.deleteById(group.getId());
+                deleteGroupAsOwner(group);
+            } else if (group.getMembers().contains(userDelete)) {
+                removeUserFromGroup(group, userDelete);
             }
+        });
 
-            if (group.getMembers().contains(userDelete)) {
-                var removeGroupMember = new RemoveGroupMemberDto();
-                removeGroupMember.setId(group.getId());
-                removeGroupMember.setMember(new UserDto(userDelete));
-                group.removeMember(userDelete);
-                gmhService.finishGroupMembership(userDelete, group);
-                groupService.setIsDeletedForCart(group, userDelete, true);
-                groupService.calculateAveragePerMember(group);
-            }
-        }
-        cartService.deleteCartsForUserWhereIsDeletedTrue(userDelete);
-        tokenRepository.deleteAll(tokenRepository.findAllByUserId(userDelete.getId()));
-        userRepository.deleteById(userDelete.getId());
-        gmhService.deleteGroupMembershipHistoryWhereGroupIdIsNull();
-
+        anonymizeUser(userDelete);
     }
 
+    private void deleteGroupAsOwner(Group group) {
+        dataLoaderService.loadMembershipHistoryForGroup(group.getId())
+                .forEach(gmh -> gmh.setGroupId(null));
+
+        gmhService.deleteGroupMembershipHistoryWhereGroupIdIsNull();
+
+        group.removeAllMembers();
+        cartRepository.deleteAll(group.getCarts());
+        categoryRepository.deleteAll(group.getCategories());
+
+        group.getShoppingLists().forEach(list ->
+                shoppingItemRepository.deleteAll(list.getShoppingItems())
+        );
+        shoppingListRepository.deleteAll(group.getShoppingLists());
+
+        groupRepository.deleteById(group.getId());
+    }
+
+    private void removeUserFromGroup(Group group, User user) {
+        group.removeMember(user);
+        gmhService.finishGroupMembership(user, group);
+        groupService.setIsDeletedForCart(group, user, true);
+        groupService.calculateAveragePerMember(group);
+    }
+
+    private void anonymizeUser(User user) {
+        user.setName(UserEnum.USER_DELETED.getName());
+        user.setEmail("deleted_" + user.getId() + "@example.com");
+        user.setPassword(passwordEncoder.encode(RandomStringUtils.randomAlphanumeric(8)));
+        userRepository.save(user);
+    }
 
     public UserDto changeUserName(UserDto userDto) throws UserNotFoundException, UserIsNotAuthenticatedUser, UserNameAlreadyExistsException {
         var userAuth = dataLoaderService.getAuthenticatedUser();

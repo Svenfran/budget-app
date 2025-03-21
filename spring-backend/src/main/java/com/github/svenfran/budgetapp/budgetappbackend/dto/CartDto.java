@@ -16,6 +16,7 @@ public class CartDto {
     private Long groupId;
     private UserDto userDto;
     private CategoryDto categoryDto;
+    private boolean deleted;
 
     public CartDto(Cart cart) {
         this.id = cart.getId();
@@ -26,6 +27,7 @@ public class CartDto {
         this.groupId = cart.getGroup().getId();
         this.userDto = new UserDto(cart.getUser());
         this.categoryDto = new CategoryDto(cart.getCategory());
+        this.deleted = cart.isDeleted();
     }
 
     public CartDto() {}
@@ -92,5 +94,13 @@ public class CartDto {
 
     public void setGroupId(Long groupId) {
         this.groupId = groupId;
+    }
+
+    public boolean isDeleted() {
+        return deleted;
+    }
+
+    public void setDeleted(boolean deleted) {
+        this.deleted = deleted;
     }
 }

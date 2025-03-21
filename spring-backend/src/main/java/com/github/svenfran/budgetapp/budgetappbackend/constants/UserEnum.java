@@ -2,23 +2,17 @@ package com.github.svenfran.budgetapp.budgetappbackend.constants;
 
 public enum UserEnum {
 
-    SVEN(1L),
-    SASCHA(2L),
-    BASTI(3L),
-    MARTIN(4L),
-    SABINE(5L),
-    TINA(6L),
-    MONTSE(7L),
-    HUGO(8L);
+    USER_DELETED("Nutzer gelöscht"),
+    USER_REMOVED("Nutzer entfernt");
 
-    private final Long id;
+    private final String name;
 
-    UserEnum(Long id) {
-        this.id = id;
+    UserEnum(String name) {
+        this.name = name;
     }
 
-    public Long getId() {
-        return id;
+    public String getName() {
+        return name;
     }
 
 }

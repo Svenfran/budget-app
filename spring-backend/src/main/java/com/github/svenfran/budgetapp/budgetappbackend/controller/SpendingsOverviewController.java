@@ -13,8 +13,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
-
 @RestController
 @RequestMapping("/api")
 public class SpendingsOverviewController {
@@ -34,9 +32,4 @@ public class SpendingsOverviewController {
         return new ResponseEntity<>(spendingsOverviewYearly, HttpStatus.OK);
     }
 
-    @GetMapping("/spendings/available-years/{groupId}")
-    public ResponseEntity<List<Integer>> getAvailableYears(@PathVariable("groupId") Long groupId) throws UserNotFoundException {
-        List<Integer> availableYears = spendingsOverviewService.getAvailableYears(groupId);
-        return new ResponseEntity<>(availableYears, HttpStatus.OK);
-    }
 }

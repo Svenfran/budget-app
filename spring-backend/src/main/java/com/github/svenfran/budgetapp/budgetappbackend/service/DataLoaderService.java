@@ -63,7 +63,7 @@ public class DataLoaderService {
     }
 
     public List<Cart> loadCartListForGroup(Long groupId) {
-        return cartRepository.findCartsByGroupIdAndIsDeletedFalseOrderByDatePurchasedDesc(groupId);
+        return cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(groupId);
     }
 
     public Category loadCategory(Long categoryId) throws CategoryNotFoundException {

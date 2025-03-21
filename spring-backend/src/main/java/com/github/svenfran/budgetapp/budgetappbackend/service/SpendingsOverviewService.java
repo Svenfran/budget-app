@@ -1,17 +1,23 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
+import com.github.svenfran.budgetapp.budgetappbackend.constants.UserEnum;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.*;
+import com.github.svenfran.budgetapp.budgetappbackend.entity.Cart;
+import com.github.svenfran.budgetapp.budgetappbackend.entity.GroupMembershipHistory;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.GroupNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOrMemberOfGroupException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository;
-import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.text.DateFormatSymbols;
-import java.util.ArrayList;
-import java.util.List;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.Month;
+import java.time.ZoneId;
+import java.time.format.TextStyle;
+import java.util.*;
 
 @Service
 public class SpendingsOverviewService {
@@ -20,259 +26,342 @@ public class SpendingsOverviewService {
     private CartRepository cartRepository;
 
     @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
     private DataLoaderService dataLoaderService;
 
     @Autowired
     private VerificationService verificationService;
 
 
+    // Overview for all Years
+    public SpendingsOverviewDto getSpendingsForGroupAndAllYears(Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
+        var user = dataLoaderService.getAuthenticatedUser();
+        var group = dataLoaderService.loadGroup(groupId);
+        verificationService.verifyIsPartOfGroup(user, group);
+        var availableYears = cartRepository.getAvailableYearsForGroup(groupId);
+
+        var spendingsOverview = new SpendingsOverviewDto();
+        spendingsOverview.setGroupId(groupId);
+        spendingsOverview.setSpendingsTotalYear(getSpendingsOverviewTotalAllYears(groupId));
+        spendingsOverview.setSpendingsPerYear(getSpendingsOverviewPerYear(groupId, availableYears));
+        spendingsOverview.setAvailableYears(availableYears);
+        return spendingsOverview;
+    }
+
+    private SpendingsOverviewTotalYearDto getSpendingsOverviewTotalAllYears(Long groupId) throws UserNotFoundException {
+        var membership = dataLoaderService.loadMembershipHistoryForGroup(groupId);
+        var carts = dataLoaderService.loadCartListForGroup(groupId);
+        var userIds = membership.stream().map(GroupMembershipHistory::getUserId).distinct().toList();
+        var spendingsOverviewTotalYearDto = new SpendingsOverviewTotalYearDto();
+        var spendingsTotalUserList = new ArrayList<SpendingsOverviewUserDto>();
+
+        var totalSum = 0.0;
+
+        if (hasCartsForGroup(carts, groupId)) {
+            for (Long userId : userIds) {
+                double sum = 0.0;
+                double sumAveragePerMember = 0.0;
+
+                var validMemberships = membership.stream()
+                        .filter(gmh -> gmh.getUserId().equals(userId))
+                        .toList();
+
+                for (Cart cart : carts) {
+                    if (cart.getUser().getId().equals(userId)) {
+                        sum += cart.getAmount();
+                    }
+
+                    for (GroupMembershipHistory gmh : validMemberships) {
+                        if (gmh.getUserId().equals(userId) && hasValidMembership(cart.getDatePurchased(), gmh)) {
+                            sumAveragePerMember += cart.getAveragePerMember();
+                            break; // Sobald eine gültige Mitgliedschaft gefunden wurde, weiter zum nächsten Cart
+                        }
+                    }
+                }
+
+                double diff = sum - sumAveragePerMember;
+                totalSum += sum;
+                var userName = dataLoaderService.loadUser(userId).getName();
+                userName = userIsCurrentlyMember(userId, groupId) ? userName : UserEnum.USER_REMOVED.getName();
+                spendingsTotalUserList.add(new SpendingsOverviewUserDto(userId, userName, roundValue(sum), roundValue(diff)));
+            }
+        }
+
+        spendingsOverviewTotalYearDto.setSumTotalYear(totalSum);
+        spendingsOverviewTotalYearDto.setSpendingsTotalUser(spendingsTotalUserList);
+
+        return spendingsOverviewTotalYearDto;
+    }
+
+    private List<SpendingsOverviewPerYearDto> getSpendingsOverviewPerYear(Long groupId, List<Integer> availableYears) throws UserNotFoundException {
+        var membership = dataLoaderService.loadMembershipHistoryForGroup(groupId);
+        var carts = dataLoaderService.loadCartListForGroup(groupId);
+        var userIds = membership.stream().map(GroupMembershipHistory::getUserId).distinct().toList();
+        var spendingsOverviewPerYearDtoList = new ArrayList<SpendingsOverviewPerYearDto>();
+
+        for (Integer year : availableYears) {
+            var spendingsOverviewPerYearDto = new SpendingsOverviewPerYearDto();
+            var spendingsTotalUserList = new ArrayList<SpendingsOverviewUserDto>();
+
+            spendingsOverviewPerYearDto.setSumTotalYear(roundValue(getTotalAmountForYear(carts, year)));
+            spendingsOverviewPerYearDto.setYear(year);
+
+            for (Long userId : userIds) {
+                double sum = 0.0;
+                double sumAveragePerMember = 0.0;
+
+                var validMemberships = membership.stream()
+                        .filter(gmh -> gmh.getUserId().equals(userId))
+                        .toList();
+
+                for (Cart cart : carts) {
+                    if (cart.getDatePurchased().toInstant().atZone(ZoneId.systemDefault()).getYear() == year) {
+                        if (cart.getUser().getId().equals(userId)) {
+                            sum += cart.getAmount();
+                        }
+
+                        for (GroupMembershipHistory gmh : validMemberships) {
+                            if (hasValidMembership(cart.getDatePurchased(), gmh)) {
+                                sumAveragePerMember += cart.getAveragePerMember();
+                                break; // Verhindert Mehrfachzählung!
+                            }
+                        }
+                    }
+                }
+
+                double diff = sum - sumAveragePerMember;
+                var userName = dataLoaderService.loadUser(userId).getName();
+                userName = userIsCurrentlyMember(userId, groupId) ? userName : UserEnum.USER_REMOVED.getName();
+                if (wasUserMemberInYear(validMemberships, year)) {
+                    spendingsTotalUserList.add(new SpendingsOverviewUserDto(userId, userName, roundValue(sum), roundValue(diff)));
+                }
+            }
+            spendingsOverviewPerYearDto.setSpendingsYearlyUser(spendingsTotalUserList);
+            spendingsOverviewPerYearDtoList.add(spendingsOverviewPerYearDto);
+        }
+
+        return spendingsOverviewPerYearDtoList;
+    }
+
+    // Overview for one Year
     public SpendingsOverviewDto getSpendingsForGroupAndYear(int year, Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
         var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(groupId);
         verificationService.verifyIsPartOfGroup(user, group);
+        var availableYears = cartRepository.getAvailableYearsForGroup(groupId);
 
         var spendingsOverview = new SpendingsOverviewDto();
         spendingsOverview.setGroupId(groupId);
         spendingsOverview.setYear(year);
         spendingsOverview.setSpendingsTotalYear(getSpendingsOverviewTotalYear(year, groupId));
         spendingsOverview.setSpendingsPerMonth(getSpendingsOverviewPerMonth(year, groupId));
-        spendingsOverview.setAvailableYears(cartRepository.getAvailableYearsForGroup(groupId));
+        spendingsOverview.setAvailableYears(availableYears);
         return spendingsOverview;
     }
-
-    public SpendingsOverviewDto getSpendingsForGroupAndAllYears(Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
-        var user = dataLoaderService.getAuthenticatedUser();
-        var group = dataLoaderService.loadGroup(groupId);
-        verificationService.verifyIsPartOfGroup(user, group);
-
-        var spendingsOverview = new SpendingsOverviewDto();
-        spendingsOverview.setGroupId(groupId);
-        spendingsOverview.setSpendingsTotalYear(getSpendingsOverviewTotalAllYears(groupId));
-        spendingsOverview.setSpendingsPerYear(getSpendingsOverviewPerYear(groupId));
-        spendingsOverview.setAvailableYears(cartRepository.getAvailableYearsForGroup(groupId));
-        return spendingsOverview;
-    }
-
-
-    private List<SpendingsOverviewPerMonthDto> getSpendingsOverviewPerMonth(int year, Long groupId) throws UserNotFoundException {
-        var spendingsPerMonthList = new ArrayList<SpendingsOverviewPerMonthDto>();
-        var spendingsAmountAverageDiffPerMonth = getAmountAverageDiffPerUserAndMonth(groupId, year);
-        var spendingsMonthly = cartRepository.getSpendingsMonthlyTotalSumAmount(year, groupId);
-
-        for (SpendingsOverviewMonthlyTotalSumAmountDto spendings : spendingsMonthly) {
-            var spendingsPerMonth = new SpendingsOverviewPerMonthDto();
-            spendingsPerMonth.setMonth(spendings.getMonth());
-            spendingsPerMonth.setMonthName(getMonthName(spendings.getMonth()));
-            spendingsPerMonth.setSumTotalMonth(spendings.getSumAmountTotalPerMonth());
-            spendingsPerMonthList.add(spendingsPerMonth);
-        }
-
-        for (SpendingsOverviewPerMonthDto spendingsPerMonth : spendingsPerMonthList) {
-            var userList = new ArrayList<SpendingsOverviewUserDto>();
-            for (SpendingsOverviewAmountAverageDiffPerMonthDto spendings : spendingsAmountAverageDiffPerMonth) {
-                if (spendingsPerMonth.getMonth() == spendings.getMonth()) {
-                    var spendingsPerUser = new SpendingsOverviewUserDto();
-                    spendingsPerUser.setUserId(spendings.getUserId());
-                    //TODO: Wenn Nutzer gelöscht wird, schlägt nachfolgende Zeile fehl -> User-Name in membership-history speichern?
-                    spendingsPerUser.setUserName(userRepository.findById(spendings.getUserId())
-                            .orElseThrow(() -> new UserNotFoundException("Get SpendingsOverviewPerMonth: User not found")).getName());
-                    spendingsPerUser.setSum(spendings.getSumAmount());
-                    spendingsPerUser.setDiff(spendings.getDiff());
-                    userList.add(spendingsPerUser);
-                    spendingsPerMonth.setSpendingsMonthlyUser(userList);
-                }
-            }
-        }
-        return spendingsPerMonthList;
-    }
-
-    private List<SpendingsOverviewPerYearDto> getSpendingsOverviewPerYear(Long groupId) throws UserNotFoundException {
-        var spendingsPerYearList = new ArrayList<SpendingsOverviewPerYearDto>();
-        var spendingsAmountAverageDiffPerYear = getAmountAverageDiffPerUserYearly(groupId);
-        var spendingsYearly = cartRepository.getSpendingsYearlyTotalSumAmount(groupId);
-
-        for (SpendingsOverviewYearlyTotalSumAmountDto spendings : spendingsYearly) {
-            var spendingsPerYear = new SpendingsOverviewPerYearDto();
-            spendingsPerYear.setYear(spendings.getYear());
-            spendingsPerYear.setSumTotalYear(spendings.getSumAmountTotalPerYear());
-            spendingsPerYearList.add(spendingsPerYear);
-        }
-
-        for (SpendingsOverviewPerYearDto spendingsPerYear : spendingsPerYearList) {
-            var userList = new ArrayList<SpendingsOverviewUserDto>();
-            for (SpendingsOverviewAmountAverageDiffPerYearDto spendings : spendingsAmountAverageDiffPerYear) {
-                if (spendingsPerYear.getYear() == spendings.getYear()) {
-                    var spendingsPerUser = new SpendingsOverviewUserDto();
-                    spendingsPerUser.setUserId(spendings.getUserId());
-                    //TODO: Wenn Nutzer gelöscht wird, schlägt nachfolgende Zeile fehl -> User-Name in membership-history speichern?
-                    spendingsPerUser.setUserName(userRepository.findById(spendings.getUserId())
-                            .orElseThrow(() -> new UserNotFoundException("Get SpendingsOverviewPerYear: User not found")).getName());
-                    spendingsPerUser.setSum(spendings.getSumAmount());
-                    spendingsPerUser.setDiff(spendings.getDiff());
-                    userList.add(spendingsPerUser);
-                    spendingsPerYear.setSpendingsYearlyUser(userList);
-                }
-            }
-        }
-        return spendingsPerYearList;
-    }
-
 
     private SpendingsOverviewTotalYearDto getSpendingsOverviewTotalYear(int year, Long groupId) throws UserNotFoundException {
-        var spendingsTotalYear = new SpendingsOverviewTotalYearDto();
-        var spendingsSumAverageDiffPerUser = getAmountAverageDiffPerUserAndYear(groupId, year);
-        var userList = new ArrayList<SpendingsOverviewUserDto>();
+        var membership = dataLoaderService.loadMembershipHistoryForGroup(groupId);
+        var carts = dataLoaderService.loadCartListForGroup(groupId);
+        var userIds = membership.stream().map(GroupMembershipHistory::getUserId).distinct().toList();
+        var spendingsOverviewTotalYearDto = new SpendingsOverviewTotalYearDto();
+        var spendingsTotalUserList = new ArrayList<SpendingsOverviewUserDto>();
 
-        for (SpendingsOverviewAmountAverageDiffPerUserDto spendings : spendingsSumAverageDiffPerUser) {
-            var spendingsPerUser = new SpendingsOverviewUserDto();
-            spendingsPerUser.setUserId(spendings.getUserId());
-            //TODO: Wenn Nutzer gelöscht wird, schlägt nachfolgende Zeile fehl -> User-Name in membership-history speichern?
-            spendingsPerUser.setUserName(userRepository.findById(spendings.getUserId())
-                    .orElseThrow(() -> new UserNotFoundException("Get SpendingsOverviewTotalYearDto: User not found")).getName());
-            spendingsPerUser.setSum(spendings.getSumAmount());
-            spendingsPerUser.setDiff(spendings.getDiff());
-            userList.add(spendingsPerUser);
-        }
+        spendingsOverviewTotalYearDto.setSumTotalYear(roundValue(getTotalAmountForYear(carts, year)));
 
-        spendingsTotalYear.setSumTotalYear(getTotalAmountPerYear(year, groupId));
-        spendingsTotalYear.setSpendingsTotalUser(userList);
-        return spendingsTotalYear;
-    }
+        if (hasCartsForYear(carts, year)) {
+            for (Long userId : userIds) {
+                double sum = 0.0;
+                double sumAveragePerMember = 0.0;
 
-    private SpendingsOverviewTotalYearDto getSpendingsOverviewTotalAllYears(Long groupId) throws UserNotFoundException {
-        var spendingsTotalAllYears = new SpendingsOverviewTotalYearDto();
-        var spendingsSumAverageDiffPerUserYearly = getAmountAverageDiffPerUserAndTotalYears(groupId);
-        var userList = new ArrayList<SpendingsOverviewUserDto>();
+                var validMemberships = membership.stream()
+                        .filter(gmh -> gmh.getUserId().equals(userId))
+                        .toList();
 
-        for (SpendingsOverviewAmountAverageDiffPerUserDto spendings : spendingsSumAverageDiffPerUserYearly) {
-            var spendingsPerUser = new SpendingsOverviewUserDto();
-            spendingsPerUser.setUserId(spendings.getUserId());
-            //TODO: Wenn Nutzer gelöscht wird, schlägt nachfolgende Zeile fehl -> User-Name in membership-history speichern?
-            spendingsPerUser.setUserName(userRepository.findById(spendings.getUserId())
-                    .orElseThrow(() -> new UserNotFoundException("Get SpendingsOverviewTotalAllYears: User not found")).getName());
-            spendingsPerUser.setSum(spendings.getSumAmount());
-            spendingsPerUser.setDiff(spendings.getDiff());
-            userList.add(spendingsPerUser);
-        }
+                for (Cart cart : carts) {
+                    if (cart.getDatePurchased().toInstant().atZone(ZoneId.systemDefault()).getYear() == year) {
+                        if (cart.getUser().getId().equals(userId)) {
+                            sum += cart.getAmount();
+                        }
 
-        spendingsTotalAllYears.setSumTotalYear(getTotalAmountForAllYears(groupId));
-        spendingsTotalAllYears.setSpendingsTotalUser(userList);
-        return spendingsTotalAllYears;
-    }
+                        for (GroupMembershipHistory gmh : validMemberships) {
+                            if (hasValidMembership(cart.getDatePurchased(), gmh)) {
+                                sumAveragePerMember += cart.getAveragePerMember();
+                                break; // Verhindert Mehrfachzählung!
+                            }
+                        }
+                    }
+                }
 
-
-    private Double getTotalAmountPerYear(int year, Long groupId) {
-        return cartRepository.getSpendingsMonthlyTotalSumAmount(year, groupId)
-                .stream().mapToDouble(SpendingsOverviewMonthlyTotalSumAmountDto::getSumAmountTotalPerMonth).sum();
-    }
-
-    private Double getTotalAmountForAllYears(Long groupId) {
-        return cartRepository.getTotalAmountAllYears(groupId);
-    }
-
-
-    private String getMonthName(int month) {
-        return new DateFormatSymbols().getMonths()[month - 1];
-    }
-
-    public List<Integer> getAvailableYears(Long groupId) {
-        return cartRepository.getAvailableYearsForGroup(groupId);
-    }
-
-
-    private List<SpendingsOverviewAmountAverageDiffPerMonthDto> getAmountAverageDiffPerUserAndMonth(Long groupId, int year) {
-        var amount = cartRepository.getSpendingsAmountPerMonthAndUser(year, groupId);
-        var average = cartRepository.getAveragePerUserAndYear(groupId, year);
-
-        var spendingsAmountAverageDiffPerMonthList = new ArrayList<SpendingsOverviewAmountAverageDiffPerMonthDto>();
-
-        for (SpendingsOverviewAmountAverageDiffPerMonthDto amt : amount) {
-            var spendingsAmountAverageDiffPerMonth = new SpendingsOverviewAmountAverageDiffPerMonthDto();
-            Double sumAverage = 0.0;
-            for (SpendingsOverviewAverageDto avg : average) {
-                if (avg.getMonth() == amt.getMonth() && avg.getUserId().equals(amt.getUserId())) {
-                    spendingsAmountAverageDiffPerMonth.setMonth(amt.getMonth());
-                    spendingsAmountAverageDiffPerMonth.setYear(amt.getYear());
-                    spendingsAmountAverageDiffPerMonth.setUserId(amt.getUserId());
-                    spendingsAmountAverageDiffPerMonth.setSumAmount(amt.getSumAmount());
-                    spendingsAmountAverageDiffPerMonth.setSumAveragePerMember(sumAverage += avg.getAveragePerMember());
-                    spendingsAmountAverageDiffPerMonth.setDiff(amt.getSumAmount() - sumAverage);
+                double diff = sum - sumAveragePerMember;
+                var userName = dataLoaderService.loadUser(userId).getName();
+                userName = userIsCurrentlyMember(userId, groupId) ? userName : UserEnum.USER_REMOVED.getName();
+                if (wasUserMemberInYear(validMemberships, year)) {
+                    spendingsTotalUserList.add(new SpendingsOverviewUserDto(userId, userName, roundValue(sum), roundValue(diff)));
                 }
             }
-            spendingsAmountAverageDiffPerMonthList.add(spendingsAmountAverageDiffPerMonth);
         }
-        return spendingsAmountAverageDiffPerMonthList;
+
+        spendingsOverviewTotalYearDto.setSpendingsTotalUser(spendingsTotalUserList);
+
+        return spendingsOverviewTotalYearDto;
     }
 
-    private List<SpendingsOverviewAmountAverageDiffPerUserDto> getAmountAverageDiffPerUserAndYear(Long groupId, int year) {
-        var amount = cartRepository.getSpendingsAmountPerYearAndUser(year, groupId);
-        var average = cartRepository.getAveragePerUserAndYear(groupId, year);
+    private List<SpendingsOverviewPerMonthDto> getSpendingsOverviewPerMonth(int year, Long groupId) throws UserNotFoundException {
+        var membership = dataLoaderService.loadMembershipHistoryForGroup(groupId);
+        var carts = dataLoaderService.loadCartListForGroup(groupId);
+        var userIds = membership.stream().map(GroupMembershipHistory::getUserId).distinct().toList();
+        var spendingsOverviewPerMonthDtoList = new ArrayList<SpendingsOverviewPerMonthDto>();
+        var availableMonth = getAvailableMonthsForYear(carts, year);
 
-        var spendingsAmountAverageDiffPerYearList = new ArrayList<SpendingsOverviewAmountAverageDiffPerUserDto>();
+        for (Integer month : availableMonth) {
+            var spendingsOverviewPerMonthDto = new SpendingsOverviewPerMonthDto();
+            var spendingsTotalUserList = new ArrayList<SpendingsOverviewUserDto>();
 
-        for (SpendingsOverviewAmountAverageDiffPerUserDto amt : amount) {
-            var spendingsAmountAverageDiffPerYear = new SpendingsOverviewAmountAverageDiffPerUserDto();
-            Double sumAverage = 0.0;
-            for (SpendingsOverviewAverageDto avg : average) {
-                if (avg.getUserId().equals(amt.getUserId())) {
-                    spendingsAmountAverageDiffPerYear.setYear(amt.getYear());
-                    spendingsAmountAverageDiffPerYear.setUserId(amt.getUserId());
-                    spendingsAmountAverageDiffPerYear.setSumAmount(amt.getSumAmount());
-                    spendingsAmountAverageDiffPerYear.setSumAveragePerMember(sumAverage += avg.getAveragePerMember());
-                    spendingsAmountAverageDiffPerYear.setDiff(amt.getSumAmount() - sumAverage);
+            spendingsOverviewPerMonthDto.setMonth(month);
+            spendingsOverviewPerMonthDto.setMonthName(getMonthName(month));
+            spendingsOverviewPerMonthDto.setSumTotalMonth(getTotalAmountForMonth(carts, year, month));
+
+            for (Long userId : userIds) {
+                double sum = 0.0;
+                double sumAveragePerMember = 0.0;
+
+                var validMemberships = membership.stream()
+                        .filter(gmh -> gmh.getUserId().equals(userId))
+                        .toList();
+
+                for (Cart cart : carts) {
+                    if (cart.getDatePurchased().toInstant().atZone(ZoneId.systemDefault()).getMonthValue() == month
+                        && cart.getDatePurchased().toInstant().atZone(ZoneId.systemDefault()).getYear() == year) {
+                        if (cart.getUser().getId().equals(userId)) {
+                            sum += cart.getAmount();
+                        }
+
+                        for (GroupMembershipHistory gmh : validMemberships) {
+                            if (hasValidMembership(cart.getDatePurchased(), gmh)) {
+                                sumAveragePerMember += cart.getAveragePerMember();
+                                break; // Verhindert Mehrfachzählung!
+                            }
+                        }
+                    }
+                }
+
+                double diff = sum - sumAveragePerMember;
+                var userName = dataLoaderService.loadUser(userId).getName();
+                userName = userIsCurrentlyMember(userId, groupId) ? userName : UserEnum.USER_REMOVED.getName();
+                if (wasUserMemberInMonth(validMemberships, year, month)) {
+                    spendingsTotalUserList.add(new SpendingsOverviewUserDto(userId, userName, roundValue(sum), roundValue(diff)));
                 }
             }
-            spendingsAmountAverageDiffPerYearList.add(spendingsAmountAverageDiffPerYear);
+            spendingsOverviewPerMonthDto.setSpendingsMonthlyUser(spendingsTotalUserList);
+            spendingsOverviewPerMonthDtoList.add(spendingsOverviewPerMonthDto);
         }
-        return spendingsAmountAverageDiffPerYearList;
+
+        return spendingsOverviewPerMonthDtoList;
     }
 
-    private List<SpendingsOverviewAmountAverageDiffPerYearDto> getAmountAverageDiffPerUserYearly(Long groupId) {
-        var amount = cartRepository.getSpendingsAmountPerUserYearly(groupId);
-        var average = cartRepository.getAveragePerUserAndTotalYears(groupId);
+    // Helper Methods
+    private boolean hasValidMembership(Date datePurchased, GroupMembershipHistory gmh) {
+        if (datePurchased == null || gmh == null || gmh.getMembershipStart() == null) {
+            return false;
+        }
+        // Zeitkomponente entfernen
+        LocalDate purchasedDate = datePurchased.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+        LocalDate startDate = gmh.getMembershipStart().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+        LocalDate endDate = (gmh.getMembershipEnd() != null)
+                ? gmh.getMembershipEnd().toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
+                : LocalDate.of(2999, 12, 31);
 
-        var spendingsAmountAverageDiffPerYearList = new ArrayList<SpendingsOverviewAmountAverageDiffPerYearDto>();
+        return !purchasedDate.isBefore(startDate) && !purchasedDate.isAfter(endDate);
+    }
 
-        for (SpendingsOverviewAmountAverageDiffPerUserDto amt : amount) {
-            var spendingsAmountAverageDiffPerYear = new SpendingsOverviewAmountAverageDiffPerYearDto();
-            Double sumAverage = 0.0;
-            for (SpendingsOverviewAverageDto avg : average) {
-                if (avg.getYear() == amt.getYear() && avg.getUserId().equals(amt.getUserId())) {
-                    spendingsAmountAverageDiffPerYear.setYear(amt.getYear());
-                    spendingsAmountAverageDiffPerYear.setUserId(amt.getUserId());
-                    spendingsAmountAverageDiffPerYear.setSumAmount(amt.getSumAmount());
-                    spendingsAmountAverageDiffPerYear.setSumAveragePerMember(sumAverage += avg.getAveragePerMember());
-                    spendingsAmountAverageDiffPerYear.setDiff(amt.getSumAmount() - sumAverage);
-                }
+    private Double roundValue(Double value) {
+        return BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP).doubleValue();
+    }
+
+    public double getTotalAmountForYear(List<Cart> carts, int year) {
+        return carts.stream()
+                .filter(cart -> {
+                    LocalDate date = cart.getDatePurchased().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+                    return date.getYear() == year;
+                })
+                .mapToDouble(Cart::getAmount)
+                .sum();
+    }
+
+    public List<Integer> getAvailableMonthsForYear(List<Cart> carts, int year) {
+        return carts.stream()
+                .map(cart -> cart.getDatePurchased().toInstant().atZone(ZoneId.systemDefault()).toLocalDate()) // Datum umwandeln
+                .filter(date -> date.getYear() == year)
+                .map(LocalDate::getMonthValue)
+                .distinct()
+                .sorted(Comparator.reverseOrder())
+                .toList();
+    }
+
+    public String getMonthName(Integer monthNumber) {
+        return Month.of(monthNumber).getDisplayName(TextStyle.FULL, Locale.GERMAN);
+    }
+
+    public double getTotalAmountForMonth(List<Cart> carts, int year, int month) {
+        return carts.stream()
+                .filter(cart -> {
+                    LocalDate date = cart.getDatePurchased().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+                    return date.getYear() == year && date.getMonthValue() == month;
+                })
+                .mapToDouble(Cart::getAmount)
+                .sum();
+    }
+
+    public boolean hasCartsForYear(List<Cart> carts, int year) {
+        return carts.stream()
+                .map(cart -> cart.getDatePurchased().toInstant().atZone(ZoneId.systemDefault()).toLocalDate())
+                .anyMatch(date -> date.getYear() == year);
+    }
+
+    public boolean hasCartsForGroup(List<Cart> carts, Long groupId) {
+        return carts.stream()
+                .anyMatch(cart -> cart.getGroup().getId() == groupId);
+    }
+
+    public boolean wasUserMemberInYear(List<GroupMembershipHistory> membershipHistory, int year) {
+        return membershipHistory.stream()
+                .anyMatch(gmh -> {
+                    LocalDate start = gmh.getMembershipStart().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+                    LocalDate end = (gmh.getMembershipEnd() != null)
+                            ? gmh.getMembershipEnd().toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
+                            : LocalDate.of(2999, 12, 31); // Falls `membership_end` null ist
+
+                    // Prüfen, ob das Jahr innerhalb des Mitgliedschaftszeitraums liegt
+                    return (start.getYear() <= year && end.getYear() >= year);
+                });
+    }
+
+    public boolean wasUserMemberInMonth(List<GroupMembershipHistory> membershipHistory, int year, int month) {
+        return membershipHistory.stream()
+                .anyMatch(gmh -> {
+                    LocalDate start = gmh.getMembershipStart().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+                    LocalDate end = (gmh.getMembershipEnd() != null)
+                            ? gmh.getMembershipEnd().toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
+                            : LocalDate.of(2999, 12, 31); // Falls `membership_end` null ist
+
+                    // Prüfen, ob der Monat innerhalb des Mitgliedschaftszeitraums liegt
+                    LocalDate firstOfMonth = LocalDate.of(year, month, 1);
+                    LocalDate lastOfMonth = firstOfMonth.withDayOfMonth(firstOfMonth.lengthOfMonth());
+
+                    return (!start.isAfter(lastOfMonth) && !end.isBefore(firstOfMonth));
+                });
+    }
+
+    private boolean userIsCurrentlyMember(Long userId, Long groupId) throws UserNotFoundException {
+        var user = dataLoaderService.loadUser(userId);
+        var membership = dataLoaderService.loadMembershipHistoryForGroupAndUser(groupId, userId);
+        var isCurrentlyMember = membership.stream().anyMatch(gmh -> gmh.getMembershipEnd() == null);
+
+        if (!user.getName().equals(UserEnum.USER_DELETED.getName())) {
+            if (!isCurrentlyMember) {
+                return false;
             }
-            spendingsAmountAverageDiffPerYearList.add(spendingsAmountAverageDiffPerYear);
         }
-        return spendingsAmountAverageDiffPerYearList;
+
+        return true;
     }
-
-    private List<SpendingsOverviewAmountAverageDiffPerUserDto> getAmountAverageDiffPerUserAndTotalYears(Long groupId) {
-        var amount = cartRepository.getSpendingsAmountPerUserAndTotalYears(groupId);
-        var average = cartRepository.getAveragePerUserAndTotalYears(groupId);
-
-        var spendingsAmountAverageDiffTotalYearsList = new ArrayList<SpendingsOverviewAmountAverageDiffPerUserDto>();
-
-        for (SpendingsOverviewAmountAverageDiffPerUserDto amt : amount) {
-            var spendingsAmountAverageDiffTotalYears = new SpendingsOverviewAmountAverageDiffPerUserDto();
-            Double sumAverage = 0.0;
-            for (SpendingsOverviewAverageDto avg : average) {
-                if (avg.getUserId().equals(amt.getUserId())) {
-                    spendingsAmountAverageDiffTotalYears.setUserId(amt.getUserId());
-                    spendingsAmountAverageDiffTotalYears.setSumAmount(amt.getSumAmount());
-                    spendingsAmountAverageDiffTotalYears.setSumAveragePerMember(sumAverage += avg.getAveragePerMember());
-                    spendingsAmountAverageDiffTotalYears.setDiff(amt.getSumAmount() - sumAverage);
-                }
-            }
-            spendingsAmountAverageDiffTotalYearsList.add(spendingsAmountAverageDiffTotalYears);
-        }
-        return spendingsAmountAverageDiffTotalYearsList;
-    }
-
 }
