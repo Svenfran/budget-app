@@ -319,7 +319,7 @@ public class SpendingsOverviewService {
 
     public boolean hasCartsForGroup(List<Cart> carts, Long groupId) {
         return carts.stream()
-                .anyMatch(cart -> cart.getGroup().getId() == groupId);
+                .anyMatch(cart -> Objects.equals(cart.getGroup().getId(), groupId));
     }
 
     public boolean wasUserMemberInYear(List<GroupMembershipHistory> membershipHistory, int year) {

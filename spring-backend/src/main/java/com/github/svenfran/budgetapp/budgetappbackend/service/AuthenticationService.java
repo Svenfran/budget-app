@@ -13,6 +13,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundExc
 import com.github.svenfran.budgetapp.budgetappbackend.repository.TokenRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -104,4 +105,11 @@ public class AuthenticationService {
         userToken.setRevoked(false);
         tokenRepository.save(userToken);
     }
+
+    @Scheduled(cron = "0 0 0 * * ?") // Läuft täglich um Mitternacht
+    public void deleteExpiredTokens() {
+        var tokens = tokenRepository.findAllByExpiredIsTrueAndRevokedIsTrue();
+        tokenRepository.deleteAll(tokens);
+    }
+
 }

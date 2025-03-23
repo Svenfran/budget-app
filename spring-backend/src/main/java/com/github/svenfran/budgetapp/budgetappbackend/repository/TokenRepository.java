@@ -15,6 +15,8 @@ public interface TokenRepository extends CrudRepository<Token, Long> {
     """)
     List<Token> findAllValidTokensByUser(Long userId);
 
+    List<Token> findAllByExpiredIsTrueAndRevokedIsTrue();
+
     Optional<Token> findByToken(String token);
 
     List<Token> findAllByUserId(Long userId);

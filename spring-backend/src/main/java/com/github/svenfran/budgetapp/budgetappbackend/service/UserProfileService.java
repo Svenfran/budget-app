@@ -74,6 +74,7 @@ public class UserProfileService {
             }
         });
 
+        tokenRepository.deleteAll(tokenRepository.findAllByUserId(userDelete.getId()));
         anonymizeUser(userDelete);
     }
 
