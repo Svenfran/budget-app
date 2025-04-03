@@ -118,7 +118,8 @@ public class CartService {
         response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
         response.setHeader("Expires", "0");
         var cartlist = dataLoaderService.loadCartListForGroup(groupId);
-        var excelWriter = new ExcelWriter(cartlist);
+        var membershipHistoryList = dataLoaderService.loadMembershipHistoryForGroup(groupId);
+        var excelWriter = new ExcelWriter(cartlist, membershipHistoryList, dataLoaderService);
         excelWriter.generateExcelFile(response);
     }
 

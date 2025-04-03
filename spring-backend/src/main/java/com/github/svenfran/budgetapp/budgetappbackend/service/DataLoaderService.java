@@ -51,6 +51,7 @@ public class DataLoaderService {
         this.shoppingItemRepository = shoppingItemRepository;
     }
 
+    public DataLoaderService() {}
 
     public Group loadGroup(Long groupId) throws GroupNotFoundException {
         return groupRepository.findById(groupId)

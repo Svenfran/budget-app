@@ -10,6 +10,7 @@ public class GroupMembershipHistoryDto {
     private Date endDate;
     private Long groupId;
     private Long userId;
+    private String userName;
 
     public GroupMembershipHistoryDto(GroupMembershipHistory gmh) {
         this.startDate = gmh.getMembershipStart();

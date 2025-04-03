@@ -15,6 +15,8 @@ public interface GroupMembershipHistoryRepository extends CrudRepository<GroupMe
 
     List<GroupMembershipHistory> findByGroupIdAndMembershipEndIsNull(Long groupId);
 
+    List<GroupMembershipHistory> findAll();
+
     @Override
     void deleteAll();
 }

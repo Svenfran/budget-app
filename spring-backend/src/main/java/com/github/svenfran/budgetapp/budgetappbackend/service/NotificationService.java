@@ -7,7 +7,10 @@ import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundExc
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.actuate.health.HealthEndpoint;
+import org.springframework.context.ApplicationContext;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -26,10 +29,16 @@ public class NotificationService {
     @Autowired
     DataLoaderService dataLoaderService;
 
+    @Autowired
+    HealthCheckService healthCheckService;
+
     private final SimpMessagingTemplate messagingTemplate;
 
-    public NotificationService(SimpMessagingTemplate messagingTemplate) {
+    private final ApplicationContext applicationContext;
+
+    public NotificationService(SimpMessagingTemplate messagingTemplate, ApplicationContext applicationContext) {
         this.messagingTemplate = messagingTemplate;
+        this.applicationContext = applicationContext;
     }
 
     public void sendShoppingListNotification(Long groupId, AddEditShoppingListDto dto, String action) throws UserNotFoundException {
@@ -164,6 +173,20 @@ public class NotificationService {
                 );
             }
         }
+    }
+
+    @Scheduled(fixedRate = 10000)
+    public void sendHealthStatus() {
+        var destination = "/notification/health";
+        var healthEndpoint = applicationContext.getBean(HealthEndpoint.class);
+        var health = healthEndpoint.health();
+
+        logger.info("Health Status: {}", health.getStatus());
+
+        messagingTemplate.convertAndSend(
+                destination,
+                health
+        );
     }
 
 }
