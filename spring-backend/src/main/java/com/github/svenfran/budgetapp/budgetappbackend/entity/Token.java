@@ -30,13 +30,17 @@ public class Token {
     @JoinColumn(name = "user_id")
     private User user;
 
-    public Token(Long id, String token, TokenType tokenType, boolean expired, boolean revoked, User user) {
+    @Column(name = "device_id", nullable = false)
+    private String deviceId;
+
+    public Token(Long id, String token, TokenType tokenType, boolean expired, boolean revoked, User user, String deviceId) {
         this.id = id;
         this.token = token;
         this.tokenType = tokenType;
         this.expired = expired;
         this.revoked = revoked;
         this.user = user;
+        this.deviceId = deviceId;
     }
 
     public Token() {
@@ -88,5 +92,13 @@ public class Token {
 
     public void setUser(User user) {
         this.user = user;
+    }
+
+    public String getDeviceId() {
+        return deviceId;
+    }
+
+    public void setDeviceId(String deviceId) {
+        this.deviceId = deviceId;
     }
 }

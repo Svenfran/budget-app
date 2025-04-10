@@ -59,9 +59,9 @@ public class AuthenticationService {
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         var savedUser = userRepository.save(user);
         var registeredUserId = dataLoaderService.loadUserByEmail(request.getEmail()).getId();
-        var token = jwtService.generateToken(user);
+        var token = jwtService.generateToken(user, request.getDeviceId());
         var expTime = jwtService.extractExpiration(token).getTime();
-        saveUserToken(savedUser, token);
+        saveUserToken(savedUser, token, request.getDeviceId());
         groupService.createDefaultGroup(savedUser);
         return new AuthenticationResponse(registeredUserId, request.getName(), request.getEmail(), expTime, token);
     }
@@ -77,15 +77,16 @@ public class AuthenticationService {
         );
 
         var user = dataLoaderService.loadUserByEmail(request.getEmail());
-        var token = jwtService.generateToken(user);
+        var token = jwtService.generateToken(user, request.getDeviceId());
         var expTime = jwtService.extractExpiration(token).getTime();
-        revokeAllUserTokens(user);
-        saveUserToken(user, token);
+        revokeAllUserTokens(user, request.getDeviceId());
+        deleteInvalidUserTokens(user, request.getDeviceId());
+        saveUserToken(user, token, request.getDeviceId());
         return new AuthenticationResponse(user.getId(), user.getName(), user.getEmail(), expTime, token);
     }
 
-    private void revokeAllUserTokens(User user) {
-        var validUserTokens = tokenRepository.findAllValidTokensByUser(user.getId());
+    private void revokeAllUserTokens(User user, String deviceId) {
+        var validUserTokens = tokenRepository.findAllValidTokensByUserAndDeviceId(user.getId(), deviceId);
         if (validUserTokens.isEmpty()) {
             return;
         }
@@ -96,13 +97,19 @@ public class AuthenticationService {
         tokenRepository.saveAll(validUserTokens);
     }
 
-    private void saveUserToken(User user, String token) {
+    private void deleteInvalidUserTokens(User user, String deviceId) {
+        var invalidTokens = tokenRepository.findAllInvalidTokensByUserAndDeviceId(user.getId(), deviceId);
+        tokenRepository.deleteAll(invalidTokens);
+    }
+
+    private void saveUserToken(User user, String token, String deviceId) {
         var userToken = new Token();
         userToken.setUser(user);
         userToken.setToken(token);
         userToken.setTokenType(TokenType.BEARER);
         userToken.setExpired(false);
         userToken.setRevoked(false);
+        userToken.setDeviceId(deviceId);
         tokenRepository.save(userToken);
     }
 

@@ -13,11 +13,13 @@ public class RegisterRequest {
     @NotEmpty
     private String email;
     private String password;
+    private String deviceId;
 
-    public RegisterRequest(String name, String email, String password) {
+    public RegisterRequest(String name, String email, String password, String deviceId) {
         this.name = name;
         this.email = email;
         this.password = password;
+        this.deviceId = deviceId;
     }
 
     public RegisterRequest() {
@@ -45,5 +47,13 @@ public class RegisterRequest {
 
     public void setPassword(String password) {
         this.password = password;
+    }
+
+    public String getDeviceId() {
+        return deviceId;
+    }
+
+    public void setDeviceId(String deviceId) {
+        this.deviceId = deviceId;
     }
 }
