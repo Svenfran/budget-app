@@ -1,0 +1,7 @@
+target/
+.git
+.gitignore
+docker-testcontainers.yaml
+README.md
+../ionic-frontend
+../railway.json

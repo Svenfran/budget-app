@@ -1,0 +1,9 @@
+{
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "spring-backend/Dockerfile"
+  },
+  "deploy": {
+    "startCommand": "java -jar /app/app.jar"
+  }
+}
