@@ -1,15 +1,23 @@
-# Verwende eine schlanke JDK 17 Runtime
-FROM eclipse-temurin:17-jdk-alpine
-
-# Setze Arbeitsverzeichnis im Container
+# ---- Build Stage ----
+FROM maven:3.9.4-eclipse-temurin-17 AS build
 WORKDIR /app
 
-# Kopiere fertiges Spring Boot Jar ins Image
-ARG JAR_FILE=target/*.jar
-COPY ${JAR_FILE} app.jar
+# nur pom.xml und src kopieren, damit Docker Caching optimal genutzt wird
+COPY pom.xml .
+COPY src ./src
 
-# Expose Port (Railway mappt automatisch nach außen)
+# Maven build -> erstellt das JAR im target/ Verzeichnis
+RUN mvn clean package -DskipTests
+
+# ---- Runtime Stage ----
+FROM eclipse-temurin:17-jdk
+WORKDIR /app
+
+# JAR aus dem Build Stage übernehmen
+COPY --from=build /app/target/*.jar app.jar
+
+# Port öffnen (Railway mapped automatisch auf extern)
 EXPOSE 8080
 
-# Starte die App
-ENTRYPOINT ["java", "-jar", "/app/app.jar", "--spring.profiles.active=prod"]
+# Spring Boot mit Prod-Profile starten
+ENTRYPOINT ["java", "-jar", "app.jar", "--spring.profiles.active=prod"]
