@@ -4,25 +4,22 @@ import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.Status;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import sendinblue.ApiClient;
+import sendinblue.Configuration;
+import sibApi.AccountApi;
+import sibModel.GetAccount;
 
-import javax.mail.Session;
-import javax.mail.Transport;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Properties;
 
 @Service
 public class HealthCheckService {
 
     private final JdbcTemplate jdbcTemplate;
     private static final Long DISK_THRESHOLD = 10L * 1024 * 1024; // 10 MB
-    private static final String EMAIL_HOST = System.getenv("BREVO_HOST");
-    private static final String EMAIL_PORT = System.getenv("BREVO_PORT");
-    private static final String EMAIL_USERNAME = System.getenv("BREVO_USERNAME");
-    private static final String EMAIL_PASSWORD = System.getenv("BREVO_SMTP_KEY");
     private static final String ERROR = "error";
 
     public HealthCheckService(JdbcTemplate jdbcTemplate) {
@@ -86,27 +83,22 @@ public class HealthCheckService {
     }
 
     /**
-     * Health-Check für den Mailserver (SMTP)
+     * Health-Check für den Mailserver (API BREVO ACCOUNT)
      */
     private Health checkMailServer() {
-        Properties props = new Properties();
-        props.put("mail.smtp.host", EMAIL_HOST);
-        props.put("mail.smtp.port", EMAIL_PORT);
-        props.put("mail.smtp.auth", "true");
-        props.put("mail.smtp.starttls.enable", "true");
+        var apiKey = System.getenv("BREVO_API_KEY");
 
         try {
-            Session session = Session.getInstance(props);
-            Transport transport = session.getTransport("smtp");
-            transport.connect(
-                    EMAIL_HOST,
-                    Integer.parseInt(EMAIL_PORT),
-                    EMAIL_USERNAME,
-                    EMAIL_PASSWORD
-            );
-            transport.close();
+            ApiClient client = Configuration.getDefaultApiClient();
+            client.setApiKey(apiKey);
 
-            return Health.up().withDetail("location", EMAIL_HOST + ":" + EMAIL_PORT).build();
+            AccountApi accountApi = new AccountApi(client);
+            GetAccount account = accountApi.getAccount(); // kleiner Ping
+
+            return Health.up()
+                    .withDetail("plan", account.getPlan().toString())
+                    .withDetail("emailCredits", account.getRelay().getData().relay("credits"))
+                    .build();
         } catch (Exception e) {
             return Health.down().withDetail(ERROR, e.getMessage()).build();
         }
