@@ -148,6 +148,13 @@
 			<version>2.3-groovy-3.0</version>
 			<scope>test</scope>
 		</dependency>
+		<!--BREVO Mail-->
+		<dependency>
+			<groupId>com.sendinblue</groupId>
+			<artifactId>sib-api-v3-sdk</artifactId>
+			<version>5.0.0</version>
+		</dependency>
+
 	</dependencies>
 
 	<dependencyManagement>

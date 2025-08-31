@@ -45,7 +45,7 @@ public class UserProfileController {
     }
 
     @PutMapping("/userprofile/password-reset")
-    public ResponseEntity<Void> passwordReset(@Valid @RequestBody PasswordResetDto resetDto, BindingResult bindingResult) throws UserNotFoundException, InvalidEmailException {
+    public ResponseEntity<Void> passwordReset(@Valid @RequestBody PasswordResetDto resetDto, BindingResult bindingResult) throws Exception {
         userProfileService.passwordReset(resetDto.getEmail(), bindingResult);
         return new ResponseEntity<>(HttpStatus.CREATED);
     }

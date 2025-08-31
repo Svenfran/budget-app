@@ -138,7 +138,7 @@ public class UserProfileService {
         userRepository.save(userPwChange);
     }
 
-    public void passwordReset(String email, BindingResult bindingResult) throws UserNotFoundException, InvalidEmailException {
+    public void passwordReset(String email, BindingResult bindingResult) throws Exception {
         verificationService.verifyEmailIsValid(bindingResult);
         var user = dataLoaderService.loadUserByEmail(email);
         var generatedPassword = RandomStringUtils.randomAlphanumeric(8);

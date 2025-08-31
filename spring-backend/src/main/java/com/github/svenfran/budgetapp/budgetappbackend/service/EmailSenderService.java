@@ -10,14 +10,9 @@ import org.springframework.stereotype.Service;
 public class EmailSenderService {
 
     @Autowired
-    private JavaMailSender mailSender;
+    private BrevoMailSenderService mailSender;
 
-    public void sendEmail(String recipient, String body, String subject) {
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom(System.getenv("BREVO_USERNAME"));
-        message.setTo(recipient);
-        message.setText(body);
-        message.setSubject(subject);
-        mailSender.send(message);
+    public void sendEmail(String recipient, String body, String subject) throws Exception {
+        mailSender.sendEmail(recipient, subject, body);
     }
 }
