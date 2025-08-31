@@ -39,7 +39,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws")
                 .setAllowedOrigins("http://localhost:8100", "http://192.168.178.23:8100",
-                        "http://localhost", "http://192.168.178.23")
+                        "http://localhost", "http://192.168.178.23", "https://localhost:8100",
+                        "https://localhost:")
                 .withSockJS();
     }
 

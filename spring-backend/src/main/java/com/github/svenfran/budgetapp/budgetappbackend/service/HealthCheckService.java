@@ -19,10 +19,10 @@ public class HealthCheckService {
 
     private final JdbcTemplate jdbcTemplate;
     private static final Long DISK_THRESHOLD = 10L * 1024 * 1024; // 10 MB
-    private static final String EMAIL_HOST = System.getenv("EMAIL_HOST");
-    private static final String EMAIL_PORT = System.getenv("EMAIL_PORT");
-    private static final String EMAIL_USERNAME = System.getenv("EMAIL_USERNAME");
-    private static final String EMAIL_PASSWORD = System.getenv("EMAIL_PASSWORD");
+    private static final String EMAIL_HOST = System.getenv("BREVO_HOST");
+    private static final String EMAIL_PORT = System.getenv("BREVO_PORT");
+    private static final String EMAIL_USERNAME = System.getenv("BREVO_USERNAME");
+    private static final String EMAIL_PASSWORD = System.getenv("BREVO_SMTP_KEY");
     private static final String ERROR = "error";
 
     public HealthCheckService(JdbcTemplate jdbcTemplate) {

@@ -14,7 +14,7 @@ public class EmailSenderService {
 
     public void sendEmail(String recipient, String body, String subject) {
         SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom(System.getenv("EMAIL_USERNAME"));
+        message.setFrom(System.getenv("BREVO_USERNAME"));
         message.setTo(recipient);
         message.setText(body);
         message.setSubject(subject);

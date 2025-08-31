@@ -142,7 +142,7 @@ public class UserProfileService {
         verificationService.verifyEmailIsValid(bindingResult);
         var user = dataLoaderService.loadUserByEmail(email);
         var generatedPassword = RandomStringUtils.randomAlphanumeric(8);
-        var subject = "Passwort zurücksetzen";
+        var subject = "DIVVY-APP - Passwort zurücksetzen";
         var body = "Hallo " + user.getName() + "," +
                 "\n\ndein temporäres Passwort lautet: " + generatedPassword +
                 "\n\nBitte melde dich an und ändere dein Passwort." +
