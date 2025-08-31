@@ -41,7 +41,7 @@ public class SecurityConfiguration {
                 .configurationSource(corsConfigurationSource())
                 .and()
                 .authorizeHttpRequests()
-                .antMatchers("/api/auth/**", "/api/userprofile/password-reset", "/ws/**")
+                .antMatchers("/api/auth/**", "/api/userprofile/password-reset", "/ws/**", "/wss/**")
                 .permitAll()
                 .antMatchers(HttpMethod.OPTIONS, "/**")
                 .permitAll()
@@ -74,7 +74,9 @@ public class SecurityConfiguration {
                 "http://192.168.178.21:8100",
                 "http://192.168.32.1:8100",
                 "http://localhost:8100",
-                "http://localhost"
+                "http://localhost",
+                "https://localhost:8100",
+                "https://localhost"
         ));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("Origin", "Content-Type", "Accept", "Authorization", "DeviceId"));
