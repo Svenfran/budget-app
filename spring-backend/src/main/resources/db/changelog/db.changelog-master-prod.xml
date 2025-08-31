@@ -39,4 +39,6 @@
     <include context="prod" file="db/changelog/release-1.x/20230407111215-1_addColumnForDateCreatedAndLastUpdateToShoppingItemTable.xml" relativeToChangelogFile="false"/>
     <include context="prod" file="db/changelog/release-1.x/20230421170015-1_addColumnForLastUpdateShoppingListToGroupTable.xml" relativeToChangelogFile="false"/>
 
+    <include context="prod" file="db/changelog/release-1.x/20250831165000-1_loadCartDataProd.xml" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>
