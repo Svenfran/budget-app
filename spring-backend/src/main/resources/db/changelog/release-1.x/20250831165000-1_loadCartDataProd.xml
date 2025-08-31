@@ -7,7 +7,7 @@
     <changeSet author="sven" id="20250831165000-1">
         <loadData
                 file="db/data/carts_prod.csv"
-                seperator=";"
+                separator=";"
                 tableName = "cart" >
             <column header="id" name="id" type="string"/>
             <column header="title" name="title" type="string"/>
