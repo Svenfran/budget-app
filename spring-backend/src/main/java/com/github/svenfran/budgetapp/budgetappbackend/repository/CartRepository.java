@@ -43,4 +43,6 @@ public interface CartRepository extends CrudRepository<Cart, Long> {
             """)
     List<Integer> getAvailableYearsForGroup(@Param("groupId") Long groupId);
 
+    @Query("select count(c) from Cart c where c.template.id = ?1 and c.template.active = true ")
+    int numberOfCartsWithActiveTemplate(Long templateId);
 }

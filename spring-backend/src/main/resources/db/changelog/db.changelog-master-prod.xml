@@ -41,4 +41,8 @@
 
     <include context="prod" file="db/changelog/release-1.x/20250831165000-1_loadCartDataProd.xml" relativeToChangelogFile="false"/>
 
+    <include context="prod" file="db/changelog/release-1.x/20250906130000-1_createCartTemplateTable.xml" relativeToChangelogFile="false"/>
+    <include context="prod" file="db/changelog/release-1.x/20250906130000-1_addColumnForTemplateIdToCartTable.xml" relativeToChangelogFile="false"/>
+    <include context="prod" file="db/changelog/release-1.x/20250906130000-1_addForeignKeyForCartTemplateToCartTable.xml" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

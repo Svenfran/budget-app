@@ -1,10 +1,7 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.*;
-import com.github.svenfran.budgetapp.budgetappbackend.entity.Cart;
-import com.github.svenfran.budgetapp.budgetappbackend.entity.Category;
-import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
-import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
+import com.github.svenfran.budgetapp.budgetappbackend.entity.*;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.*;
 import com.github.svenfran.budgetapp.budgetappbackend.service.mapper.GroupDtoMapper;
@@ -13,6 +10,7 @@ import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
 import java.util.stream.Stream;
@@ -52,6 +50,9 @@ public class GroupService {
 
     @Autowired
     private NotificationService notificationService;
+
+    @Autowired
+    private CartTemplateRepository cartTemplateRepository;
 
 
     public Stream<Group> getGroupsByMemberOrOwner() throws UserNotFoundException {
@@ -132,6 +133,8 @@ public class GroupService {
         groupMembershipHistoryService.finishGroupMembership(removedMember, group);
         setIsDeletedForCart(group, removedMember, true);
 
+        deactivateCartTemplatesForUserAndGroup(removeGroupMemberDto.getMember().getId(), group.getId());
+
         calculateAveragePerMember(group);
         var groupMemberDto = new GroupMembersDto(groupRepository.save(group), new UserDto(removedMember));
         notificationService.sendGroupMemberRemovedNotification(
@@ -156,6 +159,7 @@ public class GroupService {
             group.getShoppingLists().forEach(list -> shoppingItemRepository.deleteAll(list.getShoppingItems()));
             shoppingListRepository.deleteAll(group.getShoppingLists());
         }
+        cartTemplateRepository.deleteAll(cartTemplateRepository.findByGroupId(group.getId()));
         groupRepository.deleteById(id);
         notificationService.sendGroupDeletedNotification(history, new GroupDto(group));
     }
@@ -237,5 +241,14 @@ public class GroupService {
         });
 
         cartRepository.saveAll(carts);
+    }
+
+    private void deactivateCartTemplatesForUserAndGroup(Long userId, Long groupId) {
+        var activeTemplates = cartTemplateRepository.findByUserIdAndGroupIdAndActiveTrue(userId, groupId);
+        for (CartTemplate template : activeTemplates) {
+            template.setActive(false);
+            template.setEndDate(LocalDate.now());
+        }
+        cartTemplateRepository.saveAll(activeTemplates);
     }
 }

@@ -1,8 +1,10 @@
 package com.github.svenfran.budgetapp.budgetappbackend.dto;
 
+import com.github.svenfran.budgetapp.budgetappbackend.constants.RecurrenceType;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Cart;
 
 import javax.validation.constraints.NotNull;
+import java.time.LocalDate;
 import java.util.Date;
 
 public class CartDto {
@@ -17,6 +19,10 @@ public class CartDto {
     private UserDto userDto;
     private CategoryDto categoryDto;
     private boolean deleted;
+    private RecurrenceType recurrenceType = RecurrenceType.NONE;
+    private boolean hasActiveTemplate;
+    private LocalDate nextExecutionDate;
+    private boolean templateUpdateSelected;
 
     public CartDto(Cart cart) {
         this.id = cart.getId();
@@ -28,6 +34,9 @@ public class CartDto {
         this.userDto = new UserDto(cart.getUser());
         this.categoryDto = new CategoryDto(cart.getCategory());
         this.deleted = cart.isDeleted();
+        this.recurrenceType = getRecurrenceType(cart);
+        this.hasActiveTemplate = getTemplateIsActive(cart);
+        this.nextExecutionDate = getNextExecutionDate(cart);
     }
 
     public CartDto() {}
@@ -102,5 +111,58 @@ public class CartDto {
 
     public void setDeleted(boolean deleted) {
         this.deleted = deleted;
+    }
+
+    public RecurrenceType getRecurrenceType() {
+        return recurrenceType;
+    }
+
+    public void setRecurrenceType(RecurrenceType recurrenceType) {
+        this.recurrenceType = recurrenceType;
+    }
+
+    public RecurrenceType getRecurrenceType(Cart cart) {
+        if (cart.getTemplate() != null) {
+            return cart.getTemplate().getRecurrenceType();
+        }
+        return RecurrenceType.NONE;
+    }
+
+    public boolean getTemplateIsActive(Cart cart) {
+        if (cart.getTemplate() != null) {
+            return cart.getTemplate().isActive();
+        }
+        return false;
+    }
+
+    public LocalDate getNextExecutionDate(Cart cart) {
+        if (cart.getTemplate() != null) {
+            return cart.getTemplate().getNextExecutionDate();
+        }
+        return null;
+    }
+
+    public boolean isHasActiveTemplate() {
+        return hasActiveTemplate;
+    }
+
+    public void setHasActiveTemplate(boolean hasActiveTemplate) {
+        this.hasActiveTemplate = hasActiveTemplate;
+    }
+
+    public LocalDate getNextExecutionDate() {
+        return nextExecutionDate;
+    }
+
+    public void setNextExecutionDate(LocalDate nextExecutionDate) {
+        this.nextExecutionDate = nextExecutionDate;
+    }
+
+    public boolean isTemplateUpdateSelected() {
+        return templateUpdateSelected;
+    }
+
+    public void setTemplateUpdateSelected(boolean templateUpdateSelected) {
+        this.templateUpdateSelected = templateUpdateSelected;
     }
 }

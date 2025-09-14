@@ -45,9 +45,6 @@ public class UserProfileService {
     private GroupMembershipHistoryService gmhService;
 
     @Autowired
-    private CartService cartService;
-
-    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Autowired
@@ -58,6 +55,9 @@ public class UserProfileService {
 
     @Autowired
     private VerificationService verificationService;
+
+    @Autowired
+    private CartTemplateRepository cartTemplateRepository;
 
 
     @Transactional
@@ -75,6 +75,7 @@ public class UserProfileService {
         });
 
         tokenRepository.deleteAll(tokenRepository.findAllByUserId(userDelete.getId()));
+        cartTemplateRepository.deleteAll(cartTemplateRepository.findByUserId(userDelete.getId()));
         anonymizeUser(userDelete);
     }
 

@@ -51,5 +51,8 @@
     <include context="dev,!test" file="db/changelog/release-1.x/20221202170015-2_loadCoffeegroupCartData.xml" relativeToChangelogFile="false"/>
     <include context="dev,!test" file="db/changelog/release-1.x/20221202170015-3_loadCoffeegroupGroupMembers.xml" relativeToChangelogFile="false"/>
 
+    <include context="dev,test,prod" file="db/changelog/release-1.x/20250906130000-1_createCartTemplateTable.xml" relativeToChangelogFile="false"/>
+    <include context="dev,test,prod" file="db/changelog/release-1.x/20250906130000-1_addColumnForTemplateIdToCartTable.xml" relativeToChangelogFile="false"/>
+    <include context="dev,test,prod" file="db/changelog/release-1.x/20250906130000-1_addForeignKeyForCartTemplateToCartTable.xml" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>

@@ -54,7 +54,12 @@ public class Cart implements Serializable {
     @JoinColumn(name = "category_id", nullable = false)
     private Category category;
 
-    public Cart(Long id, String title, String description, Double amount, Double averagePerMember, boolean isDeleted, Date datePurchased, Date dateCreated, Date lastUpdate, Group group, User user, Category category) {
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "template_id")
+    private CartTemplate template; // falls aus Template erzeugt
+
+    public Cart(Long id, String title, String description, Double amount, Double averagePerMember, boolean isDeleted,
+                Date datePurchased, Date dateCreated, Date lastUpdate, Group group, User user, Category category, CartTemplate template) {
         this.id = id;
         this.title = title;
         this.description = description;
@@ -67,6 +72,7 @@ public class Cart implements Serializable {
         this.group = group;
         this.user = user;
         this.category = category;
+        this.template = template;
     }
 
     public Cart() {
@@ -168,6 +174,14 @@ public class Cart implements Serializable {
         this.averagePerMember = averagePerMember;
     }
 
+    public CartTemplate getTemplate() {
+        return template;
+    }
+
+    public void setTemplate(CartTemplate template) {
+        this.template = template;
+    }
+
     @Override
     public String toString() {
         return "Cart{" +
@@ -183,6 +197,7 @@ public class Cart implements Serializable {
                 ", group=" + group +
                 ", user=" + user +
                 ", category=" + category +
+                ", template=" + template +
                 '}';
     }
 }
