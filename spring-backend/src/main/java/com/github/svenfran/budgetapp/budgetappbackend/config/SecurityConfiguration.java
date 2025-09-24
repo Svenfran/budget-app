@@ -74,7 +74,11 @@ public class SecurityConfiguration {
                 "http://192.168.178.21:8100",
                 "http://192.168.32.1:8100",
                 "http://localhost:8100",
+                "http://localhost:3000",
                 "http://localhost",
+                "https://192.168.178.23:8100",
+                "https://192.168.178.21:8100",
+                "https://192.168.32.1:8100",
                 "https://localhost:8100",
                 "https://localhost"
         ));

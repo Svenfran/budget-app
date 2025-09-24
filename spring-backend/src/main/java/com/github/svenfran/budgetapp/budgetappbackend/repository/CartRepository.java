@@ -45,4 +45,20 @@ public interface CartRepository extends CrudRepository<Cart, Long> {
 
     @Query("select count(c) from Cart c where c.template.id = ?1 and c.template.active = true ")
     int numberOfCartsWithActiveTemplate(Long templateId);
+
+    @Query("""
+            select COUNT(*) from Cart c
+                     where c.title = :title
+                           and c.description = :description
+                           and c.category.id = :categoryId
+                           and c.datePurchased = :nextDate
+                           and c.amount = :amount
+            """)
+    int numberOfSimilarCarts(
+            @Param("title") String title,
+            @Param("description") String description,
+            @Param("categoryId") Long categoryId,
+            @Param("nextDate") Date nextDate,
+            @Param("amount") Double amount
+    );
 }

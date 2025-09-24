@@ -19,20 +19,39 @@ class CartServiceSpec extends Specification {
     @Shared
     def cartService = new CartService()
 
+    @Shared
+    def datePurchasedTest = toDate(LocalDate.of(2025, 10, 1))
+
+    def category = new Category(id: 100L)
+
+    def datePurchased = toDate(LocalDate.of(2025, 9, 1))
+
     static Date toDate(LocalDate localDate) {
         Date.from(localDate.atStartOfDay(ZoneId.systemDefault()).toInstant())
     }
 
-    def category = new Category(id: 100L)
-    def datePurchasedEntity = toDate(LocalDate.of(2025, 9, 1))
-    def datePurchasedDto = toDate(LocalDate.of(2025, 9, 1))
-    @Shared
-    def datePurchasedTest = Date.from(LocalDate.of(2025, 10, 1).atStartOfDay(ZoneId.systemDefault()).toInstant())
+    static LocalDate toLocalDate(Date date) {
+        date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
+    }
 
     Cart baseEntityWithTemplate(RecurrenceType type = RecurrenceType.MONTHLY) {
         def cart = baseEntity()
-        cart.template = new CartTemplate(id: 991L, recurrenceType: type, active: true)
+        cart.template = baseTemplate(type)
         return cart
+    }
+
+    CartTemplate baseTemplate(RecurrenceType type) {
+        def template = new CartTemplate()
+        template.id = 991L
+        template.title = "Testcart"
+        template.description = "Beschreibung"
+        template.amount = 99.99
+        template.active = true
+        template.recurrenceType = type
+        template.startDate = LocalDate.now()
+        template.nextExecutionDate = toLocalDate(datePurchased)
+        template.endDate = null
+        return template
     }
 
     Cart baseEntity() {
@@ -41,7 +60,7 @@ class CartServiceSpec extends Specification {
         cart.title = "Testcart"
         cart.description = "Beschreibung"
         cart.amount = 99.99
-        cart.datePurchased = datePurchasedEntity
+        cart.datePurchased = datePurchased
         cart.category = category
         return cart
     }
@@ -52,7 +71,7 @@ class CartServiceSpec extends Specification {
         dto.title = "Testcart"
         dto.description = "Beschreibung"
         dto.amount = 99.99
-        dto.datePurchased = datePurchasedDto
+        dto.datePurchased = datePurchased
         dto.categoryDto = new CategoryDto(id: 100L)
         return dto
     }
@@ -67,7 +86,10 @@ class CartServiceSpec extends Specification {
         change(dto)
 
         then:
-        cartService.hasCartChanged(dto, entity) == erwartet
+        def hasCartChanged = CartService.getDeclaredMethod("hasCartChanged", CartDto, Cart)
+        hasCartChanged.setAccessible(true)
+        hasCartChanged.invoke(cartService, dto, entity) == erwartet
+//        cartService.hasCartChanged(dto, entity) == erwartet
 
         where:
         feld           | change                                         || erwartet
@@ -76,7 +98,6 @@ class CartServiceSpec extends Specification {
         "amount"       | { it.amount = 111.11 }                         || true
         "datePurchased"| { it.datePurchased = datePurchasedTest}        || true
         "category"     | { it.categoryDto = new CategoryDto(id: 200L) } || true
-        "templateUpd"  | { it.templateUpdateSelected = true }           || true
         "noChange"     | { /* nichts ändern */ }                        || false
     }
 
@@ -88,7 +109,10 @@ class CartServiceSpec extends Specification {
         dto.recurrenceType = newType
 
         expect:
-        cartService.hasCartChanged(dto, entity) == erwartet
+        def hasRecurrenceTypeChanged = CartService.getDeclaredMethod("hasRecurrenceTypeChanged", CartDto, Cart)
+        hasRecurrenceTypeChanged.setAccessible(true)
+        hasRecurrenceTypeChanged.invoke(cartService, dto, entity) == erwartet
+//        cartService.hasRecurrenceTypeChanged(dto, entity) == erwartet
 
         where:
         oldType                | newType                || erwartet
@@ -99,20 +123,4 @@ class CartServiceSpec extends Specification {
         RecurrenceType.WEEKLY  | RecurrenceType.WEEKLY  || false
     }
 
-    @Unroll
-    def "hasRecurrenceChanged erkennt Änderung korrekt wenn bisher KEIN Template existierte (newType=#newType)"() {
-        given:
-        def entity = baseEntity() // kein Template
-        def dto = baseDto()
-        dto.recurrenceType = newType
-
-        expect:
-        cartService.hasCartChanged(dto, entity) == erwartet
-
-        where:
-        newType                  || erwartet
-        RecurrenceType.NONE      || false   // bleibt NONE → keine Änderung
-        RecurrenceType.MONTHLY   || true    // neues Template notwendig
-        RecurrenceType.DAILY     || true
-    }
 }

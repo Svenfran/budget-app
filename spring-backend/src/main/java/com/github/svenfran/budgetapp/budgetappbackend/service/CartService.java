@@ -86,57 +86,13 @@ public class CartService {
         var cart = dataLoaderService.loadCart(cartDto.getId());
         var group = dataLoaderService.loadGroup(cartDto.getGroupId());
         var gmh = dataLoaderService.loadMembershipHistoryForGroupAndUser(group.getId(), user.getId());
-        if (!hasCartChanged(cartDto, cart)) { return new CartDto(cart); }
         verificationService.verifyIsPartOfGroup(user, group);
         verificationService.verifyIsOwnerOfCart(user, cart);
         verificationService.verifyDatePurchasedWithinMembershipPeriod(gmh, cartDto.getDatePurchased());
         var category = dataLoaderService.loadCategory(cartDto.getCategoryDto().getId());
         var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(cartDto.getDatePurchased(), group.getId());
-        var updatedCart = cartDtoMapper.cartDtoToEntity(cartDto, category, user, group, groupMemberCount);
-        updateCartTemplateIfValid(cart, cartDto, user, group, updatedCart);
-        return new CartDto(cartRepository.save(updatedCart));
+        return updateCartAndTemplateIfValid(cart, cartDto, user, group, category, groupMemberCount);
     }
-
-    public boolean hasCartChanged(CartDto dto, Cart entity) {
-        if (!Objects.equals(dto.getTitle(), entity.getTitle())) return true;
-        if (!Objects.equals(dto.getDescription(), entity.getDescription())) return true;
-        if (!Objects.equals(dto.getAmount(), entity.getAmount())) return true;
-        if (!Objects.equals(dateToLocalDate(dto.getDatePurchased()), dateToLocalDate(entity.getDatePurchased()))) return true;
-        if (hasRecurrenceChanged(dto, entity)) return true;
-        if (!Objects.equals(dto.getCategoryDto().getId(), entity.getCategory().getId())) return true;
-        if (dto.isTemplateUpdateSelected()) return true;
-
-        return false;
-    }
-
-    private LocalDate dateToLocalDate(Date date) {
-        return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
-    }
-
-    private boolean hasRecurrenceChanged(CartDto dto, Cart cart) {
-        // Fall 1: Cart hatte bisher kein Template
-        if (cart.getTemplate() == null) {
-            // neu soll auch NONE sein → keine Änderung
-            if (dto.getRecurrenceType() == RecurrenceType.NONE) {
-                return false;
-            }
-            // neu soll z. B. DAILY, MONTHLY etc. sein → Änderung
-            return true;
-        }
-
-        // Fall 2: Cart hatte bisher ein Template
-        RecurrenceType oldType = cart.getTemplate().getRecurrenceType();
-        RecurrenceType newType = dto.getRecurrenceType();
-
-        // Wenn das Frontend NONE übergibt, will der Nutzer Wiederholung deaktivieren
-        if (newType == RecurrenceType.NONE) {
-            return true;
-        }
-
-        // Vergleichen: alt vs. neu
-        return !Objects.equals(oldType, newType);
-    }
-
 
     public void deleteCart(Long id) throws UserNotFoundException, CartNotFoundException, GroupNotFoundException, NotOwnerOfCartException, NotOwnerOrMemberOfGroupException {
         var user = dataLoaderService.getAuthenticatedUser();
@@ -144,7 +100,7 @@ public class CartService {
         var group = dataLoaderService.loadGroup(cart.getGroup().getId());
         verificationService.verifyIsPartOfGroup(user, group);
         verificationService.verifyIsOwnerOfCart(user, cart);
-        deactivateCartTemplateIfValid(cart);
+        deactivateCartTemplateIfCartDeleted(cart);
         cartRepository.deleteById(id);
     }
 
@@ -230,21 +186,33 @@ public class CartService {
             var nextDate = template.getNextExecutionDate();
 
             if (nextDate.equals(today)) {
-                createCartFromTemplate(template, nextDate);
+                if (checkIfCartAlreadyExists(template) < 1) {
+                    createCartFromTemplate(template, nextDate);
+                }
                 template.setNextExecutionDate(calculateNextDate(nextDate, template.getRecurrenceType()));
                 templateRepository.save(template);
             }
         }
     }
 
-    private void createTemplateForCartIfRecurrenceTypeValid(Cart cart, User user, Group group, RecurrenceType recurrenceType) {
+    private int checkIfCartAlreadyExists(CartTemplate template) {
+        return cartRepository.numberOfSimilarCarts(
+                template.getTitle(),
+                template.getDescription(),
+                template.getCategoryId(),
+                asDate(template.getNextExecutionDate()),
+                template.getAmount()
+        );
+    }
+
+    public void createTemplateForCartIfRecurrenceTypeValid(Cart cart, User user, Group group, RecurrenceType recurrenceType) {
         if (recurrenceType != null && !recurrenceType.equals(RecurrenceType.NONE)) {
             var cartDto = new CartDto(cart);
             createNewCartTemplate(cartDto, user, group, cart, recurrenceType);
         }
     }
 
-    private void deactivateCartTemplateIfValid(Cart cart) {
+    private void deactivateCartTemplateIfCartDeleted(Cart cart) {
         if (cart.getTemplate() != null && cartRepository.numberOfCartsWithActiveTemplate(cart.getTemplate().getId()) <= 1) {
             deactivateCartTemplate(cart);
         }
@@ -310,42 +278,6 @@ public class CartService {
         return next;
     }
 
-    private void updateCartTemplateIfValid(Cart cart, CartDto cartDto, User user, Group group, Cart updatedCart) {
-        RecurrenceType oldType = (cart.getTemplate() != null && cart.getTemplate().isActive())
-                ? cart.getTemplate().getRecurrenceType()
-                : RecurrenceType.NONE;
-
-        RecurrenceType newType = cartDto.getRecurrenceType() != null
-                ? cartDto.getRecurrenceType()
-                : RecurrenceType.NONE;
-
-        boolean updateSelected = cartDto.isTemplateUpdateSelected();
-
-        if (!oldType.equals(newType)) {
-            // RecurrenceType hat sich geändert
-            if (cart.getTemplate() != null && cart.getTemplate().isActive()) {
-                // altes Template deaktivieren
-                deactivateCartTemplate(cart);
-                templateRepository.save(cart.getTemplate());
-            }
-            if (!newType.equals(RecurrenceType.NONE)) {
-                // neues Template anlegen
-                createNewCartTemplate(cartDto, user, group, updatedCart, newType);
-            } else {
-                updatedCart.setTemplate(null); // keine Wiederholung mehr
-            }
-        } else if (updateSelected && !newType.equals(RecurrenceType.NONE)) {
-            // RecurrenceType gleich, aber Update-Flag gesetzt
-            if (cart.getTemplate() != null && cart.getTemplate().isActive()) {
-                deactivateCartTemplate(cart);
-                templateRepository.save(cart.getTemplate());
-            }
-            createNewCartTemplate(cartDto, user, group, updatedCart, newType);
-        } else {
-            updatedCart.setTemplate(cart.getTemplate());
-        }
-    }
-
     private void deactivateCartTemplate(Cart cart) {
         cart.getTemplate().setActive(false);
         cart.getTemplate().setEndDate(LocalDate.now());
@@ -355,12 +287,12 @@ public class CartService {
         CartTemplate newTemplate = new CartTemplate();
         newTemplate.setUserId(user.getId());
         newTemplate.setGroupId(group.getId());
-        newTemplate.setCategoryId(cart.getCategory().getId());
-        newTemplate.setTitle(cart.getTitle());
-        if (cart.getDatePurchased() != null) {
-            newTemplate.setDescription(cart.getDescription());
+        newTemplate.setCategoryId(cartDto.getCategoryDto().getId());
+        newTemplate.setTitle(cartDto.getTitle());
+        if (cartDto.getDatePurchased() != null) {
+            newTemplate.setDescription(cartDto.getDescription());
         }
-        newTemplate.setAmount(cart.getAmount());
+        newTemplate.setAmount(cartDto.getAmount());
         newTemplate.setRecurrenceType(recurrenceType);
         newTemplate.setActive(true);
         newTemplate.setStartDate(LocalDate.now());
@@ -374,5 +306,122 @@ public class CartService {
         );
         templateRepository.save(newTemplate);
         cart.setTemplate(newTemplate);
+    }
+
+    public CartDto updateCartAndTemplateIfValid(Cart cart, CartDto cartDto, User user, Group group, Category category, int groupMemberCount) {
+        // --- Flags ---
+        boolean cartChanged = hasCartChanged(cartDto, cart);
+        boolean recurrenceTypeChanged = hasRecurrenceTypeChanged(cartDto, cart);
+        boolean updateSelected = cartDto.isTemplateUpdateSelected();
+        boolean templateChanged = hasTemplateChanged(cartDto, cart);
+
+        // --------- Case: Cart hat sich geändert ----------
+        if (cartChanged) {
+            if (recurrenceTypeChanged) {
+                handleRecurrenceTypeChange(cart, cartDto, user, group);
+            }
+
+            if (updateSelected && templateChanged) {
+                handleTemplateUpdate(cart, cartDto, user, group);
+            }
+
+            var updatedCart = cartDtoMapper.cartDtoToEntity(cartDto, category, user, group, groupMemberCount);
+            updatedCart.setTemplate(cart.getTemplate());
+
+            var dto = new CartDto(cartRepository.save(updatedCart));
+            if (templateChanged) { dto.setHasTemplateChanged(true); }
+            return dto;
+        }
+
+        // --------- Case: Cart hat sich NICHT geändert ----------
+        if (recurrenceTypeChanged) {
+            handleRecurrenceTypeChange(cart, cartDto, user, group);
+        }
+
+        if (updateSelected && templateChanged) {
+            handleTemplateUpdate(cart, cartDto, user, group);
+        }
+
+        var dto = new CartDto(cart);
+        if (templateChanged) { dto.setHasTemplateChanged(true); }
+        return dto;
+    }
+
+    private void handleRecurrenceTypeChange(Cart cart, CartDto dto, User user, Group group) {
+        RecurrenceType oldType = (cart.getTemplate() != null && cart.getTemplate().isActive())
+                ? cart.getTemplate().getRecurrenceType()
+                : RecurrenceType.NONE;
+
+        RecurrenceType newType = dto.getRecurrenceType() != null ? dto.getRecurrenceType() : RecurrenceType.NONE;
+
+        if (oldType != newType) {
+            if (cart.getTemplate() != null && cart.getTemplate().isActive()) {
+                deactivateTemplate(cart.getTemplate());
+            }
+
+            if (newType != RecurrenceType.NONE) {
+                createNewCartTemplate(dto, user, group, cart, newType);
+            }
+        }
+    }
+
+    private void handleTemplateUpdate(Cart cart, CartDto dto, User user, Group group) {
+        if (cart.getTemplate() != null && cart.getTemplate().isActive()) {
+            deactivateTemplate(cart.getTemplate());
+        }
+
+        if (dto.getRecurrenceType() != RecurrenceType.NONE) {
+            createNewCartTemplate(dto, user, group, cart, dto.getRecurrenceType());
+        }
+    }
+
+    private void deactivateTemplate(CartTemplate template) {
+        template.setActive(false);
+        template.setEndDate(LocalDate.now());
+        templateRepository.save(template);
+    }
+
+    private boolean hasCartChanged(CartDto dto, Cart entity) {
+        if (!Objects.equals(dto.getTitle(), entity.getTitle())) return true;
+        if (!Objects.equals(dto.getDescription(), entity.getDescription())) return true;
+        if (!Objects.equals(dto.getAmount(), entity.getAmount())) return true;
+        if (!Objects.equals(asLocalDate(dto.getDatePurchased()), asLocalDate(entity.getDatePurchased()))) return true;
+        if (!Objects.equals(dto.getCategoryDto().getId(), entity.getCategory().getId())) return true;
+
+        return false;
+    }
+
+    private boolean hasTemplateChanged(CartDto dto, Cart cart) {
+        CartTemplate tpl = cart.getTemplate();
+        RecurrenceType newType = dto.getRecurrenceType() != null ? dto.getRecurrenceType() : RecurrenceType.NONE;
+
+        if (tpl == null) {
+            return newType != RecurrenceType.NONE;
+        }
+
+        if (!Objects.equals(tpl.getRecurrenceType(), newType)) return true;
+        if (!Objects.equals(tpl.getAmount(), dto.getAmount())) return true;
+        if (!Objects.equals(tpl.getTitle(), dto.getTitle())) return true;
+        if (!Objects.equals(tpl.getDescription(), dto.getDescription())) return true;
+        if (!Objects.equals(tpl.getCategoryId(), dto.getCategoryDto().getId())) return true;
+        if (!Objects.equals(tpl.getNextExecutionDate(), calculateNextDate(asLocalDate(dto.getDatePurchased()), dto.getRecurrenceType()))) return true;
+
+        return false;
+    }
+
+    private boolean hasRecurrenceTypeChanged(CartDto dto, Cart cart) {
+        RecurrenceType oldType = (cart.getTemplate() != null && cart.getTemplate().isActive())
+                ? cart.getTemplate().getRecurrenceType()
+                : RecurrenceType.NONE;
+        RecurrenceType newType = dto.getRecurrenceType() != null ? dto.getRecurrenceType() : RecurrenceType.NONE;
+        return oldType != newType;
+    }
+
+    private Date asDate(LocalDate date) {
+        return Date.from(date.atStartOfDay(ZoneId.systemDefault()).toInstant());
+    }
+
+    private LocalDate asLocalDate(Date date) {
+        return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
     }
 }

@@ -23,6 +23,8 @@ public class CartDto {
     private boolean hasActiveTemplate;
     private LocalDate nextExecutionDate;
     private boolean templateUpdateSelected;
+    private Long templateId;
+    private boolean hasTemplateChanged = false;
 
     public CartDto(Cart cart) {
         this.id = cart.getId();
@@ -37,6 +39,7 @@ public class CartDto {
         this.recurrenceType = getRecurrenceType(cart);
         this.hasActiveTemplate = getTemplateIsActive(cart);
         this.nextExecutionDate = getNextExecutionDate(cart);
+        this.templateId = getTemplateId(cart);
     }
 
     public CartDto() {}
@@ -122,7 +125,7 @@ public class CartDto {
     }
 
     public RecurrenceType getRecurrenceType(Cart cart) {
-        if (cart.getTemplate() != null) {
+        if (cart.getTemplate() != null && cart.getTemplate().isActive()) {
             return cart.getTemplate().getRecurrenceType();
         }
         return RecurrenceType.NONE;
@@ -138,6 +141,13 @@ public class CartDto {
     public LocalDate getNextExecutionDate(Cart cart) {
         if (cart.getTemplate() != null) {
             return cart.getTemplate().getNextExecutionDate();
+        }
+        return null;
+    }
+
+    public Long getTemplateId(Cart cart) {
+        if (cart.getTemplate() != null) {
+            return cart.getTemplate().getId();
         }
         return null;
     }
@@ -164,5 +174,21 @@ public class CartDto {
 
     public void setTemplateUpdateSelected(boolean templateUpdateSelected) {
         this.templateUpdateSelected = templateUpdateSelected;
+    }
+
+    public Long getTemplateId() {
+        return templateId;
+    }
+
+    public void setTemplateId(Long templateId) {
+        this.templateId = templateId;
+    }
+
+    public boolean isHasTemplateChanged() {
+        return hasTemplateChanged;
+    }
+
+    public void setHasTemplateChanged(boolean hasTemplateChanged) {
+        this.hasTemplateChanged = hasTemplateChanged;
     }
 }
