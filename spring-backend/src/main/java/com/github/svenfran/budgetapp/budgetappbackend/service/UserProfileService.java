@@ -1,8 +1,10 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
 import com.github.svenfran.budgetapp.budgetappbackend.constants.UserEnum;
+import com.github.svenfran.budgetapp.budgetappbackend.dto.GroupDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.PasswordChangeDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto;
+import com.github.svenfran.budgetapp.budgetappbackend.entity.CartTemplate;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
@@ -13,6 +15,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.BindingResult;
+
+import java.time.LocalDate;
+import java.util.HashSet;
 
 @Service
 public class UserProfileService {
@@ -45,9 +50,6 @@ public class UserProfileService {
     private GroupMembershipHistoryService gmhService;
 
     @Autowired
-    private CartService cartService;
-
-    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Autowired
@@ -59,6 +61,14 @@ public class UserProfileService {
     @Autowired
     private VerificationService verificationService;
 
+    @Autowired
+    private CartTemplateRepository cartTemplateRepository;
+
+    @Autowired
+    private NotificationService notificationService;
+
+    @Autowired
+    private GroupMembershipHistoryRepository gmhRepository;
 
     @Transactional
     public void deleteUserProfile(Long userId) throws UserNotFoundException, UserIsNotAuthenticatedUser {
@@ -66,19 +76,27 @@ public class UserProfileService {
         var userDelete = dataLoaderService.loadUser(userId);
         verificationService.verifyIsAuthenticatedUser(userDelete, userAuth);
 
-        userDelete.getGroupList().forEach(group -> {
+        var groupsOwner = groupRepository.findGroupsByOwnerOrderById(userDelete);
+        for (Group group : groupsOwner) {
             if (group.getOwner().equals(userDelete)) {
                 deleteGroupAsOwner(group);
-            } else if (group.getMembers().contains(userDelete)) {
-                removeUserFromGroup(group, userDelete);
             }
-        });
+        }
+
+        var members = new HashSet<User>();
+        members.add(userDelete);
+        var groupsMember = groupRepository.findGroupsByMembersInOrderById(members);
+        for (Group group : groupsMember) {
+            removeUserFromGroup(group, userDelete);
+        }
 
         tokenRepository.deleteAll(tokenRepository.findAllByUserId(userDelete.getId()));
         anonymizeUser(userDelete);
     }
 
-    private void deleteGroupAsOwner(Group group) {
+    private void deleteGroupAsOwner(Group group) throws UserNotFoundException {
+        var history = gmhRepository.findByGroupIdAndMembershipEndIsNull(group.getId());
+
         dataLoaderService.loadMembershipHistoryForGroup(group.getId())
                 .forEach(gmh -> gmh.setGroupId(null));
 
@@ -87,13 +105,16 @@ public class UserProfileService {
         group.removeAllMembers();
         cartRepository.deleteAll(group.getCarts());
         categoryRepository.deleteAll(group.getCategories());
+        cartTemplateRepository.deleteAll(cartTemplateRepository.findByGroupId(group.getId()));
 
         group.getShoppingLists().forEach(list ->
                 shoppingItemRepository.deleteAll(list.getShoppingItems())
         );
-        shoppingListRepository.deleteAll(group.getShoppingLists());
 
+        shoppingListRepository.deleteAll(group.getShoppingLists());
         groupRepository.deleteById(group.getId());
+
+        notificationService.sendGroupDeletedNotification(history, new GroupDto(group));
     }
 
     private void removeUserFromGroup(Group group, User user) {
@@ -101,6 +122,12 @@ public class UserProfileService {
         gmhService.finishGroupMembership(user, group);
         groupService.setIsDeletedForCart(group, user, true);
         groupService.calculateAveragePerMember(group);
+        var templates = cartTemplateRepository.findByUserIdAndGroupIdAndActiveTrue(user.getId(), group.getId());
+        for (CartTemplate cartTemplate : templates) {
+            cartTemplate.setEndDate(LocalDate.now());
+            cartTemplate.setActive(false);
+            cartTemplateRepository.save(cartTemplate);
+        }
     }
 
     private void anonymizeUser(User user) {

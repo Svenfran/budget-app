@@ -1,6 +1,7 @@
 package com.github.svenfran.budgetapp.budgetappbackend.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -23,6 +24,9 @@ import static org.springframework.http.MediaType.APPLICATION_JSON;
 @Order(Ordered.HIGHEST_PRECEDENCE + 99)
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
+    @Value("${websocket.url}")
+    private String websocketEndpoint;
+
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
         registry.enableSimpleBroker("/notification", "/user");
@@ -37,11 +41,10 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        registry.addEndpoint("/wss")
-//                .setAllowedOriginPatterns("http://localhost:8100", "http://192.168.178.23:8100",
-//                        "http://localhost", "http://192.168.178.23", "https://localhost:8100",
-//                        "https://localhost:", "https://divvy-app.up.railway.app")
-                .setAllowedOriginPatterns("*")
+        registry.addEndpoint(websocketEndpoint)
+                .setAllowedOriginPatterns("http://localhost:8100", "http://192.168.178.23:8100",
+                        "http://localhost", "http://192.168.178.23", "https://localhost:8100",
+                        "https://localhost")
                 .withSockJS();
     }
 

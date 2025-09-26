@@ -19,7 +19,7 @@ class CartDtoMapperTest {
 
     @Test
     void cartDtoToEntity_positive() throws ParseException {
-        var cartEntity = cartDtoMapper.CartDtoToEntity(cartDto(), category(),cartOwner(), group(), memberCount);
+        var cartEntity = cartDtoMapper.cartDtoToEntity(cartDto(), category(),cartOwner(), group(), memberCount);
 
         assertEquals(1L, cartEntity.getId());
         assertEquals("TestCart", cartEntity.getTitle());
@@ -36,7 +36,7 @@ class CartDtoMapperTest {
 
     @Test
     void cartDtoToEntity_negative() throws ParseException {
-        var cartEntity = cartDtoMapper.CartDtoToEntity(cartDto(), category(),cartOwner(), group(), memberCount);
+        var cartEntity = cartDtoMapper.cartDtoToEntity(cartDto(), category(),cartOwner(), group(), memberCount);
 
         assertNotEquals(10L, cartEntity.getId());
         assertNotEquals("Cart", cartEntity.getTitle());
