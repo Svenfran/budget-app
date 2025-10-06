@@ -97,6 +97,7 @@ public class ShoppingItemService {
 
     @Transactional
     public void deleteAllCompletedShoppingItems(List<AddEditShoppingItemDto> dtos) throws GroupNotFoundException, UserNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingListNotFoundException, ShoppingListDoesNotBelongToGroupException, ShoppingItemNotFoundException, ShoppingItemDoesNotBelongToShoppingListException {
+        if (dtos.isEmpty()) { return; }
         verificationService.verifyAllShoppingItemsBelongToSameShoppingListAndGroup(dtos);
         var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(dtos.get(0).getGroupId());
@@ -105,7 +106,7 @@ public class ShoppingItemService {
         verificationService.verifyShoppingListIsPartOfGroup(shoppingList, group);
         var shoppingItem = dataLoaderService.loadShoppingItem(dtos.get(0).getId());
         verificationService.verifyShoppingItemIsPartOfShoppingList(shoppingList, shoppingItem);
-        var itemIds = new ArrayList<Long>(dtos.stream()
+        var itemIds = new ArrayList<>(dtos.stream()
                 .filter(AddEditShoppingItemDto::isCompleted)
                 .map(AddEditShoppingItemDto::getId)
                 .toList());

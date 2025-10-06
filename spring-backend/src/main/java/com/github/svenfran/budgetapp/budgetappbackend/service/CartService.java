@@ -175,7 +175,7 @@ public class CartService {
 
     // ----- Wiederholende Einträge -----
 
-    @Scheduled(cron = "0 0 3 * * *") // täglich um 3 Uhr
+    @Scheduled(cron = "0 0 1 * * *") // täglich um 1 Uhr
     @Transactional
     public void generateRecurringCarts() throws UserNotFoundException, GroupNotFoundException, CategoryNotFoundException {
         List<CartTemplate> templates = templateRepository.findByActiveTrue();

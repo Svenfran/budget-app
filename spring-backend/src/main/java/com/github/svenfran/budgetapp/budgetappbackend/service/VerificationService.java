@@ -113,7 +113,7 @@ public class VerificationService {
 
     public void verifyShoppingItemIsPartOfShoppingList(ShoppingList shoppingList, ShoppingItem shoppingItem) throws ShoppingItemDoesNotBelongToShoppingListException {
         if (!shoppingList.getId().equals(shoppingItem.getShoppingList().getId())) {
-            throw new ShoppingItemDoesNotBelongToShoppingListException("Shoppingitem with Id " + shoppingItem.getId() + " does not belong to shoppinglist with Id " + shoppingList.getId());
+            throw new ShoppingItemDoesNotBelongToShoppingListException("Shoppingitem with Id " + shoppingItem.getId() + " does not belong to shopping list with Id " + shoppingList.getId());
         }
     }
 
@@ -122,7 +122,7 @@ public class VerificationService {
                 .map(shoppingItem -> Map.entry(shoppingItem.getGroupId(), shoppingItem.getShoppingListId()))
                 .distinct()
                 .count() > 1) {
-            throw new IllegalArgumentException("One of the shoppingitems does not belong to the shoppinglist or group ");
+            throw new IllegalArgumentException("One of the shopping items does not belong to the shopping list or group ");
         }
     }
 

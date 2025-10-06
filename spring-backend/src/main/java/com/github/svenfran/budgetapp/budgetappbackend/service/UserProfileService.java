@@ -78,9 +78,7 @@ public class UserProfileService {
 
         var groupsOwner = groupRepository.findGroupsByOwnerOrderById(userDelete);
         for (Group group : groupsOwner) {
-            if (group.getOwner().equals(userDelete)) {
-                deleteGroupAsOwner(group);
-            }
+            deleteGroupAsOwner(group);
         }
 
         var members = new HashSet<User>();
