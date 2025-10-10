@@ -8,6 +8,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.entity.CartTemplate;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
+import com.github.svenfran.budgetapp.budgetappbackend.helper.Translator;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.*;
 import liquibase.repackaged.org.apache.commons.lang3.RandomStringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -69,6 +70,9 @@ public class UserProfileService {
 
     @Autowired
     private GroupMembershipHistoryRepository gmhRepository;
+
+    @Autowired
+    private Translator translator;
 
     @Transactional
     public void deleteUserProfile(Long userId) throws UserNotFoundException, UserIsNotAuthenticatedUser {
@@ -166,12 +170,25 @@ public class UserProfileService {
     public void passwordReset(String email, BindingResult bindingResult) throws Exception {
         verificationService.verifyEmailIsValid(bindingResult);
         var user = dataLoaderService.loadUserByEmail(email);
-        var generatedPassword = RandomStringUtils.randomAlphanumeric(8);
-        var subject = "DIVVY-APP - Passwort zurücksetzen";
-        var body = "Hallo " + user.getName() + "," +
-                "\n\ndein temporäres Passwort lautet: " + generatedPassword +
-                "\n\nBitte melde dich an und ändere dein Passwort." +
-                "\n\nBeste Grüße!" ;
+        var generatedPassword = RandomStringUtils.randomNumeric(6);
+        var subject = translator.translate("email.reset.password.subject");
+
+        var body = """
+        <html>
+          <body style="font-family: Arial, sans-serif; color: #333;">
+            <p>%s</p>
+            <p>%s</p>
+            <p>%s</p>
+            <p>%s</p>
+          </body>
+        </html>
+        """.formatted(
+                translator.translate("email.reset.password.greeting", user.getName()),
+                translator.translate("email.reset.password.passwordLine", generatedPassword),
+                translator.translate("email.reset.password.instruction"),
+                translator.translate("email.reset.password.footer")
+        );
+
         user.setPassword(passwordEncoder.encode(generatedPassword));
         userRepository.save(user);
         senderService.sendEmail(email, body, subject);
