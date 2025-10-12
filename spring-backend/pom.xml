@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
 		<groupId>org.springframework.boot</groupId>
@@ -38,22 +38,16 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
+			<exclusions>
+				<exclusion>
+					<groupId>org.junit.vintage</groupId>
+					<artifactId>junit-vintage-engine</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 		<dependency>
 			<groupId>org.liquibase</groupId>
 			<artifactId>liquibase-core</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.junit.jupiter</groupId>
-			<artifactId>junit-jupiter-engine</artifactId>
-			<version>5.9.2</version>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.junit.jupiter</groupId>
-			<artifactId>junit-jupiter-api</artifactId>
-			<version>5.9.2</version>
-			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.poi</groupId>
@@ -104,19 +98,6 @@
 			<artifactId>junit-jupiter</artifactId>
 			<scope>test</scope>
 		</dependency>
-		<dependency>
-			<groupId>org.spockframework</groupId>
-			<artifactId>spock-core</artifactId>
-			<version>2.4-M1-groovy-4.0</version>
-			<scope>test</scope>
-		</dependency>
-
-		<dependency>
-			<groupId>org.spockframework</groupId>
-			<artifactId>spock-spring</artifactId>
-			<version>2.4-M1-groovy-4.0</version>
-			<scope>test</scope>
-		</dependency>
 		<!-- Websocket -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -134,20 +115,30 @@
 		<dependency>
 			<groupId>org.spockframework</groupId>
 			<artifactId>spock-core</artifactId>
-			<version>2.3-groovy-3.0</version>
+			<version>2.4-M1-groovy-4.0</version>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
-			<groupId>org.codehaus.groovy</groupId>
+			<groupId>org.apache.groovy</groupId>
 			<artifactId>groovy</artifactId>
-			<version>3.0.17</version>
+			<version>4.0.18</version>
+			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.spockframework</groupId>
 			<artifactId>spock-spring</artifactId>
-			<version>2.3-groovy-3.0</version>
+			<version>2.4-M1-groovy-4.0</version>
 			<scope>test</scope>
 		</dependency>
+
+		<!-- Junit -->
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<version>5.9.2</version>
+			<scope>test</scope>
+		</dependency>
+
 		<!--BREVO Mail-->
 		<dependency>
 			<groupId>com.sendinblue</groupId>
@@ -191,6 +182,8 @@
 				<executions>
 					<execution>
 						<goals>
+							<goal>addSources</goal>
+							<goal>addTestSources</goal>
 							<goal>compile</goal>
 							<goal>compileTests</goal>
 						</goals>
@@ -205,6 +198,21 @@
 					<target>17</target>
 				</configuration>
 			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<version>3.2.5</version>
+				<configuration>
+					<includes>
+						<include>**/*Test.*</include>
+						<include>**/*IT.*</include>
+						<include>**/*Spec.*</include>
+					</includes>
+					<useModulePath>false</useModulePath>
+				</configuration>
+			</plugin>
+
 		</plugins>
 	</build>
 
