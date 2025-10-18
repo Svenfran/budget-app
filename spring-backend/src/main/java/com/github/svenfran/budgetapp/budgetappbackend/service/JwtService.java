@@ -1,5 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
+import io.github.cdimascio.dotenv.Dotenv;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
@@ -20,7 +21,13 @@ import java.util.function.Function;
 @Service
 public class JwtService {
 
-    private final String secretKey = System.getenv("secret_key");
+    private static final String SECRET_KEY = "secret_key";
+
+    private final Dotenv dotenv = Dotenv.configure().ignoreIfMissing().load();
+    private final String secretKey = System.getenv(SECRET_KEY) != null
+            ? System.getenv(SECRET_KEY)
+            : dotenv.get(SECRET_KEY);
+
 
     public String extractUsername(String token) {
         return extractClaims(token, Claims::getSubject);

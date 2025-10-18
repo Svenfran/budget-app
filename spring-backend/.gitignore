@@ -37,3 +37,6 @@ build/
 
 ### Sonar
 .sonar
+
+### Env-Variables
+.env
