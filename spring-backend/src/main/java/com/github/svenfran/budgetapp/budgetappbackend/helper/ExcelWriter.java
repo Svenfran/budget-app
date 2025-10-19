@@ -16,22 +16,35 @@ import java.util.List;
 
 public class ExcelWriter {
 
-    private final String [] cartHeaderRow = {"Benutzername", "Titel", "Beschreibung", "Datum", "Betrag", "Kategorie", "Gruppe"};
-    private final String[] membershipHeaderRow = {"Benutzername", "Startdatum", "Enddatum", "Status"};
     private final List<Cart> cartlist;
     private final List<GroupMembershipHistory> membershipHistoryList;
     private final XSSFWorkbook workbook;
     private final DataLoaderService dataLoaderService;
+    private final Translator translator;
 
-    public ExcelWriter(List<Cart> cartlist, List<GroupMembershipHistory> membershipHistoryList, DataLoaderService dataLoaderService) {
+
+    public String[] getCartHeader() {
+        String header = translator.translate("download.cart.header");
+        return header.split("\\|");
+    }
+
+    public String[] getMembershipHeader() {
+        String header = translator.translate("download.membership.header");
+        return header.split("\\|");
+    }
+
+    public ExcelWriter(List<Cart> cartlist, List<GroupMembershipHistory> membershipHistoryList,
+                       DataLoaderService dataLoaderService, Translator translator) {
         this.cartlist = cartlist;
         this.membershipHistoryList = membershipHistoryList;
         this.dataLoaderService = dataLoaderService;
         workbook = new XSSFWorkbook();
+        this.translator = translator;
     }
 
     public void writeCartSheet() {
-        Sheet sheet = workbook.createSheet("Ausgaben");
+        var cartHeaderRow = getCartHeader();
+        Sheet sheet = workbook.createSheet(translator.translate("download.cart.sheetname"));
         CellStyle cellStyle = createDateCellStyle();
 
         Row firstRow = sheet.createRow(0);
@@ -57,7 +70,8 @@ public class ExcelWriter {
     }
 
     private void writeMembershipHistorySheet() throws UserNotFoundException {
-        Sheet sheet = workbook.createSheet("Mitgliedszeitraum");
+        var membershipHeaderRow = getMembershipHeader();
+        Sheet sheet = workbook.createSheet(translator.translate("download.membership.sheetname"));
         CellStyle cellStyle = createDateCellStyle();
 
         Row firstRow = sheet.createRow(0);

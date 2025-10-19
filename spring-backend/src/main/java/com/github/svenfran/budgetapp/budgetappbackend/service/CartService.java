@@ -134,7 +134,7 @@ public class CartService {
         response.setHeader("Expires", "0");
         var cartlist = dataLoaderService.loadCartListForGroup(groupId);
         var membershipHistoryList = dataLoaderService.loadMembershipHistoryForGroup(groupId);
-        var excelWriter = new ExcelWriter(cartlist, membershipHistoryList, dataLoaderService);
+        var excelWriter = new ExcelWriter(cartlist, membershipHistoryList, dataLoaderService, translator);
         excelWriter.generateExcelFile(response);
     }
 
