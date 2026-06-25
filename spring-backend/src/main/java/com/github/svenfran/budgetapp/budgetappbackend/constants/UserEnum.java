@@ -2,8 +2,8 @@ package com.github.svenfran.budgetapp.budgetappbackend.constants;
 
 public enum UserEnum {
 
-    USER_DELETED("USER_DELETED"),
-    USER_REMOVED("USER_REMOVED");
+    USER_DELETED("DELETED"),
+    USER_REMOVED("REMOVED");
 
     private final String name;
 

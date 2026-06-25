@@ -1,5 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
+import com.github.svenfran.budgetapp.budgetappbackend.constants.UserEnum;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.*;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
@@ -22,6 +23,11 @@ public class VerificationService {
 
     @Autowired
     private UserRepository userRepository;
+
+    public VerificationService(PasswordEncoder passwordEncoder, UserRepository userRepository) {
+        this.passwordEncoder = passwordEncoder;
+        this.userRepository = userRepository;
+    }
 
     public void verifyIsAuthenticatedUser(User user, User authUser) throws UserIsNotAuthenticatedUser {
         if (!user.equals(authUser)) {
@@ -50,6 +56,12 @@ public class VerificationService {
     public void verifyUserNameNotExists(String userName) throws UserNameAlreadyExistsException {
         if (userNameExists(userName)) {
             throw new UserNameAlreadyExistsException(String.format("User with name %s already exists", userName));
+        }
+    }
+
+    public void verifyUserNameIsAllowed(String userName) throws UserNameNotAllowedException {
+        if (userName.contains(UserEnum.USER_DELETED.getName()) || userName.contains(UserEnum.USER_REMOVED.getName())) {
+            throw new UserNameNotAllowedException("User name is not allowed");
         }
     }
 

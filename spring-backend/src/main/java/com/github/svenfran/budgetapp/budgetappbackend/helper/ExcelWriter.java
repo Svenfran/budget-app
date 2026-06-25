@@ -1,5 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.helper;
 
+import com.github.svenfran.budgetapp.budgetappbackend.constants.UserEnum;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Cart;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.GroupMembershipHistory;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException;
@@ -54,7 +55,7 @@ public class ExcelWriter {
         for (Cart cart : cartlist) {
             Row row = sheet.createRow(rowNum++);
 
-            row.createCell(0).setCellValue(cart.getUser().getName());
+            row.createCell(0).setCellValue(handleUserName(cart.getUser().getName()));
             row.createCell(1).setCellValue(cart.getTitle());
             row.createCell(2).setCellValue(cart.getDescription());
 
@@ -85,7 +86,7 @@ public class ExcelWriter {
                     : null;
 
             Row row = sheet.createRow(rowNum++);
-            row.createCell(0).setCellValue(dataLoaderService.loadUser(history.getUserId()).getName());
+            row.createCell(0).setCellValue(handleUserName(dataLoaderService.loadUser(history.getUserId()).getName()));
 
             Cell startDateCell = row.createCell(1);
             startDateCell.setCellValue(start);
@@ -115,6 +116,12 @@ public class ExcelWriter {
         for (int i = 0; i < columnCount; i++) {
             sheet.autoSizeColumn(i);
         }
+    }
+
+    private String handleUserName(String userName) {
+        return userName.equals(UserEnum.USER_DELETED.getName())
+                    ? translator.translate("user.deleted")
+                    : userName;
     }
 
     public void generateExcelFile(HttpServletResponse response) throws IOException, UserNotFoundException {

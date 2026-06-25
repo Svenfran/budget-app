@@ -139,10 +139,11 @@ public class UserProfileService {
         userRepository.save(user);
     }
 
-    public UserDto changeUserName(UserDto userDto) throws UserNotFoundException, UserIsNotAuthenticatedUser, UserNameAlreadyExistsException {
+    public UserDto changeUserName(UserDto userDto) throws UserNotFoundException, UserIsNotAuthenticatedUser, UserNameAlreadyExistsException, UserNameNotAllowedException {
         var userAuth = dataLoaderService.getAuthenticatedUser();
         var userChange = dataLoaderService.loadUser(userDto.getId());
         verificationService.verifyIsAuthenticatedUser(userChange, userAuth);
+        verificationService.verifyUserNameIsAllowed(userDto.getUserName());
         verificationService.verifyUserNameNotExists(userDto.getUserName());
         userChange.setName(userDto.getUserName());
         return new UserDto(userRepository.save(userChange), userChange.getEmail());

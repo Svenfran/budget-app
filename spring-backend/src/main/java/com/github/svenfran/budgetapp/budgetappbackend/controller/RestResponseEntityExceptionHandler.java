@@ -165,4 +165,10 @@ public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionH
         LOG.debug("Exception Message: " + ex.getMessage(), ex);
         return new ResponseEntity<>(ex.getMessage(), HttpStatus.BAD_REQUEST);
     }
+
+    @ExceptionHandler(value = { UserNameNotAllowedException.class })
+    protected ResponseEntity<Object> handleUserNameNotAllowedException (UserNameNotAllowedException ex, WebRequest request) {
+        LOG.debug("Exception Message: " + ex.getMessage(), ex);
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
 }

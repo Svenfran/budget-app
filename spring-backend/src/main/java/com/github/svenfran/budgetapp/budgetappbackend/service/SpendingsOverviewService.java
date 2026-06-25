@@ -80,8 +80,7 @@ public class SpendingsOverviewService {
 
                 double diff = sum - sumAveragePerMember;
                 totalSum += sum;
-                var userName = dataLoaderService.loadUser(userId).getName();
-                userName = userIsCurrentlyMember(userId, groupId) ? userName : UserEnum.USER_REMOVED.getName();
+                var userName = handleUserName(userId, groupId);
                 spendingsTotalUserList.add(new SpendingsOverviewUserDto(userId, userName, roundValue(sum), roundValue(diff)));
             }
         }
@@ -129,8 +128,7 @@ public class SpendingsOverviewService {
                 }
 
                 double diff = sum - sumAveragePerMember;
-                var userName = dataLoaderService.loadUser(userId).getName();
-                userName = userIsCurrentlyMember(userId, groupId) ? userName : UserEnum.USER_REMOVED.getName();
+                var userName = handleUserName(userId, groupId);
                 if (wasUserMemberInYear(validMemberships, year)) {
                     spendingsTotalUserList.add(new SpendingsOverviewUserDto(userId, userName, roundValue(sum), roundValue(diff)));
                 }
@@ -192,8 +190,7 @@ public class SpendingsOverviewService {
                 }
 
                 double diff = sum - sumAveragePerMember;
-                var userName = dataLoaderService.loadUser(userId).getName();
-                userName = userIsCurrentlyMember(userId, groupId) ? userName : UserEnum.USER_REMOVED.getName();
+                var userName = handleUserName(userId, groupId);
                 if (wasUserMemberInYear(validMemberships, year)) {
                     spendingsTotalUserList.add(new SpendingsOverviewUserDto(userId, userName, roundValue(sum), roundValue(diff)));
                 }
@@ -245,8 +242,7 @@ public class SpendingsOverviewService {
                 }
 
                 double diff = sum - sumAveragePerMember;
-                var userName = dataLoaderService.loadUser(userId).getName();
-                userName = userIsCurrentlyMember(userId, groupId) ? userName : UserEnum.USER_REMOVED.getName();
+                var userName = handleUserName(userId, groupId);
                 if (wasUserMemberInMonth(validMemberships, year, month)) {
                     spendingsTotalUserList.add(new SpendingsOverviewUserDto(userId, userName, roundValue(sum), roundValue(diff)));
                 }
@@ -362,4 +358,13 @@ public class SpendingsOverviewService {
                 .anyMatch(gmh -> gmh.getMembershipEnd() == null);
     }
 
+    private String handleUserName(Long userId, Long groupId) throws UserNotFoundException {
+        var userName = dataLoaderService.loadUser(userId).getName();
+
+        if (userIsCurrentlyMember(userId, groupId)) {
+            return userName;
+        } else {
+            return String.format("%s %s",userName, UserEnum.USER_REMOVED.getName());
+        }
+    }
 }
