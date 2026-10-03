@@ -7,6 +7,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.*;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
+import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.ExcelWriter;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.Translator;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository;
@@ -22,7 +23,6 @@ import org.springframework.validation.annotation.Validated;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
@@ -226,7 +226,7 @@ public class CartService {
         var user = dataLoaderService.loadUser(template.getUserId());
         var group = dataLoaderService.loadGroup(template.getGroupId());
         var category = dataLoaderService.loadCategory(template.getCategoryId());
-        var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(Date.from(nextDate.atStartOfDay(ZoneId.systemDefault()).toInstant()), group.getId());
+        var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(asDate(nextDate), group.getId());
         newCart.setUser(user);
         newCart.setGroup(group);
         newCart.setTitle(template.getTitle());
@@ -235,7 +235,7 @@ public class CartService {
         newCart.setAveragePerMember(template.getAmount() / groupMemberCount);
         newCart.setDescription(template.getDescription());
         newCart.setCategory(category);
-        newCart.setDatePurchased(Date.from(nextDate.atStartOfDay(ZoneId.systemDefault()).toInstant()));
+        newCart.setDatePurchased(asDate(nextDate));
         newCart.setTemplate(template);
 
         cartRepository.save(newCart);
@@ -301,9 +301,7 @@ public class CartService {
         newTemplate.setStartDate(LocalDate.now());
         newTemplate.setNextExecutionDate(
                 calculateNextDate(
-                        cartDto.getDatePurchased().toInstant()
-                                .atZone(ZoneId.systemDefault())
-                                .toLocalDate(),
+                        asLocalDate(cartDto.getDatePurchased()),
                         recurrenceType
                 )
         );
@@ -421,10 +419,10 @@ public class CartService {
     }
 
     private Date asDate(LocalDate date) {
-        return Date.from(date.atStartOfDay(ZoneId.systemDefault()).toInstant());
+        return DateUtils.toDate(date);
     }
 
     private LocalDate asLocalDate(Date date) {
-        return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+        return DateUtils.toLocalDate(date);
     }
 }

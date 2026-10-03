@@ -188,7 +188,7 @@ class VerificationServiceSpec extends Specification {
         service.verifyCurrentlyNoGroupMember(user, group)
 
         then:
-        thrown(MemberAlreadyExixtsException)
+        thrown(MemberAlreadyExistsException)
     }
 
     def "verifyMemberNotGroupOwner throws when member equals owner"() {

@@ -38,12 +38,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         final String userEmail;
         final String deviceIdFromToken;
 
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        if (authHeader == null || !authHeader.startsWith(JwtService.BEARER_PREFIX)) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        jwt = authHeader.substring(7);
+        jwt = authHeader.substring(JwtService.BEARER_PREFIX.length());
         userEmail = jwtService.extractUsername(jwt);
         deviceIdFromToken = jwtService.extractDeviceId(jwt);
 

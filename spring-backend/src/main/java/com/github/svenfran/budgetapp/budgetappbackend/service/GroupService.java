@@ -103,7 +103,7 @@ public class GroupService {
     }
 
     @Transactional
-    public GroupMembersDto addMemberToGroup(AddGroupMemberDto addGroupMemberDto) throws GroupNotFoundException, UserNotFoundException, NotOwnerOfGroupException, MemberAlreadyExixtsException, MemberEqualsOwnerException {
+    public GroupMembersDto addMemberToGroup(AddGroupMemberDto addGroupMemberDto) throws GroupNotFoundException, UserNotFoundException, NotOwnerOfGroupException, MemberAlreadyExistsException, MemberEqualsOwnerException {
         var user = dataLoaderService.getAuthenticatedUser();
         var newMember = dataLoaderService.loadUserByEmail(addGroupMemberDto.getNewMemberEmail().trim());
         verificationService.verifyUserExists(newMember);
@@ -214,12 +214,8 @@ public class GroupService {
 
     public void setIsDeletedForCart(Group group, User member, boolean delete) {
         var cartsOfMember = cartRepository.findCartsByGroupAndUser(group, member);
-        if (delete && (!cartsOfMember.isEmpty())) {
-            cartsOfMember.forEach(cart -> cart.setDeleted(true));
-            cartRepository.saveAll(cartsOfMember);
-        }
-        if (!delete && (!cartsOfMember.isEmpty())) {
-            cartsOfMember.forEach(cart -> cart.setDeleted(false));
+        if (!cartsOfMember.isEmpty()) {
+            cartsOfMember.forEach(cart -> cart.setDeleted(delete));
             cartRepository.saveAll(cartsOfMember);
         }
     }

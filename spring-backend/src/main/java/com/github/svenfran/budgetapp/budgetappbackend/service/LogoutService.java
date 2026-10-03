@@ -19,10 +19,10 @@ public class LogoutService implements LogoutHandler {
     public void logout(HttpServletRequest request, HttpServletResponse response, Authentication authentication) {
         final String authHeader = request.getHeader("Authorization");
         final String jwt;
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        if (authHeader == null || !authHeader.startsWith(JwtService.BEARER_PREFIX)) {
             return;
         }
-        jwt = authHeader.substring(7);
+        jwt = authHeader.substring(JwtService.BEARER_PREFIX.length());
         var storedToken = tokenRepository.findByToken(jwt)
                 .orElse(null);
         if (storedToken != null) {

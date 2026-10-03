@@ -12,7 +12,6 @@ import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.List;
 
 public class ExcelWriter {
@@ -80,9 +79,9 @@ public class ExcelWriter {
 
         int rowNum = 1;
         for (GroupMembershipHistory history : membershipHistoryList) {
-            LocalDate start = history.getMembershipStart().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+            LocalDate start = DateUtils.toLocalDate(history.getMembershipStart());
             LocalDate end = (history.getMembershipEnd() != null)
-                    ? history.getMembershipEnd().toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
+                    ? DateUtils.toLocalDate(history.getMembershipEnd())
                     : null;
 
             Row row = sheet.createRow(rowNum++);

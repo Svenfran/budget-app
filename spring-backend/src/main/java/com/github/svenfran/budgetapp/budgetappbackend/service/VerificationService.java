@@ -10,10 +10,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.BindingResult;
 
-import java.time.ZoneId;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+
+import static com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils.toLocalDate;
 
 @Service
 public class VerificationService {
@@ -99,9 +100,9 @@ public class VerificationService {
         if (user == null) throw new UserNotFoundException("User not found");
     }
 
-    public void verifyCurrentlyNoGroupMember(User user, Group group) throws MemberAlreadyExixtsException {
+    public void verifyCurrentlyNoGroupMember(User user, Group group) throws MemberAlreadyExistsException {
         if (group.getMembers().contains(user)) {
-            throw new MemberAlreadyExixtsException("Member already exists");
+            throw new MemberAlreadyExistsException("Member already exists");
         }
     }
 
@@ -140,11 +141,11 @@ public class VerificationService {
 
     public void verifyDatePurchasedWithinMembershipPeriod (List<GroupMembershipHistory> gmh, Date datePurchased) throws DatePurchasedNotWithinMembershipPeriodException {
         for (var timePeriod : gmh) {
-            var startDate = timePeriod.getMembershipStart().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
-            var endDate = timePeriod.getMembershipEnd() != null ? timePeriod.getMembershipEnd().toInstant().atZone(ZoneId.systemDefault()).toLocalDate() : null;
+            var startDate = toLocalDate(timePeriod.getMembershipStart());
+            var endDate = timePeriod.getMembershipEnd() != null ? toLocalDate(timePeriod.getMembershipEnd()) : null;
 
-            var isAfterStart = !datePurchased.toInstant().atZone(ZoneId.systemDefault()).toLocalDate().isBefore(startDate);
-            var isBeforeEnd = (endDate == null) || !datePurchased.toInstant().atZone(ZoneId.systemDefault()).toLocalDate().isAfter(endDate);
+            var isAfterStart = !toLocalDate(datePurchased).isBefore(startDate);
+            var isBeforeEnd = (endDate == null) || !toLocalDate(datePurchased).isAfter(endDate);
 
             if (isAfterStart && isBeforeEnd) {
                 return;

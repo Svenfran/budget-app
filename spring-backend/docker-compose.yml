@@ -1,0 +1,16 @@
+services:
+  postgres-dev:
+    image: postgres
+    container_name: budgetapp_dev_db
+    restart: always
+    ports:
+      - "5442:5432"        # Host 5442 -> Container intern 5432
+    volumes:
+      - budgetapp_dev_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: ${DB_USERNAME}         # aus .env (nicht eingecheckt)
+      POSTGRES_PASSWORD: ${DB_PASSWORD}     # aus .env (nicht eingecheckt)
+      POSTGRES_DB: postgres
+
+volumes:
+  budgetapp_dev_data: {}

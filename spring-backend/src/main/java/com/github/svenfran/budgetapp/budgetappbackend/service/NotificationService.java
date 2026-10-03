@@ -43,134 +43,67 @@ public class NotificationService {
 
     public void sendShoppingListNotification(Long groupId, AddEditShoppingListDto dto, String action) throws UserNotFoundException {
         var history = gmhService.getGroupMembersAndOwner(groupId);
-        var user = dataLoaderService.getAuthenticatedUser();
-        var destination = "/notification/" + action + "-list";
-
-        for (var gmh : history) {
-            if (!gmh.getUserId().equals(user.getId())) {
-                logger.info("Notify User with id {} | {} shopping-list with id {}", gmh.getUserId(), action, dto.getId());
-                messagingTemplate.convertAndSendToUser(
-                        gmh.getUserId().toString(),
-                        destination,
-                        dto
-                );
-            }
-        }
+        notifyMembers(history, "/notification/" + action + "-list", dto,
+                "{} shopping-list with id {}", action, dto.getId());
     }
 
     public void sendShoppingItemNotification(Long groupId, AddEditShoppingItemDto dto, String action) throws UserNotFoundException {
         var history = gmhService.getGroupMembersAndOwner(groupId);
-        var user = dataLoaderService.getAuthenticatedUser();
-        var destination = "/notification/" + action + "-item";
-
-        for (var gmh : history) {
-            if (!gmh.getUserId().equals(user.getId())) {
-                logger.info("Notify User with id {} | {} shopping-item with id {}", gmh.getUserId(), action, dto.getId());
-                messagingTemplate.convertAndSendToUser(
-                        gmh.getUserId().toString(),
-                        destination,
-                        dto
-                );
-            }
-        }
+        notifyMembers(history, "/notification/" + action + "-item", dto,
+                "{} shopping-item with id {}", action, dto.getId());
     }
 
     public void sendShoppingItemDeleteAllNotification(Long groupId, List<AddEditShoppingItemDto> dtos) throws UserNotFoundException {
         var history = gmhService.getGroupMembersAndOwner(groupId);
-        var user = dataLoaderService.getAuthenticatedUser();
-        var destination = "/notification/delete-all-items";
-
-        for (var gmh : history) {
-            if (!gmh.getUserId().equals(user.getId())) {
-                logger.info("Notify User with id {} | deleted all shopping items of list with id {} and group with id {}", gmh.getUserId(), dtos.get(0).getShoppingListId(), dtos.get(0).getGroupId());
-                messagingTemplate.convertAndSendToUser(
-                        gmh.getUserId().toString(),
-                        destination,
-                        dtos
-                );
-            }
-        }
+        notifyMembers(history, "/notification/delete-all-items", dtos,
+                "deleted all shopping items of list with id {} and group with id {}",
+                dtos.get(0).getShoppingListId(), dtos.get(0).getGroupId());
     }
 
     public void sendGroupUpdateNotification(Long groupId, GroupDto groupDto) throws UserNotFoundException {
         var history = gmhService.getGroupMembersAndOwner(groupId);
-        var user = dataLoaderService.getAuthenticatedUser();
-        var destination = "/notification/update-group";
-
-        for (var gmh : history) {
-            if (!gmh.getUserId().equals(user.getId())) {
-                logger.info("Notify User with id {} | update group with id {}", gmh.getUserId(), groupDto.getId());
-                messagingTemplate.convertAndSendToUser(
-                        gmh.getUserId().toString(),
-                        destination,
-                        groupDto
-                );
-            }
-        }
+        notifyMembers(history, "/notification/update-group", groupDto,
+                "update group with id {}", groupDto.getId());
     }
 
     public void sendGroupDeletedNotification(List<GroupMembershipHistory> history, GroupDto groupDto) throws UserNotFoundException {
-        var user = dataLoaderService.getAuthenticatedUser();
-        var destination = "/notification/delete-group";
-
-        for (var gmh : history) {
-            if (!gmh.getUserId().equals(user.getId())) {
-                logger.info("Notify User with id {} | delete group with id {}", gmh.getUserId(), groupDto.getId());
-                messagingTemplate.convertAndSendToUser(
-                        gmh.getUserId().toString(),
-                        destination,
-                        groupDto
-                );
-            }
-        }
+        notifyMembers(history, "/notification/delete-group", groupDto,
+                "delete group with id {}", groupDto.getId());
     }
 
     public void sendGroupMemberRemovedNotification(List<GroupMembershipHistory> history, GroupMembersDto groupMembersDto) throws UserNotFoundException {
-        var user = dataLoaderService.getAuthenticatedUser();
-        var destination = "/notification/remove-group-member";
-
-        for (var gmh : history) {
-            if (!gmh.getUserId().equals(user.getId())) {
-                logger.info("Notify User with id {} | member removed from group with id {}", gmh.getUserId(), groupMembersDto.getId());
-                messagingTemplate.convertAndSendToUser(
-                        gmh.getUserId().toString(),
-                        destination,
-                        groupMembersDto
-                );
-            }
-        }
+        notifyMembers(history, "/notification/remove-group-member", groupMembersDto,
+                "member removed from group with id {}", groupMembersDto.getId());
     }
 
     public void sendGroupMemberAddedNotification(Long groupId, GroupMembersDto groupMembersDto) throws UserNotFoundException {
         var history = gmhService.getGroupMembersAndOwner(groupId);
-        var user = dataLoaderService.getAuthenticatedUser();
-        var destination = "/notification/add-group-member";
-
-        for (var gmh : history) {
-            if (!gmh.getUserId().equals(user.getId())) {
-                logger.info("Notify User with id {} | member added to group with id {}", gmh.getUserId(), groupMembersDto.getId());
-                messagingTemplate.convertAndSendToUser(
-                        gmh.getUserId().toString(),
-                        destination,
-                        groupMembersDto
-                );
-            }
-        }
+        notifyMembers(history, "/notification/add-group-member", groupMembersDto,
+                "member added to group with id {}", groupMembersDto.getId());
     }
 
     public void sendGroupOwnerChangedNotification(Long groupId , User newOwner) throws UserNotFoundException {
         var history = gmhService.getGroupMembersAndOwner(groupId);
-        var user = dataLoaderService.getAuthenticatedUser();
-        var destination = "/notification/change-group-owner";
+        notifyMembers(history, "/notification/change-group-owner",
+                new ChangeGroupOwnerDto(new UserDto(newOwner), groupId),
+                "new group owner with id {}", newOwner.getId());
+    }
 
+    /**
+     * Sends {@code payload} to every group member except the currently authenticated user.
+     * The {@code detail} message (with its {@code detailArgs}) is appended to the common
+     * "Notify User with id {} | " log prefix, where the leading id is the recipient.
+     */
+    private void notifyMembers(List<GroupMembershipHistory> history, String destination,
+                               Object payload, String detail, Object... detailArgs) throws UserNotFoundException {
+        var user = dataLoaderService.getAuthenticatedUser();
         for (var gmh : history) {
             if (!gmh.getUserId().equals(user.getId())) {
-                logger.info("Notify User with id {} | new group owner with id {}", gmh.getUserId(), newOwner.getId());
-                messagingTemplate.convertAndSendToUser(
-                        gmh.getUserId().toString(),
-                        destination,
-                        new ChangeGroupOwnerDto(new UserDto(newOwner), groupId)
-                );
+                Object[] logArgs = new Object[detailArgs.length + 1];
+                logArgs[0] = gmh.getUserId();
+                System.arraycopy(detailArgs, 0, logArgs, 1, detailArgs.length);
+                logger.info("Notify User with id {} | " + detail, logArgs);
+                messagingTemplate.convertAndSendToUser(gmh.getUserId().toString(), destination, payload);
             }
         }
     }

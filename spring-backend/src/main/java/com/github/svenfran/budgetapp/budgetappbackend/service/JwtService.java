@@ -6,6 +6,8 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
@@ -22,6 +24,14 @@ import java.util.function.Function;
 public class JwtService {
 
     private static final String SECRET_KEY = "secret_key";
+
+    /** Prefix of the HTTP Authorization header carrying a bearer token. */
+    public static final String BEARER_PREFIX = "Bearer ";
+
+    /** Token validity: 21 days in milliseconds. */
+    private static final long TOKEN_VALIDITY_MS = 1000L * 60 * 60 * 24 * 21;
+
+    private final Logger logger = LoggerFactory.getLogger(JwtService.class);
 
     private final Dotenv dotenv = Dotenv.configure().ignoreIfMissing().load();
     private final String secretKey = System.getenv(SECRET_KEY) != null
@@ -52,8 +62,7 @@ public class JwtService {
                 .setSubject(userDetails.getUsername())
                 .setIssuedAt(new Date(System.currentTimeMillis()))
                 .signWith(getSignInKey(), SignatureAlgorithm.HS256)
-                .setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 60 * 24 * 21)) // 21 Tage
-//                .setExpiration(new Date(System.currentTimeMillis() + 1000 * 15)) // 15 Sec.
+                .setExpiration(new Date(System.currentTimeMillis() + TOKEN_VALIDITY_MS))
                 .compact();
     }
 
@@ -105,7 +114,7 @@ public class JwtService {
         try {
             secretKey = convertSecretKeyToString(generateKey(256));
         } catch (NoSuchAlgorithmException e) {
-            e.printStackTrace();
+            logger.error("Failed to generate secret key", e);
         }
         return secretKey;
     }

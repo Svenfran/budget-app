@@ -1,6 +1,7 @@
 package com.github.svenfran.budgetapp.budgetappbackend.config;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -18,10 +19,14 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import javax.servlet.http.HttpServletResponse;
 import java.util.Arrays;
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfiguration {
+
+    @Value("${app.cors.allowed-origins}")
+    private List<String> allowedOrigins;
 
     @Autowired
     private JwtAuthenticationFilter jwtAuthFilter;
@@ -69,19 +74,7 @@ public class SecurityConfiguration {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.asList(
-                "http://192.168.178.23:8100",
-                "http://192.168.178.21:8100",
-                "http://192.168.32.1:8100",
-                "http://localhost:8100",
-                "http://localhost:3000",
-                "http://localhost",
-                "https://192.168.178.23:8100",
-                "https://192.168.178.21:8100",
-                "https://192.168.32.1:8100",
-                "https://localhost:8100",
-                "https://localhost"
-        ));
+        configuration.setAllowedOrigins(allowedOrigins);
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("Origin", "Content-Type", "Accept", "Authorization", "DeviceId"));
         configuration.setAllowCredentials(true);
