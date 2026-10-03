@@ -2,6 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
+      <module fileurl="file://$PROJECT_DIR$/spring-backend/budget-app-backend.iml" filepath="$PROJECT_DIR$/spring-backend/budget-app-backend.iml" />
       <module fileurl="file://$PROJECT_DIR$/ionic-frontend/ionic-frontend.iml" filepath="$PROJECT_DIR$/ionic-frontend/ionic-frontend.iml" />
     </modules>
   </component>

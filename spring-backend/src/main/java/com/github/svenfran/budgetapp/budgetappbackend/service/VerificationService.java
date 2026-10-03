@@ -1,5 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
+import com.github.svenfran.budgetapp.budgetappbackend.constants.UserEnum;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.*;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
@@ -9,10 +10,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.BindingResult;
 
-import java.time.ZoneId;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+
+import static com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils.toLocalDate;
 
 @Service
 public class VerificationService {
@@ -22,6 +24,11 @@ public class VerificationService {
 
     @Autowired
     private UserRepository userRepository;
+
+    public VerificationService(PasswordEncoder passwordEncoder, UserRepository userRepository) {
+        this.passwordEncoder = passwordEncoder;
+        this.userRepository = userRepository;
+    }
 
     public void verifyIsAuthenticatedUser(User user, User authUser) throws UserIsNotAuthenticatedUser {
         if (!user.equals(authUser)) {
@@ -50,6 +57,12 @@ public class VerificationService {
     public void verifyUserNameNotExists(String userName) throws UserNameAlreadyExistsException {
         if (userNameExists(userName)) {
             throw new UserNameAlreadyExistsException(String.format("User with name %s already exists", userName));
+        }
+    }
+
+    public void verifyUserNameIsAllowed(String userName) throws UserNameNotAllowedException {
+        if (userName.contains(UserEnum.USER_DELETED.getName()) || userName.contains(UserEnum.USER_REMOVED.getName())) {
+            throw new UserNameNotAllowedException("User name is not allowed");
         }
     }
 
@@ -87,9 +100,9 @@ public class VerificationService {
         if (user == null) throw new UserNotFoundException("User not found");
     }
 
-    public void verifyCurrentlyNoGroupMember(User user, Group group) throws MemberAlreadyExixtsException {
+    public void verifyCurrentlyNoGroupMember(User user, Group group) throws MemberAlreadyExistsException {
         if (group.getMembers().contains(user)) {
-            throw new MemberAlreadyExixtsException("Member already exists");
+            throw new MemberAlreadyExistsException("Member already exists");
         }
     }
 
@@ -113,7 +126,7 @@ public class VerificationService {
 
     public void verifyShoppingItemIsPartOfShoppingList(ShoppingList shoppingList, ShoppingItem shoppingItem) throws ShoppingItemDoesNotBelongToShoppingListException {
         if (!shoppingList.getId().equals(shoppingItem.getShoppingList().getId())) {
-            throw new ShoppingItemDoesNotBelongToShoppingListException("Shoppingitem with Id " + shoppingItem.getId() + " does not belong to shoppinglist with Id " + shoppingList.getId());
+            throw new ShoppingItemDoesNotBelongToShoppingListException("Shoppingitem with Id " + shoppingItem.getId() + " does not belong to shopping list with Id " + shoppingList.getId());
         }
     }
 
@@ -122,17 +135,17 @@ public class VerificationService {
                 .map(shoppingItem -> Map.entry(shoppingItem.getGroupId(), shoppingItem.getShoppingListId()))
                 .distinct()
                 .count() > 1) {
-            throw new IllegalArgumentException("One of the shoppingitems does not belong to the shoppinglist or group ");
+            throw new IllegalArgumentException("One of the shopping items does not belong to the shopping list or group ");
         }
     }
 
     public void verifyDatePurchasedWithinMembershipPeriod (List<GroupMembershipHistory> gmh, Date datePurchased) throws DatePurchasedNotWithinMembershipPeriodException {
         for (var timePeriod : gmh) {
-            var startDate = timePeriod.getMembershipStart().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
-            var endDate = timePeriod.getMembershipEnd() != null ? timePeriod.getMembershipEnd().toInstant().atZone(ZoneId.systemDefault()).toLocalDate() : null;
+            var startDate = toLocalDate(timePeriod.getMembershipStart());
+            var endDate = timePeriod.getMembershipEnd() != null ? toLocalDate(timePeriod.getMembershipEnd()) : null;
 
-            var isAfterStart = !datePurchased.toInstant().atZone(ZoneId.systemDefault()).toLocalDate().isBefore(startDate);
-            var isBeforeEnd = (endDate == null) || !datePurchased.toInstant().atZone(ZoneId.systemDefault()).toLocalDate().isAfter(endDate);
+            var isAfterStart = !toLocalDate(datePurchased).isBefore(startDate);
+            var isBeforeEnd = (endDate == null) || !toLocalDate(datePurchased).isAfter(endDate);
 
             if (isAfterStart && isBeforeEnd) {
                 return;

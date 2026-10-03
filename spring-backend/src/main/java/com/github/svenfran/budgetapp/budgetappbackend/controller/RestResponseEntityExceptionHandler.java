@@ -16,153 +16,52 @@ public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionH
 
     private final Logger LOG = LoggerFactory.getLogger(RestResponseEntityExceptionHandler.class);
 
-    @ExceptionHandler(value = { CartNotFoundException.class })
-    protected ResponseEntity<Object> handleCartNotFoundException (CartNotFoundException ex, WebRequest request) {
-        LOG.debug("Exception Message: " + ex.getMessage(), ex);
-        return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
+    @ExceptionHandler(value = {
+            CartNotFoundException.class,
+            CategoryNotFoundException.class,
+            UserNotFoundException.class,
+            GroupNotFoundException.class,
+            GroupIdNotFoundException.class,
+            ShoppingListNotFoundException.class,
+            ShoppingItemNotFoundException.class,
+            ShoppingListDoesNotBelongToGroupException.class,
+            ShoppingItemDoesNotBelongToShoppingListException.class,
+            CategoryBelongsNotToGroupException.class,
+            CategoryIsUsedByCartException.class
+    })
+    protected ResponseEntity<Object> handleNotFound(Exception ex, WebRequest request) {
+        return buildResponse(ex, HttpStatus.NOT_FOUND);
     }
 
-    @ExceptionHandler(value = { AddCartCategoryNotFoundException.class })
-    protected ResponseEntity<Object> handleAddCartCategoryNotFoundException (AddCartCategoryNotFoundException ex, WebRequest request) {
-        LOG.debug("Exception Message: " + ex.getMessage(), ex);
-        return new ResponseEntity<>(ex.getMessage(), HttpStatus.BAD_REQUEST);
+    @ExceptionHandler(value = {
+            AddCartCategoryNotFoundException.class,
+            UpdateCartCategoryNotFoundException.class,
+            UserAlreadyExistException.class,
+            InvalidEmailException.class,
+            UserNameAlreadyExistsException.class,
+            UserIsNotAuthenticatedUser.class,
+            WrongPasswordException.class,
+            DatePurchasedNotWithinMembershipPeriodException.class,
+            UserNameNotAllowedException.class
+    })
+    protected ResponseEntity<Object> handleBadRequest(Exception ex, WebRequest request) {
+        return buildResponse(ex, HttpStatus.BAD_REQUEST);
     }
 
-    @ExceptionHandler(value = { UpdateCartCategoryNotFoundException.class })
-    protected ResponseEntity<Object> handleUpdateCartCategoryNotFoundException (UpdateCartCategoryNotFoundException ex, WebRequest request) {
-        LOG.debug("Exception Message: " + ex.getMessage(), ex);
-        return new ResponseEntity<>(ex.getMessage(), HttpStatus.BAD_REQUEST);
+    @ExceptionHandler(value = {
+            NotOwnerOfGroupException.class,
+            MemberAlreadyExistsException.class,
+            MemberEqualsOwnerException.class,
+            NotMemberOfGroupException.class,
+            NotOwnerOrMemberOfGroupException.class,
+            NotOwnerOfCartException.class
+    })
+    protected ResponseEntity<Object> handleForbidden(Exception ex, WebRequest request) {
+        return buildResponse(ex, HttpStatus.FORBIDDEN);
     }
 
-    @ExceptionHandler(value = { CategoryNotFoundException.class })
-    protected ResponseEntity<Object> handleCategoryNotFoundException (CategoryNotFoundException ex, WebRequest request) {
+    private ResponseEntity<Object> buildResponse(Exception ex, HttpStatus status) {
         LOG.debug("Exception Message: " + ex.getMessage(), ex);
-        return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
-    }
-
-    @ExceptionHandler(value = { UserNotFoundException.class })
-    protected ResponseEntity<Object> handleUserNotFoundException (UserNotFoundException ex, WebRequest request) {
-        LOG.debug("Exception Message: " + ex.getMessage(), ex);
-        return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
-    }
-
-    @ExceptionHandler(value = { GroupNotFoundException.class })
-    protected ResponseEntity<Object> handleGroupNotFoundException (GroupNotFoundException ex, WebRequest request) {
-        LOG.debug("Exception Message: " + ex.getMessage(), ex);
-        return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
-    }
-
-    @ExceptionHandler(value = { NotOwnerOfGroupException.class })
-    protected ResponseEntity<Object> handleNotOwnerOfGroupException (NotOwnerOfGroupException ex, WebRequest request) {
-        LOG.debug("Exception Message: " + ex.getMessage(), ex);
-        return new ResponseEntity<>(ex.getMessage(), HttpStatus.FORBIDDEN);
-    }
-
-    @ExceptionHandler(value = { MemberAlreadyExixtsException.class })
-    protected ResponseEntity<Object> handleMemberAlreadyExistsException (MemberAlreadyExixtsException ex, WebRequest request) {
-        LOG.debug("Exception Message: " + ex.getMessage(), ex);
-        return new ResponseEntity<>(ex.getMessage(), HttpStatus.FORBIDDEN);
-    }
-
-    @ExceptionHandler(value = { MemberEqualsOwnerException.class })
-    protected ResponseEntity<Object> handleMemberEqualsOwnerException (MemberEqualsOwnerException ex, WebRequest request) {
-        LOG.debug("Exception Message: " + ex.getMessage(), ex);
-        return new ResponseEntity<>(ex.getMessage(), HttpStatus.FORBIDDEN);
-    }
-
-    @ExceptionHandler(value = { NotMemberOfGroupException.class })
-    protected ResponseEntity<Object> handleNotMemberOfGroupException (NotMemberOfGroupException ex, WebRequest request) {
-        LOG.debug("Exception Message: " + ex.getMessage(), ex);
-        return new ResponseEntity<>(ex.getMessage(), HttpStatus.FORBIDDEN);
-    }
-
-    @ExceptionHandler(value = { NotOwnerOrMemberOfGroupException.class })
-    protected ResponseEntity<Object> handleNotOwnerOrMemberOfGroupException (NotOwnerOrMemberOfGroupException ex, WebRequest request) {
-        LOG.debug("Exception Message: " + ex.getMessage(), ex);
-        return new ResponseEntity<>(ex.getMessage(), HttpStatus.FORBIDDEN);
-    }
-
-    @ExceptionHandler(value = { NotOwnerOfCartException.class })
-    protected ResponseEntity<Object> handleNotOwnerOfCartException (NotOwnerOfCartException ex, WebRequest request) {
-        LOG.debug("Exception Message: " + ex.getMessage(), ex);
-        return new ResponseEntity<>(ex.getMessage(), HttpStatus.FORBIDDEN);
-    }
-
-    @ExceptionHandler(value = { GroupIdNotFoundException.class })
-    protected ResponseEntity<Object> handleGroupIdNotFoundException (GroupIdNotFoundException ex, WebRequest request) {
-        LOG.debug("Exception Message: " + ex.getMessage(), ex);
-        return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
-    }
-
-    @ExceptionHandler(value = { ShoppingListNotFoundException.class })
-    protected ResponseEntity<Object> handleShoppingListNotFoundException (ShoppingListNotFoundException ex, WebRequest request) {
-        LOG.debug("Exception Message: " + ex.getMessage(), ex);
-        return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
-    }
-
-    @ExceptionHandler(value = { ShoppingItemNotFoundException.class })
-    protected ResponseEntity<Object> handleShoppingItemNotFoundException (ShoppingItemNotFoundException ex, WebRequest request) {
-        LOG.debug("Exception Message: " + ex.getMessage(), ex);
-        return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
-    }
-
-    @ExceptionHandler(value = { ShoppingListDoesNotBelongToGroupException.class })
-    protected ResponseEntity<Object> handleShoppingListDoesNotBelongToGroupException (ShoppingListDoesNotBelongToGroupException ex, WebRequest request) {
-        LOG.debug("Exception Message: " + ex.getMessage(), ex);
-        return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
-    }
-
-    @ExceptionHandler(value = { ShoppingItemDoesNotBelongToShoppingListException.class })
-    protected ResponseEntity<Object> handleShoppingItemDoesNotBelongToShoppingListException (ShoppingItemDoesNotBelongToShoppingListException ex, WebRequest request) {
-        LOG.debug("Exception Message: " + ex.getMessage(), ex);
-        return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
-    }
-
-    @ExceptionHandler(value = { CategoryBelongsNotToGroupException.class })
-    protected ResponseEntity<Object> handleSCategoryBelongsNotToGroupException (CategoryBelongsNotToGroupException ex, WebRequest request) {
-        LOG.debug("Exception Message: " + ex.getMessage(), ex);
-        return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
-    }
-
-    @ExceptionHandler(value = { CategoryIsUsedByCartException.class })
-    protected ResponseEntity<Object> handleCategoryIsUsedByCartException (CategoryIsUsedByCartException ex, WebRequest request) {
-        LOG.debug("Exception Message: " + ex.getMessage(), ex);
-        return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
-    }
-
-    @ExceptionHandler(value = { UserAlreadyExistException.class })
-    protected ResponseEntity<Object> handleUserAlreadyExistException (UserAlreadyExistException ex, WebRequest request) {
-        LOG.debug("Exception Message: " + ex.getMessage(), ex);
-        return new ResponseEntity<>(ex.getMessage(), HttpStatus.BAD_REQUEST);
-    }
-
-    @ExceptionHandler(value = { InvalidEmailException.class })
-    protected ResponseEntity<Object> handleInvalidEmailException (InvalidEmailException ex, WebRequest request) {
-        LOG.debug("Exception Message: " + ex.getMessage(), ex);
-        return new ResponseEntity<>(ex.getMessage(), HttpStatus.BAD_REQUEST);
-    }
-
-    @ExceptionHandler(value = { UserNameAlreadyExistsException.class })
-    protected ResponseEntity<Object> handleUserNameAlreadyExistsException (UserNameAlreadyExistsException ex, WebRequest request) {
-        LOG.debug("Exception Message: " + ex.getMessage(), ex);
-        return new ResponseEntity<>(ex.getMessage(), HttpStatus.BAD_REQUEST);
-    }
-
-    @ExceptionHandler(value = { UserIsNotAuthenticatedUser.class })
-    protected ResponseEntity<Object> handleUserIsNotAuthenticatedUserExistsException (UserIsNotAuthenticatedUser ex, WebRequest request) {
-        LOG.debug("Exception Message: " + ex.getMessage(), ex);
-        return new ResponseEntity<>(ex.getMessage(), HttpStatus.BAD_REQUEST);
-    }
-
-    @ExceptionHandler(value = { WrongPasswordException.class })
-    protected ResponseEntity<Object> handleWrongPasswordException (WrongPasswordException ex, WebRequest request) {
-        LOG.debug("Exception Message: " + ex.getMessage(), ex);
-        return new ResponseEntity<>(ex.getMessage(), HttpStatus.BAD_REQUEST);
-    }
-
-    @ExceptionHandler(value = { DatePurchasedNotWithinMembershipPeriodException.class })
-    protected ResponseEntity<Object> handleDatePurchasedNotWithinMembershipPeriodException (DatePurchasedNotWithinMembershipPeriodException ex, WebRequest request) {
-        LOG.debug("Exception Message: " + ex.getMessage(), ex);
-        return new ResponseEntity<>(ex.getMessage(), HttpStatus.BAD_REQUEST);
+        return new ResponseEntity<>(ex.getMessage(), status);
     }
 }

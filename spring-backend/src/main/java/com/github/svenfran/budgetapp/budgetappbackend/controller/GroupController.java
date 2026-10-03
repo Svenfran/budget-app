@@ -52,7 +52,7 @@ public class GroupController {
     }
 
     @PostMapping("/groups/add-new-member")
-    public ResponseEntity<GroupMembersDto> addMemberToGroup(@RequestBody AddGroupMemberDto addGroupMemberDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOfGroupException, MemberAlreadyExixtsException, MemberEqualsOwnerException {
+    public ResponseEntity<GroupMembersDto> addMemberToGroup(@RequestBody AddGroupMemberDto addGroupMemberDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOfGroupException, MemberAlreadyExistsException, MemberEqualsOwnerException {
         GroupMembersDto newGroup = groupService.addMemberToGroup(addGroupMemberDto);
         return new ResponseEntity<>(newGroup, HttpStatus.CREATED);
     }

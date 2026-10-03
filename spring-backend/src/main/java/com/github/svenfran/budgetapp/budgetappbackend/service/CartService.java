@@ -7,7 +7,9 @@ import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.*;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
+import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.ExcelWriter;
+import com.github.svenfran.budgetapp.budgetappbackend.helper.Translator;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartTemplateRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CategoryRepository;
@@ -21,7 +23,6 @@ import org.springframework.validation.annotation.Validated;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
@@ -48,7 +49,10 @@ public class CartService {
     @Autowired
     private CartTemplateRepository templateRepository;
 
-    private static final String SETTLEMENT_CATEGORY_NAME = "Ausgleichszahlung";
+    @Autowired
+    private Translator translator;
+
+    private static final String SETTLEMENT_CATEGORY_NAME = "categories.default.settlement";
 
     public List<CartDto> getCartsByGroupId(Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
         var user = dataLoaderService.getAuthenticatedUser();
@@ -116,7 +120,7 @@ public class CartService {
         verificationService.verifyDatePurchasedWithinMembershipPeriod(gmhUser, settlementPaymentDto.getDatePurchased());
         verificationService.verifyDatePurchasedWithinMembershipPeriod(gmhMember, settlementPaymentDto.getDatePurchased());
         createCategoryForSettlementPaymentIfNotExist(group);
-        var category = dataLoaderService.loadCategoryByGroupAndName(group, SETTLEMENT_CATEGORY_NAME);
+        var category = dataLoaderService.loadCategoryByGroupAndName(group, translator.translate(SETTLEMENT_CATEGORY_NAME));
         var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(settlementPaymentDto.getDatePurchased(), group.getId());
         return createSettlementPaymentCarts(category, user, member, group, settlementPaymentDto.getAmount(), groupMemberCount, settlementPaymentDto.getDatePurchased());
     }
@@ -130,13 +134,13 @@ public class CartService {
         response.setHeader("Expires", "0");
         var cartlist = dataLoaderService.loadCartListForGroup(groupId);
         var membershipHistoryList = dataLoaderService.loadMembershipHistoryForGroup(groupId);
-        var excelWriter = new ExcelWriter(cartlist, membershipHistoryList, dataLoaderService);
+        var excelWriter = new ExcelWriter(cartlist, membershipHistoryList, dataLoaderService, translator);
         excelWriter.generateExcelFile(response);
     }
 
     private List<CartDto> createSettlementPaymentCarts(Category category, User user, User member, Group group, Double amount, int groupMemberCount, Date datePurchased) {
         var cartDtoSender = new CartDto();
-        cartDtoSender.setTitle("Ausgleichszahlung an " + formatUsername(member.getName()));
+        cartDtoSender.setTitle(translator.translate("cart.settlement_to") + " " + formatUsername(member.getName()));
         cartDtoSender.setDescription("");
         cartDtoSender.setDatePurchased(datePurchased);
         cartDtoSender.setAmount(amount);
@@ -147,7 +151,7 @@ public class CartService {
         cartDtoSender.setId(cartSender.getId());
 
         var cartDtoReceiver = new CartDto();
-        cartDtoReceiver.setTitle("Ausgleichszahlung von " + formatUsername(user.getName()));
+        cartDtoReceiver.setTitle(translator.translate("cart.settlement_from") + " " + formatUsername(user.getName()));
         cartDtoReceiver.setDescription("");
         cartDtoReceiver.setDatePurchased(datePurchased);
         cartDtoReceiver.setAmount((-1) * amount);
@@ -168,14 +172,14 @@ public class CartService {
     }
 
     private void createCategoryForSettlementPaymentIfNotExist(Group group) {
-        if (categoryRepository.findCategoryByGroupAndName(group, SETTLEMENT_CATEGORY_NAME) == null) {
-            categoryRepository.save(new Category(null, SETTLEMENT_CATEGORY_NAME, group, null));
+        if (categoryRepository.findCategoryByGroupAndName(group, translator.translate(SETTLEMENT_CATEGORY_NAME)) == null) {
+            categoryRepository.save(new Category(null, translator.translate(SETTLEMENT_CATEGORY_NAME), group, null));
         }
     }
 
     // ----- Wiederholende Einträge -----
 
-    @Scheduled(cron = "0 0 3 * * *") // täglich um 3 Uhr
+    @Scheduled(cron = "${task.recurringCart.schedule}")
     @Transactional
     public void generateRecurringCarts() throws UserNotFoundException, GroupNotFoundException, CategoryNotFoundException {
         List<CartTemplate> templates = templateRepository.findByActiveTrue();
@@ -222,7 +226,7 @@ public class CartService {
         var user = dataLoaderService.loadUser(template.getUserId());
         var group = dataLoaderService.loadGroup(template.getGroupId());
         var category = dataLoaderService.loadCategory(template.getCategoryId());
-        var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(Date.from(nextDate.atStartOfDay(ZoneId.systemDefault()).toInstant()), group.getId());
+        var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(asDate(nextDate), group.getId());
         newCart.setUser(user);
         newCart.setGroup(group);
         newCart.setTitle(template.getTitle());
@@ -231,7 +235,7 @@ public class CartService {
         newCart.setAveragePerMember(template.getAmount() / groupMemberCount);
         newCart.setDescription(template.getDescription());
         newCart.setCategory(category);
-        newCart.setDatePurchased(Date.from(nextDate.atStartOfDay(ZoneId.systemDefault()).toInstant()));
+        newCart.setDatePurchased(asDate(nextDate));
         newCart.setTemplate(template);
 
         cartRepository.save(newCart);
@@ -297,9 +301,7 @@ public class CartService {
         newTemplate.setStartDate(LocalDate.now());
         newTemplate.setNextExecutionDate(
                 calculateNextDate(
-                        cartDto.getDatePurchased().toInstant()
-                                .atZone(ZoneId.systemDefault())
-                                .toLocalDate(),
+                        asLocalDate(cartDto.getDatePurchased()),
                         recurrenceType
                 )
         );
@@ -417,10 +419,10 @@ public class CartService {
     }
 
     private Date asDate(LocalDate date) {
-        return Date.from(date.atStartOfDay(ZoneId.systemDefault()).toInstant());
+        return DateUtils.toDate(date);
     }
 
     private LocalDate asLocalDate(Date date) {
-        return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+        return DateUtils.toLocalDate(date);
     }
 }

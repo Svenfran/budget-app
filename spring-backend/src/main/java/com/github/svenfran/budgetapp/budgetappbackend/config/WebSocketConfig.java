@@ -27,6 +27,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Value("${websocket.url}")
     private String websocketEndpoint;
 
+    @Value("${app.cors.allowed-origins}")
+    private List<String> allowedOrigins;
+
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
         registry.enableSimpleBroker("/notification", "/user");
@@ -42,9 +45,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint(websocketEndpoint)
-                .setAllowedOriginPatterns("http://localhost:8100", "http://192.168.178.23:8100",
-                        "http://localhost", "http://192.168.178.23", "https://localhost:8100",
-                        "https://localhost")
+                .setAllowedOriginPatterns(allowedOrigins.toArray(new String[0]))
                 .withSockJS();
     }
 

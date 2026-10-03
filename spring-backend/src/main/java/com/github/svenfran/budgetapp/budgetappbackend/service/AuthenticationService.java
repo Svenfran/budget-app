@@ -113,7 +113,7 @@ public class AuthenticationService {
         tokenRepository.save(userToken);
     }
 
-    @Scheduled(cron = "0 0 0 * * ?") // Läuft täglich um Mitternacht
+    @Scheduled(cron = "${task.clearToken.schedule}")
     public void deleteExpiredTokens() {
         var tokens = tokenRepository.findAllByExpiredIsTrueAndRevokedIsTrue();
         tokenRepository.deleteAll(tokens);

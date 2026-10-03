@@ -27,7 +27,7 @@ public class UserProfileController {
     }
 
     @PutMapping("/userprofile/update-username")
-    public ResponseEntity<UserDto> changeUserName(@RequestBody UserDto userDto) throws UserNotFoundException, UserIsNotAuthenticatedUser, UserNameAlreadyExistsException {
+    public ResponseEntity<UserDto> changeUserName(@RequestBody UserDto userDto) throws UserNotFoundException, UserIsNotAuthenticatedUser, UserNameAlreadyExistsException, UserNameNotAllowedException {
         UserDto changedUser = userProfileService.changeUserName(userDto);
         return new ResponseEntity<>(changedUser, HttpStatus.CREATED);
     }

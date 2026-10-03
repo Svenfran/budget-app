@@ -15,9 +15,11 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.Month;
-import java.time.ZoneId;
 import java.time.format.TextStyle;
 import java.util.*;
+
+import static com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils.NO_END_DATE;
+import static com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils.toLocalDate;
 
 @Service
 public class SpendingsOverviewService {
@@ -80,8 +82,7 @@ public class SpendingsOverviewService {
 
                 double diff = sum - sumAveragePerMember;
                 totalSum += sum;
-                var userName = dataLoaderService.loadUser(userId).getName();
-                userName = userIsCurrentlyMember(userId, groupId) ? userName : UserEnum.USER_REMOVED.getName();
+                var userName = handleUserName(userId, groupId);
                 spendingsTotalUserList.add(new SpendingsOverviewUserDto(userId, userName, roundValue(sum), roundValue(diff)));
             }
         }
@@ -114,7 +115,7 @@ public class SpendingsOverviewService {
                         .toList();
 
                 for (Cart cart : carts) {
-                    if (cart.getDatePurchased().toInstant().atZone(ZoneId.systemDefault()).getYear() == year) {
+                    if (toLocalDate(cart.getDatePurchased()).getYear() == year) {
                         if (cart.getUser().getId().equals(userId)) {
                             sum += cart.getAmount();
                         }
@@ -129,8 +130,7 @@ public class SpendingsOverviewService {
                 }
 
                 double diff = sum - sumAveragePerMember;
-                var userName = dataLoaderService.loadUser(userId).getName();
-                userName = userIsCurrentlyMember(userId, groupId) ? userName : UserEnum.USER_REMOVED.getName();
+                var userName = handleUserName(userId, groupId);
                 if (wasUserMemberInYear(validMemberships, year)) {
                     spendingsTotalUserList.add(new SpendingsOverviewUserDto(userId, userName, roundValue(sum), roundValue(diff)));
                 }
@@ -177,7 +177,7 @@ public class SpendingsOverviewService {
                         .toList();
 
                 for (Cart cart : carts) {
-                    if (cart.getDatePurchased().toInstant().atZone(ZoneId.systemDefault()).getYear() == year) {
+                    if (toLocalDate(cart.getDatePurchased()).getYear() == year) {
                         if (cart.getUser().getId().equals(userId)) {
                             sum += cart.getAmount();
                         }
@@ -192,8 +192,7 @@ public class SpendingsOverviewService {
                 }
 
                 double diff = sum - sumAveragePerMember;
-                var userName = dataLoaderService.loadUser(userId).getName();
-                userName = userIsCurrentlyMember(userId, groupId) ? userName : UserEnum.USER_REMOVED.getName();
+                var userName = handleUserName(userId, groupId);
                 if (wasUserMemberInYear(validMemberships, year)) {
                     spendingsTotalUserList.add(new SpendingsOverviewUserDto(userId, userName, roundValue(sum), roundValue(diff)));
                 }
@@ -229,8 +228,8 @@ public class SpendingsOverviewService {
                         .toList();
 
                 for (Cart cart : carts) {
-                    if (cart.getDatePurchased().toInstant().atZone(ZoneId.systemDefault()).getMonthValue() == month
-                        && cart.getDatePurchased().toInstant().atZone(ZoneId.systemDefault()).getYear() == year) {
+                    if (toLocalDate(cart.getDatePurchased()).getMonthValue() == month
+                        && toLocalDate(cart.getDatePurchased()).getYear() == year) {
                         if (cart.getUser().getId().equals(userId)) {
                             sum += cart.getAmount();
                         }
@@ -245,8 +244,7 @@ public class SpendingsOverviewService {
                 }
 
                 double diff = sum - sumAveragePerMember;
-                var userName = dataLoaderService.loadUser(userId).getName();
-                userName = userIsCurrentlyMember(userId, groupId) ? userName : UserEnum.USER_REMOVED.getName();
+                var userName = handleUserName(userId, groupId);
                 if (wasUserMemberInMonth(validMemberships, year, month)) {
                     spendingsTotalUserList.add(new SpendingsOverviewUserDto(userId, userName, roundValue(sum), roundValue(diff)));
                 }
@@ -264,11 +262,11 @@ public class SpendingsOverviewService {
             return false;
         }
         // Zeitkomponente entfernen
-        LocalDate purchasedDate = datePurchased.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
-        LocalDate startDate = gmh.getMembershipStart().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+        LocalDate purchasedDate = toLocalDate(datePurchased);
+        LocalDate startDate = toLocalDate(gmh.getMembershipStart());
         LocalDate endDate = (gmh.getMembershipEnd() != null)
-                ? gmh.getMembershipEnd().toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
-                : LocalDate.of(2999, 12, 31);
+                ? toLocalDate(gmh.getMembershipEnd())
+                : NO_END_DATE;
 
         return !purchasedDate.isBefore(startDate) && !purchasedDate.isAfter(endDate);
     }
@@ -280,7 +278,7 @@ public class SpendingsOverviewService {
     public double getTotalAmountForYear(List<Cart> carts, int year) {
         return carts.stream()
                 .filter(cart -> {
-                    LocalDate date = cart.getDatePurchased().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+                    LocalDate date = toLocalDate(cart.getDatePurchased());
                     return date.getYear() == year;
                 })
                 .mapToDouble(Cart::getAmount)
@@ -289,7 +287,7 @@ public class SpendingsOverviewService {
 
     public List<Integer> getAvailableMonthsForYear(List<Cart> carts, int year) {
         return carts.stream()
-                .map(cart -> cart.getDatePurchased().toInstant().atZone(ZoneId.systemDefault()).toLocalDate()) // Datum umwandeln
+                .map(cart -> toLocalDate(cart.getDatePurchased())) // Datum umwandeln
                 .filter(date -> date.getYear() == year)
                 .map(LocalDate::getMonthValue)
                 .distinct()
@@ -304,7 +302,7 @@ public class SpendingsOverviewService {
     public double getTotalAmountForMonth(List<Cart> carts, int year, int month) {
         return carts.stream()
                 .filter(cart -> {
-                    LocalDate date = cart.getDatePurchased().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+                    LocalDate date = toLocalDate(cart.getDatePurchased());
                     return date.getYear() == year && date.getMonthValue() == month;
                 })
                 .mapToDouble(Cart::getAmount)
@@ -313,7 +311,7 @@ public class SpendingsOverviewService {
 
     public boolean hasCartsForYear(List<Cart> carts, int year) {
         return carts.stream()
-                .map(cart -> cart.getDatePurchased().toInstant().atZone(ZoneId.systemDefault()).toLocalDate())
+                .map(cart -> toLocalDate(cart.getDatePurchased()))
                 .anyMatch(date -> date.getYear() == year);
     }
 
@@ -325,10 +323,10 @@ public class SpendingsOverviewService {
     public boolean wasUserMemberInYear(List<GroupMembershipHistory> membershipHistory, int year) {
         return membershipHistory.stream()
                 .anyMatch(gmh -> {
-                    LocalDate start = gmh.getMembershipStart().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+                    LocalDate start = toLocalDate(gmh.getMembershipStart());
                     LocalDate end = (gmh.getMembershipEnd() != null)
-                            ? gmh.getMembershipEnd().toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
-                            : LocalDate.of(2999, 12, 31); // Falls `membership_end` null ist
+                            ? toLocalDate(gmh.getMembershipEnd())
+                            : NO_END_DATE; // Falls `membership_end` null ist
 
                     // Prüfen, ob das Jahr innerhalb des Mitgliedschaftszeitraums liegt
                     return (start.getYear() <= year && end.getYear() >= year);
@@ -338,10 +336,10 @@ public class SpendingsOverviewService {
     public boolean wasUserMemberInMonth(List<GroupMembershipHistory> membershipHistory, int year, int month) {
         return membershipHistory.stream()
                 .anyMatch(gmh -> {
-                    LocalDate start = gmh.getMembershipStart().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+                    LocalDate start = toLocalDate(gmh.getMembershipStart());
                     LocalDate end = (gmh.getMembershipEnd() != null)
-                            ? gmh.getMembershipEnd().toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
-                            : LocalDate.of(2999, 12, 31); // Falls `membership_end` null ist
+                            ? toLocalDate(gmh.getMembershipEnd())
+                            : NO_END_DATE; // Falls `membership_end` null ist
 
                     // Prüfen, ob der Monat innerhalb des Mitgliedschaftszeitraums liegt
                     LocalDate firstOfMonth = LocalDate.of(year, month, 1);
@@ -362,4 +360,13 @@ public class SpendingsOverviewService {
                 .anyMatch(gmh -> gmh.getMembershipEnd() == null);
     }
 
+    private String handleUserName(Long userId, Long groupId) throws UserNotFoundException {
+        var userName = dataLoaderService.loadUser(userId).getName();
+
+        if (userIsCurrentlyMember(userId, groupId)) {
+            return userName;
+        } else {
+            return String.format("%s %s",userName, UserEnum.USER_REMOVED.getName());
+        }
+    }
 }

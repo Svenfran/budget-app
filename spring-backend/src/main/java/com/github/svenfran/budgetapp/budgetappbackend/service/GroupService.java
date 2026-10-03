@@ -3,6 +3,7 @@ package com.github.svenfran.budgetapp.budgetappbackend.service;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.*;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.*;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
+import com.github.svenfran.budgetapp.budgetappbackend.helper.Translator;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.*;
 import com.github.svenfran.budgetapp.budgetappbackend.service.mapper.GroupDtoMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -54,6 +55,9 @@ public class GroupService {
     @Autowired
     private CartTemplateRepository cartTemplateRepository;
 
+    @Autowired
+    private Translator translator;
+
 
     public Stream<Group> getGroupsByMemberOrOwner() throws UserNotFoundException {
         var user = dataLoaderService.getAuthenticatedUser();
@@ -99,7 +103,7 @@ public class GroupService {
     }
 
     @Transactional
-    public GroupMembersDto addMemberToGroup(AddGroupMemberDto addGroupMemberDto) throws GroupNotFoundException, UserNotFoundException, NotOwnerOfGroupException, MemberAlreadyExixtsException, MemberEqualsOwnerException {
+    public GroupMembersDto addMemberToGroup(AddGroupMemberDto addGroupMemberDto) throws GroupNotFoundException, UserNotFoundException, NotOwnerOfGroupException, MemberAlreadyExistsException, MemberEqualsOwnerException {
         var user = dataLoaderService.getAuthenticatedUser();
         var newMember = dataLoaderService.loadUserByEmail(addGroupMemberDto.getNewMemberEmail().trim());
         verificationService.verifyUserExists(newMember);
@@ -182,11 +186,18 @@ public class GroupService {
 
     private void createDefaultCategories(Group group) {
         var defaultCategories = new String[]{
-                "Ausgehen", "Ausgleichszahlung", "Geschenke", "Lebensmittel",
-                "Restaurant", "Wohnung", "Sonstiges"};
+                "categories.default.go_out",
+                "categories.default.settlement",
+                "categories.default.gifts",
+                "categories.default.grocery",
+                "categories.default.restaurant",
+                "categories.default.home",
+                "categories.default.misc"
+        };
+
         for (String categoryName : defaultCategories) {
             var category = new Category();
-            category.setName(categoryName);
+            category.setName(translator.translate(categoryName));
             category.setGroup(group);
             categoryRepository.save(category);
         }
@@ -195,7 +206,7 @@ public class GroupService {
     @Transactional
     public void createDefaultGroup(User user) {
         var groupDto = new GroupDto();
-        groupDto.setName("Meine Ausgaben");
+        groupDto.setName(translator.translate("group.default.name"));
         var group = groupRepository.save(groupDtoMapper.GroupDtoToEntity(groupDto, user));
         createDefaultCategories(group);
         groupMembershipHistoryService.startGroupMembershipForOwner(user, group);
@@ -203,12 +214,8 @@ public class GroupService {
 
     public void setIsDeletedForCart(Group group, User member, boolean delete) {
         var cartsOfMember = cartRepository.findCartsByGroupAndUser(group, member);
-        if (delete && (!cartsOfMember.isEmpty())) {
-            cartsOfMember.forEach(cart -> cart.setDeleted(true));
-            cartRepository.saveAll(cartsOfMember);
-        }
-        if (!delete && (!cartsOfMember.isEmpty())) {
-            cartsOfMember.forEach(cart -> cart.setDeleted(false));
+        if (!cartsOfMember.isEmpty()) {
+            cartsOfMember.forEach(cart -> cart.setDeleted(delete));
             cartRepository.saveAll(cartsOfMember);
         }
     }
