@@ -1,0 +1,84 @@
+.icon-eye-btn {
+    height: 100%;
+    font-size: 1rem;
+}
+
+ion-list {
+    margin-bottom: 12px;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+h3 {
+    margin: 2.5rem auto;
+}
+
+/* Button kompakter & modern */
+.language-button {
+  width: fit-content;
+  margin: 1.5rem auto;
+  background: var(--ion-color-light);
+  border-radius: 8px;
+  padding: 0 8px;
+  color: var(--ion-color-dark);
+  text-transform: none;
+}
+
+/* Popover Container */
+ion-popover::part(content) {
+  background: var(--ion-color-light);
+  border-radius: 8px;
+  min-width: 200px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  padding: 0;
+}
+
+/* Liste im Popover */
+.language-list {
+  padding: 0;
+  background: transparent;
+}
+
+/* Items */
+.language-list ion-item {
+  --background: transparent;
+  --inner-padding-start: 12px;
+  --inner-padding-end: 12px;
+  --min-height: 44px;
+  font-size: 14px;
+  // color: #fff;
+  color: var(--ion-color-dark);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.2s ease;
+}
+
+/* Hover-Effekt */
+.language-list ion-item:hover {
+  --background: var(--ion-color-light);
+}
+
+/* Aktives Element */
+.language-list ion-item.active {
+  --background: var(--ion-color-primary);
+  color: var(--ion-color-dark);
+}
+
+/* Flagge */
+.language-list .flag {
+  font-size: 20px;
+  line-height: 1;
+  padding-right: 0.5rem;
+}
+
+/* Sprache */
+.language-list .label {
+  flex: 1;
+}
+
+/* Code (z.B. DE) */
+.language-list .code {
+  opacity: 0.7;
+  font-size: 12px;
+}

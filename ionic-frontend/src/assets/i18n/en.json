@@ -1,0 +1,419 @@
+{
+    "global": {
+        "errors": {
+            "required": "Mandatory field!",
+            "invalid_amount": "Separate decimal numbers with a dot: ##.##",
+            "invalid_date": "Note the date format: dd.MM.yyyy"
+        },
+        "selections": {
+            "btn_ok": "OK",
+            "btn_cancel": "Cancel"
+        },
+        "date_picker": {
+            "btn_ok": "Save",
+            "btn_cancel": "Cancel",
+            "btn_reset": "Reset"
+        },
+        "user": {
+            "deleted": "User deleted",
+            "removed": "User removed"
+        },
+        "language": "Language"
+    },
+    "navigation": {
+        "welcome": "Hi {{name}}!",
+        "title": "Nice to see you 😊",
+        "group": "Group:",
+        "groups": {
+            "header": "GROUPS",
+            "all": "My Groups",
+            "edit": "Edit Groups",
+            "create": "Add Group",
+            "no_groups": "No Groups available."
+        },
+        "categories": {
+            "header": "CATEGORIES",
+            "edit": "Edit Categories",
+            "create": "Add Category"
+        },
+        "settings": {
+            "header": "SETTINGS",
+            "edit_profile": "Edit User Profil",
+            "dark_mode": "Dark mode",
+            "language": "Language"
+        }
+    },
+    "domains": {
+        "overview": {
+            "title": "Overview",
+            "total": "Total:",
+            "segment": {
+                "yearly": "Yearly",
+                "monthly": "Monthly",
+                "spendings_yearly": "Yearly expenses",
+                "spendings_monthly": "Monthly expenses",
+                "no_spendings_yearly": "No expenses available!",
+                "no_spendings_monthly": "No expenses available for the current year!"
+            }
+        },
+        "spendings": {
+            "title": "Expenses",
+            "total": "Total",
+            "download": "Download",
+            "settlement": "Repayment",
+            "filter": "Filter",
+            "no_spendings": "No expenses available!",
+            "toast": {
+                "message": "Download successfull."
+            },
+            "overlay": {
+                "settlementpayment": {
+                    "title": "Repayment",
+                    "amount": "Amount in €*",
+                    "to_member": "To member*",
+                    "date": "Date*",
+                    "btn_cancel": "Cancel",
+                    "no_members": "No members available"
+                },
+                "filter": {
+                    "header": "Filter",
+                    "title": "Title",
+                    "description": "Description",
+                    "placeholder_category": "Category",
+                    "placeholder_cart_owner": "Creator",
+                    "date_from": "Date from",
+                    "date_to": "Date to",
+                    "btn_reset": "Reset",
+                    "btn_cancel": "Cancel"
+                }
+            }
+        },
+        "shoppinglists": {
+            "title": "Shopping Lists",
+            "no_shoppinglists": "No shopping lists available!",
+            "delete_completed": "Delete completed",
+            "item_placeholder": "Add a new item"
+        }
+    },
+    "alerts": {
+        "group": {
+            "new": {
+                "header": "New group:",
+                "cancel": "Cancel",
+                "ok": "OK",
+                "loading": "Create Group...",
+                "placeholder": "Group name"
+            },
+            "edit": {
+                "header": "Group name:",
+                "cancel": "Cancel",
+                "ok": "OK",
+                "loading": "Update group..."
+            },
+            "delete": {
+                "header": "Delete group:",
+                "message": "Do you really want to delete the group \"{{groupName}}\" including all expenses and categories?",
+                "cancel": "No",
+                "ok": "Yes",
+                "loading": "Delete group..."
+            },
+            "add_member": {
+                "header": "Add member:",
+                "cancel": "Cancel",
+                "ok": "OK",
+                "loading": "Add member...",
+                "placeholder": "E-mail address",
+                "error_message_page": {
+                    "header": "Incorrect e-mail address!",
+                    "message": "Please enter a valid e-mail address."
+                },
+                "error_message_service": {
+                    "message_success": "User has been added to the group.",
+                    "message_no_exists": "User does not exist.",
+                    "message_already_member": "The user is already a member of the group.",
+                    "message_admin_is_member": "New member and group admin are identical.",
+                    "message_default": "An error occurred while adding the member. Please try again."
+                }
+            },
+            "remove_member": {
+                "header": "Remove member:",
+                "message": "Do you really want to remove the member \"{{memberName}}\" from the group \"{{group}}\" including all saved expenses?",
+                "cancel": "No",
+                "ok": "Yes"
+            }
+        },
+        "category": {
+            "new": {
+                "header": "New category:",
+                "cancel": "Cancel",
+                "ok": "OK",
+                "loading": "Create Category...",
+                "placeholder": "Category name"
+            },
+            "edit": {
+                "header": "Edit category:",
+                "cancel": "Cancel",
+                "ok": "OK",
+                "loading": "Update category..."
+            },
+            "delete": {
+                "header": "Delete category:",
+                "message": "Do you really want to delete the category \"{{categoryName}}\"?",
+                "cancel": "No",
+                "ok": "Yes",
+                "loading": "Delete category...",
+                "error_message_service": {
+                    "header": "Category cannot be deleted!",
+                    "message": "The category \"{{categoryName}}\" is still in use. Please assign all expenses to another category before deleting it."
+                }
+            }
+        },
+        "cart": {
+            "delete": {
+                "header": "Delete:",
+                "message": "Do you really want to delete the purchase \"{{cartTitle}}\"?",
+                "cancel": "No",
+                "ok": "Yes",
+                "loading": "Delete purchase..."
+            },
+            "invalid_membership": {
+                "header": "Date not in the period of membership",
+                "message_new_edit": "You were not a member of the group at the time selected. Please choose another date.",
+                "message_settlementpayment": "The user \"{{userName}}\" was not a member of the group at the time selected. Please choose another date."
+            }
+        },
+        "forgot_password": {
+            "header": "Forgot your password?",
+            "message": "Enter your e-mail address to reset your password.",
+            "cancel": "Cancel",
+            "ok": "send",
+            "loading": "Reset password...",
+            "placeholder": "E-mail-address",
+            "error_message": {
+                "header": "Incorrect e-mail address!",
+                "message": "Please enter a valid e-mail address."
+            }
+        },
+        "reset_password": {
+            "success": {
+                "header": "Password reset",
+                "message": "We have sent an email with a temporary password to the email address \"{{email}}\". It is quite possible that the email has ended up in the spam folder. Please log in and change your password."
+            },
+            "error_invalid_email": {
+                "header": "Incorrect e-mail address!",
+                "message": "Please enter a valid e-mail address."
+            },
+            "error_email_not_exists": {
+                "header": "Incorrect e-mail address!",
+                "message": "A user with the e-mail address \"{{email}}\" does not exist."
+            }
+        },
+        "shoppinglist": {
+            "new": {
+                "header": "New shopping list:",
+                "cancel": "Cancel",
+                "ok": "OK",
+                "loading": "Create shopping list...",
+                "placeholder": "Shopping list name"
+            },
+            "delete": {
+                "header": "Delete shopping list:",
+                "message": "Do you really want to delete the shopping list \"{{listName}}\" including all items?",
+                "cancel": "No",
+                "ok": "Yes",
+                "loading": "Delete shopping list..."
+            },
+            "edit": {
+                "header": "Edit shopping list:",
+                "cancel": "Cancel",
+                "ok": "OK",
+                "loading": "Update shopping list..."
+            },
+            "item": {
+                "edit": {
+                    "header": "Edit list item:",
+                    "cancel": "Cancel",
+                    "ok": "OK",
+                    "loading": "Update list item..."
+                }
+            }
+        },
+        "user_profile": {
+            "change_username": {
+                "header": "Change username:",
+                "cancel": "Cancel",
+                "ok": "OK",
+                "loading": "Update username...",
+                "placeholder": "Username",
+                "error_message_page": {
+                    "header": "Incorrect username!",
+                    "message": "The username must not be empty."
+                },
+                "error_message_service": {
+                    "exists": {
+                        "header": "Username already taken!",
+                        "message": "The username \"{{userName}}\" is already taken. Please choose another one."
+                    },
+                    "not_allowed": {
+                        "header": "Username not allowed!",
+                        "message": "The username \"{{userName}}\" is not allowed. Please choose another one."
+                    }
+                }
+            },
+            "change_email": {
+                "header": "Change e-mail address:",
+                "cancel": "Cancel",
+                "ok": "OK",
+                "loading": "Update e-mail address...",
+                "placeholder": "E-mail address",
+                "error_message_page": {
+                    "header": "Incorrect e-mail address!",
+                    "message": "Please enter a valid e-mail address."
+                },
+                "error_message_service": {
+                    "header": "Incorrect e-mail address!",
+                    "message": "Please enter a valid e-mail address."
+                }
+            },
+            "delete_profile": {
+                "header": "Delete profile:",
+                "message": "Do you really want to delete your profile including all groups and expenses?",
+                "cancel": "No",
+                "ok": "Yes",
+                "loading": "Delete Profile..."
+            },
+            "change_password": {
+                "loading": "Change password...",
+                "error_message_page": {
+                    "header": "Incorrect password!",
+                    "message": "The new password could not be confirmed. Please try again."
+                },
+                "error_message_service": {
+                    "header": "Incorrect current password!",
+                    "message": "The password you entered is not correct. Please try again."
+                }
+            }
+        },
+        "authenticate": {
+            "loading": "Logging in...",
+            "message": "Login successfully!",
+            "error_messages": {
+                "header_login": "Login failed",
+                "header_register": "Registration failed",
+                "message": "Password or e-mail incorrect.",
+                "message_email_exists": "The e-mail address is already taken.",
+                "message_username_exists": "The username is already taken."
+            }
+        },
+        "server_unavailable": {
+            "header": "An error has occurred",
+            "message": "The server is currently not available. Please try again in a few minutes.",
+            "btn_cancel": "Cancel",
+            "btn_ok": "OK"
+        }
+    },
+    "login": {
+        "text_login": "Login",
+        "text_register": "Register",
+        "form": {
+            "username": "Username",
+            "email": "E-Mail",
+            "password": "Password",
+            "error_messages": {
+                "invalid_username_length": "At least 3 characters required",
+                "invalid_email": "No valid e-mail address",
+                "invalid_password_length": "At least 6 characters required",
+                "invalid_password_whitespace": "The password must not contain any white spaces"
+            }
+        },
+        "buttons": {
+            "forgot_password": "Forgot Password?"
+        }
+    },
+    "user_profile": {
+        "title": "Edit profile",
+        "header": "MY PROFILE",
+        "label_change_pw": "Change password",
+        "label_delete_profile": "Delete profile"
+    },
+    "password_change": {
+        "title": "Change password",
+        "form": {
+            "current_password": "Current password",
+            "new_password": "New password",
+            "confirm_new_password": "Confirm new password",
+            "error_messages": {
+                "invalid_password_length": "At least 6 characters required",
+                "invalid_password_whitespace": "The password must not contain any spaces"
+            }
+        },
+        "buttons": {
+            "change_password": "Change password"
+        }
+    },
+    "categories": {
+        "title": "Edit categories",
+        "header": "GROUP:",
+        "subheader": "Categories",
+        "empty": "No categories available!"
+    },
+    "groups": {
+        "title": "Edit groups",
+        "header": "MY GROUPS",
+        "empty": "No groups available!",
+        "group": {
+            "members": "Members:"
+        },
+        "group_members": {
+            "title": "Group members",
+            "change_admin": "Change group admin",
+            "no_members": "No members available!"
+        }
+    },
+    "carts": {
+        "title_add": "Add purchase",
+        "title_edit": "Edit purchase",
+        "form": {
+            "title": "Title*",
+            "amount": "Amount in €*",
+            "description": "Description",
+            "date_purchased": "Date*",
+            "category": "Category*",
+            "recurrence": "Repeat purchase?",
+            "recurrence_messages": {
+                "text_info": "Purchases are not created in the past. The next execution date is always in the future and is calculated from the purchase date specified above.",
+                "next_execution": "Next execution on:",
+                "apply_changes": "Apply changes to all future purchases",
+                "apply_changes_info": "The change to the interval type automatically applies to all future purchases, even without selecting the checkbox."
+            }
+        },
+        "loading_add": "Add purchase...",
+        "loading_update": "Update purchase...",
+        "recurrence_types": {
+            "daily": "Daily",
+            "weekly": "Weekly",
+            "monthly": "Monthly",
+            "yearly": "Yearly",
+            "none": "No repetition"
+        }
+    },
+    "error_pages": {
+        "no_group": {
+            "title": "Oops! No groups available",
+            "message": "Add a new group to get started.",
+            "btn_text": "Create group",
+            "footer": {
+                "link_profile": "Profile",
+                "exit_app": "Exit"
+            }
+        },
+        "server_unreachable": {
+            "title": "Server unavailable!",
+            "message": "Please try again later.",
+            "btn_text": "Reload",
+            "footer": {
+                "exit_app": "Exit"
+            }
+        }
+    }
+}

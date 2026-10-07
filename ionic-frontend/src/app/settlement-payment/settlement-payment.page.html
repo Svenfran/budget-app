@@ -1,0 +1,134 @@
+<ion-content>
+  <ion-toolbar>
+    <ion-title>{{ 'domains.spendings.overlay.settlementpayment.title' | translate }}</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="onDismiss()" [disabled]="!form.valid">
+        <ion-icon name="checkmark-outline" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+
+  <div *ngIf="groupMembers().members.length > 0">
+    <form [formGroup]="form">
+      <ion-list>
+        <ion-grid>
+          <ion-row>
+            <ion-col size-sm="6" offset-sm="3">
+              <ion-item>
+                <ion-label position="floating">{{ 'domains.spendings.overlay.settlementpayment.amount' | translate }}</ion-label>
+                <ion-input
+                  type="number"
+                  formControlName="amount">
+                </ion-input>
+              </ion-item>
+              <ion-item lines="none" *ngIf="amount?.invalid && (amount?.dirty || amount?.touched)">
+                <ion-label color="danger">
+                  <small *ngIf="amount?.errors?.['required']">{{ 'global.errors.required' | translate }}</small>
+                  <small *ngIf="amount?.errors?.['pattern']" class="text-danger">{{ 'global.errors.invalid_amount' | translate }}</small>
+                </ion-label>
+              </ion-item>
+            </ion-col>
+          </ion-row>
+          <ion-row>
+            <ion-col size-sm="6" offset-sm="3">
+              <ion-item>
+                <ion-label position="floating">{{ 'domains.spendings.overlay.settlementpayment.to_member' | translate }}</ion-label>
+                <ion-select
+                  type="text"
+                  formControlName="memberId"
+                  [okText]="'global.selections.btn_ok' | translate" 
+                  [cancelText]="'global.selections.btn_cancel' | translate">
+                  <ion-select-option *ngIf="user.id != groupMembers().ownerId" [value]="groupMembers().ownerId">
+                    {{ (groupMembers().ownerName.length > 10) ? (groupMembers().ownerName | slice:0:10) + '...' : groupMembers().ownerName}}
+                  </ion-select-option>
+                  <div *ngFor="let member of groupMembers().members">
+                    <ion-select-option *ngIf="user.id != member.id" [value]="member.id">
+                      {{ (member.userName.length > 10) ? (member.userName | slice:0:10) + '...' : member.userName}}
+                    </ion-select-option>
+                  </div>
+                </ion-select>
+              </ion-item>
+              <ion-item lines="none" *ngIf="memberId?.invalid && memberId?.dirty">
+                <ion-label color="danger"><small>{{ 'global.errors.required' | translate }}</small></ion-label>
+              </ion-item>
+            </ion-col>
+          </ion-row>
+          <ion-row>
+            <ion-col size-sm="6" offset-sm="3">
+              <ion-item id="open-date-picker">
+                <ion-label position="floating">{{ 'domains.spendings.overlay.settlementpayment.date' | translate }}</ion-label>
+                <ion-input
+                type="text"
+                placeholder="dd.MM.yyyy"
+                [value]="formattedString"
+                readonly
+                formControlName="datePurchased"
+                ></ion-input>
+              </ion-item>
+              <ion-modal trigger="open-date-picker">
+                <ng-template>
+                  <ion-content>
+                    <ion-datetime
+                      #datetime
+                      [locale]="currentLang()"
+                      size="cover"
+                      presentation="date"
+                      [isDateEnabled]="isDateSelectable"
+                      [min]="minDate"
+                      [max]="maxDate"
+                      [firstDayOfWeek]="1"
+                      [value]="dateValue"
+                      [preferWheel]="false"
+                      (ionChange)="dateChanged(datetime.value)"
+                      (ionCancel)="showPicker = false;">
+                      <ion-buttons slot="buttons">
+                        <ion-button color="primary" (click)="closeDatePicker()">{{ 'global.date_picker.btn_cancel' | translate }}</ion-button>
+                        <ion-button color="primary" (click)="select()">{{ 'global.date_picker.btn_ok' | translate }}</ion-button>
+                      </ion-buttons>
+                    </ion-datetime>
+                  </ion-content>
+                </ng-template>
+              </ion-modal>
+              <ion-item lines="none" *ngIf="datePurchased?.invalid && (datePurchased?.dirty || datePurchased?.touched)">
+                <ion-label color="danger">
+                  <small *ngIf="datePurchased?.errors?.['required']">{{ 'global.errors.required' | translate }}</small>
+                  <small *ngIf="datePurchased?.errors?.['pattern']">{{ 'global.errors.invalid_date' | translate }}</small>
+                </ion-label>
+              </ion-item>
+            </ion-col>
+          </ion-row>
+          <ion-row>
+            <ion-col>
+              <ion-toolbar>
+                <ion-buttons slot="end" >
+                  <ion-button (click)="close()" color="primary">{{ 'domains.spendings.overlay.settlementpayment.btn_cancel' | translate }}</ion-button>
+                </ion-buttons>
+              </ion-toolbar>
+            </ion-col>
+          </ion-row>
+        </ion-grid>
+      </ion-list>
+    </form>
+  </div>
+  <div *ngIf="groupMembers().members.length === 0">
+    <ion-list>
+      <ion-grid>
+        <ion-row>
+          <ion-col class="ion-text-center" size-sm="6" offset-sm="3">
+            <ion-text>{{ 'domains.spendings.overlay.settlementpayment.no_members' | translate }}</ion-text>
+          </ion-col>
+        </ion-row>
+        <ion-row>
+          <ion-col>
+            <ion-toolbar>
+              <ion-buttons slot="end" >
+                <ion-button (click)="close()" color="primary">{{ 'domains.spendings.overlay.settlementpayment.btn_cancel' | translate }}</ion-button>
+              </ion-buttons>
+            </ion-toolbar>
+          </ion-col>
+        </ion-row>
+      </ion-grid>
+    </ion-list>
+  </div>
+
+</ion-content>

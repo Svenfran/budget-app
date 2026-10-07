@@ -1,0 +1,31 @@
+.done {
+    text-decoration: line-through;
+    text-decoration-color: #D00000;
+    text-decoration-thickness: 2px;
+    color: #999;
+}
+
+ion-chip {
+    --background: var(--ion-color-light);
+    --color: var(--ion-color-medium);
+}
+
+.chip {
+    display: flex;
+    flex-flow: row-reverse;
+    padding-top: 1rem;
+}
+
+ion-item-sliding {
+    border-radius: 6px;
+}
+
+.bold {
+    font-weight: bold;
+}
+
+ion-list {
+    margin-bottom: 12px;
+    padding-top: 0;
+    padding-bottom: 0;
+}
