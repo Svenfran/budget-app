@@ -3,17 +3,19 @@
     <ion-buttons slot="start">
       <ion-menu-button menu="m1"></ion-menu-button>
     </ion-buttons>
-    <ion-title>Übersicht</ion-title>
-    <ion-buttons *ngIf="activeGroup.id !== null" slot="primary">
-      <ion-text *ngIf="loadedActiveGroup | async" class="ion-padding group-name" routerLink="/groupoverview"><small>{{ (activeGroup.name.length > 20)? (activeGroup.name | slice:0:20) + '...' : (activeGroup.name) }}</small></ion-text>
-      <ion-button id="popover-button" [class.hide]="availableYears.length <= 0">
+    <ion-title>{{ 'domains.overview.title' | translate }}</ion-title>
+    <ion-buttons slot="primary">
+      <ion-text class="ion-padding group-name" routerLink="/groupoverview">
+        <small>{{ getShortGroupName(activeGroup.name) }}</small>
+      </ion-text>
+      <ion-button id="popover-button" [class.hide]="availableYears().length === 0">
         <ion-icon name="ellipsis-vertical"></ion-icon>
       </ion-button>
       <ion-popover trigger="popover-button" [dismissOnSelect]="true" side="bottom" alignment="start">
         <ng-template>
           <ion-content>
             <ion-list lines="none">
-              <ion-item *ngFor="let year of availableYears" size="small" [button]="true" [detail]="false" (click)="getSpendingsOverview(year)">{{year}}</ion-item>
+              <ion-item *ngFor="let year of availableYears()" size="small" [button]="true" [detail]="false" (click)="getSpendingsOverview(year)">{{year}}</ion-item>
             </ion-list>
           </ion-content>
         </ng-template>
@@ -22,165 +24,277 @@
   </ion-toolbar>
 </ion-header>
 
-<ion-content *ngIf="activeGroup.id === null">
-  <ion-grid class="ion-padding center-text">
-    <ion-row>
-      <ion-col class="ion-text-center" size-md="6" offset-md="3">
-        <p>{{activeGroup.name}}</p>
-        <ion-button (click)="onCreateGroup()" color="primary" size="small">Gruppe erstellen</ion-button>
-      </ion-col>
-    </ion-row>
-  </ion-grid>  
-</ion-content>
+<ion-content>
+  <ion-refresher slot="fixed" (ionRefresh)="refreshSpendings($event)">
+    <ion-refresher-content></ion-refresher-content>
+  </ion-refresher>
 
-
-<ion-content *ngIf="activeGroup.id !== null">
-<div *ngIf="loadedSpendings | async">
-  <ion-segment [(ngModel)]="segment" (ionChange)="onFilterUpdate($event)">
+  <ion-segment [(ngModel)]="segment">
     <ion-segment-button value="year">
-      <ion-label>jährlich</ion-label>
+      <ion-label>{{ 'domains.overview.segment.yearly' | translate }}</ion-label>
     </ion-segment-button>
     <ion-segment-button value="month">
-      <ion-label>monatlich</ion-label>
+      <ion-label>{{ 'domains.overview.segment.monthly' | translate }}</ion-label>
     </ion-segment-button>
   </ion-segment>
-  <!-- <ion-text *ngIf="loadedActiveGroup | async" class="ion-padding group-name"><small>{{ (activeGroup.name.length > 50)? (activeGroup.name | slice:0:50) + '...' : (activeGroup.name) }}</small></ion-text> -->
+
   <ion-grid class="ion-padding">
     <ion-row>
       <ion-col class="ion-text-center" size-md="6" offset-md="3" *ngIf="isLoading">
         <ion-spinner color="primary"></ion-spinner>
       </ion-col>
-      <ion-col class="ion-text-center" size-md="6" offset-md="3" *ngIf="!isLoading && segment == 'month' && (!spendingsPerMonth || spendingsPerMonth.length <= 0)">
-        <p>Keine Ausgaben vorhanden <br> für das aktuelle Jahr!</p>
+      <ion-col class="ion-text-center" size-md="6" offset-md="3" *ngIf="!isLoading && segment == 'year' && (!spendingsPerYear() || spendingsPerYear()?.length === 0)">
+        <p>{{ 'domains.overview.segment.no_spendings_yearly' | translate }}</p>
       </ion-col>
-      <ion-col class="ion-text-center" size-md="6" offset-md="3" *ngIf="!isLoading && segment == 'year' && (!spendingsPerYear || spendingsPerYear.length <= 0)">
-        <p>Keine Ausgaben vorhanden!</p>
+      <ion-col class="ion-text-center ion-text-wrap" size-md="6" offset-md="3" *ngIf="!isLoading && segment == 'month' && (!spendingsPerMonth() || spendingsPerMonth()?.length === 0)">
+        <p>{{ 'domains.overview.segment.no_spendings_monthly' | translate }}</p>
       </ion-col>
     </ion-row>
+
+    <!-- overview of total spendings (per year & for all years) -->
     <ion-row>
-      <!-- overview of total spendings (per year & for all years) -->
-      <ion-col size-md="6" offset-md="3" *ngIf="!isLoading && spendingsTotalYear.spendingsTotalUser && spendingsTotalYear.spendingsTotalUser.length > 0">
-        <ion-list *ngIf="!isLoading && spendingsTotalYear.spendingsTotalUser.length > 0">
+      <ion-col size-md="6" offset-md="3" *ngIf="!isLoading && (segment === 'year' ? spendingsTotalYearYearly().spendingsTotalUser.length : spendingsTotalYearMonthly().spendingsTotalUser.length) > 0">
+        <ion-list *ngIf="!isLoading && (segment === 'year' ? spendingsTotalYearYearly().spendingsTotalUser.length : spendingsTotalYearMonthly().spendingsTotalUser.length) > 0">
           <ion-item lines="none">
-            <ion-label>
 
+            <ion-label>
               <div class="spendings-details">
                 <div class="spendings-date">
-                  <ion-text *ngIf="segment == 'month'" class="month">{{ spendingsPerMonth[spendingsPerMonth.length - 1].monthName }} - {{ spendingsPerMonth[0].monthName }}</ion-text>
-                  <ion-text *ngIf="segment == 'month'">{{ year }}</ion-text>
-                  <ion-text *ngIf="segment == 'year'" class="month">{{ spendingsPerYear[spendingsPerYear.length - 1].year }} - {{ spendingsPerYear[0].year }}</ion-text>
+                  <ion-text class="month" *ngIf="segment == 'month' && spendingsPerMonth()?.length">
+                    {{ spendingsPerMonth()![spendingsPerMonth()!.length - 1].month | monthName }} - {{ spendingsPerMonth()![0].month | monthName }}
+                  </ion-text>
+                  
+                  <ion-text *ngIf="segment == 'month'">
+                    {{ year() }}
+                  </ion-text>
+                  
+                  <ion-text class="month" *ngIf="segment == 'year' && spendingsPerYear()?.length">
+                    {{ spendingsPerYear()![spendingsPerYear()!.length - 1].year }} - {{ spendingsPerYear()![0].year }}
+                  </ion-text>
                 </div>
 
-                <div class="spendings-user-details" *ngFor="let userSpendings of spendingsTotalYear.spendingsTotalUser">
-                  <div [class.spendings-user-amount-single]="spendingsTotalYear.spendingsTotalUser.length <= 1" 
-                       [class.spendings-user-amount]="spendingsTotalYear.spendingsTotalUser.length > 1">
+                <div class="spendings-user-details" *ngFor="let userSpendings of spendingsUsers">
+                  <div [ngClass]="{
+                        'spendings-user-amount-single': spendingsUsers.length <= 1,
+                        'spendings-user-amount': spendingsUsers.length > 1
+                      }">
                     <div class="space">
-                      <ion-text color="medium">{{ (userSpendings.userName.length > 8) ? (userSpendings.userName | slice:0:8) + '...' : (userSpendings.userName) }}</ion-text>
-                      <ion-text>{{ userSpendings.sum | scientificCurrency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
+                      <!-- Überprüfung, ob der Benutzer gelöscht/entfernt ist -->
+                      <ng-container *ngIf="!isDeletedUser(userSpendings.userName); else deletedUser">
+                        <ion-text [attr.color]="userSpendings.userName === user?.name ? 'primary' : 'medium'">
+                          {{ getShortUserName(userSpendings.userName) }}
+                        </ion-text>
+                        <ion-text>
+                          {{ userSpendings.sum | scientificCurrency }}
+                        </ion-text>
+                      </ng-container>
+                      
+                      <!-- Template für gelöschte/entfernte Benutzer -->
+                      <ng-template #deletedUser>
+                        <ion-text color="medium">
+                          <em>{{ getShortUserName(userSpendings.userName) }}</em>
+                        </ion-text>
+                        <ion-text color="medium">
+                          <em>{{ userSpendings.sum | scientificCurrency }}</em>
+                        </ion-text>
+                      </ng-template>
                     </div>
                   </div>
-                  <div *ngIf="spendingsTotalYear.spendingsTotalUser.length > 1" class="spendings-user-diff">
-                    <ion-text *ngIf="userSpendings.diff >= 0" color="primary" class="bold">{{ userSpendings.diff | scientificCurrency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
-                    <ion-text *ngIf="userSpendings.diff < 0" color="danger" class="bold">{{ userSpendings.diff | scientificCurrency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
+                
+                  <!-- Differenz-Anzeige -->
+                  <div *ngIf="spendingsUsers.length > 1" class="spendings-user-diff">
+                    <ng-container *ngIf="!isDeletedUser(userSpendings.userName); else deletedDiff">
+                      <ion-text [attr.color]="userSpendings.diff >= 0 ? 'primary' : 'danger'" class="bold">
+                        {{ userSpendings.diff | scientificCurrency }}
+                      </ion-text>
+                    </ng-container>
+                
+                    <!-- Template für Differenzen bei gelöschten Nutzern -->
+                    <ng-template #deletedDiff>
+                      <ion-text color="medium">
+                        <em>{{ userSpendings.diff | scientificCurrency }}</em>
+                      </ion-text>
+                    </ng-template>
                   </div>
                 </div>
-
-                <div *ngIf="spendingsTotalYear.spendingsTotalUser.length > 1" class="spendings-total">
-                  <ion-text class="bold" color="medium">Gesamt:</ion-text>
-                  <ion-text class="bold">{{ spendingsTotalYear.sumTotalYear | scientificCurrency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
+                
+      
+                <div *ngIf="(segment === 'year' ? spendingsTotalYearYearly().spendingsTotalUser.length : spendingsTotalYearMonthly().spendingsTotalUser.length) > 1" class="spendings-total">
+                  <ion-text class="bold" color="medium">{{ 'domains.overview.total' | translate }}</ion-text>
+                  <ion-text class="bold">
+                    {{ (segment === 'year' ? spendingsTotalYearYearly().sumTotalYear : spendingsTotalYearMonthly().sumTotalYear)  | scientificCurrency }}
+                  </ion-text>
                 </div>
               </div>
-
             </ion-label>
+
           </ion-item>
         </ion-list>
       </ion-col>
     </ion-row>
+
     <ion-row>
-      <!-- monthly overview -->
-      <ion-col size-md="6" offset-md="3" *ngIf="segment == 'month' && !isLoading && spendingsPerMonth && spendingsPerMonth.length > 0">
-        <ion-list *ngIf="!isLoading && spendingsPerMonth.length > 0">
+      <!-- yearly and monthly overview -->
+      <ion-col 
+        size-md="6" 
+        offset-md="3" 
+        *ngIf="!isLoading && ((segment === 'year' && spendingsPerYear().length > 0) || (segment === 'month' && spendingsPerMonth().length > 0))"
+      >
+        <ion-list *ngIf="!isLoading && ((segment === 'year' && spendingsPerYear().length > 0) || (segment === 'month' && spendingsPerMonth().length > 0))">
+          
           <ion-list-header (click)="hide()">
-            <ion-text *ngIf="segment == 'month'" class="space-right">Monatliche Ausgaben</ion-text>
+            <ion-text class="space-right">
+              {{ (segment === 'year' ? 'domains.overview.segment.spendings_yearly' : 'domains.overview.segment.spendings_monthly') | translate }}
+            </ion-text>
             <ion-icon *ngIf="hidden" name="chevron-down-outline"></ion-icon>
             <ion-icon *ngIf="!hidden" name="chevron-up-outline"></ion-icon>
           </ion-list-header>
-          <ion-item [hidden]="hidden" *ngFor="let spendings of spendingsPerMonth">
-            <ion-label>
 
-              <div class="spendings-details">
-                <div class="spendings-date">
-                  <ion-text class="month">{{ spendings.monthName }}</ion-text>
-                  <ion-text>{{ year }}</ion-text>
-                </div>
+          <!-- jährliche Ausgaben -->
+          <div *ngIf="segment === 'year'">
+            <ion-item [hidden]="hidden" *ngFor="let spendings of spendingsPerYear()">
+              <ion-label>
+                <div class="spendings-details">
+                  <div class="spendings-date">
+                    <ion-text class="month">
+                      {{ spendings.year }}
+                    </ion-text>
+                  </div>
 
-                <div class="spendings-user-details" *ngFor="let userSpendings of spendings.spendingsMonthlyUser">
-                  <div [class.spendings-user-amount-single]="spendingsTotalYear.spendingsTotalUser.length <= 1"
-                       [class.spendings-user-amount]="spendingsTotalYear.spendingsTotalUser.length > 1">
-                    <div class="space">
-                      <ion-text color="medium">{{ (userSpendings.userName.length > 8) ? (userSpendings.userName | slice:0:8) + '...' : (userSpendings.userName) }}</ion-text>
-                      <ion-text>{{ userSpendings.sum | scientificCurrency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
+                  <div class="spendings-user-details" *ngFor="let userSpendings of spendings.spendingsYearlyUser">
+                    <div [ngClass]="{
+                          'spendings-user-amount-single': spendingsUsers.length <= 1,
+                          'spendings-user-amount': spendingsUsers.length > 1
+                        }">
+                      <div class="space">
+                        <!-- Überprüfung, ob der Benutzer gelöscht/entfernt ist -->
+                        <ng-container *ngIf="!isDeletedUser(userSpendings.userName); else deletedUser">
+                          <ion-text [attr.color]="userSpendings.userName === user?.name ? 'primary' : 'medium'">
+                            {{ getShortUserName(userSpendings.userName) }}
+                          </ion-text>
+                          <ion-text>
+                            {{ userSpendings.sum | scientificCurrency }}
+                          </ion-text>
+                        </ng-container>
+                        
+                        <!-- Template für gelöschte/entfernte Benutzer -->
+                        <ng-template #deletedUser>
+                          <ion-text color="medium">
+                            <em>{{ getShortUserName(userSpendings.userName) }}</em>
+                          </ion-text>
+                          <ion-text color="medium">
+                            <em>{{ userSpendings.sum | scientificCurrency }}</em>
+                          </ion-text>
+                        </ng-template>
+                      </div>
+                    </div>
+                  
+                    <!-- Differenz-Anzeige -->
+                    <div *ngIf="spendingsUsers.length > 1" class="spendings-user-diff">
+                      <ng-container *ngIf="!isDeletedUser(userSpendings.userName); else deletedDiff">
+                        <ion-text [attr.color]="userSpendings.diff >= 0 ? 'primary' : 'danger'" class="bold">
+                          {{ userSpendings.diff | scientificCurrency }}
+                        </ion-text>
+                      </ng-container>
+                  
+                      <!-- Template für Differenzen bei gelöschten Nutzern -->
+                      <ng-template #deletedDiff>
+                        <ion-text color="medium">
+                          <em>{{ userSpendings.diff | scientificCurrency }}</em>
+                        </ion-text>
+                      </ng-template>
                     </div>
                   </div>
-                  <div *ngIf="spendingsTotalYear.spendingsTotalUser.length > 1" class="spendings-user-diff">
-                    <ion-text *ngIf="userSpendings.diff >= 0" color="primary" class="bold">{{ userSpendings.diff | scientificCurrency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
-                    <ion-text *ngIf="userSpendings.diff < 0" color="danger" class="bold">{{ userSpendings.diff | scientificCurrency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
+  
+                  <div 
+                    *ngIf="spendingsTotalYearYearly().spendingsTotalUser.length > 1" 
+                    class="spendings-total"
+                  >
+                    <ion-text class="bold" color="medium">{{ 'domains.overview.total' | translate }}</ion-text>
+                    <ion-text class="bold">
+                      {{ spendings.sumTotalYear | scientificCurrency }}
+                    </ion-text>
                   </div>
                 </div>
+              </ion-label>
+            </ion-item>
+          </div>
 
-                <div *ngIf="spendingsTotalYear.spendingsTotalUser.length > 1" class="spendings-total">
-                  <ion-text class="bold" color="medium">Gesamt:</ion-text>
-                  <ion-text class="bold">{{ spendings.sumTotalMonth | scientificCurrency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
+           <!-- monatliche Ausgaben -->
+           <div *ngIf="segment === 'month'">
+            <ion-item [hidden]="hidden" *ngFor="let spendings of spendingsPerMonth()">
+              <ion-label>
+                <div class="spendings-details">
+                  <div class="spendings-date">
+                    <ion-text class="month">
+                      {{ spendings.month | monthName }}
+                    </ion-text>
+                  </div>
+
+                  <div class="spendings-user-details" *ngFor="let userSpendings of spendings.spendingsMonthlyUser">
+                    <div [ngClass]="{
+                          'spendings-user-amount-single': spendingsUsers.length <= 1,
+                          'spendings-user-amount': spendingsUsers.length > 1
+                        }">
+                      <div class="space">
+                        <!-- Überprüfung, ob der Benutzer gelöscht/entfernt ist -->
+                        <ng-container *ngIf="!isDeletedUser(userSpendings.userName); else deletedUser">
+                          <ion-text [attr.color]="userSpendings.userName === user?.name ? 'primary' : 'medium'">
+                            {{ getShortUserName(userSpendings.userName) }}
+                          </ion-text>
+                          <ion-text>
+                            {{ userSpendings.sum | scientificCurrency }}
+                          </ion-text>
+                        </ng-container>
+                        
+                        <!-- Template für gelöschte/entfernte Benutzer -->
+                        <ng-template #deletedUser>
+                          <ion-text color="medium">
+                            <em>{{ getShortUserName(userSpendings.userName) }}</em>
+                          </ion-text>
+                          <ion-text color="medium">
+                            <em>{{ userSpendings.sum | scientificCurrency }}</em>
+                          </ion-text>
+                        </ng-template>
+                      </div>
+                    </div>
+                  
+                    <!-- Differenz-Anzeige -->
+                    <div *ngIf="spendingsUsers.length > 1" class="spendings-user-diff">
+                      <ng-container *ngIf="!isDeletedUser(userSpendings.userName); else deletedDiff">
+                        <ion-text [attr.color]="userSpendings.diff >= 0 ? 'primary' : 'danger'" class="bold">
+                          {{ userSpendings.diff | scientificCurrency }}
+                        </ion-text>
+                      </ng-container>
+                  
+                      <!-- Template für Differenzen bei gelöschten Nutzern -->
+                      <ng-template #deletedDiff>
+                        <ion-text color="medium">
+                          <em>{{ userSpendings.diff | scientificCurrency }}</em>
+                        </ion-text>
+                      </ng-template>
+                    </div>
+                  </div>
+  
+                  <div 
+                    *ngIf="spendingsTotalYearMonthly().spendingsTotalUser.length > 1" 
+                    class="spendings-total"
+                  >
+                    <ion-text class="bold" color="medium">{{ 'domains.overview.total' | translate }}</ion-text>
+                    <ion-text class="bold">
+                      {{ spendings.sumTotalMonth | scientificCurrency }}
+                    </ion-text>
+                  </div>
                 </div>
-              </div>
+              </ion-label>
+            </ion-item>
+          </div>
 
-            </ion-label>
-          </ion-item>
         </ion-list>
       </ion-col>
 
-      <!-- yearly overview -->
-      <ion-col size-md="6" offset-md="3" *ngIf="segment == 'year' && !isLoading && spendingsPerYear && spendingsPerYear.length > 0">
-        <ion-list *ngIf="!isLoading && spendingsPerYear.length > 0">
-          <ion-list-header (click)="hide()">
-            <ion-text *ngIf="segment == 'year'" class="space-right">Jährliche Ausgaben</ion-text>
-            <ion-icon *ngIf="hidden" name="chevron-down-outline"></ion-icon>
-            <ion-icon *ngIf="!hidden" name="chevron-up-outline"></ion-icon>
-          </ion-list-header>
-          <ion-item [hidden]="hidden" *ngFor="let spendings of spendingsPerYear">
-            <ion-label>
-
-              <div class="spendings-details">
-                <div class="spendings-date">
-                  <ion-text class="month">{{ spendings.year }}</ion-text>
-                </div>
-
-                <div class="spendings-user-details" *ngFor="let userSpendings of spendings.spendingsYearlyUser">
-                  <div [class.spendings-user-amount-single]="spendingsTotalYear.spendingsTotalUser.length <= 1"
-                       [class.spendings-user-amount]="spendingsTotalYear.spendingsTotalUser.length > 1">
-                    <div class="space">
-                      <ion-text color="medium">{{ (userSpendings.userName.length > 8) ? (userSpendings.userName | slice:0:8) + '...' : (userSpendings.userName) }}</ion-text>
-                      <ion-text>{{ userSpendings.sum | scientificCurrency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
-                    </div>
-                  </div>
-
-                  <div *ngIf="spendingsTotalYear.spendingsTotalUser.length > 1" class="spendings-user-diff">
-                    <ion-text *ngIf="userSpendings.diff >= 0" color="primary" class="bold">{{ userSpendings.diff | scientificCurrency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
-                    <ion-text *ngIf="userSpendings.diff < 0" color="danger" class="bold">{{ userSpendings.diff | scientificCurrency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
-                  </div>
-                </div>
-
-                <div *ngIf="spendingsTotalYear.spendingsTotalUser.length > 1" class="spendings-total">
-                  <ion-text class="bold" color="medium">Gesamt:</ion-text>
-                  <ion-text class="bold">{{ spendings.sumTotalYear | scientificCurrency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
-                </div>
-              </div>
-
-            </ion-label>
-          </ion-item>
-        </ion-list>
-      </ion-col>
     </ion-row>
+
   </ion-grid>
-</div>
+
 </ion-content>

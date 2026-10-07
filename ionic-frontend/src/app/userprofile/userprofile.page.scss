@@ -10,3 +10,14 @@ ion-item {
     margin-bottom: 12px;
     --inner-border-width: 0;
 }
+
+.menu-footer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 18px 0 22px 0;
+    ion-icon {
+        font-size: 1.5rem;
+    }
+}

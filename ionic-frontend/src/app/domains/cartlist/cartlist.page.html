@@ -3,16 +3,14 @@
     <ion-buttons slot="start">
       <ion-menu-button menu="m1"></ion-menu-button>
     </ion-buttons>
-    <ion-title>Ausgaben</ion-title>
-    
-    <ion-buttons *ngIf="loadedActiveGroup | async" slot="primary">
-      <div *ngIf="activeGroup.id !== null">
-        <ion-text class="ion-padding group-name" routerLink="/groupoverview"><small>{{ (activeGroup.name.length > 20)? (activeGroup.name | slice:0:20) + '...' : (activeGroup.name) }}</small></ion-text>
-      </div>
-      <ion-button *ngIf="activeGroup.id !== null" [routerLink]="['new-edit']">
+    <ion-title>{{ 'domains.spendings.title' | translate }}</ion-title>
+
+    <ion-buttons slot="primary">
+      <ion-text class="ion-padding group-name" routerLink="/groupoverview"><small>{{ (activeGroup.name.length > 20)? (activeGroup.name | slice:0:20) + '...' : (activeGroup.name) }}</small></ion-text>
+      <ion-button [routerLink]="['new-edit']">
         <ion-icon name="add" slot="icon-only"></ion-icon>
       </ion-button>
-      <ion-button *ngIf="activeGroup.id !== null" id="cartlist-popover-button">
+      <ion-button id="cartlist-popover-button">
         <ion-icon name="ellipsis-vertical"></ion-icon>
       </ion-button>
       <ion-popover trigger="cartlist-popover-button" [dismissOnSelect]="true" side="bottom" alignment="start">
@@ -21,16 +19,21 @@
             <ion-list lines="none">
               <ion-item size="small" [button]="true" [detail]="false" (click)="download()">
                 <ion-icon class="pop-icon" name="download-outline" slot="start"></ion-icon>
-                <ion-label>Download</ion-label>
+                <ion-label>{{ 'domains.spendings.download' | translate }}</ion-label>
               </ion-item>
               <ion-item size="small" [button]="true" [detail]="false" (click)="settlementPayment()">
-                <ion-icon class="pop-icon" name="repeat-outline" slot="start"></ion-icon>
-                <ion-label>Ausgleichszahlung</ion-label>
+                <ion-icon class="pop-icon" name="swap-horizontal-outline" slot="start"></ion-icon>
+                <ion-label>{{ 'domains.spendings.settlement' | translate }}</ion-label>
               </ion-item>
               <ion-item size="small" [button]="true" [detail]="false" (click)="filterModal()">
                 <ion-icon class="pop-icon" name="filter-circle-outline" slot="start"></ion-icon>
-                <ion-label>Filter</ion-label>
+                <ion-label>{{ 'domains.spendings.filter' | translate }}</ion-label>
               </ion-item>
+              <!-- <ion-item size="small" [button]="true" [detail]="false" (click)="toggleCartVisability()">
+                <ion-icon *ngIf="!cartVisible" class="pop-icon" name="chevron-expand-outline" slot="start"></ion-icon>
+                <ion-icon *ngIf="cartVisible" class="pop-icon" name="chevron-collapse-outline" slot="start"></ion-icon>
+                <ion-label>gelöschte Einkäufe {{ cartVisible ? 'ausblenden' : 'einblenden' }}</ion-label>
+              </ion-item> -->
             </ion-list>
           </ion-content>
         </ng-template>
@@ -39,77 +42,87 @@
   </ion-toolbar>
 </ion-header>
 
-<div *ngIf="activeGroup.id !== null">
-  <ion-list-header color="light">
-    <ion-label>
-      <div class="total">
-        <ion-text>{{ filterTerm == "" ? "Gesamt" : (filterTerm.length > 12 ? (filterTerm | slice:0:12) + '...' : (filterTerm))  }} ({{ count }})</ion-text>
-          <ion-chip color="primary" *ngIf="filterMode">
-            <ion-label (click)="filterModal()">filter</ion-label>
-            <ion-icon name="close" (click)="deleteFilter(activeGroup.id)"></ion-icon>
-          </ion-chip>
-        <ion-text>{{ sum | scientificCurrency: 'EUR': number: '1.2-2': 'de' }}</ion-text>
-      </div>
-    </ion-label>
-  </ion-list-header>
-</div>
+<ion-list-header color="light">
+  <ion-label>
+    <div class="total">
+      <ion-text>{{ (filterTerm() == "" ? 'domains.spendings.total' : (filterTerm().length > 10 ? (filterTerm() | slice:0:10) + '...' : (filterTerm()))) | translate  }} ({{ count() }})</ion-text>
+        <ion-chip color="primary" *ngIf="filterMode()">
+          <ion-label (click)="filterModal()">filter</ion-label>
+          <ion-icon name="close" (click)="deleteFilter()"></ion-icon>
+        </ion-chip>
+        <!-- <ion-chip [attr.color]="filterMode() ? 'primary' : 'medium'">
+          <ion-label (click)="filterModal()">filter</ion-label>
+          <ion-icon *ngIf="filterMode()" name="close" (click)="deleteFilter()"></ion-icon>
+        </ion-chip> -->
+      <ion-text>{{ sum() | scientificCurrency }}</ion-text>
+    </div>
+  </ion-label>
+</ion-list-header>
 
-<ion-content *ngIf="activeGroup.id === null">
-  <ion-grid class="ion-padding center-text">
-    <ion-row>
-      <ion-col class="ion-text-center" size-md="6" offset-md="3">
-        <p>{{activeGroup.name}}</p>
-        <ion-button (click)="onCreateGroup()" color="primary" size="small">Gruppe erstellen</ion-button>
-      </ion-col>
-    </ion-row>
-  </ion-grid>  
-</ion-content>
-
-<ion-content *ngIf="activeGroup.id !== null">
-  <!-- <ion-text class="ion-padding group-name"><small>{{ (activeGroup.name.length > 50)? (activeGroup.name | slice:0:50) + '...' : (activeGroup.name) }}</small></ion-text> -->
+<ion-content>
+  <ion-refresher 
+      slot="fixed"
+      [disabled]="!isAtTop"
+      (ionRefresh)="refreshCartList($event)">
+    <ion-refresher-content></ion-refresher-content>
+  </ion-refresher>
   <ion-grid class="ion-padding">
     <ion-row>
       <ion-col class="ion-text-center" size-md="6" offset-md="3" *ngIf="isLoading">
         <ion-spinner color="primary"></ion-spinner>
       </ion-col>
-      <ion-col class="ion-text-center" size-md="6" offset-md="3" *ngIf="!isLoading && (!cartlist || cartlist.length <= 0)">
-        <p>Keine Ausgaben vorhanden!</p>
+      <ion-col class="ion-text-center" size-md="6" offset-md="3" *ngIf="!isLoading && cartList().length === 0">
+        <p>{{ 'domains.spendings.no_spendings' | translate }}</p>
       </ion-col>
     </ion-row>
     <ion-row>
-      <ion-col size-md="6" offset-md="3" *ngIf="!isLoading && cartlist && cartlist.length > 0">
-        <cdk-virtual-scroll-viewport itemSize="56" minBufferPx="900" maxBufferPx="1350">
-          <ion-list *ngIf="!isLoading && cartlist.length > 0">
-            <ion-item-sliding *cdkVirtualFor="let cart of cartlist, let i = index" #slidingItem>
-              <ion-item>
-                <ion-avatar slot="start" (click)="onFilterCategory(cart.categoryDto.name, cart.groupId)">
+      <ion-col size-md="6" offset-md="3" *ngIf="!isLoading && cartList() && cartList().length > 0">
+        <cdk-virtual-scroll-viewport 
+            itemSize="56" 
+            minBufferPx="900" 
+            maxBufferPx="1350"
+            (scrolledIndexChange)="onScrollChange()"
+            class="cart-scroll"
+            #viewport>
+          <ion-list *ngIf="!isLoading && cartList().length > 0">
+            <ion-item-sliding *cdkVirtualFor="let cart of cartList(), let i = index" #slidingItem>
+              <ion-item [lines]="i == cartList().length - 1 ? 'none' : 'inset'"  [disabled]="cart.deleted === true">
+                <ion-avatar slot="start" (click)="onFilter('category', cart.categoryDto.name)">
                   <div class="category-circle">
-                    <p *ngIf="cart.categoryDto.name != 'Ausgleichszahlung'">{{ cart.categoryDto.name.substring(0, 2) | uppercase }}</p>
-                    <ion-icon *ngIf="cart.categoryDto.name == 'Ausgleichszahlung'" name="repeat-outline" color="medium"></ion-icon>
-                    <!-- <p>{{ cart.userDto.userName.substring(0, 2) | uppercase }}</p> -->
+                    <p *ngIf="!isSettlementpayment(cart.categoryDto.name)">{{ cart.categoryDto.name.substring(0, 2) | uppercase }}</p>
+                    <ion-icon *ngIf="isSettlementpayment(cart.categoryDto.name)" name="swap-horizontal-outline" color="medium"></ion-icon>
                   </div>
                 </ion-avatar>
                 <ion-label>
                   <div class="cart-details">
                     <h2 (click)="toggleDescriptionVisibility(i)" class="titlestyle ion-text-wrap">{{ cart.title }}</h2>
-                    <h2>{{ cart.amount | scientificCurrency: 'EUR': number: '1.2-2': 'de' }}</h2>
+                    <h2>{{ cart.amount | scientificCurrency }}</h2>
                   </div>
-                  <p [hidden]="!isDescriptionVisible(i)" class="ion-text-wrap">{{cart.description}}</p>
+                  <p *ngIf="isDescriptionVisible(i)" class="ion-text-wrap">{{cart.description}}</p>
                   <div class="cart-details">
-                    <ion-text *ngIf="cart.userDto.userName !== userName" color="medium" (click)="onFilterUserName(cart.userDto.userName, cart.groupId)">{{ cart.userDto.userName }}</ion-text>
-                    <ion-text *ngIf="cart.userDto.userName === userName" color="primary" (click)="onFilterUserName(cart.userDto.userName, cart.groupId)"><strong>{{ cart.userDto.userName }}</strong></ion-text>
-                    <!-- <ion-text color="medium">{{ cart.categoryDto.name }}</ion-text> -->
+                    <div class="cart-repeat">
+                      <ion-text *ngIf="cart.userDto.userName !== user?.name && cart.deleted === false" (click)="onFilter('user', cart.userDto.userName)" color="medium" >
+                        {{ (cart.userDto.userName.length > 10) ? (cart.userDto.userName | slice:0:10) + '...' : cart.userDto.userName }}
+                      </ion-text>
+                      <ion-text *ngIf="cart.userDto.userName === user?.name && cart.deleted === false" (click)="onFilter('user', cart.userDto.userName)" color="primary" >
+                        <strong>{{ (cart.userDto.userName.length > 10) ? (cart.userDto.userName | slice:0:10) + '...' : cart.userDto.userName }}</strong>
+                      </ion-text>
+                      <ion-icon *ngIf="cart.recurrenceType !== 'NONE' && cart.hasActiveTemplate === true && cart.deleted === false" name="repeat" slot="icon-only" color="medium" title="wiederkehrend"></ion-icon>
+                      <ion-text *ngIf="cart.deleted === true" (click)="onFilter('user', cart.userDto.userName)" color="medium" >
+                        <em>{{ cart.userDto.userName.includes('DELETED') ? ('global.user.deleted' | translate) : cart.userDto.userName + getTranslationKey() }}</em>
+                      </ion-text>
+                    </div>
                     <div class="cart-name-date">
                       <ion-text color="medium">{{ cart.datePurchased | date: "dd.MM.yyyy" }}</ion-text>
                     </div>
                   </div>
                 </ion-label>
               </ion-item>
-              <ion-item-options *ngIf="cart.userDto.userName == userName">
+              <ion-item-options *ngIf="cart.userDto.userName == user?.name">
                 <ion-item-option color="secondary">
-                  <ion-icon name="create-outline" slot="icon-only" [routerLink]="['new-edit', cart.id]"></ion-icon>
+                  <ion-icon name="create-outline" slot="icon-only" (click)="editCart(cart, slidingItem)"></ion-icon>
                 </ion-item-option>
-                <ion-item-option color="secondary" (click)="onDelete(cart.id, cart.title, slidingItem)">
+                <ion-item-option (click)="onDeleteCart(cart, slidingItem)" color="secondary">
                   <ion-icon name="trash-outline" slot="icon-only"></ion-icon>
                 </ion-item-option>
               </ion-item-options>

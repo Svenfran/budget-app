@@ -1,223 +1,173 @@
 import { Component, OnInit } from '@angular/core';
-import { AlertController, LoadingController } from '@ionic/angular';
-import { UserprofileService } from '../services/userprofile.service';
 import { AuthService } from '../auth/auth.service';
 import { User } from '../auth/user';
+import { AlertController, LoadingController, MenuController } from '@ionic/angular';
+import { UserprofileService } from './service/userprofile.service';
+import { AlertService } from '../service/alert.service';
+import { UserDto } from '../model/user-dto';
+import { EmailValidator } from '../Validator/email-validator';
+import { INIT_NUMBERS } from '../constants/default-values';
 import { Router } from '@angular/router';
-import { UserDto } from '../models/user';
-import { StorageService } from '../services/storage.service';
-import { AlertService } from '../services/alert.service';
-
+import { GroupService } from '../service/group.service';
+import { TranslateService } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-userprofile',
   templateUrl: './userprofile.page.html',
   styleUrls: ['./userprofile.page.scss'],
+  standalone: false
 })
 export class UserprofilePage implements OnInit {
 
-  userName: string;
-  userEmail: string;
-  user: User;
-
+  public user!: User;
+  public noGroups = this.groupService.hasNoGroups;
 
   constructor(
+    private authService: AuthService,
     private alertCtrl: AlertController,
     private loadingCtrl: LoadingController,
     private userProfileService: UserprofileService,
-    private authService: AuthService,
+    private alertService: AlertService,
+    private menuCtrl: MenuController,
     private router: Router,
-    private storageService: StorageService,
-    private alertService: AlertService
-    ) { }
+    private groupService: GroupService,
+    private translate: TranslateService
+  ) { }
 
   ngOnInit() {
-    this.getCurrentUser();
+    this.authService.user.pipe().subscribe(user => {
+      if (user) this.user = user;
+    })
   }
 
-  changeUsername() {
+  ionViewDidEnter() {
+    this.menuCtrl.enable(false);
+  }
+
+  ionViewWillLeave() {
+    if (!this.router.url.includes("no-group")) {
+      this.menuCtrl.enable(true);
+    }
+  }
+
+  changeUserName() {
     this.alertCtrl.create({
-      header: "Benutzername ändern",
+      header: this.translate.instant("alerts.user_profile.change_username.header"),
       buttons: [{
-        text: "Abbrechen",
+        text: this.translate.instant("alerts.user_profile.change_username.cancel"),
         role: "cancel"
       }, {
-        text: "ok",
+        text: this.translate.instant("alerts.user_profile.change_username.ok"),
         handler: (data) => {
           if (data.userName === undefined || data.userName === null || data.userName.trim() === "") {
-            let header = "Fehlerhafter Benutzername!";
-            let message = `Der Benutzername darf nicht leer sein.`
-            this.alertService.showAlert(header, message);
+            let header = this.translate.instant("alerts.user_profile.change_username.error_message_page.header");
+            let message = this.translate.instant("alerts.user_profile.change_username.error_message_page.message");
+            this.alertService.showErrorAlert(header, message);
             return
           }
           this.loadingCtrl.create({
-            message: "Ändere Benutzername..."
+            message: this.translate.instant("alerts.user_profile.change_username.loading")
           }).then(loadingEl => {
             loadingEl.present();
-            this.userProfileService.changeUserName(new UserDto(this.user.id, data.userName.trim())).subscribe(res => {
-              this.userName = res.userName;
-              this.setUserData();
-              loadingEl.dismiss();
-            }, errRes => {
-              if (errRes.status === 0) {
-                loadingEl.dismiss();
-                this.alertService.showAlertSeverUnavailable();
-              } else if (errRes.error.includes(data.userName.trim())) {
-                loadingEl.dismiss();
-                let header = "Fehlerhafter Benutzername!";
-                let message = `Der Benutzername "${data.userName.trim()}" existiert bereits.`
-                this.alertService.showAlert(header, message);
-              }
-            });          
+            const user: UserDto = {
+              id: this.user.id,
+              userName: data.userName,
+              userEmail: this.user.email
+            }
+            this.userProfileService.changeUserName(user);
+            loadingEl.dismiss();
           })
         }
       }],
       inputs: [
         {
           name: "userName",
-          placeholder: "Benutzername"
+          placeholder: this.translate.instant("alerts.user_profile.change_username.placeholder"),
+          attributes: {
+            maxlength: INIT_NUMBERS.MAX_LENGTH_50
+          }
         }
       ]
     }).then(alertEl => alertEl.present().then(() => {
-      const inputField: HTMLElement = document.querySelector("ion-alert input");
-      inputField.focus();
+      const inputField = document.querySelector('ion-alert input') as HTMLElement;
+      if (inputField) {
+        inputField.focus();
+      }
     }));
   }
 
-  changeEmail() {
+  changeUserEmail() {
     this.alertCtrl.create({
-      header: "E-Mail-Adresse ändern",
+      header: this.translate.instant("alerts.user_profile.change_email.header"),
       buttons: [{
-        text: "Abbrechen",
+        text: this.translate.instant("alerts.user_profile.change_email.cancel"),
         role: "cancel"
       }, {
-        text: "ok",
+        text: this.translate.instant("alerts.user_profile.change_email.ok"),
         handler: (data) => {
-          let email = data.email.trim();
+          const email = data.email.trim();
           if (EmailValidator.isNotValid(email)) {
-            let header = "Fehlerhafte E-Mail-Adresse!";
-            let message = "Bitte gib eine gültige E-mail-Adresse an.";
-            this.alertService.showAlert(header, message);
+            let header = this.translate.instant("alerts.user_profile.change_email.error_message_page.header");
+            let message = this.translate.instant("alerts.user_profile.change_email.error_message_page.message");
+            this.alertService.showErrorAlert(header, message);
             return
           }
           this.loadingCtrl.create({
-            message: "Ändere Email..."
+            message: this.translate.instant("alerts.user_profile.change_email.loading")
           }).then(loadingEl => {
-            loadingEl.present(),
-            this.userProfileService.changeUserEmail(new UserDto(this.user.id, this.user.name, email)).subscribe(res => {
-              console.log(res);
-              this.userEmail = email;
-              loadingEl.dismiss();
-              this.authService.logout();
-            }, errRes => {
-              if (errRes.status === 0) {
-                loadingEl.dismiss();
-                this.alertService.showAlertSeverUnavailable();
-              }
-              if (errRes.error.includes(email)) {
-                loadingEl.dismiss();
-                let header = "Fehlerhafte E-Mail-Adresse!";
-                let message = `Die E-Mail-Adresse "${email}" existiert bereits.`;
-                this.alertService.showAlert(header, message);
-              }
-              if (errRes.error === "Invalid Email") {
-                loadingEl.dismiss();
-                let header = "Fehlerhafte E-Mail-Adresse!";
-                let message = "Bitte gib eine gültige E-Mail-Adresse an.";
-                this.alertService.showAlert(header, message);
-              }
-            })
+            loadingEl.present();
+            const user: UserDto = {
+              id: this.user.id,
+              userName: this.user.name,
+              userEmail: data.email
+            }
+            this.userProfileService.changeUserEmail(user);
+            loadingEl.dismiss();
           })
         }
       }],
       inputs: [
         {
           name: "email",
-          placeholder: "E-Mail-Adresse",
-          type: "email"
+          placeholder: this.translate.instant("alerts.user_profile.change_email.placeholder"),
+          type: "email",
+          attributes: {
+            maxlength: INIT_NUMBERS.MAX_LENGTH_50
+          }
         }
       ]
     }).then(alertEl => alertEl.present().then(() => {
-      const inputField: HTMLElement = document.querySelector("ion-alert input");
-      inputField.focus();
+      const inputField = document.querySelector('ion-alert input') as HTMLElement;
+      if (inputField) {
+        inputField.focus();
+      }
     }));
   }
 
-  deleteProfile() {
+  deleteUserProfile() {
     this.alertCtrl.create({
-      header: "Profil löschen",
-      message: "Möchtest du dein Profil wirklich löschen inkl. aller Gruppen und Ausgaben?",
+      header: this.translate.instant("alerts.user_profile.delete_profile.header"),
+      message: this.translate.instant("alerts.user_profile.delete_profile.message"),
       buttons: [{
-        text: 'Nein'
+        text: this.translate.instant("alerts.user_profile.delete_profile.cancel"),
+        role: "cancel"
       }, {
-        text: 'Ja',
+        text: this.translate.instant("alerts.user_profile.delete_profile.ok"),
         handler: () => {
           this.loadingCtrl.create({
-            message: 'Lösche Profil...'
+            message: this.translate.instant("alerts.user_profile.delete_profile.loading")
           }).then(loadingEl => {
-            loadingEl.present(),
-            this.userProfileService.deleteUserProfile(this.user.id).subscribe(() => {
-              loadingEl.dismiss();
-              this.authService.logout();
-              this.router.navigateByUrl("/auth", { replaceUrl: true });
-            }, errRes => {
-              if (errRes.status === 0) {
-                loadingEl.dismiss();
-                this.alertService.showAlertSeverUnavailable();
-              }
-            })
+            loadingEl.present();
+            this.userProfileService.deleteUserProfile(this.user.id);
+            loadingEl.dismiss();
           })
         }
       }]
     }).then(alertEl => alertEl.present());
   }
 
-  getCurrentUser() {
-    this.authService.user.subscribe(user => {
-      this.user = user;
-      this.userName = user.name;
-      this.userEmail = user.email;
-    })
-    return this.user;
+  onLogout() {
+    this.authService.logout();
+    this.router.navigateByUrl("/auth", { replaceUrl: true });
   }
-
-  private setUserData() {
-    this.storageService.getData('authData').then(storedData => {
-      const parsedData = JSON.parse(storedData.value) as {id: number, name: string, email: string, expirationDate: number, token: string};
-      const parsedObject = JSON.parse(parsedData['data']);
-      const authRes = new AuthResponseData(
-        parsedObject.id,
-        this.userName,
-        parsedObject.email,
-        parsedObject.expirationDate,
-        parsedObject.token.substring(7)
-      )
-      this.authService.setUserData(authRes);
-    });
-  }
-  
-}
-
-class EmailValidator {
-  static isNotValid(email: string){
-    let pattern = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
-    let result = pattern.test(email);
-    
-    if (!result) {
-      return {
-        'email:validation:fail' : true
-      }
-    }
-    return null;
-  }
-}
-
-class AuthResponseData {
-  constructor(
-    public id: number,
-    public name: string,
-    public email: string,
-    public expirationDate: number,
-    public token: string
-  ) {}
 }

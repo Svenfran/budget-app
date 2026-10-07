@@ -1,321 +1,240 @@
-import { Component, Input, OnInit } from '@angular/core';
-import { AlertController, IonItemSliding, LoadingController, ModalController, ToastController } from '@ionic/angular';
-import { GroupMembersPage } from '../group-members/group-members.page';
-import { Group } from '../models/group';
-import { GroupMembers } from '../models/group-members';
-import { GroupOverview } from '../models/group-overview';
-import { GroupSideNav } from '../models/group-side-nav';
-import { NewMemberDto } from '../models/new-member-dto';
-import { UserDto } from '../models/user';
-import { CartService } from '../services/cart.service';
-import { GroupService } from '../services/group.service';
-import { SpendingsOverviewService } from '../services/spendings-overview.service';
-import { StorageService } from '../services/storage.service';
-import { from, of } from 'rxjs';
-import { Router } from '@angular/router';
-import { NavigationService } from '../services/navigation.service';
+import { Component, OnInit } from '@angular/core';
+import { GroupService } from '../service/group.service';
+import { User } from '../auth/user';
 import { AuthService } from '../auth/auth.service';
-import { AlertService } from '../services/alert.service';
+import { AlertController, IonItemSliding, LoadingController, ModalController, Platform } from '@ionic/angular';
+import { Group } from '../model/group';
+import { NewMemberDto } from './model/new-member-dto';
+import { GroupOverview } from './model/group-overview';
+import { GroupmembersPage } from '../groupmembers/groupmembers.page';
+import { INIT_NUMBERS } from '../constants/default-values';
+import { Router } from '@angular/router';
+import { EmailValidator } from '../Validator/email-validator';
+import { AlertService } from '../service/alert.service';
+import { TranslateService } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-groupoverview',
   templateUrl: './groupoverview.page.html',
   styleUrls: ['./groupoverview.page.scss'],
+  standalone: false
 })
 export class GroupoverviewPage implements OnInit {
 
-  groupOverviewList: GroupOverview[] = [];
-  groupMembers: GroupMembers;
-  isLoading: boolean = false;
-  userName: string;
-  currentUser: UserDto;
-  activeGroup: GroupSideNav;
-  groupIsDeleted: boolean = false;
+  public isLoading: boolean = false;
+  public groupOverviewList = this.groupService.groupOverviewList;
+  public user: User | undefined;
 
   constructor(
     private groupService: GroupService,
+    private authService: AuthService,
     private alertCtrl: AlertController,
     private loadingCtrl: LoadingController,
     private modalCtrl: ModalController,
-    private toastCtrl: ToastController,
-    private cartService: CartService,
-    private spendingsService: SpendingsOverviewService,
-    private storageService: StorageService,
-    private navigationService: NavigationService,
     private router: Router,
-    private authService: AuthService,
-    private alertService: AlertService
-    ) { }
+    private alertService: AlertService,
+    private translate: TranslateService
+  ) {}
 
   ngOnInit() {
-    this.getCurrentUser();
-    this.getGroupsForOverview();
-    this.groupService.activeGroup.subscribe(group => {
-      this.activeGroup = group;
+    this.authService.user.pipe().subscribe(user => {
+      if (user) this.user = user;
+      this.groupService.getGroupsForOverview();
     })
   }
 
-
-  getGroupsForOverview() {
-    this.groupService.groupModified.subscribe(() => {
-      this.isLoading = true;
-      this.groupService.getGroupsForOverview().subscribe(groups => {
-        this.groupOverviewList = groups;
-        this.isLoading = false;
-      }, errRes => {
-        this.isLoading = false;
-        if (errRes.status === 0) {
-          this.alertService.showAlertSeverUnavailable();
-        }
-      })
-    })
-    this.groupService.setGroupModified(false);
+  refreshGroupList(event: CustomEvent) {
+    setTimeout(() => {
+      this.groupService.getGroupsForOverview();
+      (event.target as HTMLIonRefresherElement).complete();
+    }, 2000);
   }
 
-  navigate() {
-    if (this.groupIsDeleted && this.navigationService.getPreviousUrl().includes("shoppinglist")) {
-      this.router.navigate(['/domains/tabs/overview']);
+  async onSelectGroup(group: GroupOverview, slidingItem: IonItemSliding) {
+    // Ist das Item gerade aufgeswiped, nur schließen statt navigieren
+    if (await slidingItem.getOpenAmount() !== 0) {
+      slidingItem.close();
+      return;
     }
+    if (this.groupService.activeGroup().id !== group.id) {
+      this.groupService.setActiveGroup(group);
+    }
+    this.router.navigateByUrl('/domains/tabs/overview', { replaceUrl: true });
   }
 
-  onDelete(groupId: number, groupName: string, slidingItem: IonItemSliding) {
-    this.groupIsDeleted = true;
+  onCreateGroup() {
+    this.alertCtrl.create({
+      header: this.translate.instant("alerts.group.new.header"),
+      buttons: [{
+        text: this.translate.instant("alerts.group.new.cancel"),
+        role: "cancel"
+      }, {
+        text: this.translate.instant("alerts.group.new.ok"),
+        handler: (data) => {
+          this.loadingCtrl.create({
+            message: this.translate.instant("alerts.group.new.loading")
+          }).then(loadingEl => {
+            if (!data) return;
+            const trimmedGroupName = data.groupName.trim();
+            if (trimmedGroupName === "") return;
+
+            const newGroup: Group = { id: new Date().getTime(), name: trimmedGroupName, dateCreated: new Date() };
+            this.groupService.addGroup(newGroup);
+            loadingEl.dismiss();
+          })
+        }
+      }],
+      inputs: [
+        {
+          name: "groupName",
+          placeholder: this.translate.instant("alerts.group.new.placeholder"),
+          attributes: {
+            maxlength: INIT_NUMBERS.MAX_LENGTH
+          }
+        }
+      ]
+    }).then(alertEl => alertEl.present().then(() => {
+      const inputField = document.querySelector("ion-alert input") as HTMLElement;
+      if (inputField) {
+        inputField.focus();
+      }
+    }));
+  }
+
+  onUpdateGroup(group: Group, slidingItem: IonItemSliding) {
     slidingItem.close();
     this.alertCtrl.create({
-      header: 'Löschen',
-      message: `Möchtest du die Gruppe "${groupName}" wirklich löschen inkl. aller Mitglieder und gespeicherten Ausgaben?`,
+      header: this.translate.instant("alerts.group.edit.header"),
       buttons: [{
-        text: 'Nein'
+        text: this.translate.instant("alerts.group.edit.cancel"),
+        role: "cancel"
       }, {
-        text: 'Ja',
+        text: this.translate.instant("alerts.group.edit.ok"),
+        handler: (data) => {
+          this.loadingCtrl.create({
+            message: this.translate.instant("alerts.group.edit.loading")
+          }).then(loadingEl => {
+            if (!data) return;
+            const trimmedGroupName = data.groupName.trim();
+            if (trimmedGroupName === "") return;
+
+            const newGroup: Group = { id: group.id, name: trimmedGroupName, dateCreated: new Date() };
+            this.groupService.updateGroup(newGroup);
+            loadingEl.dismiss();
+          })
+        }
+      }],
+      inputs: [
+        {
+          name: "groupName",
+          value: this.groupOverviewList().find(gr => gr.id === group.id)?.name,
+          attributes: {
+            maxlength: INIT_NUMBERS.MAX_LENGTH
+          }
+        }
+      ]
+    }).then(alertEl => alertEl.present().then(() => {
+      const inputField = document.querySelector("ion-alert input") as HTMLElement;
+      if (inputField) {
+        inputField.focus();
+      }
+    }));
+  }
+
+  onDeleteGroup(group: Group, slidingItem: IonItemSliding) {
+    slidingItem.close();
+    this.alertCtrl.create({
+      header: this.translate.instant("alerts.group.delete.header"),
+      message: this.translate.instant("alerts.group.delete.message", {groupName: group.name}),
+      buttons: [{
+        text: this.translate.instant("alerts.group.delete.cancel"),
+        role: "cancel"
+      }, {
+        text: this.translate.instant("alerts.group.delete.ok"),
         handler: () => {
           this.loadingCtrl.create({
-            message: 'Lösche Gruppe...'
+            message: this.translate.instant("alerts.group.delete.loading")
           }).then(loadingEl => {
-            loadingEl.present(),
-            this.groupService.deleteGroup(groupId).subscribe(() => {
-              loadingEl.dismiss();
-              this.groupOverviewList = this.groupOverviewList.filter(group => group.id !== groupId);
-              this.groupService.setGroupModified(true);
-              this.groupService.activeGroup.subscribe(activeGroup => {
-                if(this.groupOverviewList.length > 0 && (activeGroup.id === groupId)) {
-                  const newGroup = new Group(
-                    this.groupOverviewList[0].id,
-                    this.groupOverviewList[0].name,
-                    this.groupOverviewList[0].dateCreated
-                  )
-                  this.groupService.setActiveGroup(newGroup);
-                  this.storageService.setActiveGroup(newGroup);
-                } else if (this.groupOverviewList.length <= 0 && activeGroup.id === groupId) {
-                  this.groupService.setActiveGroup(null);
-                  this.groupService.activeGroup.subscribe(actGroup => {
-                    this.storageService.setActiveGroup(actGroup)
-                  })
-                }
-              });
-              this.groupService.activeGroup.subscribe(group => {
-                if (group.id !== null) {
-                  this.spendingsService.setSpendingsModified(true);
-                }
-              });
-            }, errRes => {
-              if (errRes.status === 0) {
-                loadingEl.dismiss();
-                this.alertService.showAlertSeverUnavailable();
-              }
-            })
+            this.groupService.deleteGroup(group);
+            loadingEl.dismiss();
+            // Redirect to no-group page if last group is deleted
+            if (this.groupOverviewList().length === 1 && this.groupOverviewList()[0].id === group.id) {
+              this.groupService.hasNoGroups.set(true);
+              this.router.navigate(['/no-group'], { replaceUrl: true });
+            }
           })
         }
       }]
     }).then(alertEl => alertEl.present());
   }
 
-  onCreateGroup() {
-    this.alertCtrl.create({
-      header: "Neue Gruppe:",
-      buttons: [{
-        text: "Abbrechen",
-        role: "cancel"
-      }, {
-        text: "ok",
-        handler: (data) => {
-          this.loadingCtrl.create({
-            message: "Erstelle Gruppe..."
-          }).then(loadingEl => {
-            let newGroup = new Group(null, data.groupName, null);
-            this.groupService.addGroup(newGroup).subscribe((group) => {
-              loadingEl.dismiss();
-              this.groupService.setGroupModified(true);
-              this.groupService.setActiveGroup(group);
-              this.activeGroup = group;
-            }, errRes => {
-              if (errRes.status === 0) {
-                loadingEl.dismiss();
-                this.alertService.showAlertSeverUnavailable();
-              }
-            })
-          })
-        }
-      }],
-      inputs: [
-        {
-          name: "groupName",
-          placeholder: "Gruppenname"
-        }
-      ]
-    }).then(alertEl => alertEl.present().then(() => {
-      const inputField: HTMLElement = document.querySelector("ion-alert input");
-      inputField.focus();
-    }));
-  }
-
-  onAddMember(groupId: number, groupName: string, slidingItem: IonItemSliding) {
+  onAddMember(group: Group, slidingItem: IonItemSliding) {
     slidingItem.close();
     this.alertCtrl.create({
-      header: "Neues Gruppenmitglied:",
+      header: this.translate.instant("alerts.group.add_member.header"),
       buttons: [{
-        text: "Abbrechen",
+        text: this.translate.instant("alerts.group.add_member.cancel"),
         role: "cancel"
       }, {
-        text: "ok",
+        text: this.translate.instant("alerts.group.add_member.ok"),
         handler: (data) => {
-          // console.log(data.memberEmail.match("^[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,4}$")[0] == data.memberEmail);
           this.loadingCtrl.create({
-            message: "Füge Benutzer hinzu..."
+            message: this.translate.instant("alerts.group.add_member.loading")
           }).then(loadingEl => {
-            let newMember = new NewMemberDto(
-              groupId,
-              groupName,
-              data.memberEmail.trim()
-            )
-            this.groupService.addMemberToGroup(newMember).subscribe(() => {
-              this.getGroupsForOverview();
-              this.cartService.setCartModified(true);
-              this.spendingsService.setSpendingsModified(true);
-              loadingEl.dismiss();
-              let message = "Benutzer wurde zur Gruppe " + groupName + " hinzugefügt"
-              this.showToast(message);
-            }, errRes => {
-              let message: string;
-              if (errRes.status === 0) {
-                loadingEl.dismiss();
-                this.alertService.showAlertSeverUnavailable();
-              } else if (errRes.error.includes(newMember.newMemberEmail)) {
-                message = "Benutzer existiert nicht."
-              } else if (errRes.error.includes("New member equals group owner")) {
-                message = "Neues Mitglied und Gruppenersteller sind identisch"
-              } else if (errRes.error.includes("Member already exists")) {
-                message = "Der Benutzer ist bereits Mitglied"
-              } else {
-                message = "Es ist ein Fehler aufgetreten"
-              }
-              this.showToast(message);
-            }) 
+            if (!data) return;
+            const trimmedEmail = data.memberEmail.trim();
+            if (EmailValidator.isNotValid(trimmedEmail)) {
+              let header = this.translate.instant("alerts.group.add_member.error_message_page.header");
+              let message = this.translate.instant("alerts.group.add_member.error_message_page.message");
+              this.alertService.showErrorAlert(header, message);
+              return
+            }
+
+            let newMember: NewMemberDto = {
+              id: group.id,
+              name: group.name,
+              newMemberEmail: trimmedEmail
+            }
+            this.groupService.addMemberToGroup(newMember);
+            loadingEl.dismiss();
           })
         }
       }],
       inputs: [
         {
-          placeholder: "E-Mail Adresse",
+          placeholder: this.translate.instant("alerts.group.add_member.placeholder"),
           name: "memberEmail",
-          type: "email"
+          type: "email",
+          attributes: {
+            maxlength: INIT_NUMBERS.MAX_LENGTH
+          }
         }
       ]
     }).then(alertEl => alertEl.present().then(() => {
-      const inputField: HTMLElement = document.querySelector("ion-alert input");
-      inputField.focus();
+      const inputField = document.querySelector("ion-alert input") as HTMLElement;
+      if (inputField) {
+        inputField.focus();
+      }
     }));
   }
 
-  onUpdate(groupId: number, slidingItem: IonItemSliding) {
-    slidingItem.close();
-    this.alertCtrl.create({
-      header: "Gruppenname:",
-      buttons: [{
-        text: "Abbrechen",
-        role: "cancel"
-      }, {
-        text: "ok",
-        handler: (data) => {
-          this.loadingCtrl.create({
-            message: "Bearbeite Gruppe..."
-          }).then(loadingEl => {
-            let updatedGroup = new Group(groupId, data.groupName, null);
-            this.groupService.updateGroup(updatedGroup).subscribe(() => {
-              loadingEl.dismiss();
-              this.groupService.setGroupModified(true);
-              this.groupService.setActiveGroup(updatedGroup);
-
-              // let group = new GroupOverview(
-              //   groupId,
-              //   data.groupName,
-              //   this.userName,
-              //   this.groupOverviewList.filter(g => g.id == groupId)[0].memberCount
-              // )
-
-              // let index = this.groupOverviewList.indexOf(
-              //   this.groupOverviewList.filter(g => g.id == group.id)[0]
-              // )
-              
-              // if (this.groupOverviewList[index].name != data.groupName) {
-              //   this.groupOverviewList[index] = group;
-              // }
-              
-            }, errRes => {
-              if (errRes.status === 0) {
-                loadingEl.dismiss();
-                this.alertService.showAlertSeverUnavailable();
-              }
-            })
-          })
-        }
-      }],
-      inputs: [
-        {
-          name: "groupName",
-          value: this.groupOverviewList.filter(g => g.id == groupId)[0].name
-        }
-      ]
-    }).then(alertEl => alertEl.present().then(() => {
-      const inputField: HTMLElement = document.querySelector("ion-alert input");
-      inputField.focus();
-    }));
-  }
-
-  async showMembers(groupId: number, groupOwnerName: string, slidingItem: IonItemSliding) {
+  async showGroupMembers(groupId: number, groupOwnerName: string, slidingItem: IonItemSliding) {
     slidingItem.close();
     const modal = this.modalCtrl.create({
-      component: GroupMembersPage,
+      component: GroupmembersPage,
       componentProps: {
         'groupId': groupId,
         'groupOwnerName': groupOwnerName
       }
     });
 
-    (await modal).onDidDismiss().then((groupWithMembers) => {
+    (await modal).onWillDismiss().then(groupWithMembers => {
       if (!groupWithMembers.data) {
         return;
       }
+    })
 
-      this.groupService.setGroupModified(true);
-    });
     return (await modal).present();
   }
 
-
-  private showToast(message: string) {
-    this.toastCtrl.create({
-      message: message,
-      duration: 3000,
-      position: 'bottom'
-    }).then(toastEl => toastEl.present());
-  }
-
-  getCurrentUser() {
-    this.authService.user.subscribe(user => {
-      this.userName = user.name;
-      this.currentUser = new UserDto(user.id, user.name);
-    })
-    return this.userName;
-  }
 }

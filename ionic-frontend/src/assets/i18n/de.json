@@ -1,0 +1,419 @@
+{
+    "global": {
+        "errors": {
+            "required": "Pflichtfeld!",
+            "invalid_amount": "Dezimalstelle mit Punkt trennen: ##.##",
+            "invalid_date": "Datumsformat beachten: dd.MM.yyyy"
+        },
+        "selections": {
+            "btn_ok": "OK",
+            "btn_cancel": "Abbrechen"
+        },
+        "date_picker": {
+            "btn_ok": "Speichern",
+            "btn_cancel": "Abbrechen",
+            "btn_reset": "Reset"
+        },
+        "user": {
+            "deleted": "Nutzer gelöscht",
+            "removed": "Nutzer entfernt"
+        },
+        "language": "Sprache"
+    },
+    "navigation": {
+        "welcome": "Hallo {{name}}!",
+        "title": "Schön dich zu sehen 😊",
+        "group": "Gruppe:",
+        "groups": {
+            "header": "GRUPPEN",
+            "all": "Meine Gruppen",
+            "edit": "Gruppen bearbeiten",
+            "create": "Gruppe hinzufügen",
+            "no_groups": "Keine Gruppen vorhanden."
+        },
+        "categories": {
+            "header": "KATEGORIEN",
+            "edit": "Kategorien bearbeiten",
+            "create": "Kategorie hinzufügen"
+        },
+        "settings": {
+            "header": "EINSTELLUNGEN",
+            "edit_profile": "Profil bearbeiten",
+            "dark_mode": "Nacht Modus",
+            "language": "Sprache"
+        }
+    },
+    "domains": {
+        "overview": {
+            "title": "Übersicht",
+            "total": "Gesamt:",
+            "segment": {
+                "yearly": "Jährlich",
+                "monthly": "Monatlich",
+                "spendings_yearly": "Jährliche Ausgaben",
+                "spendings_monthly": "Monatliche Ausgaben",
+                "no_spendings_yearly": "Keine Ausgaben vorhanden!",
+                "no_spendings_monthly": "Keine Ausgaben vorhanden für das aktuelle Jahr!"
+            }
+        },
+        "spendings": {
+            "title": "Ausgaben",
+            "total": "Gesamt",
+            "download": "Download",
+            "settlement": "Ausgleichszahlung",
+            "filter": "Filter",
+            "no_spendings": "Keine Ausgaben vorhanden!",
+            "toast": {
+                "message": "Datei erfolgreich heruntergeladen."
+            },
+            "overlay": {
+                "settlementpayment": {
+                    "title": "Ausgleichszahlung",
+                    "amount": "Betrag in €*",
+                    "to_member": "An Mitglied*",
+                    "date": "Datum*",
+                    "btn_cancel": "Abbrechen",
+                    "no_members": "Keine Mitglieder vorhanden"
+                },
+                "filter": {
+                    "header": "Filter",
+                    "title": "Titel",
+                    "description": "Beschreibung",
+                    "placeholder_category": "Kategorie",
+                    "placeholder_cart_owner": "Ersteller",
+                    "date_from": "Datum von",
+                    "date_to": "Datum bis",
+                    "btn_reset": "Reset",
+                    "btn_cancel": "Abbrechen"
+                }
+            }
+        },
+        "shoppinglists": {
+            "title": "Einkaufslisten",
+            "no_shoppinglists": "Keine Einkaufslisten vorhanden!",
+            "delete_completed": "Erledigte löschen",
+            "item_placeholder": "Eintrag hinzufügen"
+        }
+    },
+    "alerts": {
+        "group": {
+            "new": {
+                "header": "Neue Gruppe:",
+                "cancel": "Abbrechen",
+                "ok": "OK",
+                "loading": "Erstelle Gruppe...",
+                "placeholder": "Gruppenname"
+            },
+            "edit": {
+                "header": "Gruppenname:",
+                "cancel": "Abbrechen",
+                "ok": "OK",
+                "loading": "Aktualisiere Gruppe..."
+            },
+            "delete": {
+                "header": "Gruppe löschen:",
+                "message": "Möchtest du die Gruppe \"{{groupName}}\" wirklich löschen inkl. aller Ausgaben und Kategorien?",
+                "cancel": "Nein",
+                "ok": "Ja",
+                "loading": "Lösche Gruppe..."
+            },
+            "add_member": {
+                "header": "Mitglied hinzufügen:",
+                "cancel": "Abbrechen",
+                "ok": "OK",
+                "loading": "Füge Mitglied hinzu...",
+                "placeholder": "E-Mail-Adresse",
+                "error_message_page": {
+                    "header": "Fehlerhafte E-Mail-Adresse!",
+                    "message": "Bitte gib eine gültige E-Mail-Adresse an."
+                },
+                "error_message_service": {
+                    "message_success": "Benutzer wurde zur Gruppe hinzugefügt.",
+                    "message_no_exists": "Benutzer existiert nicht.",
+                    "message_already_member": "Der Benutzer ist bereits Mitglied der Gruppe.",
+                    "message_admin_is_member": "Neues Mitglied und Gruppenersteller sind identisch.",
+                    "message_default": "Beim Hinzufügen des Mitglieds ist ein Fehler aufgetreten."
+                }
+            },
+            "remove_member": {
+                "header": "Mitglied entfernen:",
+                "message": "Möchtest du das Mitglied \"{{memberName}}\" wirklich aus der Gruppe \"{{group}}\" entfernen inkl. aller gespeicherten Ausgaben?",
+                "cancel": "Nein",
+                "ok": "Ja"
+            }
+        },
+        "category": {
+            "new": {
+                "header": "Neue Kategorie:",
+                "cancel": "Abbrechen",
+                "ok": "OK",
+                "loading": "Erstelle Kategorie...",
+                "placeholder": "Name der Kategorie"
+            },
+            "edit": {
+                "header": "Kategorie bearbeiten:",
+                "cancel": "Abbrechen",
+                "ok": "OK",
+                "loading": "Aktualisiere Kategorie..."
+            },
+            "delete": {
+                "header": "Kategorie löschen:",
+                "message": "Möchtest du die Kategorie \"{{categoryName}}\" wirklich löschen?",
+                "cancel": "Nein",
+                "ok": "Ja",
+                "loading": "Lösche Kategorie...",
+                "error_message_service": {
+                    "header": "Kategorie kann nicht gelöscht werden!",
+                    "message": "Die Kategorie \"{{categoryName}}\" ist noch in Verwendung. Bitte weise alle Ausgaben einer anderen Kategorie zu, bevor du sie löschst."
+                }
+            }
+        },
+        "cart": {
+            "delete": {
+                "header": "Löschen:",
+                "message": "Möchtest du den Eintrag \"{{cartTitle}}\" wirklich löschen?",
+                "cancel": "Nein",
+                "ok": "Ja",
+                "loading": "Lösche Eintrag..."
+            },
+            "invalid_membership": {
+                "header": "Datum nicht im Zeitraum der Mitgliedschaft",
+                "message_new_edit": "Du warst zu dem gewählten Zeitpunkt kein Mitglied der Gruppe. Bitte wähle ein anderes Datum.",
+                "message_settlementpayment": "Der Nutzer \"{{userName}}\" war zu dem gewählten Zeitpunkt kein Mitglied der Gruppe. Bitte wähle ein anderes Datum."
+            }
+        },
+        "forgot_password": {
+            "header": "Passwort vergessen?",
+            "message": "Gib deine E-Mail Adresse ein, um dein Passwort zurückzusetzen.",
+            "cancel": "Abbrechen",
+            "ok": "senden",
+            "loading": "Reset Passwort...",
+            "placeholder": "E-Mail-Adresse",
+            "error_message": {
+                "header": "Fehlerhafte E-Mail-Adresse!",
+                "message": "Bitte gib eine gültige E-Mail-Adresse ein."
+            }
+        },
+        "reset_password": {
+            "success": {
+                "header": "Passwort Reset",
+                "message": "Wir haben eine E-Mail mit einem temporären Passwort an die E-Mail-Adresse \"{{email}}\" gesendet. Es ist durchaus möglich, dass die E-Mail im Spam-Ordner gelandet ist. Bitte melde dich an und ändere dein Passwort."
+            },
+            "error_invalid_email": {
+                "header": "Fehlerhafte E-Mail-Adresse!",
+                "message": "Bitte gib eine gültige E-Mail-Adresse an."
+            },
+            "error_email_not_exists": {
+                "header": "Fehlerhafte E-Mail-Adresse!",
+                "message": "Ein Benutzer mit der E-Mail-Adresse \"{{email}}\" existiert nicht."
+            }
+        },
+        "shoppinglist": {
+            "new": {
+                "header": "Neue Einkaufsliste:",
+                "cancel": "Abbrechen",
+                "ok": "OK",
+                "loading": "Erstelle Einkaufsliste...",
+                "placeholder": "Name der Einkaufsliste"
+            },
+            "delete": {
+                "header": "Einkaufsliste löschen:",
+                "message": "Möchtest du die Einkaufsliste \"{{listName}}\" wirklich löschen inkl. aller Einträge?",
+                "cancel": "Nein",
+                "ok": "Ja",
+                "loading": "Lösche Einkaufsliste..."
+            },
+            "edit": {
+                "header": "Einkaufsliste bearbeiten:",
+                "cancel": "Abbrechen",
+                "ok": "OK",
+                "loading": "Aktualisiere Einkaufsliste..."
+            },
+            "item": {
+                "edit": {
+                    "header": "Eintrag bearbeiten:",
+                    "cancel": "Abbrechen",
+                    "ok": "OK",
+                    "loading": "Aktualisiere Eintrag..."
+                }
+            }
+        },
+        "user_profile": {
+            "change_username": {
+                "header": "Benutzername ändern:",
+                "cancel": "Abbrechen",
+                "ok": "OK",
+                "loading": "Ändere Benutzername...",
+                "placeholder": "Benutzername",
+                "error_message_page": {
+                    "header": "Unzulässiger Benutzername!",
+                    "message": "Der Benutzername darf nicht leer sein."
+                },
+                "error_message_service": {
+                    "exists": {
+                        "header": "Benutzername bereits vergeben!",
+                        "message": "Der Benutzername \"{{userName}}\" ist bereits vergeben. Bitte wähle einen anderen Namen."
+                    },
+                    "not_allowed": {
+                        "header": "Benutzername nicht erlaubt!",
+                        "message": "Der Benutzername \"{{userName}}\" ist nicht erlaubt. Bitte wähle einen anderen Namen."
+                    }
+                }
+            },
+            "change_email": {
+                "header": "E-Mail Adresse ändern:",
+                "cancel": "Abbrechen",
+                "ok": "OK",
+                "loading": "Ändere E-Mail Adresse...",
+                "placeholder": "E-Mail Adresse",
+                "error_message_page": {
+                    "header": "Fehlerhafte E-Mail-Adresse!",
+                    "message": "Bitte gib eine gültige E-mail-Adresse an."
+                },
+                "error_message_service": {
+                    "header": "Fehlerhafte E-Mail-Adresse!",
+                    "message": "Bitte gib eine gültige E-Mail-Adresse an."
+                }
+            },
+            "delete_profile": {
+                "header": "Profil löschen:",
+                "message": "Möchtest du dein Profil wirklich löschen inkl. aller Gruppen und Ausgaben?",
+                "cancel": "Nein",
+                "ok": "Ja",
+                "loading": "Lösche Profil..."
+            },
+            "change_password": {
+                "loading": "Ändere Passwort...",
+                "error_message_page": {
+                    "header": "Falsches Passwort!",
+                    "message": "Das neue Passwort konnte nicht bestätigt werden. Bitte versuche es noch einmal."
+                },
+                "error_message_service": {
+                    "header": "Falsches aktuelles Passwort!",
+                    "message": "Das angegebene Passwort ist nicht korrekt. Bitte versuche es noch einmal"
+                }
+            }
+        },
+        "authenticate": {
+            "loading": "Anmelden...",
+            "message": "Erfolgreich angemeldet!",
+            "error_messages": {
+                "header_login": "Anmeldung fehlgeschlagen",
+                "header_register": "Registrierung fehlgeschlagen",
+                "message": "Passwort oder E-Mail falsch.",
+                "message_email_exists": "Die E-Mail Adresse ist bereits vergeben.",
+                "message_username_exists": "Der Benutzername ist bereits vergeben."
+            }
+        },
+        "server_unavailable": {
+            "header": "Es ist ein Fehler aufgetreten",
+            "message": "Der Server ist momentan nicht erreichbar. Bitte versuche es in ein paar Minuten noch einmal.",
+            "btn_cancel": "Abbrechen",
+            "btn_ok": "OK"
+        }
+    },
+    "login": {
+        "text_login": "Anmelden",
+        "text_register": "Registrieren",
+        "form": {
+            "username": "Benutzername",
+            "email": "E-Mail",
+            "password": "Passwort",
+            "error_messages": {
+                "invalid_username_length": "Mindestens 3 Zeichen erforderlich",
+                "invalid_email": "Keine gültige E-Mail Adresse",
+                "invalid_password_length": "Mindestens 6 Zeichen erforderlich",
+                "invalid_password_whitespace": "Das Password darf keine Leerzeichen enthalten"
+            }
+        },
+        "buttons": {
+            "forgot_password": "Passwort vergessen?"
+        }
+    },
+    "user_profile": {
+        "title": "Profil bearbeiten",
+        "header": "MEIN PROFIL",
+        "label_change_pw": "Passwort ändern",
+        "label_delete_profile": "Profil löschen"
+    },
+    "password_change": {
+        "title": "Passwort ändern",
+        "form": {
+            "current_password": "Aktuelles Passwort",
+            "new_password": "Neues Passwort",
+            "confirm_new_password": "Neues Passwort bestätigen",
+            "error_messages": {
+                "invalid_password_length": "Mindestens 6 Zeichen erforderlich",
+                "invalid_password_whitespace": "Das Password darf keine Leerzeichen enthalten"
+            }
+        },
+        "buttons": {
+            "change_password": "Passwort ändern"
+        }
+    },
+    "categories": {
+        "title": "Kategorien bearbeiten",
+        "header": "GRUPPE:",
+        "subheader": "Kategorien",
+        "empty": "Keine Kategorien vorhanden!"
+    },
+    "groups": {
+        "title": "Gruppen bearbeiten",
+        "header": "MEINE GRUPPEN",
+        "empty": "Keine Gruppen vorhanden.",
+        "group": {
+            "members": "Mitglieder:"
+        },
+        "group_members": {
+            "title": "Gruppenmitglieder",
+            "change_admin": "Gruppenadmin ändern",
+            "no_members": "Keine Mitglieder vorhanden."
+        }
+    },
+    "carts": {
+        "title_add": "Einkauf hinzufügen",
+        "title_edit": "Einkauf bearbeiten",
+        "form": {
+            "title": "Titel*",
+            "amount": "Betrag in €*",
+            "description": "Beschreibung",
+            "date_purchased": "Datum*",
+            "category": "Kategorie*",
+            "recurrence": "Eintrag regelmäßig wiederholen?",
+            "recurrence_messages": {
+                "text_info": "Einträge werden nicht in der Vergangenheit angelegt. Das nächste Ausführungsdatum liegt immer in der Zukunft und wird aus dem oben angegebenen Kaufdatum berechnet.",
+                "next_execution": "Nächste Ausführung am:",
+                "apply_changes": "Änderungen auf alle zukünftigen Einträge anwenden",
+                "apply_changes_info": "Die Änderung des Intervalltyps gilt automatisch für alle zukünftigen Einträge, auch ohne Auswahl der Checkbox."
+            }
+        },
+        "loading_add": "Füge Einkauf hinzu...",
+        "loading_update": "Aktualisiere Einkauf...",
+        "recurrence_types": {
+            "daily": "Täglich",
+            "weekly": "Wöchentlich",
+            "monthly": "Monatlich",
+            "yearly": "Jährlich",
+            "none": "Kein Wiederholung"
+        }
+    },
+    "error_pages": {
+        "no_group": {
+            "title": "Oops! Keine Gruppen",
+            "message": "Füge eine neue Gruppe hinzu, um loszulegen.",
+            "btn_text": "Gruppe erstellen",
+            "footer": {
+                "link_profile": "Profil",
+                "exit_app": "Exit"
+            }
+        },
+        "server_unreachable": {
+            "title": "Server nicht erreichbar!",
+            "message": "Bitte versuche es später noch einmal.",
+            "btn_text": "Reload",
+            "footer": {
+                "exit_app": "Exit"
+            }
+        }
+    }
+}

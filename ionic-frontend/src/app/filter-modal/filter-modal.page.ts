@@ -1,50 +1,54 @@
-import {ChangeDetectorRef, Component, OnInit, ViewChild} from '@angular/core';
-import {FormBuilder, FormGroup} from '@angular/forms';
-import {IonDatetime, ModalController} from '@ionic/angular';
-import {UserDto} from '../models/user';
-import {AuthService} from '../auth/auth.service';
-import {CategoryService} from '../services/category.service';
-import {CategoryDto} from '../models/category';
-import {GroupService} from '../services/group.service';
-import {CartFilter} from '../models/cartFilter';
+import { ChangeDetectorRef, Component, OnInit, ViewChild } from '@angular/core';
+import { FormBuilder, FormGroup } from '@angular/forms';
+import { IonDatetime, ModalController } from '@ionic/angular';
+import { AuthService } from '../auth/auth.service';
+import { CategoryService } from '../service/category.service';
+import { GroupService } from '../service/group.service';
+import { User } from '../auth/user';
+import { CartFilter } from './model/CartFilter';
+import { LanguageService } from '../service/language.service';
 
 @Component({
   selector: 'app-filter-modal',
   templateUrl: './filter-modal.page.html',
   styleUrls: ['./filter-modal.page.scss'],
+  standalone: false
 })
 export class FilterModalPage implements OnInit {
+  @ViewChild(IonDatetime) datetimeStart!: IonDatetime;
+  @ViewChild(IonDatetime) datetimeEnd!: IonDatetime;
 
-  form: FormGroup;
-  groupMembers: string[] = [];
-  userName: string;
-  currentUser: UserDto;
-  categoryList: CategoryDto[] = [];
-  activeGroupId: number;
-  today = new Date();
-  showPicker = false;
-  dateValue: string = '';
-  formattedDateFrom: string = '';
-  formattedDateTo: string = '';
-  cartFilter: CartFilter = {};
+  public activeGroup = this.groupService.activeGroup;
+  public categoryList = this.categoryService.categories;
+  public groupMembersWithOwner = this.groupService.groupMembersWithOwner;
+  public form!: FormGroup;
+  public user!: User;
+  public cartFilter: CartFilter = {};
+  public formattedDateFrom: string = '';
+  public formattedDateTo: string = '';
+  public today = new Date();
+  public showPicker = false;
+  public dateValue: string = '';
+  public currentLang = this.langService.currentLang
 
-
-  @ViewChild(IonDatetime) datetimeStart: IonDatetime;
-  @ViewChild(IonDatetime) datetimeEnd: IonDatetime;
   constructor(
     private modalCtrl: ModalController,
     private authService: AuthService,
     private fb: FormBuilder,
     private categoryService: CategoryService,
     private groupService: GroupService,
-    private cdRef: ChangeDetectorRef
-
+    private cdRef: ChangeDetectorRef,
+    private langService: LanguageService
   ) { }
 
   ngOnInit() {
-    this.getCurrentUser();
-    this.getCategoriesForGroup();
-    this.getGroupMembers();
+    this.authService.user.subscribe(user => {
+      if (user) {
+        this.user = user;
+        this.groupService.getGroupMembers(this.activeGroup().id);
+        this.categoryService.getCategoriesByGroup(this.activeGroup());
+      }
+    });
 
     this.form = this.fb.group({
       title: [null],
@@ -74,19 +78,12 @@ export class FilterModalPage implements OnInit {
   get startDate() {return this.form.get('startDate');}
   get endDate() {return this.form.get('endDate');}
 
-  getCategoriesForGroup() {
-    this.categoryService.getCategoriesByGroup(this.activeGroupId).subscribe(response => {
-      this.categoryList = response;
-    })
-  }
-
-  getGroupMembers() {
-    this.groupService.getGroupMembers(this.activeGroupId).subscribe(response => {
-      this.groupMembers.push(response.ownerName);
-      response.members.forEach(member => {
-        this.groupMembers.push(member.userName);
-      });
-    })
+  onDismiss() {
+    if (this.form.invalid) {
+      return;
+    } else {
+      this.onSubmit();
+    }
   }
 
   onSubmit() {
@@ -94,19 +91,18 @@ export class FilterModalPage implements OnInit {
       title: this.form.value.title ? this.form.value.title.trim() : null,
       description: this.form.value.description ? this.form.value.description.trim() : null,
       category: this.form.value.categories,
-      startDate: this.convertStringToDate(this.form.value.startDate),
-      endDate: this.convertStringToDate(this.form.value.endDate),
+      startDate: this.convertStringToDate(this.form.value.startDate)!,
+      endDate: this.convertStringToDate(this.form.value.endDate)!,
       userName: this.form.value.members,
     }
     this.modalCtrl.dismiss(this.cartFilter);
   }
 
-  onDismiss() {
-    if (this.form.invalid) {
-      return;
-    } else {
-      this.onSubmit();
-    }
+  formatDate(date: Date): string {
+    const day = ('0' + date.getDate()).slice(-2);
+    const month = ('0' + (date.getMonth() + 1)).slice(-2); // Monate sind 0-basiert
+    const year = date.getFullYear();
+    return `${day}.${month}.${year}`;
   }
 
   close() {
@@ -119,47 +115,16 @@ export class FilterModalPage implements OnInit {
   }
 
   clearInput(controlName: string) {
-    this.form.get(controlName).setValue(null);
+    this.form.get(controlName)?.setValue(null);
     this.cdRef.detectChanges();
     if (controlName === 'startDate') {
-      this.formattedDateFrom = null;
+      this.formattedDateFrom = '';
       this.closeDatePicker(controlName);
     }
     if (controlName === 'endDate') {
-      this.formattedDateTo = null;
+      this.formattedDateTo = '';
       this.closeDatePicker(controlName);
     }
-  }
-
-
-  getCurrentUser() {
-      this.authService.user.subscribe(user => {
-      this.userName = user.name;
-      this.currentUser = new UserDto(user.id, user.name);
-    })
-    return this.currentUser;
-  }
-
-
-  onDateChange(event: any, controlName: string) {
-    const date = new Date(event.detail.value); // Datum im ISO-Format
-    const formattedDate = this.formatDate(date); // Datum ins gewünschte Format umwandeln
-
-    this.form.get(controlName).setValue(formattedDate);
-
-    if (controlName === 'startDate') {
-      this.formattedDateFrom = formattedDate;
-    } else if (controlName === 'endDate') {
-      this.formattedDateTo = formattedDate;
-    }
-  }
-
-  // Funktion zum Formatieren des Datums in dd.MM.yyyy
-  formatDate(date: Date): string {
-    const day = ('0' + date.getDate()).slice(-2);
-    const month = ('0' + (date.getMonth() + 1)).slice(-2); // Monate sind 0-basiert
-    const year = date.getFullYear();
-    return `${day}.${month}.${year}`;
   }
 
   closeDatePicker(controlName: string) {
@@ -170,16 +135,29 @@ export class FilterModalPage implements OnInit {
     }
   }
 
+  onDateChange(event: any, controlName: string) {
+    const date = new Date(event.detail.value); // Datum im ISO-Format
+    const formattedDate = this.formatDate(date); // Datum ins gewünschte Format umwandeln
+
+    this.form.get(controlName)?.setValue(formattedDate);
+
+    if (controlName === 'startDate') {
+      this.formattedDateFrom = formattedDate;
+    } else if (controlName === 'endDate') {
+      this.formattedDateTo = formattedDate;
+    }
+  }
+
   select(controlName: string) {
     if (controlName === 'startDate') {
       // Manuelles Setzen des aktuellen Datums, falls der Wert noch nicht gesetzt wurde
-      if (!this.form.get('startDate').value) {
+      if (!this.form.get('startDate')?.value) {
         const currentDate = new Date(this.getDateValue('startDate'));
         this.onDateChange({ detail: { value: currentDate.toISOString() } }, 'startDate');
       }
       this.datetimeStart.confirm(true);
     } else if (controlName === 'endDate') {
-      if (!this.form.get('endDate').value) {
+      if (!this.form.get('endDate')?.value) {
         const currentDate = new Date(this.getDateValue('endDate'));
         this.onDateChange({ detail: { value: currentDate.toISOString() } }, 'endDate');
       }
@@ -188,7 +166,7 @@ export class FilterModalPage implements OnInit {
   }
   
   getDateValue(controlName: string): string {
-    const dateValue = this.form.get(controlName).value;
+    const dateValue = this.form.get(controlName)?.value;
     if (dateValue) {
       // Wenn ein Datum im Feld steht, verwenden wir es
       const parts = dateValue.split('.');
@@ -231,6 +209,4 @@ export class FilterModalPage implements OnInit {
 
     return date;
   }
-
-
 }

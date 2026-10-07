@@ -24,7 +24,7 @@ export class ScientificCurrencyPipe implements PipeTransform {
   }
 
   transform(value: number, currencyCode: string = 'EUR', display: 'symbol' | 'code' | 'symbol-narrow' = 'symbol', digitsInfo: string = '1.2-2', locale: string = 'de'): string {
-    const threshold = 10000000;
+    const threshold = 1000000;
 
     // Wenn der Wert kleiner ist als der Schwellwert, normale Währungsformatierung anwenden
     if (Math.abs(value) < threshold) {

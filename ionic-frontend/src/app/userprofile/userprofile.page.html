@@ -1,9 +1,9 @@
 <ion-header class="ion-no-border">
   <ion-toolbar>
     <ion-buttons slot="start">
-      <ion-back-button defaultHref="/domains/tabs/cartlist"></ion-back-button>
+      <ion-back-button defaultHref="/domains/tabs/overview"></ion-back-button>
     </ion-buttons>
-    <ion-title>Profil bearbeiten</ion-title>
+    <ion-title>{{ 'user_profile.title' | translate }}</ion-title>
   </ion-toolbar>
 </ion-header>
 
@@ -14,17 +14,17 @@
        
           <ion-list-header>
             <div class="profil-header">
-              <ion-text color="medium">MEIN PROFIL</ion-text>
+              <ion-text color="medium">{{ 'user_profile.header' | translate }}</ion-text>
             </div>
           </ion-list-header>
 
           <ion-item>
             <ion-icon name="person-outline" slot="start"></ion-icon>
             <ion-label>
-              <p class="ion-text-wrap">{{ userName }}</p>
+              <p class="ion-text-wrap">{{ user.name }}</p>
             </ion-label>
             <ion-buttons>
-              <ion-button (click)="changeUsername()">
+              <ion-button (click)="changeUserName()">
                 <ion-icon name="pencil-outline" slot="icon-only" size="small"></ion-icon>
               </ion-button>
             </ion-buttons>
@@ -33,10 +33,10 @@
           <ion-item>
             <ion-icon name="mail-outline" slot="start"></ion-icon>
             <ion-label>
-              <p class="ion-text-wrap">{{ userEmail }}</p>
+              <p class="ion-text-wrap">{{ user.email }}</p>
             </ion-label>
             <ion-buttons>
-              <ion-button (click)="changeEmail()">
+              <ion-button (click)="changeUserEmail()">
                 <ion-icon name="pencil-outline" slot="icon-only" size="small"></ion-icon>
               </ion-button>
             </ion-buttons>
@@ -45,10 +45,10 @@
           <ion-item>
             <ion-icon name="lock-closed-outline" slot="start"></ion-icon>
             <ion-label>
-              <p class="ion-text-wrap">Passwort ändern</p>
+              <p class="ion-text-wrap">{{ 'user_profile.label_change_pw' | translate }}</p>
             </ion-label>
             <ion-buttons>
-              <ion-button routerLink="/passwordchange">
+              <ion-button routerLink="/password-change">
                 <ion-icon name="pencil-outline" slot="icon-only" size="small"></ion-icon>
               </ion-button>
             </ion-buttons>        
@@ -57,10 +57,10 @@
           <ion-item>
             <ion-icon name="person-circle-outline" slot="start"></ion-icon>
             <ion-label>
-              <p class="ion-text-wrap">Profil löschen</p>
+              <p class="ion-text-wrap">{{ 'user_profile.label_delete_profile' | translate }}</p>
             </ion-label>
             <ion-buttons>
-              <ion-button (click)="deleteProfile()">
+              <ion-button (click)="deleteUserProfile()">
                 <ion-icon name="trash-outline" slot="icon-only" size="small" color="danger"></ion-icon>
               </ion-button>
             </ion-buttons>
@@ -69,5 +69,11 @@
       </ion-col>
     </ion-row>
   </ion-grid>
-
 </ion-content>
+
+<ion-footer *ngIf="noGroups()" class="ion-no-border">
+    <div class="menu-footer" (click)="onLogout()">
+      <ion-icon name="power-outline" color="dark"></ion-icon>
+      <ion-text color="dark"><small>Logout</small></ion-text>
+    </div>
+</ion-footer>

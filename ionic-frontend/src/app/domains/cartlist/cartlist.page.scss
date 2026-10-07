@@ -8,6 +8,12 @@
     }
 }
 
+.cart-repeat {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
 .category-circle {
     width: 40px;
     height: 40px;
@@ -43,12 +49,12 @@ ion-popover {
     margin-right: 1rem;
 }
 
-cdk-virtual-scroll-viewport {
-    height: 100vh;
-    width: 100%;
-}
-
 .toggle-arrow {
     display: flex;
     align-items: center;
+}
+
+.cart-scroll {
+  height: calc(100vh - 150px);
+  overflow: auto;
 }

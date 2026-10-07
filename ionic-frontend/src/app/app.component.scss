@@ -1,3 +1,16 @@
+.menu-footer {
+    width: fit-content;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 18px 0 22px 0;
+    ion-icon {
+        font-size: 1.5rem;
+    }
+}
+
 .menu-header {
     display: flex;
     flex-direction: column;
@@ -10,17 +23,8 @@
 
 .menu-header-title {
     margin-top: 16px;
-}
-
-.menu-footer {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 18px 0 22px 0;
-    ion-icon {
-        font-size: 1.5rem;
-    }
+    text-align: center;
+    font-weight: 700;
 }
 
 .active {

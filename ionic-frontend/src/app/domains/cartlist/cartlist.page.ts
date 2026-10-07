@@ -1,192 +1,222 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
-import { AlertController, IonItemSliding, LoadingController, ModalController } from '@ionic/angular';
-import { format } from 'date-fns';
-import { Subscription } from 'rxjs';
+import { Component, effect, OnInit, signal, ViewChild } from '@angular/core';
+import { CartService } from './service/cart.service';
+import { GroupService } from 'src/app/service/group.service';
+import { User } from 'src/app/auth/user';
 import { AuthService } from 'src/app/auth/auth.service';
-import { FilterModalPage } from 'src/app/filter-modal/filter-modal.page';
-import { Cart } from 'src/app/models/cart';
-import { CartFilter } from 'src/app/models/cartFilter';
-import { Group } from 'src/app/models/group';
-import { GroupSideNav } from 'src/app/models/group-side-nav';
-import { AlertService } from 'src/app/services/alert.service';
-import { CartService } from 'src/app/services/cart.service';
-import { GroupService } from 'src/app/services/group.service';
-import { StorageService } from 'src/app/services/storage.service';
+import { AlertController, IonItemSliding, LoadingController, ModalController } from '@ionic/angular';
+import { Cart } from './model/cart';
+import { Router } from '@angular/router';
+import { OverviewService } from '../overview/service/overview.service';
+import { CategoryService } from 'src/app/service/category.service';
+import moment from 'moment';
 import { SettlementPaymentPage } from 'src/app/settlement-payment/settlement-payment.page';
+import { INIT_VALUES } from 'src/app/constants/default-values';
+import { FilterModalPage } from 'src/app/filter-modal/filter-modal.page';
+import { CartFilter } from 'src/app/filter-modal/model/CartFilter';
+import { TranslateService } from '@ngx-translate/core';
+import { CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
 
 @Component({
   selector: 'app-cartlist',
   templateUrl: './cartlist.page.html',
   styleUrls: ['./cartlist.page.scss'],
+  standalone: false
 })
-export class CartlistPage implements OnInit, OnDestroy {
-
-  cartlist: Cart[] = [];
-  cartlistInit: Cart[] = [];
-  isLoading = false;
-  userName: string;
-  activeGroup: GroupSideNav;
-  groupSub: Subscription;
-  cartSub: Subscription;
-  filterTerm: string;
-  filterMode = false;
-  sum: number;
-  count: number;
-  loadedActiveGroup: Promise<boolean>;
-  cartFilter: CartFilter = {};
-  hidden: boolean = true;
-  visibleItems: Set<number> = new Set<number>();
+export class CartlistPage implements OnInit {
+  @ViewChild('viewport', { static: false }) viewport!: CdkVirtualScrollViewport;
+  
+  public cartList = this.cartService.cartList;
+  public initCartList = this.cartService.initCartList;
+  public activeGroup = this.groupService.activeGroup();
+  public filterTerm = signal<string>('');
+  public filterMode = signal<boolean>(false);
+  public sum = this.cartService.sum;
+  public count = this.cartService.count;
+  public isLoading: boolean = true;
+  public user: User | undefined;
+  public visibleItems: Set<number> = new Set<number>();
+  public hidden: boolean = true;
+  public cartFilter: CartFilter = {};
+  public cartVisible: boolean = false;
+  public isAtTop: boolean = true;
+  public viewportInitialized: boolean = false;
 
   constructor(
     private cartService: CartService,
-    private alertCtrl: AlertController,
-    private loadingCtrl: LoadingController,
-    private modalCtrl: ModalController,
     private groupService: GroupService,
-    private storageService: StorageService,
     private authService: AuthService,
-    private alertService: AlertService) { }
+    private loadingCtrl: LoadingController,
+    private alertCtrl: AlertController,
+    private router: Router,
+    private overviewService: OverviewService,
+    private categoryService: CategoryService,
+    private modalCtrl: ModalController,
+    private translate: TranslateService
+  ) { 
+    effect(() => {
+      this.activeGroup = this.groupService.activeGroup();
+      this.overviewService.overviewRefresh();
+      this.categoryService.categoryUpdate();
+      this.groupService.memberUpdated();
+      this.isLoading = true;
+      if (!this.activeGroup.flag?.includes(INIT_VALUES.DEFAULT)) {
+        this.cartList.set([]);
+        this.cartService.getCartListByGroupId(this.activeGroup, false, () => {
+          this.isLoading = false;
+          this.resetFilterParams();
+        });
+      } else {
+        this.isLoading = false;
+      }
+      this.cartVisible = false;
+    });
+  
+  }
 
   ngOnInit() {
-    this.getCurrentUser();
-    this.groupSub = this.groupService.activeGroup.subscribe(group => {
-      if (group) {
-        // console.log(group);
-        this.loadedActiveGroup = Promise.resolve(true);
-        this.activeGroup = group;
-        this.getAllCartsByGroupId(group.id);
-      } else {
-        this.groupService.setActiveGroup(null);
-      }
+    this.authService.user.subscribe(user => {
+      if (user) this.user = user;
     })
-    this.filterTerm = "";
   }
+
+  ngAfterViewChecked() {
+  if (this.viewport && !this.viewportInitialized) {
+    this.viewportInitialized = true;
+
+    this.viewport.elementScrolled().subscribe(() => {
+      const scrollOffset = this.viewport.measureScrollOffset();
+      this.isAtTop = scrollOffset <= 100;
+    });
+  }
+}
   
-  ionViewWillEnter() {
-    this.groupSub = this.groupService.activeGroup.subscribe(group => {
-      if (group) {
-        this.loadedActiveGroup = Promise.resolve(true);
-        this.activeGroup = group;
-        this.getAllCartsByGroupId(group.id);
-      } else {
-        this.groupService.setActiveGroup(null);
-      }
-    })
+  onScrollChange() {
+    setTimeout(() => {
+      if (!this.viewport) return;
+      const offset = this.viewport.measureScrollOffset();
+      this.isAtTop = offset <= 100;
+    }, 50);
   }
 
+  getTranslationKey() {
+    let key = this.translate.instant('global.user.removed');
+    return ` (${key.split(' ')[1]})`;
+  }
 
-  getAllCartsByGroupId(groupId: number) {
-    this.isLoading = true;
-    if (groupId === null) {
-      this.isLoading = false;
-      this.cartlist = [];
-      this.sum = 0;
-      this.count = 0;
+  // TODO: Evtl. nur option in Filtermodal -> Gelöschte Nutzer -> if true -> filter carts?!
+  toggleCartVisability() {
+    if (!this.cartVisible) {
+      this.cartList.set(this.initCartList());
+      this.cartVisible = true;
     } else {
-      this.cartService.cartModified.subscribe(() => {
-        this.cartSub = this.cartService.getCartListByGroupId(groupId).subscribe(carts => {
-          this.isLoading = false;
-          this.cartlist = carts;
-          this.cartlistInit = carts;
-          this.sum = this.cartlist.reduce((s, c) => s + (+c.amount), 0);
-          this.count = this.cartlist.length;
-          this.filterMode = false;
-          this.filterTerm = "";
-          this.visibleItems = new Set<number>();
-          this.cartFilter = {};
-        });
-      })
+      this.cartList.update(carts => 
+        carts.filter(cart => 
+          cart.deleted === false
+        )
+      )
+      this.cartVisible = false;
     }
   }
 
-  onDelete(cartId: number, cartTitle:string, slidingItem: IonItemSliding) {
+  isSettlementpayment(category: string): boolean {
+    return this.categoryService.isSettlementpayment(category);
+  }
+
+  resetFilterParams() {
+    this.filterMode.set(false);
+    this.filterTerm.set("");
+    this.cartFilter = {};
+    this.cartVisible = false;
+  }
+  
+  refreshCartList(event: CustomEvent) {
+    setTimeout(() => {
+      this.cartService.getCartListByGroupId(this.activeGroup, true);
+      this.resetFilterParams();
+      (event.target as HTMLIonRefresherElement).complete();
+    }, 2000);
+  }
+
+  toggleDescriptionVisibility(index: number) {
+    if (this.visibleItems.has(index)) {
+      this.visibleItems.delete(index);
+    } else {
+      this.visibleItems.add(index);
+    }
+  }
+
+  isDescriptionVisible(index: number): boolean {
+    return this.visibleItems.has(index);
+  }
+
+  onDeleteCart(cart: Cart, slidingItem: IonItemSliding) {
     slidingItem.close();
     this.alertCtrl.create({
-      header: 'Löschen',
-      message: `Möchtest du den Eintrag "${cartTitle}" wirklich löschen?`,
+      header: this.translate.instant('alerts.cart.delete.header'),
+      message: this.translate.instant('alerts.cart.delete.message', { cartTitle: cart.title }),
       buttons: [{
-        text: 'Nein'
+        text: this.translate.instant('alerts.cart.delete.cancel'),
+        role: "cancel"
       }, {
-        text: 'Ja',
+        text: this.translate.instant('alerts.cart.delete.ok'),
         handler: () => {
           this.loadingCtrl.create({
-            message: 'Lösche Einkauf...'
+            message: this.translate.instant('alerts.cart.delete.loading')
           }).then(loadingEl => {
             loadingEl.present(),
-            this.cartService.deleteCart(cartId).subscribe(() => {
-              loadingEl.dismiss();
-              // this.cartlist = this.cartlist.filter(cart => cart.id !== cartId);
-              this.ionViewWillEnter();
-            })
+            this.cartService.deleteCart(cart.id!)
+            loadingEl.dismiss();
           })
         }
       }]
     }).then(alertEl => alertEl.present());
   }
-  
-  onFilterCategory(filterTerm: string, groupId: number) {
-    this.sum = 0;
-    this.filterTerm = filterTerm;
-    if (!this.filterMode) {
-      this.filterMode = !this.filterMode;
-      this.cartlist = this.cartlist.filter(c => c.categoryDto.name == filterTerm);
-      this.sum = this.cartlist.reduce((s, c) => s + (+c.amount), 0);
-      this.count = this.cartlist.length;
-      this.cartFilter.category = [filterTerm];
-    } else {
-      this.filterMode = !this.filterMode;
-      this.getAllCartsByGroupId(groupId);
-    }
-  }
 
-  onFilterUserName(filterTerm: string, groupId: number) {
-    this.sum = 0;
-    this.filterTerm = filterTerm;
-    if (!this.filterMode) {
-      this.filterMode = !this.filterMode;
-      this.cartlist = this.cartlist.filter(c => c.userDto.userName == filterTerm);
-      this.sum = this.cartlist.reduce((s, c) => s + (+c.amount), 0);
-      this.count = this.cartlist.length;
-      this.cartFilter.userName = [filterTerm];
-    } else {
-      this.filterMode = !this.filterMode;
-      this.getAllCartsByGroupId(groupId);
-    }
-  }
-
-  deleteFilter(groupId: number) {
-    this.getAllCartsByGroupId(groupId);
-  }
-
-  onFilter(cartfilter: CartFilter) {
-    if (Object.values(cartfilter).every(field => field == null)) {
-      this.cartlist = this.cartlistInit;
-      this.filterMode = false;
-      this.filterTerm = '';
-      this.sum = this.cartlist.reduce((s, c) => s + (+c.amount), 0);
-      this.count = this.cartlist.length;
-      return;
-    }
-    this.filterTerm = '';
-    this.cartlist = this.cartlistInit;
-    this.cartlist = this.cartlist.filter(item => 
-      (cartfilter.title ? item.title?.toLowerCase().includes(cartfilter.title.toLowerCase()) : true) &&
-      (cartfilter.description ? item.description?.toLowerCase().includes(cartfilter.description.toLowerCase()) : true) &&
-      (cartfilter.category?.length > 0 ? cartfilter.category.includes(item.categoryDto.name) : true) &&
-      (cartfilter.userName?.length > 0 ? cartfilter.userName.includes(item.userDto.userName) : true) &&
-      (cartfilter.startDate ? new Date(item.datePurchased) >= cartfilter.startDate : true) &&
-      (cartfilter.endDate ? new Date(item.datePurchased) <= cartfilter.endDate : true) 
-    );
-
-    this.filterMode = true;
-    this.sum = this.cartlist.reduce((s, c) => s + (+c.amount), 0);
-    this.count = this.cartlist.length;
-    // console.log(this.cartlist);
+  editCart(cart: Cart, slidingItem: IonItemSliding) {
+    slidingItem.close();
+    this.router.navigate(['domains', 'tabs', 'cartlist', 'new-edit', cart.id?.toString()]);
   }
 
   download() {
-    let filename = "Ausgaben_" + this.activeGroup.name.replace(/ /g, "-") + "_" + format(new Date(), 'yyyyMMddHHmmss') + ".xlsx";
-    this.cartService.getExcelFile(this.activeGroup.id, filename);
+    let suffix = `${this.translate.instant('domains.spendings.title')}_`
+    let filename = suffix + this.activeGroup.name.replace(/ /g, "-") + "_" + moment().format('YYYYMMDDHHmmss') + ".xlsx";
+    this.cartService.getExcelFile(this.activeGroup, filename);
+  }
+
+  onFilter(action: string, filterTerm: string) {
+    this.cartFilter = {};
+    if (!this.filterMode()) {
+      this.filterMode.set(true);
+      this.cartList.update(carts => carts.filter(cart => 
+        action === "user" ? cart.userDto.userName === filterTerm : cart.categoryDto.name === filterTerm)
+      );
+      action === "user" ? this.cartFilter.userName = [filterTerm] : this.cartFilter.category = [filterTerm];
+      this.filterTerm.set(filterTerm);
+    } else {
+      // this.cartService.getCartListByGroupId(this.activeGroup);
+      this.resetFilterParams();
+      this.cartList.set(this.initCartList());
+    }
+  }
+  
+  deleteFilter() {
+    // this.cartService.getCartListByGroupId(this.activeGroup);
+    this.resetFilterParams();
+    this.cartList.set(this.initCartList());
+  }
+
+  async settlementPayment() {
+    const modal = this.modalCtrl.create({
+      component: SettlementPaymentPage,
+      backdropDismiss: true
+    });
+
+    (await modal).onDidDismiss().then((response) => {
+      if (response.data) {
+        this.cartService.addSettlementPayment(response.data);
+      }
+    });
+    return (await modal).present();
   }
 
   async filterModal() {
@@ -195,12 +225,13 @@ export class CartlistPage implements OnInit, OnDestroy {
       componentProps: { 
         activeGroupId: this.activeGroup.id,
         cartFilter: this.cartFilter
-      }
+      },
+      backdropDismiss: true
     });
 
     (await modal).onDidDismiss().then((response) => {
       if (response.data) {
-        this.onFilter(response.data);
+        this.filterCarts(response.data);
         this.cartFilter = response.data;
       }
     });
@@ -208,89 +239,25 @@ export class CartlistPage implements OnInit, OnDestroy {
     return (await modal).present();
   }
 
-  async settlementPayment() {
-    const modal = this.modalCtrl.create({
-      component: SettlementPaymentPage
-    });
-
-    (await modal).onDidDismiss().then((response) => {
-      if (response.data) {
-        this.cartService.addSettlementPayment(response.data).subscribe(() => {
-          this.getAllCartsByGroupId(this.activeGroup.id);
-        }, errRes => {
-          if (errRes.error.includes('not within membership period')) {
-            this.alertService.showAlert(
-              'Datum nicht im Zeitraum der Mitgliedschaft',
-              `Der Nutzer "${response.data.member.userName}" war zu dem gewählten Zeitpunkt kein Mitglied der Gruppe. Bitte wähle ein anderes Datum.`
-            )
-          }
-        })
-      }
-    });
-    return (await modal).present();
-  }
-
-  ngOnDestroy(): void {
-    if (this.groupSub) {
-      this.groupSub.unsubscribe();
+  filterCarts(cartFilter: CartFilter) {
+    if (Object.values(cartFilter).every(field => field == null)) {
+      this.resetFilterParams();
+      this.cartList.set(this.initCartList());
+      return;
     }
-    if (this.cartSub) {
-      this.cartSub.unsubscribe();
-    }
-  }
 
-  // Methode zum Umschalten der Sichtbarkeit
-  toggleDescriptionVisibility(index: number) {
-    if (this.visibleItems.has(index)) {
-      this.visibleItems.delete(index);  // Wenn es sichtbar ist, verstecken
-    } else {
-      this.visibleItems.add(index);  // Wenn es nicht sichtbar ist, anzeigen
-    }
-  }
+    this.filterTerm.set('');
+    this.cartList.set(this.initCartList());
+    this.cartList.update(carts => 
+      carts.filter(cart =>
+        (cartFilter.title ? cart.title?.toLowerCase().includes(cartFilter.title.toLowerCase()) : true) &&
+        (cartFilter.description ? cart.description?.toLowerCase().includes(cartFilter.description.toLowerCase()) : true) &&
+        (cartFilter.category && cartFilter.category.length > 0 ? cartFilter.category.includes(cart.categoryDto.name) : true) &&
+        (cartFilter.userName && cartFilter.userName.length > 0 ? cartFilter.userName.includes(cart.userDto.userName) : true) &&
+        (cartFilter.startDate ? new Date(cart.datePurchased) >= cartFilter.startDate : true) &&
+        (cartFilter.endDate ? new Date(cart.datePurchased) <= cartFilter.endDate : true)
+    ))
 
-  // Methode zur Überprüfung, ob die Beschreibung sichtbar ist
-  isDescriptionVisible(index: number): boolean {
-    return this.visibleItems.has(index);
-  }
-
-  getCurrentUser() {
-    this.authService.userName.subscribe(name => {
-      this.userName = name;
-    })
-    return this.userName;
-  }
-
-  onCreateGroup() {
-    this.alertCtrl.create({
-      header: "Neue Gruppe:",
-      buttons: [{
-        text: "Abbrechen",
-        role: "cancel"
-      }, {
-        text: "ok",
-        handler: (data) => {
-          this.loadingCtrl.create({
-            message: "Erstelle Gruppe..."
-          }).then(loadingEl => {
-            let newGroup = new Group(null, data.groupName, null);
-            this.groupService.addGroup(newGroup).subscribe((group) => {
-              loadingEl.dismiss();
-              this.groupService.setGroupModified(true);
-              this.groupService.setActiveGroup(group);
-              this.storageService.setActiveGroup(this.activeGroup);
-            })
-          })
-        }
-      }],
-      inputs: [
-        {
-          name: "groupName",
-          placeholder: "Gruppenname"
-        }
-      ]
-    }).then(alertEl => alertEl.present().then(() => {
-      const inputField: HTMLElement = document.querySelector("ion-alert input");
-      inputField.focus();
-    }));
+    this.filterMode.set(true);
   }
 }

@@ -10,25 +10,40 @@
  */
 
 /* Core CSS required for Ionic components to work properly */
-@import "~@ionic/angular/css/core.css";
+@import "@ionic/angular/css/core.css";
 
 /* Basic CSS for apps built with Ionic */
-@import "~@ionic/angular/css/normalize.css";
-@import "~@ionic/angular/css/structure.css";
-@import "~@ionic/angular/css/typography.css";
-@import '~@ionic/angular/css/display.css';
+@import "@ionic/angular/css/normalize.css";
+@import "@ionic/angular/css/structure.css";
+@import "@ionic/angular/css/typography.css";
+@import "@ionic/angular/css/display.css";
 
 /* Optional CSS utils that can be commented out */
-@import "~@ionic/angular/css/padding.css";
-@import "~@ionic/angular/css/float-elements.css";
-@import "~@ionic/angular/css/text-alignment.css";
-@import "~@ionic/angular/css/text-transformation.css";
-@import "~@ionic/angular/css/flex-utils.css";
+@import "@ionic/angular/css/padding.css";
+@import "@ionic/angular/css/float-elements.css";
+@import "@ionic/angular/css/text-alignment.css";
+@import "@ionic/angular/css/text-transformation.css";
+@import "@ionic/angular/css/flex-utils.css";
+
+/**
+ * Ionic Dark Mode
+ * -----------------------------------------------------
+ * For more info, please see:
+ * https://ionicframework.com/docs/theming/dark-mode
+ */
+
+/* @import "@ionic/angular/css/palettes/dark.always.css"; */
+/* @import "@ionic/angular/css/palettes/dark.class.css"; */
+// @import "@ionic/angular/css/palettes/dark.system.css";
 
 @font-face {
-    font-family: 'Nunito';
-    src: url('assets/fonts/NunitoSans-Regular.ttf');
-  }
+  font-family: 'Roboto';
+  src: url('assets/fonts/Roboto-Regular.ttf');
+}
+  
+[hidden] {
+  display: none !important;
+}
 
 ion-item-sliding {
 	border-radius: 6px;
@@ -42,13 +57,10 @@ ion-modal {
   --background: rgba(44, 39, 45, 0.2);
   --border-radius: 16px;
 
-  // &::part(content) {
-  //   backdrop-filter: blur(6px);
-  // }
-  
   ion-content {
     --background: transparent;
-    --padding-top: 25vh;
+
+    --padding-top: 20vh;
     --padding-start: 20px;
     --padding-end: 20px;
 
@@ -68,89 +80,14 @@ ion-modal {
   }
 }
 
-ion-button {
-	text-transform: none;
-}
-
 .group-name {
-    // display: flex;
-    // justify-content: center;
-	font-weight: 600;
-	// margin-bottom: -2rem;
+  font-weight: 600;
 }
 
-.center-text {
-	margin-top: 40%;
+.alert-wrapper.sc-ion-alert-md {
+  --border-radius: 8px;
 }
 
-.ion-color-darkgrey {
-	--ion-color-base: var(--ion-color-darkgrey);
-	--ion-color-base-rgb: var(--ion-color-darkgrey-rgb);
-	--ion-color-contrast: var(--ion-color-darkgrey-contrast);
-	--ion-color-contrast-rgb: var(--ion-color-darkgrey-contrast-rgb);
-	--ion-color-shade: var(--ion-color-darkgrey-shade);
-	--ion-color-tint: var(--ion-color-darkgrey-tint);
-}
-
-.ion-color-darkgreen {
-  --ion-color-base: var(--ion-color-darkgreen);
-  --ion-color-base-rgb: var(--ion-color-darkgreen-rgb);
-  --ion-color-contrast: var(--ion-color-darkgreen-contrast);
-  --ion-color-contrast-rgb: var(--ion-color-darkgreen-contrast-rgb);
-  --ion-color-shade: var(--ion-color-darkgreen-shade);
-  --ion-color-tint: var(--ion-color-darkgreen-tint);
-}
-
-.ion-color-orange {
-	--ion-color-base: var(--ion-color-orange);
-	--ion-color-base-rgb: var(--ion-color-orange-rgb);
-	--ion-color-contrast: var(--ion-color-orange-contrast);
-	--ion-color-contrast-rgb: var(--ion-color-orange-contrast-rgb);
-	--ion-color-shade: var(--ion-color-orange-shade);
-	--ion-color-tint: var(--ion-color-orange-tint);
-}
-
-.ion-color-graygreen {
-	--ion-color-base: var(--ion-color-graygreen);
-	--ion-color-base-rgb: var(--ion-color-graygreen-rgb);
-	--ion-color-contrast: var(--ion-color-graygreen-contrast);
-	--ion-color-contrast-rgb: var(--ion-color-graygreen-contrast-rgb);
-	--ion-color-shade: var(--ion-color-graygreen-shade);
-	--ion-color-tint: var(--ion-color-graygreen-tint);
-}
-
-.ion-color-red {
-	--ion-color-base: var(--ion-color-red);
-	--ion-color-base-rgb: var(--ion-color-red-rgb);
-	--ion-color-contrast: var(--ion-color-red-contrast);
-	--ion-color-contrast-rgb: var(--ion-color-red-contrast-rgb);
-	--ion-color-shade: var(--ion-color-red-shade);
-	--ion-color-tint: var(--ion-color-red-tint);
-}
-
-.ion-color-greenblue {
-	--ion-color-base: var(--ion-color-greenblue);
-	--ion-color-base-rgb: var(--ion-color-greenblue-rgb);
-	--ion-color-contrast: var(--ion-color-greenblue-contrast);
-	--ion-color-contrast-rgb: var(--ion-color-greenblue-contrast-rgb);
-	--ion-color-shade: var(--ion-color-greenblue-shade);
-	--ion-color-tint: var(--ion-color-greenblue-tint);
-}
-
-.ion-color-gold {
-	--ion-color-base: var(--ion-color-gold);
-	--ion-color-base-rgb: var(--ion-color-gold-rgb);
-	--ion-color-contrast: var(--ion-color-gold-contrast);
-	--ion-color-contrast-rgb: var(--ion-color-gold-contrast-rgb);
-	--ion-color-shade: var(--ion-color-gold-shade);
-	--ion-color-tint: var(--ion-color-gold-tint);
-}
-
-.ion-color-blue {
-	--ion-color-base: var(--ion-color-blue);
-	--ion-color-base-rgb: var(--ion-color-blue-rgb);
-	--ion-color-contrast: var(--ion-color-blue-contrast);
-	--ion-color-contrast-rgb: var(--ion-color-blue-contrast-rgb);
-	--ion-color-shade: var(--ion-color-blue-shade);
-	--ion-color-tint: var(--ion-color-blue-tint);
+.pw-item {
+  align-items: center;
 }

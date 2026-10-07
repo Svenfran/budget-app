@@ -1,174 +1,165 @@
-import { Component, OnInit } from '@angular/core';
-import { AlertController, IonItemSliding, LoadingController } from '@ionic/angular';
-import { CategoryDto } from '../models/category';
-import { GroupSideNav } from '../models/group-side-nav';
-import { CartService } from '../services/cart.service';
-import { CategoryService } from '../services/category.service';
-import { GroupService } from '../services/group.service';
-import { AlertService } from '../services/alert.service';
-import { StorageService } from '../services/storage.service';
-import { from } from 'rxjs';
+import { Component, effect, OnInit } from '@angular/core';
+import { CategoryService } from '../service/category.service';
+import { CategoryDto } from '../model/category-dto';
+import { GroupService } from '../service/group.service';
+import { AlertController, LoadingController } from '@ionic/angular';
+import { INIT_NUMBERS, INIT_VALUES, SETTLEMENTPAYMENT_CATEGORIES } from '../constants/default-values';
+import { CartService } from '../domains/cartlist/service/cart.service';
+import { TranslateService } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-categoryoverview',
   templateUrl: './categoryoverview.page.html',
   styleUrls: ['./categoryoverview.page.scss'],
+  standalone: false
 })
 export class CategoryoverviewPage implements OnInit {
 
-  activeGroup: GroupSideNav;
-  categories: CategoryDto[] = [];
-  isLoading: boolean = false;
+  public categories = this.categoryService.categories;
+  public isLoading: boolean = false;
+  public activeGroup = this.groupService.activeGroup;
 
   constructor(
+    private categoryService: CategoryService,
+    private groupService: GroupService,
     private alertCtrl: AlertController,
     private loadingCtrl: LoadingController,
-    private groupService: GroupService,
-    private categoryService: CategoryService,
     private cartService: CartService,
-    private alertService: AlertService,
-    private storageService: StorageService
-  ) { }
-
-  ngOnInit() {
-    this.getActiveGroupId();
-  }
-
-  getActiveGroupId() {
-    this.groupService.activeGroup.subscribe(group => {
+    private translate: TranslateService
+  ) { 
+    effect(() => {
+      this.activeGroup = this.groupService.activeGroup;
       this.isLoading = true;
-      let groupId = null;
-      if (group == null) {
-        return from(this.storageService.getActiveGroup()).subscribe(actGr => {
-          groupId = actGr.id;
-        });
-      } else {
-        groupId = group.id;
+      if (!this.activeGroup().flag?.includes(INIT_VALUES.DEFAULT)) {
+        this.categoryService.getCategoriesByGroup(this.activeGroup());
       }
-      this.categoryService.getCategoriesByGroup(groupId).subscribe((categories) => {
-        this.activeGroup = group;
-        this.categories = categories;
-        this.isLoading = false;
-      }, errRes => {
-        this.isLoading = false;
-        console.log(errRes.error);
-      });
-    }, errRes => {
       this.isLoading = false;
-      console.log(errRes.error);
     });
   }
 
+  ngOnInit() {
+  }
+
+  refreshCategories(event: CustomEvent) {
+    setTimeout(() => {
+      this.categoryService.getCategoriesByGroup(this.activeGroup());
+      (event.target as HTMLIonRefresherElement).complete();
+    }, 2000);
+  }
+
+  isSettlementpayment(category: string): boolean {
+    return this.categoryService.isSettlementpayment(category);
+  }
 
   onCreateCategory() {
     this.alertCtrl.create({
-      header: "Neue Kategorie:",
+      header: this.translate.instant("alerts.category.new.header"),
       buttons: [{
-        text: "Abbrechen",
+        text: this.translate.instant("alerts.category.new.cancel"),
         role: "cancel"
       }, {
-        text: "ok",
+        text: this.translate.instant("alerts.category.new.ok"),
         handler: (data) => {
           this.loadingCtrl.create({
-            message: "Erstelle Kategorie..."
+            message: this.translate.instant("alerts.category.new.loading")
           }).then(loadingEl => {
-            let newCategory = new CategoryDto(null, data.categoryName, this.activeGroup.id);
-            this.categoryService.addCategory(newCategory).subscribe((category) => {
-              loadingEl.dismiss();
-              this.categories.push(category);
-              this.categories.sort((a, b) => (a.name < b.name ? -1 : 1))
-            }, errRes => {
-              if (errRes.status === 0) {
-                loadingEl.dismiss();
-                this.alertService.showAlertSeverUnavailable();
-              }
-            })
+            if (!data) return;
+            const trimmedCategoryName = data.categoryName.trim();
+            if (trimmedCategoryName === "") return;
+
+            const newCategory: CategoryDto = {
+              name: trimmedCategoryName,
+              groupId: this.activeGroup().id
+            };
+            this.categoryService.addCategory(newCategory);
+            loadingEl.dismiss();
           })
         }
       }],
       inputs: [
         {
           name: "categoryName",
-          placeholder: "Name der Kategorie"
+          placeholder: this.translate.instant("alerts.category.new.placeholder"),
+          attributes: {
+            maxlength: INIT_NUMBERS.MAX_LENGTH
+          }
         }
       ]
     }).then(alertEl => alertEl.present().then(() => {
-      const inputField: HTMLElement = document.querySelector("ion-alert input");
-      inputField.focus();
+      const inputField = document.querySelector('ion-alert input') as HTMLElement;
+      if (inputField) {
+        inputField.focus();
+      }
     }));
   }
 
   onUpdateCategory(category: CategoryDto) {
     this.alertCtrl.create({
-      header: "Kategorie bearbeiten:",
+      header: this.translate.instant("alerts.category.edit.header"),
       buttons: [{
-        text: "Abbrechen",
+        text: this.translate.instant("alerts.category.edit.cancel"),
         role: "cancel"
       }, {
-        text: "ok",
+        text: this.translate.instant("alerts.category.edit.ok"),
         handler: (data) => {
           this.loadingCtrl.create({
-            message: "Bearbeite Kategorie..."
+            message: this.translate.instant("alerts.category.edit.loading")
           }).then(loadingEl => {
-            let updateCategory = new CategoryDto(category.id, data.categoryName, category.groupId);
-            this.categoryService.updateCategory(updateCategory).subscribe((category) => {
-              loadingEl.dismiss();
-              let updateCategory = this.categories.filter(c => c.id == category.id)[0];
-              updateCategory.name = category.name;
-              this.categories.sort((a, b) => (a.name < b.name ? -1 : 1))
-              this.cartService.setCartModified(true);
-            }, errRes => {
-              if (errRes.status === 0) {
-                loadingEl.dismiss();
-                this.alertService.showAlertSeverUnavailable();
-              }
-            })
+            const foundCategory = this.categories().find(c => c.id === category.id);
+
+            if (!data) return;
+            const trimmedCategoryName = data.categoryName.trim();
+            if (trimmedCategoryName === "") return;
+
+            const updatedCategory: CategoryDto = {
+              id: foundCategory?.id,
+              name: trimmedCategoryName,
+              groupId: foundCategory?.groupId!
+            };
+            this.categoryService.updateCategory(updatedCategory);
+            this.cartService.triggerUpdate();
+            loadingEl.dismiss();
           })
         }
       }],
       inputs: [
         {
           name: "categoryName",
-          value: category.name
+          value: category.name,
+          attributes: {
+            maxlength: INIT_NUMBERS.MAX_LENGTH
+          }
         }
       ]
     }).then(alertEl => alertEl.present().then(() => {
-      const inputField: HTMLElement = document.querySelector("ion-alert input");
-      inputField.focus();
+      const inputField = document.querySelector('ion-alert input') as HTMLElement;
+      if (inputField) {
+        inputField.focus();
+      }
     }));
   }
-
+  
   onDeleteCategory(category: CategoryDto) {
     this.alertCtrl.create({
-      header: "Löschen",
-      message: `Möchtest du die Kategorie "${category.name}" wirklich löschen?`,
+      header: this.translate.instant("alerts.category.delete.header"),
+      message: this.translate.instant("alerts.category.delete.message", {categoryName: category.name}),
       buttons: [{
-        text: "Nein",
+        text: this.translate.instant("alerts.category.delete.cancel"),
         role: "cancel"
       }, {
-        text: "Ja",
+        text: this.translate.instant("alerts.category.delete.ok"),
         handler: () => {
           this.loadingCtrl.create({
-            message: "Lösche Kategorie..."
+            message: this.translate.instant("alerts.category.delete.loading")
           }).then(loadingEl => {
-            let deleteCategory = new CategoryDto(category.id, category.name, category.groupId);
-            this.categoryService.deleteCategory(deleteCategory).subscribe(() => {
-              loadingEl.dismiss();
-              this.categories = this.categories.filter(cat => cat.id !== category.id );
-            }, errRes => {
-              if (errRes.status === 0) {
-                loadingEl.dismiss();
-                this.alertService.showAlertSeverUnavailable();
-              } else if (errRes.status === 404) {
-                loadingEl.dismiss();
-                let header = "Löschen fehlgeschlagen";
-                let message = "Kategorie kann nicht gelöscht werden, diese ist bereits einigen deiner Ausgaben zugeordnet!"
-                this.alertService.showAlert(header, message);
-              }
-            })
+            const deletedCategory = this.categories().find(c => c.id === category.id);
+            this.categoryService.deleteCategory(deletedCategory!);
+            loadingEl.dismiss();
           })
         }
       }]
     }).then(alertEl => alertEl.present());
   }
+
+
 }

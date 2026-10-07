@@ -7,13 +7,15 @@ import { IonicModule } from '@ionic/angular';
 import { GroupoverviewPageRoutingModule } from './groupoverview-routing.module';
 
 import { GroupoverviewPage } from './groupoverview.page';
+import { TranslateModule } from '@ngx-translate/core';
 
 @NgModule({
   imports: [
     CommonModule,
     FormsModule,
     IonicModule,
-    GroupoverviewPageRoutingModule
+    GroupoverviewPageRoutingModule,
+    TranslateModule
   ],
   declarations: [GroupoverviewPage]
 })

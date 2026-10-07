@@ -7,15 +7,18 @@ import { IonicModule } from '@ionic/angular';
 import { SettlementPaymentPageRoutingModule } from './settlement-payment-routing.module';
 
 import { SettlementPaymentPage } from './settlement-payment.page';
+import { DatePickerComponent } from '../components/date-picker/date-picker.component';
+import { TranslateModule } from '@ngx-translate/core';
 
 @NgModule({
   imports: [
     CommonModule,
     FormsModule,
     IonicModule,
-    ReactiveFormsModule,
-    SettlementPaymentPageRoutingModule
+    SettlementPaymentPageRoutingModule,
+    TranslateModule,
+    ReactiveFormsModule
   ],
-  declarations: [SettlementPaymentPage]
+  declarations: [SettlementPaymentPage, DatePickerComponent]
 })
 export class SettlementPaymentPageModule {}

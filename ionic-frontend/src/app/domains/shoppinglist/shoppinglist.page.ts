@@ -1,431 +1,412 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
-import { AlertController, IonItemSliding, LoadingController } from '@ionic/angular';
+import { Component, effect, OnInit, QueryList, ViewChildren } from '@angular/core';
+import { ShoppinglistService } from './service/shoppinglist.service';
+import { AddEditShoppinglistDto } from './model/add-edit-shoppinglist-dto';
+import { AlertService } from 'src/app/service/alert.service';
+import { AlertController, IonInput, IonItemSliding, LoadingController } from '@ionic/angular';
+import { ShoppinglistDto } from './model/shoppinglist-dto';
+import { AddEditShoppingItemDto } from './model/add-edit-shopping-item-dto';
+import { ShoppingitemDto } from './model/shoppingitem-dto';
 import { Subscription } from 'rxjs';
-import { finalize } from 'rxjs/operators';
+import { WebSocketService } from 'src/app/service/websocket.service';
 import { AuthService } from 'src/app/auth/auth.service';
-import { AddEditShoppingItemDto } from 'src/app/models/add-edit-shopping-item-dto';
-import { AddEditShoppingListDto } from 'src/app/models/add-edit-shopping-list-dto';
-import { GroupSideNav } from 'src/app/models/group-side-nav';
-import { ShoppingItemDto } from 'src/app/models/shopping-item-dto';
-import { ShoppingListDto } from 'src/app/models/shopping-list-dto';
-import { AlertService } from 'src/app/services/alert.service';
-import { GroupService } from 'src/app/services/group.service';
-import { ShoppingitemService } from 'src/app/services/shoppingitem.service';
-import { ShoppinglistService } from 'src/app/services/shoppinglist.service';
+import { GroupService } from 'src/app/service/group.service';
+import { INIT_NUMBERS, INIT_VALUES } from 'src/app/constants/default-values';
+import { TranslateService } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-shoppinglist',
   templateUrl: './shoppinglist.page.html',
   styleUrls: ['./shoppinglist.page.scss'],
+  standalone: false
 })
-export class ShoppinglistPage implements OnInit, OnDestroy {
-
-  activeGroupName: string;
-  activeGroupId: number;
-  activeGroup: GroupSideNav;
-  userName: string;
-  shoppingListWithItems: ShoppingListDto[] = [];
-  shoppingItemsForNewList: ShoppingItemDto[] = [];
-  allShoppingItems: ShoppingItemDto[] = [];
-  allCurrentShoppingItems: ShoppingItemDto[] = [];
-  toggleLists: any = {};
-  itemName = "";
-  isLoading: boolean = false;
-  focusIsSet: boolean;
-  requestTimeStamp: number = new Date('1900-01-01').getTime();
-  INITIAL_REQUEST_TIMESTAMP: number = new Date('1900-01-01').getTime();
-  pollSub: Subscription = new Subscription();
-  loadedActiveGroup: Promise<boolean>;
-  pageLeft: boolean = false;
+export class ShoppinglistPage implements OnInit {
+  @ViewChildren(IonInput) inputFields!: QueryList<IonInput>; 
+  public shoppingLists = this.shoppinglistService.getShoppingLists();
+  public isLoading: boolean = true;
+  public toggleLists: any = {};
+  public newItemInputs: { [listId: number]: string } = {};
+  private subscriptions: Subscription[] = [];
+  public activeGroup = this.groupService.activeGroup();
 
 
   constructor(
-    private groupService: GroupService,
-    private shoppingListService: ShoppinglistService,
+    private shoppinglistService: ShoppinglistService,
+    private alertService: AlertService,
     private alertCtrl: AlertController,
     private loadingCtrl: LoadingController,
-    private shoppingItemService: ShoppingitemService,
-    private alertService: AlertService,
-    private authService: AuthService
-  ) { }
+    private webSocketService: WebSocketService,
+    private authService: AuthService,
+    private groupService: GroupService,
+    private translate: TranslateService
+  ) {
+    effect(() => {
+      this.activeGroup = this.groupService.activeGroup();
+      this.isLoading = true;
+      if (!this.activeGroup.flag?.includes(INIT_VALUES.DEFAULT)) {
+        this.shoppingLists.set([]);
+        this.shoppinglistService.getShoppingListsWithItems(this.activeGroup, () => {
+          this.isLoading = false;
+        });
+      } else {
+        this.isLoading = false;
+      }
+    });
+  }
 
   ngOnInit() {
-    this.getCurrentUser();
-    this.groupService.activeGroup.subscribe(group => {
-      if (group) {
-        // console.log(group);
-        this.activeGroupName = group.name;
-        this.activeGroupId = group.id;
-        this.activeGroup = group;
-        this.loadedActiveGroup = Promise.resolve(true);
-        this.getShoppingListWithItems(group.id);
-      } else {
-        this.groupService.setActiveGroup(null);
-      }
-    })
-    console.log("Poll I");
-    this.pollForList();
-  }
-
-  getShoppingListWithItems(groupId: number) {
-    this.isLoading = true;
-    if (groupId !== null) {
-      this.shoppingListService.getShoppingListsWithItems(groupId, this.INITIAL_REQUEST_TIMESTAMP).subscribe(list => {
-        this.shoppingListWithItems = list;
-        this.isLoading = false;
-      })
-    }
-  }
-
-  getAllListItemsForGroup(listObj: ShoppingListDto[]): ShoppingItemDto[] {
-    let listArray = [];
-    listObj.forEach(subList => {
-      subList.shoppingItems.forEach(listItem => {
-        let shoppingList = new ShoppingItem(
-          subList.id, listItem.id, listItem.name, listItem.completed
-        )
-        listArray.push(shoppingList);
-        shoppingList = null;
-      });
-    });
-    return listArray;
-  }
-
-  getDifferenceList(listObj1: ShoppingListDto[], listObj2: ShoppingListDto[]): ShoppingListDto[] {
-    return listObj1.filter(el1 => listObj2.every(el2 => el2.id !== el1.id));
-  }
-
-  getDifferenceItem(listObj1: ShoppingItemDto[], listObj2: ShoppingItemDto[]): ShoppingItemDto[] {
-    return listObj1.filter(el1 => listObj2.every(el2 => el2.id !== el1.id || el2.name !== el1.name || el2.completed !== el1.completed));
-  }
-
-  updateList(currentList, newList, diffList) {
-    diffList.forEach(entry1 => {
-      if (!newList.includes(entry1)) {
-        let i = currentList.indexOf(entry1);
-        currentList.splice(i, 1);
-      } else if (newList.includes(entry1)) {
-        entry1.shoppingItems = [];
-        currentList.push(entry1);
-      } 
-    });
-
-    currentList.forEach((cList, index) => {
-      newList.forEach((nList) => {
-        if (nList.id === cList.id && nList.name !== cList.name) {
-          currentList[index].name = nList.name;
-        }
-      })
-    });
-  }
-
-  updateItems(currentList, allNewShoppingItems, diffItem) {
-    diffItem.forEach(entry => {
-      let items = currentList.filter(list => list.id === entry.listId)[0];
-      if (typeof items !== 'undefined') {
-        if (!allNewShoppingItems.includes(entry)) {
-          items.shoppingItems.forEach((el, index) => {
-            if (el.id === entry.id) {
-              items.shoppingItems.splice(index, 1);
-            }
-          });
-        } else if (allNewShoppingItems.includes(entry)) {  
-          currentList.forEach(cList => {
-            if (cList.id === entry.listId) {
-              cList.shoppingItems.push(new ShoppingItemDto(entry.id, entry.name, entry.completed));
-            }
+    this.subscriptions.push(
+      this.webSocketService.getConnectionState().subscribe((isConnected) => {
+        if (isConnected) {
+          this.authService.user.subscribe(user => {
+            if (user) this.subscribeToTopics(user.id);
           });
         }
-        items.shoppingItems.forEach((item, index) => {
-          if ((item.id === entry.id) && (item.name !== entry.name || item.completed !== entry.completed)) {
-            item.shoppingItems[index].name = entry.name;
-            item.shoppingItems[index].completed = entry.completed;
-          }
-        })
-        items.shoppingItems.sort((a, b) => a.id < b.id ? -1 : 1);
-      }
-    });
+      })
+    );
   }
-
-  pollForList() {
-    if (this.activeGroup.id !== null) {
-      this.pollSub = this.shoppingListService.getShoppingListsWithItems(this.activeGroupId, this.requestTimeStamp).subscribe(list => {  
-        let diffList = [];
-        let diffItem = [];
-        this.allShoppingItems = [];
-        this.allCurrentShoppingItems = [];
   
-        this.allShoppingItems = this.getAllListItemsForGroup(list);
-        this.allCurrentShoppingItems =this.getAllListItemsForGroup(this.shoppingListWithItems);
-  
-        diffList = [
-          ...this.getDifferenceList(this.shoppingListWithItems, list),
-          ...this.getDifferenceList(list, this.shoppingListWithItems)
-        ];
-  
-        diffItem = [
-          ...this.getDifferenceItem(this.allCurrentShoppingItems, this.allShoppingItems),
-          ...this.getDifferenceItem(this.allShoppingItems, this.allCurrentShoppingItems)
-        ];
-  
-        this.updateList(this.shoppingListWithItems, list, diffList);
-  
-        this.updateItems(this.shoppingListWithItems, this.allShoppingItems, diffItem);
-  
-        this.requestTimeStamp = new Date().getTime();
-
-        if (!this.pageLeft) {
-          console.log("Poll II");
-          this.pollForList()
-        }
-
-      }, errRes => {
-        if (errRes.status == 304 && !this.pageLeft) {
-          console.log("Poll III");
-          this.pollForList();
-        }
-      }) 
-    }
-  }
-
   ngOnDestroy() {
-    this.pollSub.unsubscribe();
+    this.webSocketService.unsubscribeAll();
   }
 
-  async refreshShoppingList(event?: any) {
-    this.shoppingListService.getShoppingListsWithItems(this.activeGroup.id, this.INITIAL_REQUEST_TIMESTAMP).pipe(
-      finalize(() => {
-        if (event) {
-          event.target.complete();
-        }
-      })
-    ).subscribe(list => {
-      this.shoppingListWithItems = list;
-    })
-  }
-
-  ionViewWillEnter() {
-    // console.log(this.activeGroup.id);
-    this.pageLeft = false;
-    if (this.activeGroup.id !== null) {
-      this.getShoppingListWithItems(this.activeGroupId);
-      console.log("Poll IV");
-      this.pollForList();
-    }
-  }
-
-  ionViewDidLeave() {
-    this.pageLeft = true;
+  refreshShoppingList(event: CustomEvent) {
+    setTimeout(() => {
+      this.shoppinglistService.getShoppingListsWithItems(this.activeGroup);
+      (event.target as HTMLIonRefresherElement).complete();
+    }, 2000);
   }
 
   onCreateList() {
+    this.alertService.presentInputAlert({
+      header: this.translate.instant('alerts.shoppinglist.new.header'),
+      placeholder: this.translate.instant('alerts.shoppinglist.new.placeholder'),
+      okText: this.translate.instant('alerts.shoppinglist.new.ok'),
+      cancelText: this.translate.instant('alerts.shoppinglist.new.cancel'),
+      onConfirm: async (listName) => {
+        const loading = await this.alertService.presentLoading(
+          this.translate.instant('alerts.shoppinglist.new.loading')
+        );
+
+        const newShoppingList: AddEditShoppinglistDto = {
+          id: null,
+          name: listName.trim(),
+          groupId: this.activeGroup.id,
+        };
+        this.shoppinglistService.addShoppingList(newShoppingList);
+        loading.dismiss();
+      },
+    });
+  }
+
+  onUpdateList(list: ShoppinglistDto, slidingItem: IonItemSliding) {
+    slidingItem.close();
     this.alertCtrl.create({
-      header: "Neue Einkaufsliste:",
+      header: this.translate.instant('alerts.shoppinglist.edit.header'),
       buttons: [{
-        text: "Abbrechen",
+        text: this.translate.instant('alerts.shoppinglist.edit.cancel'),
         role: "cancel"
       }, {
-        text: "ok",
+        text: this.translate.instant('alerts.shoppinglist.edit.ok'),
         handler: (data) => {
           this.loadingCtrl.create({
-            message: "Erstelle Einkaufsliste..."
+            message: this.translate.instant('alerts.shoppinglist.edit.loading')
           }).then(loadingEl => {
-            let newShoppingList = new AddEditShoppingListDto(null, data.listName, this.activeGroupId);
-            this.shoppingListService.addShoppingList(newShoppingList).subscribe((list) => {
-              loadingEl.dismiss();
-              // this.getShoppingListWithItems(this.activeGroupId);
-              let newShoppingListDto = new ShoppingListDto(
-                list.id,
-                list.name,
-                this.shoppingItemsForNewList
-              )
-              this.shoppingListWithItems.push(newShoppingListDto);
-              this.shoppingItemsForNewList = [];
-            })
+
+            if (!data) return;
+            const trimmedListName = data.listName.trim();
+            if (trimmedListName === "") return;
+
+            const updateShoppingList: AddEditShoppinglistDto = {
+              id: list.id, 
+              name: trimmedListName, 
+              groupId: this.activeGroup.id
+            };
+
+            this.shoppinglistService.updateShoppingList(updateShoppingList)
+            loadingEl.dismiss();
           })
         }
       }],
       inputs: [
         {
           name: "listName",
-          placeholder: "Name der Einkaufsliste"
+          value: list.name,
+          attributes: {
+            maxlength: INIT_NUMBERS.MAX_LENGTH
+          }
         }
       ]
     }).then(alertEl => alertEl.present().then(() => {
-      const inputField: HTMLElement = document.querySelector("ion-alert input");
-      inputField.focus();
-    }));
-
+      const inputField = document.querySelector('ion-alert input') as HTMLElement;
+      if (inputField) {
+        inputField.focus();
+      }
+    }))
   }
 
-  onUpdateList(list: ShoppingListDto, slidingItem: IonItemSliding) {
+  onDeleteList(list: ShoppinglistDto, slidingItem: IonItemSliding) {
     slidingItem.close();
     this.alertCtrl.create({
-      header: "Einkaufsliste bearbeiten:",
+      header: this.translate.instant('alerts.shoppinglist.delete.header'),
+      message: this.translate.instant('alerts.shoppinglist.delete.message', {listName: list.name}),
       buttons: [{
-        text: "Abbrechen",
+        text: this.translate.instant('alerts.shoppinglist.delete.cancel'),
         role: "cancel"
       }, {
-        text: "ok",
-        handler: (data) => {
+        text: this.translate.instant('alerts.shoppinglist.delete.ok'),
+        handler: () => {
           this.loadingCtrl.create({
-            message: "Bearbeite Einkaufsliste..."
+            message: this.translate.instant('alerts.shoppinglist.delete.loading')
           }).then(loadingEl => {
-            let updateShoppingList = new AddEditShoppingListDto(list.id, data.listName, this.activeGroupId);
-            this.shoppingListService.updateShoppingList(updateShoppingList).subscribe((nList) => {
-              loadingEl.dismiss();
-              list.name = nList.name;
-              // this.getShoppingListWithItems(this.activeGroupId);
-            })
-          })
-        }
-      }],
-      inputs: [
-        {
-          name: "listName",
-          value: list.name
-        }
-      ]
-    }).then(alertEl => alertEl.present().then(() => {
-      const inputField: HTMLElement = document.querySelector("ion-alert input");
-      inputField.focus();
-    }));
-  }
-
-  onDeleteList(list: ShoppingListDto, slidingItem: IonItemSliding) {
-    slidingItem.close();
-    this.alertCtrl.create({
-      header: "Löschen:",
-      message: `Möchtest du die Einkaufsliste "${list.name}" wirklich löschen inkl. aller Einträge?`,
-      buttons: [{
-        text: "Nein",
-        role: "cancel"
-      }, {
-        text: "Ja",
-        handler: (data) => {
-          this.loadingCtrl.create({
-            message: "Lösche Einkaufsliste..."
-          }).then(loadingEl => {
-            let deleteShoppingList = new AddEditShoppingListDto(list.id, list.name, this.activeGroupId);
-            this.shoppingListService.deleteShoppingList(deleteShoppingList).subscribe(() => {
-              loadingEl.dismiss();
-              this.shoppingListWithItems = this.shoppingListWithItems.filter(sList => sList.id !== list.id );
-              // this.getShoppingListWithItems(this.activeGroupId);
-            })
+            const deletedShoppinglist: AddEditShoppinglistDto = {
+              id: list.id,
+              name: list.name,
+              groupId: this.activeGroup.id
+            }
+            this.shoppinglistService.deleteShoppingList(deletedShoppinglist);
+            loadingEl.dismiss();
           })
         }
       }]
     }).then(alertEl => alertEl.present());
   }
+  
+  onCreateItem(list: ShoppinglistDto) {
+    if (!this.newItemInputs[list.id]?.trim()) return;
+    const trimmedItemName = this.newItemInputs[list.id]?.trim();
+    if (trimmedItemName === "") return;
 
-  onCreateItem(list: ShoppingListDto, indexList: number, indexItem: number) {
-    let newItemName = list.shoppingItems[indexItem + 1].toString(); 
-    
-    let newItem = new AddEditShoppingItemDto(
-      null, newItemName, false, list.id, this.activeGroupId
-    );
-    
-    this.shoppingItemService.addItemToShoppingList(newItem).subscribe((item) => {
-      list.shoppingItems[indexItem + 1] = null;
-      list.shoppingItems.push(item);
-      // this.getShoppingListWithItems(this.activeGroupId);
-      setTimeout(() => document.querySelectorAll('ion-input')[indexList].setFocus(), 300);
-      // document.querySelectorAll('ion-input')[indexList].setFocus();
-    })
-    
+    const newItem: AddEditShoppingItemDto = {
+      id: null,
+      name: trimmedItemName,
+      completed: false,
+      shoppingListId: list.id,
+      groupId: this.activeGroup.id,
+    }
+    this.newItemInputs[list.id] = '';
+    this.shoppinglistService.addItemToShoppingList(newItem);
+    setTimeout(() => { this.focusInput(list.id); }, 300);
   }
 
-  onUpdateItem(list: ShoppingListDto, item: ShoppingItemDto) {
+  private focusInput(listId: number) {
+    const inputElement = this.inputFields.find((_, index) => this.shoppingLists()[index].id === listId);
+    if (inputElement) {
+      inputElement.setFocus();
+    } else {
+      console.warn('Kein passendes Input-Feld gefunden für List ID:', listId);
+    }
+  }
+
+  onUpdateItem(list: ShoppinglistDto, item: ShoppingitemDto) {
     this.alertCtrl.create({
-      header: "Eintrag bearbeiten:",
+      header: this.translate.instant('alerts.shoppinglist.item.edit.header'),
       buttons: [{
-        text: "Abbrechen",
+        text: this.translate.instant('alerts.shoppinglist.item.edit.cancel'),
         role: "cancel"
       }, {
-        text: "ok",
+        text: this.translate.instant('alerts.shoppinglist.item.edit.ok'),
         handler: (data) => {
           this.loadingCtrl.create({
-            message: "Bearbeite Eintrag..."
+            message: this.translate.instant('alerts.shoppinglist.item.edit.loading')
           }).then(loadingEl => {
-            let updateShoppingItem = new AddEditShoppingItemDto(
-              item.id, data.itemName, item.completed, list.id, this.activeGroupId
-            );
-            this.shoppingItemService.updateItemOfShoppingList(updateShoppingItem).subscribe((item) => {
-              loadingEl.dismiss();
-              let updateItem = list.shoppingItems.filter(i => i.id == item.id)[0];
-              updateItem.name = item.name;
-              // this.getShoppingListWithItems(this.activeGroupId);
-              
-            })
+            if (!data) return;
+            const trimmedItemName = data.itemName.trim();
+            if (trimmedItemName === "") return;
+
+            const updateShoppingItem: AddEditShoppingItemDto = {
+              id: item.id,
+              name: trimmedItemName,
+              completed: item.completed,
+              groupId: this.activeGroup.id,
+              shoppingListId: list.id
+            };
+            
+            this.shoppinglistService.updateItemOfShoppingList(updateShoppingItem);
+            loadingEl.dismiss();
           })
         }
       }],
       inputs: [
         {
           name: "itemName",
-          value: item.name
+          value: item.name,
+          attributes: {
+            maxlength: INIT_NUMBERS.MAX_LENGTH
+          }
         }
       ]
     }).then(alertEl => alertEl.present().then(() => {
-      const inputField: HTMLElement = document.querySelector("ion-alert input");
-      inputField.focus();
+      const inputField = document.querySelector('ion-alert input') as HTMLElement;
+      if (inputField) {
+        inputField.focus();
+      }
     }));
   }
 
-  onDeleteItem(list: ShoppingListDto, item: ShoppingItemDto) {
-    let deleteShoppingItem = new AddEditShoppingItemDto(
-      item.id, item.name, item.completed, list.id, this.activeGroupId
-    );
-    
-    this.shoppingItemService.deleteItemFromShoppingList(deleteShoppingItem).subscribe(() => {
-      let index = this.shoppingListWithItems.indexOf(
-        this.shoppingListWithItems.filter(sList => sList.id == list.id)[0]
-      )
-      let newListItems = this.shoppingListWithItems[index].shoppingItems.filter(lItem => lItem.id !== item.id);
-      this.shoppingListWithItems[index].shoppingItems = newListItems;
-      // this.getShoppingListWithItems(this.activeGroupId);
-    })
+  onDeleteItem(list: ShoppinglistDto, item: ShoppingitemDto) {
+    const deletedItem: AddEditShoppingItemDto = {
+      id: item.id,
+      name: item.name,
+      completed: item.completed,
+      shoppingListId: list.id,
+      groupId: this.activeGroup.id,
+    }
+    this.shoppinglistService.deleteItemFromShoppingList(deletedItem);
   }
 
-  deleteList(sList: ShoppingListDto) {
-    let newShoppingList = [];
-    newShoppingList = this.shoppingListWithItems.filter(list => list.id == sList.id)
-    newShoppingList[0].shoppingItems.forEach(item => {
+  markAsDone(list: ShoppinglistDto, item: ShoppingitemDto) {
+    item.completed = !item.completed;
+    let updateShoppingItem: AddEditShoppingItemDto = {
+      id: item.id,
+      name: item.name,
+      completed: item.completed,
+      groupId: this.activeGroup.id,
+      shoppingListId: list.id
+    };
+    this.shoppinglistService.updateItemOfShoppingList(updateShoppingItem);
+  }
+
+  deleteListOfItems(list: ShoppinglistDto) {
+    let items: AddEditShoppingItemDto[] = [];
+    list.shoppingItems.forEach(item => {
       if (item.completed) {
-        this.onDeleteItem(newShoppingList[0], item);
+        items.push({
+          id: item.id,
+          name: item.name,
+          completed: item.completed,
+          shoppingListId: list.id,
+          groupId: this.activeGroup.id
+        });
       }
     })
+    if (items.length === 0) return;
+    this.shoppinglistService.deleteAllCompletedShoppingItems(items);
   }
 
-  markAsDone(list: ShoppingListDto, item: ShoppingItemDto) {
-    item.completed = !item.completed;
-    let updateShoppingItem = new AddEditShoppingItemDto(
-      item.id, item.name, item.completed, list.id, this.activeGroupId
-    );
-    this.shoppingItemService.updateItemOfShoppingList(updateShoppingItem).subscribe(() => {});
+  private subscribeToTopics(userId: number) {
+
+    this.webSocketService.subscribe(
+      `/user/${userId}/notification/add-list`,
+      (message: any) => {
+        const parsedData = JSON.parse(message.body);
+        const shoppinglistDto: ShoppinglistDto = {
+          id: parsedData.id,
+          name: parsedData.name,
+          shoppingItems: []
+        } 
+        console.log(parsedData);
+        this.shoppingLists.update(lists => [...lists, shoppinglistDto])
+      }
+    )
+
+    this.webSocketService.subscribe(
+      `/user/${userId}/notification/update-list`,
+      (message: any) => {
+        const parsedData = JSON.parse(message.body);
+        console.log(parsedData);
+        this.shoppingLists.update(lists => lists.map(list => 
+          list.id === parsedData.id ? {...list, name: parsedData.name} : list
+        ))
+      }
+    )
+
+    this.webSocketService.subscribe(
+      `/user/${userId}/notification/delete-list`,
+      (message: any) => {
+        const parsedData = JSON.parse(message.body);
+        console.log(parsedData);
+        this.shoppingLists.update(lists => lists.filter(list =>
+          list.id !== parsedData.id
+        ))
+      }
+    )
+
+    this.webSocketService.subscribe(
+      `/user/${userId}/notification/add-item`,
+      (message: any) => {
+        const parsedData = JSON.parse(message.body);
+        console.log(parsedData);
+        const newItem: ShoppingitemDto = {
+          id: parsedData.id!,
+          name: parsedData.name,
+          completed: parsedData.completed
+        }
+
+        this.shoppingLists.update(lists => 
+          lists.map(list => 
+            list.id === parsedData.shoppingListId 
+              ? { 
+                  ...list, 
+                  shoppingItems: [...list.shoppingItems, newItem] 
+                } 
+              : list
+          )
+        );
+      }
+    )
+
+    this.webSocketService.subscribe(
+      `/user/${userId}/notification/update-item`,
+      (message: any) => {
+        const parsedData = JSON.parse(message.body);
+        console.log(parsedData);
+        const updatedItem: ShoppingitemDto = {
+          id: parsedData.id!,
+          name: parsedData.name,
+          completed: parsedData.completed
+        }
+
+        this.shoppingLists.update(lists => 
+          lists.map(list => 
+            list.shoppingItems.some(item => item.id === updatedItem.id)
+              ? {
+                  ...list,
+                  shoppingItems: list.shoppingItems.map(item =>
+                    item.id === updatedItem.id ? updatedItem : item
+                  )
+                }
+              : list
+          )
+        )
+      }
+    )
+
+    this.webSocketService.subscribe(
+      `/user/${userId}/notification/delete-item`,
+      (message: any) => {
+        const parsedData = JSON.parse(message.body);
+        console.log(parsedData);
+        this.shoppingLists.update(lists => 
+          lists.map(list => 
+            list.id === parsedData.shoppingListId
+              ? {
+                ...list,
+                shoppingItems: list.shoppingItems.filter(item => item.id !== parsedData.id)
+                }
+              : list
+          )
+        )
+      }
+    )
+    
+    this.webSocketService.subscribe(
+      `/user/${userId}/notification/delete-all-items`,
+      (message: any) => {
+        const parsedData = JSON.parse(message.body);
+        console.log(parsedData);
+        this.shoppingLists.update(lists => 
+          lists.map(list =>
+            list.id === parsedData[0].shoppingListId
+            ? {
+                ...list,
+                shoppingItems: list.shoppingItems.filter(items =>
+                  !parsedData.some((deletedItem: { id: number }) => deletedItem.id === items.id)
+                )
+              } 
+            : list
+          )
+        )
+      }
+    )
   }
-
-  getCurrentUser() {
-    // this.groupService.currentUser.subscribe(user => {
-    //   this.userName = user.userName;
-    // })
-    this.authService.userName.subscribe(name => {
-      this.userName = name;
-    })
-    return this.userName;
-  }
-
-  onCreateGroup() {
-    this.alertService.createGroup();
-  }
-
-}
-
-class ShoppingItem {
-  constructor (
-    public listId: number,
-    public id : number,
-    public name: string,
-    public completed: boolean
-  ) {}
 }

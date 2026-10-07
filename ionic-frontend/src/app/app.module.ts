@@ -1,43 +1,47 @@
 import { NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
 import { RouteReuseStrategy } from '@angular/router';
+import { ScrollingModule } from '@angular/cdk/scrolling';
 
 import { IonicModule, IonicRouteStrategy } from '@ionic/angular';
-import { HTTP_INTERCEPTORS, HttpClientModule } from '@angular/common/http';
-import { FileOpener } from '@ionic-native/file-opener/ngx';
+
 import { AppComponent } from './app.component';
 import { AppRoutingModule } from './app-routing.module';
-import { AsyncPipe, CommonModule, CurrencyPipe, DatePipe, registerLocaleData } from '@angular/common';
-import localDe from '@angular/common/locales/de';
+import { HTTP_INTERCEPTORS, HttpClient, provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { ReactiveFormsModule } from '@angular/forms';
 import { AuthHttpInterceptorService } from './auth/auth-http-interceptor.service';
-import { SettlementPaymentPage } from './settlement-payment/settlement-payment.page';
-import { GroupMembersPage } from './group-members/group-members.page';
-import { ScrollingModule } from '@angular/cdk/scrolling';
-import { FilterModalPage } from './filter-modal/filter-modal.page';
+import { CommonModule } from '@angular/common';
 import { ScientificCurrencyPipe } from './pipe/scientific.pipe';
-registerLocaleData(localDe, 'de');
+import { TranslateLoader, TranslateModule } from '@ngx-translate/core';
+import { CustomTranslateLoader } from './custom-translate-loader';
+
+export function createTranslateLoader(http: HttpClient) {
+  return new CustomTranslateLoader(http);
+}
 
 @NgModule({
-  declarations: [AppComponent, SettlementPaymentPage, GroupMembersPage, FilterModalPage],
-  imports: [
+  declarations: [AppComponent],
+  imports: [ 
     BrowserModule,
     CommonModule,
-    IonicModule.forRoot(), 
+    IonicModule.forRoot(),
     AppRoutingModule,
-    HttpClientModule,
     ReactiveFormsModule,
-    ScrollingModule
+    ScrollingModule,
+    TranslateModule.forRoot({
+      loader: {
+        provide: TranslateLoader,
+        useFactory: createTranslateLoader,
+        deps: [HttpClient]
+      }
+    }),
   ],
   providers: [
-    DatePipe,
-    CurrencyPipe,
-    AsyncPipe,
-    ScientificCurrencyPipe,
-    FileOpener,
     { provide: HTTP_INTERCEPTORS, useClass: AuthHttpInterceptorService, multi: true },
-    { provide: RouteReuseStrategy, useClass: IonicRouteStrategy }
+    { provide: RouteReuseStrategy, useClass: IonicRouteStrategy },
+    provideHttpClient(withInterceptorsFromDi()),
+    ScientificCurrencyPipe
   ],
-  bootstrap: [AppComponent],
+  bootstrap: [AppComponent]
 })
 export class AppModule {}

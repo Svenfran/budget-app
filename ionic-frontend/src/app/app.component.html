@@ -1,13 +1,15 @@
 <ion-app>
   <ion-menu side="start" menuId="m1" contentId="main">
     <ion-header class="ion-no-border">
-      <ion-toolbar>
-        <ion-title class="menu-header-title">Budget App</ion-title>
+      <ion-toolbar>  
+        <ion-title color="primary" class="menu-header-title">DIVVY</ion-title>
         <ion-item>
           <div class="menu-header">
-            <ion-label class="ion-text-wrap" *ngIf="loadedUser | async">Hallo {{ userName }}!</ion-label>
-            <ion-text>Schön dich zu sehen 😊</ion-text>
-            <ion-text *ngIf="loadedActiveGroup | async" color="medium">Gruppe: {{ activeGroup?.name }}</ion-text>
+            <ion-label class="ion-text-wrap" *ngIf="user">
+              {{ 'navigation.welcome' | translate: { name: (user.name.length > 10) ? (user.name | slice:0:10) + '...' : user.name } }}
+            </ion-label>
+            <ion-text>{{ 'navigation.title' | translate }}</ion-text>
+            <ion-text class="ion-text-wrap" color="medium">{{ 'navigation.group' | translate }} {{ activeGroup.name }}</ion-text>
           </div>
         </ion-item>
       </ion-toolbar>
@@ -15,99 +17,95 @@
     <ion-content>
       <ion-list>
         <ion-list-header>
-          <ion-label color="medium">GRUPPEN</ion-label>
+          <ion-label color="medium">{{ 'navigation.groups.header' | translate }}</ion-label>
         </ion-list-header>
         <ion-item button lines="none" (click)="isOpen = !isOpen" [class.active-parent]="isOpen" detail="false">
           <ion-icon slot="start" name="chevron-up" *ngIf="!isOpen"></ion-icon>
           <ion-icon slot="start" name="chevron-down" *ngIf="isOpen"></ion-icon>
-          <ion-label>Meine Gruppen ({{grouplistSideNav?.length}})</ion-label>
+          <ion-label>{{ 'navigation.groups.all' | translate }} ({{ sideNavGroups().length }})</ion-label>
         </ion-item>
         <ion-list *ngIf="isOpen">
-          <ion-item *ngIf="grouplistSideNav?.length <= 0" class="sub-item" lines="none">
-            <p>Keine Gruppen gefunden.</p>
+          <ion-item *ngIf="sideNavGroups().length <= 0" class="sub-item" lines="none">
+            <p>{{ 'navigation.groups.no_groups' | translate }}</p>
           </ion-item>
           <ion-menu-toggle>
-            <ion-text *ngIf="grouplistSideNav.length > 0 && hasGroupOwner" class="sub-item">Admin ({{numberGroupOwner}})</ion-text>
-            <ng-container *ngFor="let group of grouplistSideNav">
-              <ion-item *ngIf="group.userDto.userName == userName" 
-                        class="sub-item"
-                        (click)="getActiveGroup(group.id)"
-                        [class.active]="group.id == activeGroup.id"
-                        lines="none" 
-                        button>
-                <ion-icon name="folder-outline" slot="start"></ion-icon>
-                <ion-label class="ion-text-wrap">{{ group.name }}</ion-label>
-              </ion-item>
-            </ng-container>
-            <ion-text *ngIf="grouplistSideNav.length > 0 && hasGroupMember" class="sub-item">Mitglied ({{numberGroupMember}})</ion-text>
-            <ng-container *ngFor="let group of grouplistSideNav">
-              <ion-item *ngIf="group.userDto.userName != userName"
-                        class="sub-item"
-                        (click)="getActiveGroup(group.id)"
-                        [class.active]="group.id == activeGroup.id"
-                        lines="none" 
-                        button>
-                <ion-icon name="folder-outline" slot="start"></ion-icon>
-                <ion-label class="ion-text-wrap">{{ group.name }}</ion-label>
-              </ion-item>
-            </ng-container>
+            <ion-item *ngFor="let group of sideNavGroups()"
+                      class="sub-item"
+                      (click)="setActiveGroup(group)"
+                      [class.active]="group.id === activeGroup.id"
+                      lines="none" 
+                      button>
+              <ion-icon *ngIf="groupHasMembers(group)" name="people-outline" slot="start"></ion-icon>
+              <ion-icon *ngIf="!groupHasMembers(group)" name="person-outline" slot="start"></ion-icon>
+              <ion-label class="ion-text-wrap">{{ group.name }}</ion-label>
+            </ion-item>
           </ion-menu-toggle>
         </ion-list>
+
         <ion-menu-toggle menu="m1">
-          <ion-item [disabled]="!grouplistSideNav?.length > 0" lines="none" routerLink="/groupoverview" button>
+          <ion-item lines="none" routerLink="/groupoverview" button>
             <ion-icon name="ellipsis-horizontal" slot="start"></ion-icon>
-            <ion-label>Gruppen bearbeiten</ion-label>
+            <ion-label>{{ 'navigation.groups.edit' | translate }}</ion-label>
           </ion-item>
         </ion-menu-toggle>
-        <!-- <ion-menu-toggle menu="m1">
-          <ion-item lines="none" button>
-            <ion-icon name="stats-chart-outline" slot="start"></ion-icon>
-            <ion-label>Gruppenstatistik</ion-label>
-          </ion-item>
-        </ion-menu-toggle> -->
+
         <ion-menu-toggle menu="m1">
           <ion-item lines="none" (click)="onCreateGroup()" button>
             <ion-icon name="add" slot="start"></ion-icon>
-            <ion-label>Gruppe hinzufügen</ion-label>
+            <ion-label>{{ 'navigation.groups.create' | translate }}</ion-label>
           </ion-item>
         </ion-menu-toggle>
 
         <ion-list-header>
-          <ion-label color="medium">KATEGORIEN</ion-label>
+          <ion-label color="medium">{{ 'navigation.categories.header'| translate }}</ion-label>
         </ion-list-header>
         <ion-menu-toggle menu="m1">
-          <ion-item [disabled]="!grouplistSideNav?.length > 0" lines="none" routerLink="/categoryoverview" button>
+          <ion-item lines="none" routerLink="/categoryoverview" button>
             <ion-icon name="ellipsis-horizontal" slot="start"></ion-icon>
-            <ion-label>Kategorien bearbeiten</ion-label>
+            <ion-label>{{ 'navigation.categories.edit' | translate }}</ion-label>
           </ion-item>
         </ion-menu-toggle>
         <ion-menu-toggle menu="m1">
-          <ion-item [disabled]="!grouplistSideNav?.length > 0" lines="none" (click)="onCreateCategory()" button>
+          <ion-item lines="none" (click)="onCreateCategory()" button>
             <ion-icon name="add" slot="start"></ion-icon>
-            <ion-label>Kategorie hinzufügen</ion-label>
+            <ion-label>{{ 'navigation.categories.create' | translate }}</ion-label>
           </ion-item>
         </ion-menu-toggle>
 
         <ion-list-header>
-          <ion-label color="medium">EINSTELLUNGEN</ion-label>
+          <ion-label color="medium">{{ 'navigation.settings.header' | translate }}</ion-label>
         </ion-list-header>
         <ion-menu-toggle menu="m1">
           <ion-item lines="none" routerLink="/userprofile" button>
             <ion-icon name="person-circle-outline" slot="start"></ion-icon>
-            <ion-label>Profil bearbeiten</ion-label>
+            <ion-label>{{ 'navigation.settings.edit_profile' | translate }}</ion-label>
           </ion-item>
         </ion-menu-toggle>
         <ion-item lines="none">
           <ion-icon name="moon-outline" slot="start"></ion-icon>
-          <ion-label>Dark Mode</ion-label>
+          <ion-label>{{ 'navigation.settings.dark_mode' | translate }}</ion-label>
           <ion-toggle 
               slot="end"
               (ionChange)="onToggleColorTheme($event)"
               checked={{darkMode}}
           ></ion-toggle>
         </ion-item>
+
+        <ion-menu-toggle menu="m1">
+          <ion-item lines="none">
+            <ion-icon name="globe-outline" slot="start"></ion-icon>
+            <ion-text slot="start">{{ 'navigation.settings.language' | translate }}</ion-text>
+            <ion-buttons slot="end">
+              <ion-button (click)="switchLanguage('de')" [color]="currentLang === 'de' ? 'primary' : 'medium'">DE</ion-button>
+              <ion-button (click)="switchLanguage('en')" [color]="currentLang === 'en' ? 'primary' : 'medium'">EN</ion-button>
+              <ion-button (click)="switchLanguage('es')" [color]="currentLang === 'es' ? 'primary' : 'medium'">ES</ion-button>
+            </ion-buttons>
+          </ion-item>
+        </ion-menu-toggle>
+        
       </ion-list>
     </ion-content>
+
     <ion-footer class="ion-no-border">
       <ion-menu-toggle>
         <div class="menu-footer" (click)="onLogout()">

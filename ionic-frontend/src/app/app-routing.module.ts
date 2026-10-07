@@ -4,8 +4,9 @@ import { AuthGuard } from './auth/auth.guard';
 
 const routes: Routes = [
   {
-    path: '', redirectTo: 'domains/tabs/overview', pathMatch: 'full'
-    // path: '', redirectTo: 'auth', pathMatch: 'full'
+    path: '',
+    redirectTo: 'domains/tabs/overview',
+    pathMatch: 'full'
   },
   {
     path: 'auth',
@@ -37,8 +38,8 @@ const routes: Routes = [
     canLoad: [AuthGuard]
   },
   {
-    path: 'group-members',
-    loadChildren: () => import('./group-members/group-members.module').then( m => m.GroupMembersPageModule),
+    path: 'groupmembers',
+    loadChildren: () => import('./groupmembers/groupmembers.module').then( m => m.GroupmembersPageModule),
     canLoad: [AuthGuard]
   },
   {
@@ -52,20 +53,31 @@ const routes: Routes = [
     canLoad: [AuthGuard]
   },
   {
+    path: 'filter-modal',
+    loadChildren: () => import('./filter-modal/filter-modal.module').then( m => m.FilterModalPageModule),
+    canLoad: [AuthGuard]
+  },
+  {
     path: 'userprofile',
     loadChildren: () => import('./userprofile/userprofile.module').then( m => m.UserprofilePageModule),
     canLoad: [AuthGuard]
   },
   {
-    path: 'passwordchange',
-    loadChildren: () => import('./passwordchange/passwordchange.module').then( m => m.PasswordchangePageModule),
+    path: 'password-change',
+    loadChildren: () => import('./password-change/password-change.module').then( m => m.PasswordChangePageModule),
     canLoad: [AuthGuard]
   },
   {
-    path: 'filter-modal',
-    loadChildren: () => import('./filter-modal/filter-modal.module').then( m => m.FilterModalPageModule),
+    path: 'no-group',
+    loadChildren: () => import('./error-page/no-group/no-group.module').then( m => m.NoGroupPageModule),
     canLoad: [AuthGuard]
   },
+  {
+    path: 'server-unavailable',
+    loadChildren: () => import('./error-page/server-unavailable/server-unavailable.module').then( m => m.ServerUnavailablePageModule),
+    canLoad: [AuthGuard]
+  }
+
 ];
 
 @NgModule({

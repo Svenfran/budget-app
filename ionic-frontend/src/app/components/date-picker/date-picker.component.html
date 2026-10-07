@@ -1,0 +1,14 @@
+<ng-template>
+  <ion-content>
+    <ion-item>
+      <ion-datetime 
+        [value]="selectedDate" 
+        (ionChange)="onDateChange($event)">
+      </ion-datetime>
+      <ion-buttons slot="buttons">
+        <ion-button color="primary" (click)="close()">Abbrechen</ion-button>
+        <ion-button color="primary" (click)="select()">Speichern</ion-button>
+      </ion-buttons>
+    </ion-item>
+  </ion-content>
+</ng-template>

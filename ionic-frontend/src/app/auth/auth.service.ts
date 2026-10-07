@@ -1,10 +1,11 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable, OnDestroy } from '@angular/core';
+import { Injectable, OnDestroy, signal } from '@angular/core';
 import { BehaviorSubject, Observable, from } from 'rxjs';
 import { map, tap } from 'rxjs/operators';
 import { environment } from 'src/environments/environment';
-import { StorageService } from '../services/storage.service';
+import { StorageService } from '../service/storage.service';
 import { User } from './user';
+import { Device } from '@capacitor/device';
 
 export interface AuthResponseData {
   id: number,
@@ -19,11 +20,12 @@ export interface AuthResponseData {
 })
 export class AuthService implements OnDestroy {
 
-  private _user = new BehaviorSubject<User>(null);
-  private apiBaseUrl = environment.apiBaseUrlExternal;
+  private _user = new BehaviorSubject<User>(null!);
+  private apiBaseUrl = environment.apiBaseUrl;
   private authUrl = `${this.apiBaseUrl}/api/auth/authenticate`;
   private registerUrl = `${this.apiBaseUrl}/api/auth/register`;
   private logoutUrl = `${this.apiBaseUrl}/api/auth/logout`;
+  public deviceId = signal<string>("");
   
   private activeLogoutTimer: any;
   
@@ -42,16 +44,19 @@ export class AuthService implements OnDestroy {
   constructor(
     private http: HttpClient,
     private storageService: StorageService
-    ) {}
- 
-  login(userEmail: string, password: string ) {
+    ) {
+    Device.getId().then(device => this.deviceId.set(device.identifier));
+    }
+
+
+  login(userEmail: string, password: string) {
     return this.http.post<AuthResponseData>(this.authUrl,
-      { email: userEmail, password: password } ).pipe(tap(this.setUserData.bind(this)));
+      { email: userEmail, password: password, deviceId: this.deviceId() } ).pipe(tap(this.setUserData.bind(this)));
   }
 
   register(userName: string, userEmail: string, password: string) {
     return this.http.post<AuthResponseData>(this.registerUrl, 
-      { name: userName, email: userEmail, password: password} ).pipe(tap(this.setUserData.bind(this)));
+      { name: userName, email: userEmail, password: password, deviceId: this.deviceId() } ).pipe(tap(this.setUserData.bind(this)));
   }
 
   userLogout(): Observable<any>{
@@ -67,9 +72,10 @@ export class AuthService implements OnDestroy {
       clearTimeout(this.activeLogoutTimer);
     }
     this.userLogout().subscribe();
-    this._user.next(null);
-    this.storageService.removeData('authData');
+    this._user.next(null!);
     localStorage.removeItem('token');
+    this.storageService.removeData('authData');
+    this.storageService.removeData('ACTIVE_GROUP');
   }
 
   ngOnDestroy(): void {
@@ -120,8 +126,9 @@ export class AuthService implements OnDestroy {
         if (!storedData || !storedData.value) {
           return null;
         }
-        const parsedData = JSON.parse(storedData.value) as {id: number, name: string, email: string, expirationDate: number, token: string};
-        const parsedObject = JSON.parse(parsedData['data']);
+        const parsedData = JSON.parse(storedData.value);
+        const parsedObject = JSON.parse(parsedData.data) as {id: number, name: string, email: string, expirationDate: number, token: string};
+
 
         if (parsedObject.expirationDate <= new Date().getTime()) {
           return null;
@@ -134,6 +141,7 @@ export class AuthService implements OnDestroy {
           parsedObject.expirationDate,
           parsedObject.token
           );
+
         return user;
       }),
       tap(user => {

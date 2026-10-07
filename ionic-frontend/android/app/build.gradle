@@ -1,9 +1,19 @@
 apply plugin: 'com.android.application'
 
+// Release-Signierung: Zugangsdaten liegen in android/keystore.properties (nicht in git)
+def keystorePropertiesFile = rootProject.file('keystore.properties')
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+} else {
+    logger.warn("android/keystore.properties nicht gefunden – Release-Builds werden nicht signiert.")
+}
+
 android {
-    compileSdkVersion rootProject.ext.compileSdkVersion
+    namespace "de.svenfran.divvyapp"
+    compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.svenfran.ionicbudgetapp"
+        applicationId "de.svenfran.divvyapp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
@@ -15,10 +25,38 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    flavorDimensions "environment"
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                storeFile rootProject.file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
+            if (keystorePropertiesFile.exists()) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+        debug {}
+    }
+    productFlavors {
+        dev {
+            dimension "environment"
+            applicationIdSuffix ".dev"
+            versionNameSuffix "-dev"
+            resValue "string", "app_name", "Divvy-Dev"
+        }
+        prod {
+            dimension "environment"
+            applicationId "de.svenfran.divvyapp"
+            resValue "string", "app_name", "Divvy"
         }
     }
 }

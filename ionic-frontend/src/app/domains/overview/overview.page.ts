@@ -1,129 +1,138 @@
-import { Component, OnInit } from '@angular/core';
-import { SegmentChangeEventDetail } from '@ionic/angular';
+import { Component, effect, OnInit } from '@angular/core';
+import { GroupService } from 'src/app/service/group.service';
+import { OverviewService } from './service/overview.service';
+import { CartService } from '../cartlist/service/cart.service';
+import { User } from 'src/app/auth/user';
 import { AuthService } from 'src/app/auth/auth.service';
-import { Group } from 'src/app/models/group';
-import { SpendingsOverviewDto } from 'src/app/models/spendings-overview-dto';
-import { SpendingsOverviewPerMonthDto } from 'src/app/models/spendings-overview-per-month-dto';
-import { SpendingsOverviewPerYearDto } from 'src/app/models/spendings-overview-per-year-dto';
-import { SpendingsOverviewTotalYearDto } from 'src/app/models/spendings-overview-total-year-dto';
-import { AlertService } from 'src/app/services/alert.service';
-import { GroupService } from 'src/app/services/group.service';
-import { SpendingsOverviewService } from 'src/app/services/spendings-overview.service';
+import { INIT_VALUES } from 'src/app/constants/default-values';
+import { SpendingsOverviewUserDto } from './model/spendings-overview-user-dto';
+import { TranslateService } from '@ngx-translate/core';
+
+const DELETED = 'DELETED';
+const REMOVED = 'REMOVED';
 
 @Component({
   selector: 'app-overview',
   templateUrl: './overview.page.html',
   styleUrls: ['./overview.page.scss'],
+  standalone: false
 })
 export class OverviewPage implements OnInit {
 
-  activeGroup: Group;
-  userName: string;
-  availableYears: number[] = [];
-  currentYear: number;
-  isLoading: boolean;
-  hidden: boolean = true;
-  spendigsOverview: SpendingsOverviewDto;
-  spendingsPerMonth: SpendingsOverviewPerMonthDto[];
-  spendingsPerYear: SpendingsOverviewPerYearDto[];
-  spendingsTotalYear: SpendingsOverviewTotalYearDto;
-  year: number;
-  segment: string;
-  loadedActiveGroup: Promise<boolean>;
-  loadedSpendings: Promise<boolean>;
+  public activeGroup = this.groupService.activeGroup();
+  // Monthly
+  public spendingsOverviewMonthly = this.overviewService.spendingsOverview;
+  public spendingsPerMonth = this.overviewService.spendingsPerMonth;
+  public spendingsTotalYearMonthly = this.overviewService.spendingsTotalYearMonthly;
+  public year = this.overviewService.year;
+  // Yearly
+  public spendingsOverviewYearly = this.overviewService.spendingsOverviewYearly;
+  public spendingsPerYear = this.overviewService.spendingsPerYear;
+  public spendingsTotalYearYearly = this.overviewService.spendingsTotalYearYearly;
+  public availableYears = this.overviewService.availableYears;
+
+  public segment: 'year' | 'month' = 'year';
+  public isLoading: boolean = true;
+  public currentYear = new Date().getFullYear();
+  public hidden: boolean = true;
+  public user: User | undefined;
+  public translatedRemoved!: string;
 
   constructor(
     private groupService: GroupService,
-    private spendingsService: SpendingsOverviewService,
-    private alertService: AlertService,
-    private authService: AuthService
-  ) { }
+    private overviewService: OverviewService,
+    private cartService: CartService,
+    private authService: AuthService,
+    private translate: TranslateService
+  ) { 
+    effect(() => {
+      this.activeGroup = this.groupService.activeGroup();
+      this.cartService.cartUpdated();
+      this.groupService.memberUpdated();
+      this.isLoading = true;
+      if (!this.activeGroup.flag?.includes(INIT_VALUES.DEFAULT)) {
+        this.spendingsOverviewMonthly.set(null);
+        this.spendingsOverviewYearly.set(null);
+        this.overviewService.getSpendingsOverviewYearly(this.activeGroup, false, () => {
+          this.isLoading = false;
+        });
+        this.overviewService.getSpendingsOverview(this.currentYear, this.activeGroup);
+      } else {
+        this.isLoading = false;
+      }
+    });
+  }
 
   ngOnInit() {
-    this.getCurrentUser();
-    this.getCurrentYear();
-    this.groupService.activeGroup.subscribe(group => {
-      if (group) {
-        // console.log(group);
-        this.activeGroup = group;
-        this.getSpendingsOverviewYearly();
-        this.loadedActiveGroup = Promise.resolve(true);
-      } else {
-        this.groupService.setActiveGroup(null);
+    this.authService.user.subscribe(user => {
+      if (user) {
+        this.user = user;
       }
-    })
-  }
-  
-  ionViewWillEnter() {
-    this.getSpendingsOverviewYearly();
-  }
-  
+    });
 
+    this.loadTranslations();
+    // Sprache wechseln -> Werte aktualisieren
+    this.translate.onLangChange.subscribe(() => this.loadTranslations());
+  }
+
+  get spendingsUsers(): SpendingsOverviewUserDto[] {
+    return this.segment === 'year' ? this.spendingsTotalYearYearly().spendingsTotalUser : this.spendingsTotalYearMonthly().spendingsTotalUser;
+  }
+
+  
+  private loadTranslations() {
+    this.translate.get(['global.user.removed']).subscribe(translations => {
+      this.translatedRemoved = translations['global.user.removed'];
+    });
+  }
+
+  isDeletedUser(userName: string): boolean {
+    return userName.includes(DELETED) || userName.includes(REMOVED);
+  }
+
+  getShortUserName(userName: string): string {
+    if (userName.includes(DELETED)) {
+        const userDeleted = this.translate.instant('global.user.deleted');
+        return userDeleted.length > 10 ? `${userDeleted.slice(0, 10)}...` : userDeleted;
+    } else if (userName.includes(REMOVED)) {
+        const userRemoved = userName.split(' ')[0]
+        return userRemoved.length > 10 ? `${userRemoved.slice(0, 10)}...` : userRemoved;
+    } else {
+        return userName.length > 10 ? `${userName.slice(0, 10)}...` : userName;
+    }
+  }
+
+  getShortGroupName(groupName: string): string {
+    return groupName.length > 20 ? `${groupName.slice(0, 20)}...` : groupName;
+  }
 
   getSpendingsOverview(year: number) {
-    if (!year) {
-      year = this.currentYear;
-    };
-
+    this.segment = 'month';
     this.isLoading = true;
-    if (this.activeGroup.id !== null) {
-      this.spendingsService.spendingsOverviewModified.subscribe(() => {
-        this.spendingsService.getSpendingsOverview(year, this.activeGroup.id).subscribe(res => {
-          this.spendingsPerMonth = res.spendingsPerMonth;
-          this.spendingsTotalYear = res.spendingsTotalYear;
-          this.segment = 'month';
-          this.year = res.year;
-          this.isLoading = false;
-        })
-      })
-    }
+
+    this.spendingsOverviewMonthly.set(null);
+    this.spendingsOverviewYearly.set(null);
+
+    this.overviewService.getSpendingsOverviewYearly(this.activeGroup, false, () => {
+      this.isLoading = false;
+    });
+    this.overviewService.getSpendingsOverview(year, this.activeGroup);
+
   }
 
-  getSpendingsOverviewYearly() {
-    this.isLoading = true;
-    if (this.activeGroup.id !== null) {
-      this.spendingsService.spendingsOverviewModified.subscribe(() => {
-        this.spendingsService.getSpendingsOverviewYearly(this.activeGroup.id).subscribe(res => {
-          this.spendingsPerYear = res.spendingsPerYear;
-          this.spendingsTotalYear = res.spendingsTotalYear;
-          this.availableYears = res.availableYears;
-          this.segment = 'year';
-          this.loadedSpendings = Promise.resolve(true);
-          this.isLoading = false;
-        })
-      })
-    }
+  ionViewWillEnter() {
+    this.segment = 'year';
   }
 
   hide() {
     this.hidden = !this.hidden;
   }
 
-  getCurrentUser() {
-    // this.groupService.currentUser.subscribe(user => {
-    //   this.userName = user.userName;
-    // })
-    this.authService.userName.subscribe(name => {
-      this.userName = name;
-    })
-    return this.userName;
+  refreshSpendings(event: CustomEvent) {
+    setTimeout(() => {
+      this.overviewService.getSpendingsOverviewYearly(this.activeGroup, true);
+      this.overviewService.getSpendingsOverview(this.currentYear, this.activeGroup, true);
+      (event.target as HTMLIonRefresherElement).complete();
+    }, 2000);
   }
-
-  getCurrentYear() {
-    this.currentYear = new Date().getFullYear();
-  }
-
-  onFilterUpdate(event: CustomEvent<SegmentChangeEventDetail>) {
-    if (event.detail.value === 'month') {
-      this.getSpendingsOverview(this.year);
-    } else {
-      this.segment = "year";
-      this.getSpendingsOverviewYearly();
-    }
-  }
-
-  onCreateGroup() {
-    this.alertService.createGroup();
-  }
-
 }

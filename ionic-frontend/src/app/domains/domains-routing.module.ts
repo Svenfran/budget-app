@@ -21,11 +21,11 @@ const routes: Routes = [
           },
           {
             path: 'new-edit',
-            loadChildren: () => import('./new-edit-cart/new-edit-cart.module').then( m => m.NewEditCartPageModule)
+            loadChildren: () => import('./cartlist/new-edit-cart/new-edit-cart.module').then( m => m.NewEditCartPageModule)
           },
           {
             path: 'new-edit/:id',
-            loadChildren: () => import('./new-edit-cart/new-edit-cart.module').then( m => m.NewEditCartPageModule)
+            loadChildren: () => import('./cartlist/new-edit-cart/new-edit-cart.module').then( m => m.NewEditCartPageModule)
           }
         ]
       },
