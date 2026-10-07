@@ -1,0 +1,4 @@
+# Capacitor (`cap sync`) schreibt diese generierten Dateien immer mit LF.
+# Ohne festes eol erscheinen sie bei core.autocrlf=true nach jedem Sync als geändert.
+android/capacitor.settings.gradle text eol=lf
+android/app/capacitor.build.gradle text eol=lf
