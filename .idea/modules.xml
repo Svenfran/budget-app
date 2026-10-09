@@ -2,6 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
+      <module fileurl="file://$PROJECT_DIR$/.idea/budget-app.iml" filepath="$PROJECT_DIR$/.idea/budget-app.iml" />
       <module fileurl="file://$PROJECT_DIR$/spring-backend/budget-app-backend.iml" filepath="$PROJECT_DIR$/spring-backend/budget-app-backend.iml" />
     </modules>
   </component>
