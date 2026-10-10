@@ -9,6 +9,7 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
+    "test:ci": "ng test --watch=false --browsers=ChromeHeadless",
     "lint": "ng lint",
     "build:dev": "cross-env APP_ENV=dev ionic build --configuration development",
     "build:prod": "cross-env APP_ENV=prod ionic build --configuration production",
