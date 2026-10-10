@@ -11,6 +11,68 @@ Implement the approved plan identified by:
 
 $ARGUMENTS
 
+## 0. Git branch management
+
+Before modifying any files, ensure the implementation runs
+on the correct Git branch.
+
+### Jira-based implementation
+
+If the implementation target is a Jira issue key
+matching `DIV-[0-9]+` (case-insensitive):
+
+1. Normalize the issue key to uppercase.
+2. Use the branch name `feature/<ISSUE-KEY>`.
+   Example: `feature/DIV-123`.
+3. Check the current Git branch and working tree status.
+4. Check whether the target branch exists locally.
+5. If it does not exist locally, check whether it exists on
+   the remote.
+6. If the branch already exists:
+    - Stay on it if it is already checked out.
+    - Otherwise switch to the existing branch.
+    - If it exists only on the remote, create a local tracking
+      branch without overwriting remote history.
+7. If the branch does not exist:
+    - Create it from the configured base branch.
+    - Prefer `develop` if available; otherwise use the
+      repository's configured default branch.
+    - Do not automatically pull, merge or rebase.
+8. Confirm the active branch before starting implementation.
+
+### Working tree safety
+
+- Never discard, overwrite or stash uncommitted changes
+  without explicit user approval.
+- If switching branches could interfere with existing changes,
+  stop and ask the user how to proceed.
+- Do not force-checkout branches.
+- Do not reset existing branches.
+- Do not delete or recreate existing branches.
+- Do not automatically push branches.
+- Do not create commits unless explicitly requested.
+
+### Monorepo handling
+
+- Perform branch management from the `budget-app`
+  monorepo root.
+- Verify that the directory is a Git repository.
+- If frontend and backend are separate Git repositories,
+  do not assume a shared branch.
+- Report the repository structure and request clarification
+  before creating branches in multiple repositories.
+
+### Free-text implementation
+
+If the implementation target is not a Jira issue:
+
+- Do not automatically invent a feature branch name.
+- Use the current branch unless the user explicitly
+  requests a new branch.
+- Never implement directly on a protected branch
+  such as `main` or `master` without confirmation.
+
+
 ## 1. Resolve implementation plan
 
 Work from the budget-app monorepo root.
