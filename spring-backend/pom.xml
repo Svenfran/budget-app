@@ -214,14 +214,41 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<version>3.2.5</version>
+				<!-- Unit-Tests ohne Docker (./mvnw test); *Test nur bis zur JUnit-Migration (T5) -->
 				<configuration>
 					<includes>
-						<include>**/*Test.*</include>
-						<include>**/*IT.*</include>
 						<include>**/*Spec.*</include>
+						<include>**/*Test.*</include>
+					</includes>
+					<excludes>
+						<exclude>**/*IntegrationSpec.*</exclude>
+						<exclude>**/*ApiSpec.*</exclude>
+					</excludes>
+					<useModulePath>false</useModulePath>
+				</configuration>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-failsafe-plugin</artifactId>
+				<version>3.2.5</version>
+				<!-- Integrations- und API-Tests mit Testcontainers (./mvnw verify); *IT nur bis zur JUnit-Migration (T5) -->
+				<configuration>
+					<includes>
+						<include>**/*IntegrationSpec.*</include>
+						<include>**/*ApiSpec.*</include>
+						<include>**/*IT.*</include>
 					</includes>
 					<useModulePath>false</useModulePath>
 				</configuration>
+				<executions>
+					<execution>
+						<goals>
+							<goal>integration-test</goal>
+							<goal>verify</goal>
+						</goals>
+					</execution>
+				</executions>
 			</plugin>
 
 		</plugins>

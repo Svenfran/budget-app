@@ -1,13 +1,11 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service.integration
 
 import com.github.svenfran.budgetapp.budgetappbackend.helper.Translator
-import com.github.svenfran.budgetapp.budgetappbackend.service.container.TestContainerEnv
+import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.transaction.annotation.Transactional
 import spock.lang.Unroll
 
-@Transactional
-class I18nIntegrationSpec extends TestContainerEnv {
+class I18nIntegrationSpec extends IntegrationSpec {
 
     @Autowired Translator translator
 

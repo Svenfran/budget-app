@@ -5,14 +5,12 @@ import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto
 import com.github.svenfran.budgetapp.budgetappbackend.repository.*
 import com.github.svenfran.budgetapp.budgetappbackend.service.CartService
 import com.github.svenfran.budgetapp.budgetappbackend.service.TestDataFactory
-import com.github.svenfran.budgetapp.budgetappbackend.service.container.TestContainerEnv
+import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.transaction.annotation.Transactional
 
 import java.time.LocalDate
 
-@Transactional
-class CartServiceIntegrationSpec extends TestContainerEnv {
+class CartServiceIntegrationSpec extends IntegrationSpec {
 
     @Autowired CartService cartService
     @Autowired CartRepository cartRepository
