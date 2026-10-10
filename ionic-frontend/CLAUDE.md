@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-"Divvy" is an Ionic 8 + Angular 19 mobile app (Capacitor, Android target) for shared-expense / budget management across groups. Users belong to groups, record purchases ("carts") against categories, manage shared shopping lists, and settle balances between members. The backend is a separate Spring Boot service (REST + STOMP/SockJS WebSocket); this repo is the frontend only.
+"Divvy" is an Ionic 8 + Angular 19 mobile app (Capacitor, Android target) for shared-expense / budget management across groups. Users belong to groups, record purchases ("carts") against categories, manage shared shopping lists, and settle balances between members. This directory (`ionic-frontend`) is the client module of the `budget-app` monorepo; the sibling `spring-backend` is the Spring Boot API (REST + STOMP/SockJS WebSocket). Cross-module architecture and working rules are in the root `CLAUDE.md`; backend details in `spring-backend/CLAUDE.md`.
 
 Note: the codebase is written largely in **German** — comments, alert text source keys, and many identifiers. UI strings are translated via i18n (de/en/es).
 
@@ -59,7 +59,11 @@ Cross-component "something changed, refetch" signaling uses an incrementing coun
 
 **Auth.** `AuthService` holds the user in a `BehaviorSubject`, with a JWT-style token. Token + auth data persist via `StorageService` (`authData`) and `localStorage` (`token`). `autoLogin()` restores on launch and `autoLogout()` schedules a `setTimeout` to log out at `expirationDate`. `AuthHttpInterceptorService` (registered as a multi `HTTP_INTERCEPTORS` in `app.module.ts`) attaches `Authorization`, `DeviceId`, and `Accept-Language` headers to every request.
 
-**Real-time updates.** `WebSocketService` connects via STOMP over SockJS to `${baseUrl}/ws`. `AppComponent.subscribeToTopics()` subscribes to per-user topics (`/user/{userId}/notification/...`) for group add/update/delete, member changes, owner changes, and a global `/notification/health` topic. Incoming messages mutate the same service signals, keeping all open views in sync. `subscribe()` filters out messages whose `groupId` ≠ the active group for list/item topics.
+**Real-time updates.** `WebSocketService` connects via STOMP over SockJS to `${baseUrl}/ws`. Subscriptions to per-user topics (`/user/{userId}/notification/...`) are split by feature:
+- `AppComponent.subscribeToTopics()` — group update/delete, member add/remove, owner change, and the global `/notification/health` topic.
+- `domains/shoppinglist/shoppinglist.page.ts` — shopping list add/update/delete and shopping item add/update/delete/delete-all.
+
+Incoming messages mutate the same service signals, keeping all open views in sync. `WebSocketService.subscribe()` drops messages whose `groupId` ≠ the active group for list/item topics.
 
 **Health / offline handling.** `HealthCheckService` polls `/actuator/health`; the `/notification/health` WebSocket topic pushes `UP`/`DOWN`. On `DOWN` the app routes to `/server-unavailable`; on recovery it returns to the overview. When a user has no groups, the app routes to `/no-group`.
 
