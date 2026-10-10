@@ -20,8 +20,6 @@ abstract class TestContainerEnv extends Specification {
     protected final Logger logger = LoggerFactory.getLogger(this.getClass());
 
     static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:14-alpine")
-            .withReuse(true);
-
 
     static { postgres.start() }
 

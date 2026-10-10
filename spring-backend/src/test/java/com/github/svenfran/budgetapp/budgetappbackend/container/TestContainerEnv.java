@@ -19,9 +19,7 @@ public abstract class TestContainerEnv {
 
     protected final Logger logger = LoggerFactory.getLogger(this.getClass());
 
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:14-alpine")
-            .withReuse(true);
-
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:14-alpine");
 
     @BeforeAll
     public static void startContainer() {
