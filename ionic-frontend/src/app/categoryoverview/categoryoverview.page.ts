@@ -1,4 +1,4 @@
-import { Component, effect, OnInit } from '@angular/core';
+import { Component, effect } from '@angular/core';
 import { CategoryService } from '../service/category.service';
 import { CategoryDto } from '../model/category-dto';
 import { GroupService } from '../service/group.service';
@@ -13,7 +13,7 @@ import { TranslateService } from '@ngx-translate/core';
   styleUrls: ['./categoryoverview.page.scss'],
   standalone: false
 })
-export class CategoryoverviewPage implements OnInit {
+export class CategoryoverviewPage {
 
   public categories = this.categoryService.categories;
   public isLoading: boolean = false;
@@ -35,9 +35,6 @@ export class CategoryoverviewPage implements OnInit {
       }
       this.isLoading = false;
     });
-  }
-
-  ngOnInit() {
   }
 
   refreshCategories(event: CustomEvent) {

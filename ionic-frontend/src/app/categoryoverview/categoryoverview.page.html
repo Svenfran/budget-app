@@ -36,7 +36,7 @@
           </ion-list-header>
 
           <div *ngFor="let cat of categories(), let i = index">
-            <ion-item [lines]="i == categories().length - 1 ? 'none' : 'inset'">
+            <ion-item [lines]="i === categories().length - 1 ? 'none' : 'inset'">
               <ion-avatar slot="start">
                 <div class="category-circle">
                   <p *ngIf="!isSettlementpayment(cat.name)">{{ cat.name.substring(0, 2) | uppercase }}</p>

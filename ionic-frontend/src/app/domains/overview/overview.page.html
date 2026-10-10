@@ -43,10 +43,10 @@
       <ion-col class="ion-text-center" size-md="6" offset-md="3" *ngIf="isLoading">
         <ion-spinner color="primary"></ion-spinner>
       </ion-col>
-      <ion-col class="ion-text-center" size-md="6" offset-md="3" *ngIf="!isLoading && segment == 'year' && (!spendingsPerYear() || spendingsPerYear()?.length === 0)">
+      <ion-col class="ion-text-center" size-md="6" offset-md="3" *ngIf="!isLoading && segment === 'year' && (!spendingsPerYear() || spendingsPerYear()?.length === 0)">
         <p>{{ 'domains.overview.segment.no_spendings_yearly' | translate }}</p>
       </ion-col>
-      <ion-col class="ion-text-center ion-text-wrap" size-md="6" offset-md="3" *ngIf="!isLoading && segment == 'month' && (!spendingsPerMonth() || spendingsPerMonth()?.length === 0)">
+      <ion-col class="ion-text-center ion-text-wrap" size-md="6" offset-md="3" *ngIf="!isLoading && segment === 'month' && (!spendingsPerMonth() || spendingsPerMonth()?.length === 0)">
         <p>{{ 'domains.overview.segment.no_spendings_monthly' | translate }}</p>
       </ion-col>
     </ion-row>
@@ -60,15 +60,15 @@
             <ion-label>
               <div class="spendings-details">
                 <div class="spendings-date">
-                  <ion-text class="month" *ngIf="segment == 'month' && spendingsPerMonth()?.length">
+                  <ion-text class="month" *ngIf="segment === 'month' && spendingsPerMonth()?.length">
                     {{ spendingsPerMonth()![spendingsPerMonth()!.length - 1].month | monthName }} - {{ spendingsPerMonth()![0].month | monthName }}
                   </ion-text>
                   
-                  <ion-text *ngIf="segment == 'month'">
+                  <ion-text *ngIf="segment === 'month'">
                     {{ year() }}
                   </ion-text>
                   
-                  <ion-text class="month" *ngIf="segment == 'year' && spendingsPerYear()?.length">
+                  <ion-text class="month" *ngIf="segment === 'year' && spendingsPerYear()?.length">
                     {{ spendingsPerYear()![spendingsPerYear()!.length - 1].year }} - {{ spendingsPerYear()![0].year }}
                   </ion-text>
                 </div>

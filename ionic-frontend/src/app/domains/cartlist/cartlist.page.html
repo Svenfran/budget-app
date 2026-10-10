@@ -45,7 +45,7 @@
 <ion-list-header color="light">
   <ion-label>
     <div class="total">
-      <ion-text>{{ (filterTerm() == "" ? 'domains.spendings.total' : (filterTerm().length > 10 ? (filterTerm() | slice:0:10) + '...' : (filterTerm()))) | translate  }} ({{ count() }})</ion-text>
+      <ion-text>{{ (filterTerm() === "" ? 'domains.spendings.total' : (filterTerm().length > 10 ? (filterTerm() | slice:0:10) + '...' : (filterTerm()))) | translate  }} ({{ count() }})</ion-text>
         <ion-chip color="primary" *ngIf="filterMode()">
           <ion-label (click)="filterModal()">filter</ion-label>
           <ion-icon name="close" (click)="deleteFilter()"></ion-icon>
@@ -86,7 +86,7 @@
             #viewport>
           <ion-list *ngIf="!isLoading && cartList().length > 0">
             <ion-item-sliding *cdkVirtualFor="let cart of cartList(), let i = index" #slidingItem>
-              <ion-item [lines]="i == cartList().length - 1 ? 'none' : 'inset'"  [disabled]="cart.deleted === true">
+              <ion-item [lines]="i === cartList().length - 1 ? 'none' : 'inset'"  [disabled]="cart.deleted === true">
                 <ion-avatar slot="start" (click)="onFilter('category', cart.categoryDto.name)">
                   <div class="category-circle">
                     <p *ngIf="!isSettlementpayment(cart.categoryDto.name)">{{ cart.categoryDto.name.substring(0, 2) | uppercase }}</p>
@@ -118,7 +118,7 @@
                   </div>
                 </ion-label>
               </ion-item>
-              <ion-item-options *ngIf="cart.userDto.userName == user?.name">
+              <ion-item-options *ngIf="cart.userDto.userName === user?.name">
                 <ion-item-option color="secondary">
                   <ion-icon name="create-outline" slot="icon-only" (click)="editCart(cart, slidingItem)"></ion-icon>
                 </ion-item-option>

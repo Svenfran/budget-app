@@ -34,7 +34,7 @@
           <ion-item-sliding *ngFor="let group of groupOverviewList(), let i = index" #slidingItem>
             <ion-item button detail="false"
                       (click)="onSelectGroup(group, slidingItem)"
-                      [lines]="i == groupOverviewList().length - 1 ? 'none' : 'inset'">
+                      [lines]="i === groupOverviewList().length - 1 ? 'none' : 'inset'">
               <ion-icon *ngIf="group.memberCount > 0" slot="start" name="people-outline"></ion-icon>
               <ion-icon *ngIf="group.memberCount === 0" slot="start" name="person-outline"></ion-icon>
               <ion-label>
@@ -56,13 +56,13 @@
               <ion-item-option color="secondary">
                 <ion-icon name="people" slot="icon-only" (click)="showGroupMembers(group.id, group.ownerName, slidingItem)"></ion-icon>
               </ion-item-option>
-              <ion-item-option *ngIf="group.ownerName == user?.name" color="secondary" (click)="onAddMember(group, slidingItem)">
+              <ion-item-option *ngIf="group.ownerName === user?.name" color="secondary" (click)="onAddMember(group, slidingItem)">
                 <ion-icon  name="person-add" slot="icon-only"></ion-icon>
               </ion-item-option>
-              <ion-item-option *ngIf="group.ownerName == user?.name" color="secondary" (click)="onUpdateGroup(group, slidingItem)">
+              <ion-item-option *ngIf="group.ownerName === user?.name" color="secondary" (click)="onUpdateGroup(group, slidingItem)">
                 <ion-icon name="create" slot="icon-only"></ion-icon>
               </ion-item-option>
-              <ion-item-option *ngIf="group.ownerName == user?.name" color="secondary" (click)="onDeleteGroup(group, slidingItem)">
+              <ion-item-option *ngIf="group.ownerName === user?.name" color="secondary" (click)="onDeleteGroup(group, slidingItem)">
                 <ion-icon name="trash" slot="icon-only"></ion-icon>
               </ion-item-option>
             </ion-item-options>

@@ -38,11 +38,11 @@
                   formControlName="memberId"
                   [okText]="'global.selections.btn_ok' | translate" 
                   [cancelText]="'global.selections.btn_cancel' | translate">
-                  <ion-select-option *ngIf="user.id != groupMembers().ownerId" [value]="groupMembers().ownerId">
+                  <ion-select-option *ngIf="user.id !== groupMembers().ownerId" [value]="groupMembers().ownerId">
                     {{ (groupMembers().ownerName.length > 10) ? (groupMembers().ownerName | slice:0:10) + '...' : groupMembers().ownerName}}
                   </ion-select-option>
                   <div *ngFor="let member of groupMembers().members">
-                    <ion-select-option *ngIf="user.id != member.id" [value]="member.id">
+                    <ion-select-option *ngIf="user.id !== member.id" [value]="member.id">
                       {{ (member.userName.length > 10) ? (member.userName | slice:0:10) + '...' : member.userName}}
                     </ion-select-option>
                   </div>

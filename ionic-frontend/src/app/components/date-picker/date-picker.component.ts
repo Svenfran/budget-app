@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnInit, Output, ViewChild } from '@angular/core';
+import { Component, EventEmitter, Input, Output, ViewChild } from '@angular/core';
 import { IonDatetime } from '@ionic/angular';
 
 @Component({
@@ -7,14 +7,12 @@ import { IonDatetime } from '@ionic/angular';
   styleUrls: ['./date-picker.component.scss'],
   standalone: false
 })
-export class DatePickerComponent  implements OnInit {
+export class DatePickerComponent {
   @ViewChild(IonDatetime) datetime!: IonDatetime;
   @Input() selectedDate: string = ''; // Datum, das vom Eltern-Element gesetzt wird
   @Output() dateChange = new EventEmitter<string>(); // Event für das ausgewählte Datum
 
   constructor() { }
-
-  ngOnInit() {}
 
 
   onDateChange(event: any) {
