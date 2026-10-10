@@ -22,23 +22,31 @@ If the implementation target is a Jira issue key
 matching `DIV-[0-9]+` (case-insensitive):
 
 1. Normalize the issue key to uppercase.
-2. Use the branch name `feature/<ISSUE-KEY>`.
-   Example: `feature/DIV-123`.
-3. Check the current Git branch and working tree status.
-4. Check whether the target branch exists locally.
-5. If it does not exist locally, check whether it exists on
+2. Generate a short, descriptive kebab-case slug from the
+   Jira issue summary:
+    - Use lowercase ASCII letters, numbers and hyphens.
+    - Remove special characters and replace spaces with hyphens.
+    - Transliterate German umlauts (ä → ae, ö → oe, ü → ue, ß → ss).
+    - Remove unnecessary filler words.
+    - Keep the slug concise, preferably 2–5 meaningful words.
+    - Do not invent information not present in the issue summary.
+3. Use the branch name `feature/<ISSUE-KEY>-<slug>`. 
+   Example: `feature/DIV-123-shopping-list-sorting`.
+4. Check the current Git branch and working tree status.
+5. Check whether the target branch exists locally.
+6. If it does not exist locally, check whether it exists on
    the remote.
-6. If the branch already exists:
+7. If the branch already exists:
     - Stay on it if it is already checked out.
     - Otherwise switch to the existing branch.
     - If it exists only on the remote, create a local tracking
       branch without overwriting remote history.
-7. If the branch does not exist:
+8. If the branch does not exist:
     - Create it from the configured base branch.
     - Prefer `develop` if available; otherwise use the
       repository's configured default branch.
     - Do not automatically pull, merge or rebase.
-8. Confirm the active branch before starting implementation.
+9. Confirm the active branch before starting implementation.
 
 ### Working tree safety
 

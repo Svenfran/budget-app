@@ -52,12 +52,13 @@ Mobile app for shared expenses within groups: members record purchases ("carts")
 ## Tests
 
 ```bash
-cd spring-backend && ./mvnw test   # JUnit + Spock; integration tests use Testcontainers (Docker must be running)
+cd spring-backend && ./mvnw test   # unit tests only, no Docker needed
+cd spring-backend && ./mvnw verify # all tests incl. integration tests (Testcontainers, Docker must be running)
 cd ionic-frontend && npm test      # Karma + Jasmine
 cd ionic-frontend && npm run lint
 ```
 
-## Deployment
+## Deployments
 
 The backend is deployed on Railway from `railway.json` with the `prod` profile; database settings come from Railway's `PG*` variables. The production app uses `src/config/config.prod.ts` as its backend URL.
 
