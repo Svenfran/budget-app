@@ -1,6 +1,7 @@
 package com.github.svenfran.budgetapp.budgetappbackend.testsupport
 
 import com.github.svenfran.budgetapp.budgetappbackend.constants.RecurrenceType
+import com.github.svenfran.budgetapp.budgetappbackend.constants.TokenType
 import com.github.svenfran.budgetapp.budgetappbackend.constants.TypeEnum
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CategoryDto
@@ -55,6 +56,16 @@ class TestData {
         new CartTemplate([title: 'Einkauf', description: 'Wocheneinkauf', amount: 40.0d,
                           recurrenceType: RecurrenceType.MONTHLY, active: true, startDate: REFERENCE_DATE,
                           nextExecutionDate: REFERENCE_DATE, endDate: null] + overrides)
+    }
+
+    static ShoppingList shoppingList(Map overrides = [:]) {
+        new ShoppingList([name: "Liste ${nextId()}", shoppingItems: [] as Set] + overrides)
+    }
+
+    /** Gültiges Token (weder abgelaufen noch widerrufen); Platzhalter statt echtem JWT. Nutzer setzt der Aufrufer. */
+    static Token token(Map overrides = [:]) {
+        new Token([token: "token-${nextId()}", tokenType: TokenType.BEARER, expired: false, revoked: false,
+                   deviceId: 'device-1'] + overrides)
     }
 
     static CartDto cartDto(Map overrides = [:]) {

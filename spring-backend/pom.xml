@@ -93,11 +93,6 @@
 			<artifactId>postgresql</artifactId>
 			<scope>test</scope>
 		</dependency>
-		<dependency>
-			<groupId>org.testcontainers</groupId>
-			<artifactId>junit-jupiter</artifactId>
-			<scope>test</scope>
-		</dependency>
 		<!-- Websocket -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -128,14 +123,6 @@
 			<groupId>org.spockframework</groupId>
 			<artifactId>spock-spring</artifactId>
 			<version>2.4-M1-groovy-4.0</version>
-			<scope>test</scope>
-		</dependency>
-
-		<!-- Junit -->
-		<dependency>
-			<groupId>org.junit.jupiter</groupId>
-			<artifactId>junit-jupiter</artifactId>
-			<version>5.9.2</version>
 			<scope>test</scope>
 		</dependency>
 
@@ -214,11 +201,10 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<version>3.2.5</version>
-				<!-- Unit-Tests ohne Docker (./mvnw test); *Test nur bis zur JUnit-Migration (T5) -->
+				<!-- Unit-Tests ohne Docker (./mvnw test) -->
 				<configuration>
 					<includes>
 						<include>**/*Spec.*</include>
-						<include>**/*Test.*</include>
 					</includes>
 					<excludes>
 						<exclude>**/*IntegrationSpec.*</exclude>
@@ -232,12 +218,11 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-failsafe-plugin</artifactId>
 				<version>3.2.5</version>
-				<!-- Integrations- und API-Tests mit Testcontainers (./mvnw verify); *IT nur bis zur JUnit-Migration (T5) -->
+				<!-- Integrations- und API-Tests mit Testcontainers (./mvnw verify) -->
 				<configuration>
 					<includes>
 						<include>**/*IntegrationSpec.*</include>
 						<include>**/*ApiSpec.*</include>
-						<include>**/*IT.*</include>
 					</includes>
 					<useModulePath>false</useModulePath>
 				</configuration>
