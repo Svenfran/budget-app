@@ -30,12 +30,15 @@ class DataLoaderServiceIntegrationSpec extends IntegrationSpec {
         given:
         def wg = fixtures.group()
         def andere = fixtures.group()
+        def wohnen = wg.category
+        wohnen.name = 'Wohnen'
         def miete = fixtures.category(wg, name: 'Miete')
         def ausgehen = fixtures.category(wg, name: 'Ausgehen')
         fixtures.category(andere, name: 'Sport')
+        flushAndClear()
 
         expect:
-        dataLoaderService.loadCategoriesForGroup(wg.group.id)*.id == [ausgehen, wg.category, miete]*.id
+        dataLoaderService.loadCategoriesForGroup(wg.group.id)*.id == [ausgehen, miete, wohnen]*.id
     }
 
     def "Kategorie '#name' wird per Gruppe und Name gefunden: #gefunden"() {

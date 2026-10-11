@@ -49,6 +49,18 @@ class TokenRepositoryIntegrationSpec extends IntegrationSpec {
         false   | false   | 'fremdem Gerät' || false   | false
     }
 
+    def "Tokens anderer Nutzer auf demselben Gerät zählen weder als gültig noch als ungültig"() {
+        given:
+        def anna = fixtures.user()
+        def ben = fixtures.user()
+        fixtures.token(ben)
+        fixtures.token(ben, expired: true, revoked: true)
+
+        expect:
+        tokenRepository.findAllValidTokensByUserAndDeviceId(anna.id, 'device-1').isEmpty()
+        tokenRepository.findAllInvalidTokensByUserAndDeviceId(anna.id, 'device-1').isEmpty()
+    }
+
     def "Alle Tokens eines Nutzers werden geladen, die anderer Nutzer nicht"() {
         given:
         def anna = fixtures.user()
