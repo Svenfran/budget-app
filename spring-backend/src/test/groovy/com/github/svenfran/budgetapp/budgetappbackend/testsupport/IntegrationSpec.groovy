@@ -29,6 +29,7 @@ import javax.persistence.EntityManager
  * - Kein withReuse(true) am Container (siehe PostgresTestContainer).
  * - NotificationService ist gemockt: Benachrichtigungen als Interaktion prüfen,
  *   z. B. 1 * notificationService.sendGroupUpdateNotification(groupId, _).
+ * - Testdaten kommen über fixtures (persistierte Szenarien) bzw. TestData (nicht persistiert).
  *
  * Isolation:
  * - Standard: Rollback über das @Transactional dieser Klasse; Service und Test teilen einen Persistence Context.
@@ -45,6 +46,7 @@ import javax.persistence.EntityManager
 @Transactional
 abstract class IntegrationSpec extends Specification {
 
+    @Autowired Fixtures fixtures
     @Autowired MockMvc mockMvc
     @Autowired EntityManager entityManager
 
