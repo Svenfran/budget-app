@@ -291,7 +291,7 @@ class VerificationServiceSpec extends Specification {
         given:
         def start = DateUtils.toDate(TestData.REFERENCE_DATE.minusDays(10))
         def end = DateUtils.toDate(TestData.REFERENCE_DATE.minusDays(5))
-        def gmh = [new GroupMembershipHistory(membershipStart: start, membershipEnd: end)]
+        def gmh = [TestData.membership(membershipStart: start, membershipEnd: end)]
         def date = DateUtils.toDate(TestData.REFERENCE_DATE)
 
         when:
@@ -305,7 +305,7 @@ class VerificationServiceSpec extends Specification {
         given:
         def start = DateUtils.toDate(TestData.REFERENCE_DATE.minusDays(10))
         def end = DateUtils.toDate(TestData.REFERENCE_DATE.plusDays(5))
-        def gmh = [new GroupMembershipHistory(membershipStart: start, membershipEnd: end)]
+        def gmh = [TestData.membership(membershipStart: start, membershipEnd: end)]
         def date = DateUtils.toDate(TestData.REFERENCE_DATE)
 
         when:

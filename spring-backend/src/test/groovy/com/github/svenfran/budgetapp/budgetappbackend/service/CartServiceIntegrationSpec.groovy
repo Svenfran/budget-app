@@ -73,6 +73,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         def category = [wg.category, other].find { it.id == dto.categoryDto.id }
 
         when:
+        // groupMemberCount 2 = Owner + Ben (in CartService.updateCart aus der Mitgliedschaftshistorie ermittelt)
         cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, category, 2)
         flushAndClear()
 
