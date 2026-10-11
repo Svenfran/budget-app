@@ -25,6 +25,7 @@ class Fixtures {
     @Autowired CartRepository cartRepository
     @Autowired CartTemplateRepository templateRepository
     @Autowired GroupMembershipHistoryRepository membershipRepository
+    @Autowired TokenRepository tokenRepository
 
     User user(Map overrides = [:]) {
         userRepository.save(TestData.user(overrides))
@@ -71,6 +72,10 @@ class Fixtures {
         cart.template = template
         cartRepository.save(cart)
         template
+    }
+
+    Token token(Map overrides = [:], User user) {
+        tokenRepository.save(TestData.token([user: user] + overrides))
     }
 
     @TupleConstructor
