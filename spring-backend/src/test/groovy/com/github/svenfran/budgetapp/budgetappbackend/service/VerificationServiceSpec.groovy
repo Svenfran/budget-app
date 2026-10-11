@@ -1,15 +1,13 @@
-package com.github.svenfran.budgetapp.budgetappbackend.service.unit
+package com.github.svenfran.budgetapp.budgetappbackend.service
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto
 import com.github.svenfran.budgetapp.budgetappbackend.entity.*
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*
+import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
 import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository
-import com.github.svenfran.budgetapp.budgetappbackend.service.TestDataFactory
-import com.github.svenfran.budgetapp.budgetappbackend.service.VerificationService
+import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
 import org.springframework.security.crypto.password.PasswordEncoder
 import spock.lang.Specification
-
-import java.time.LocalDate
 
 class VerificationServiceSpec extends Specification {
 
@@ -17,10 +15,10 @@ class VerificationServiceSpec extends Specification {
     def passwordEncoder = Mock(PasswordEncoder)
     def service = new VerificationService(passwordEncoder, userRepository)
 
-    def "verifyIsAuthenticatedUser throws when users differ"() {
+    def "Anderer Nutzer gilt nicht als angemeldeter Nutzer"() {
         given:
-        def user = TestDataFactory.buildUser("User")
-        def authUser = TestDataFactory.buildUser("AuthUser")
+        def user = TestData.user(name: "User")
+        def authUser = TestData.user(name: "AuthUser")
 
         when:
         service.verifyIsAuthenticatedUser(user, authUser)
@@ -29,9 +27,9 @@ class VerificationServiceSpec extends Specification {
         thrown(UserIsNotAuthenticatedUser)
     }
 
-    def "verifyIsAuthenticatedUser passes for same user"() {
+    def "Derselbe Nutzer gilt als angemeldeter Nutzer"() {
         given:
-        def user = TestDataFactory.buildUser("User")
+        def user = TestData.user(name: "User")
 
         when:
         service.verifyIsAuthenticatedUser(user, user)
@@ -40,7 +38,7 @@ class VerificationServiceSpec extends Specification {
         noExceptionThrown()
     }
 
-    def "verifyIsCorrectPassword throws on mismatch"() {
+    def "Falsches Passwort wird abgelehnt"() {
         given:
         def user = new User(password: "encoded")
         passwordEncoder.matches("wrong", "encoded") >> false
@@ -52,7 +50,7 @@ class VerificationServiceSpec extends Specification {
         thrown(WrongPasswordException)
     }
 
-    def "verifyIsCorrectPassword passes on correct password"() {
+    def "Richtiges Passwort wird akzeptiert"() {
         given:
         def user = new User(password: "encoded")
         passwordEncoder.matches("secret", "encoded") >> true
@@ -64,7 +62,7 @@ class VerificationServiceSpec extends Specification {
         noExceptionThrown()
     }
 
-    def "verifyEmailNotExists throws when email already exists"() {
+    def "Bereits vergebene E-Mail wird abgelehnt"() {
         given:
         userRepository.findByEmail("test@mail.com") >> Optional.of(new User())
 
@@ -75,7 +73,7 @@ class VerificationServiceSpec extends Specification {
         thrown(UserAlreadyExistException)
     }
 
-    def "verifyEmailNotExists passes when email not exists"() {
+    def "Noch freie E-Mail wird akzeptiert"() {
         given:
         userRepository.findByEmail("test@mail.com") >> Optional.empty()
 
@@ -86,7 +84,7 @@ class VerificationServiceSpec extends Specification {
         noExceptionThrown()
     }
 
-    def "verifyUserNameNotExists throws when username exists"() {
+    def "Bereits vergebener Nutzername wird abgelehnt"() {
         given:
         userRepository.findByName("john") >> Optional.of(new User())
 
@@ -97,7 +95,7 @@ class VerificationServiceSpec extends Specification {
         thrown(UserNameAlreadyExistsException)
     }
 
-    def "verifyUserNameIsAllowed throws when name contains forbidden term #userName"() {
+    def "Nutzername #userName mit reserviertem Begriff wird abgelehnt"() {
         when:
         service.verifyUserNameIsAllowed(userName)
 
@@ -110,11 +108,11 @@ class VerificationServiceSpec extends Specification {
         "test_DELETED_user" | UserNameNotAllowedException
     }
 
-    def "verifyIsPartOfGroup throws when user not owner or member"() {
+    def "Nutzer, der weder Owner noch Mitglied ist, gehört nicht zur Gruppe"() {
         given:
-        def user = TestDataFactory.buildUser()
-        def notOwner = TestDataFactory.buildUser("NotOwner")
-        def group = new Group(owner: notOwner, members: [])
+        def user = TestData.user()
+        def notOwner = TestData.user(name: "NotOwner")
+        def group = TestData.group(owner: notOwner)
 
         when:
         service.verifyIsPartOfGroup(user, group)
@@ -123,10 +121,34 @@ class VerificationServiceSpec extends Specification {
         thrown(NotOwnerOrMemberOfGroupException)
     }
 
-    def "verifyIsOwnerOfCart throws when user not owner"() {
+    def "Owner gehört zur Gruppe"() {
         given:
-        def user = TestDataFactory.buildUser()
-        def notOwner = TestDataFactory.buildUser("NotOwner")
+        def user = TestData.user()
+        def group = TestData.group(owner: user)
+
+        when:
+        service.verifyIsPartOfGroup(user, group)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "Mitglied gehört zur Gruppe"() {
+        given:
+        def user = TestData.user()
+        def group = TestData.group(owner: TestData.user(), members: [user] as Set)
+
+        when:
+        service.verifyIsPartOfGroup(user, group)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "Anderer Nutzer ist nicht Eigentümer des Einkaufs"() {
+        given:
+        def user = TestData.user()
+        def notOwner = TestData.user(name: "NotOwner")
         def cart = new Cart(user: notOwner)
 
         when:
@@ -136,7 +158,7 @@ class VerificationServiceSpec extends Specification {
         thrown(NotOwnerOfCartException)
     }
 
-    def "verifyCategoryIsPartOfGroup throws when group IDs differ"() {
+    def "Kategorie einer anderen Gruppe wird abgelehnt"() {
         given:
         def group = new Group(id: 1)
         def category = new Category(id: 2, group: new Group(id: 3))
@@ -148,7 +170,7 @@ class VerificationServiceSpec extends Specification {
         thrown(CategoryBelongsNotToGroupException)
     }
 
-    def "verifyCategoryNotInUse throws when category has carts"() {
+    def "Kategorie mit Einkäufen gilt als in Benutzung"() {
         given:
         def category = new Category(id: 1, carts: [new Cart()])
 
@@ -159,7 +181,7 @@ class VerificationServiceSpec extends Specification {
         thrown(CategoryIsUsedByCartException)
     }
 
-    def "verifyIsGroupOwner throws when user is not owner"() {
+    def "Nutzer, der nicht Owner ist, wird als Gruppen-Owner abgelehnt"() {
         given:
         def user = new User(id: 1)
         def group = new Group(owner: new User(id: 2))
@@ -171,7 +193,7 @@ class VerificationServiceSpec extends Specification {
         thrown(NotOwnerOfGroupException)
     }
 
-    def "verifyUserExists throws when user is null"() {
+    def "Fehlender Nutzer wird als nicht gefunden gemeldet"() {
         when:
         service.verifyUserExists(null)
 
@@ -179,7 +201,7 @@ class VerificationServiceSpec extends Specification {
         thrown(UserNotFoundException)
     }
 
-    def "verifyCurrentlyNoGroupMember throws when user already in group"() {
+    def "Bestehendes Mitglied kann nicht erneut hinzugefügt werden"() {
         given:
         def user = new User(id: 1)
         def group = new Group(members: [user])
@@ -191,7 +213,7 @@ class VerificationServiceSpec extends Specification {
         thrown(MemberAlreadyExistsException)
     }
 
-    def "verifyMemberNotGroupOwner throws when member equals owner"() {
+    def "Owner kann nicht als Mitglied hinzugefügt werden"() {
         given:
         def user = new User(id: 1)
 
@@ -202,7 +224,7 @@ class VerificationServiceSpec extends Specification {
         thrown(MemberEqualsOwnerException)
     }
 
-    def "verifyIsOwnerOrMemberToRemove throws when neither owner nor removed member"() {
+    def "Unbeteiligter Nutzer darf kein Mitglied aus der Gruppe entfernen"() {
         given:
         def user = new User(id: 1)
         def removed = new User(id: 2)
@@ -215,7 +237,19 @@ class VerificationServiceSpec extends Specification {
         thrown(NotOwnerOfGroupException)
     }
 
-    def "verifyShoppingListIsPartOfGroup throws when group mismatch"() {
+    def "Mitglied darf sich selbst aus der Gruppe entfernen"() {
+        given:
+        def member = TestData.user()
+        def group = TestData.group(owner: TestData.user(), members: [member] as Set)
+
+        when:
+        service.verifyIsOwnerOrMemberToRemove(member, member, group)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "Einkaufsliste einer anderen Gruppe wird abgelehnt"() {
         given:
         def group = new Group(id: 1)
         def shoppingList = new ShoppingList(id: 1, group: new Group(id: 2))
@@ -227,7 +261,7 @@ class VerificationServiceSpec extends Specification {
         thrown(ShoppingListDoesNotBelongToGroupException)
     }
 
-    def "verifyShoppingItemIsPartOfShoppingList throws when not same list"() {
+    def "Artikel einer anderen Einkaufsliste wird abgelehnt"() {
         given:
         def list = new ShoppingList(id: 1)
         def item = new ShoppingItem(id: 2, shoppingList: new ShoppingList(id: 3))
@@ -239,7 +273,7 @@ class VerificationServiceSpec extends Specification {
         thrown(ShoppingItemDoesNotBelongToShoppingListException)
     }
 
-    def "verifyAllShoppingItemsBelongToSameShoppingListAndGroup throws when inconsistent"() {
+    def "Artikel aus verschiedenen Gruppen werden gemeinsam abgelehnt"() {
         given:
         def items = [
                 new AddEditShoppingItemDto(groupId: 1, shoppingListId: 1),
@@ -253,12 +287,12 @@ class VerificationServiceSpec extends Specification {
         thrown(IllegalArgumentException)
     }
 
-    def "verifyDatePurchasedWithinMembershipPeriod throws when outside period"() {
+    def "Kaufdatum außerhalb der Mitgliedschaft wird abgelehnt"() {
         given:
-        def start = TestDataFactory.asDate(LocalDate.now().minusDays(10))
-        def end = TestDataFactory.asDate(LocalDate.now().minusDays(5))
-        def gmh = [new GroupMembershipHistory(membershipStart: start, membershipEnd: end)]
-        def date = TestDataFactory.asDate(LocalDate.now())
+        def start = DateUtils.toDate(TestData.REFERENCE_DATE.minusDays(10))
+        def end = DateUtils.toDate(TestData.REFERENCE_DATE.minusDays(5))
+        def gmh = [TestData.membership(membershipStart: start, membershipEnd: end)]
+        def date = DateUtils.toDate(TestData.REFERENCE_DATE)
 
         when:
         service.verifyDatePurchasedWithinMembershipPeriod(gmh, date)
@@ -267,12 +301,12 @@ class VerificationServiceSpec extends Specification {
         thrown(DatePurchasedNotWithinMembershipPeriodException)
     }
 
-    def "verifyDatePurchasedWithinMembershipPeriod passes when within period"() {
+    def "Kaufdatum innerhalb der Mitgliedschaft wird akzeptiert"() {
         given:
-        def start = TestDataFactory.asDate(LocalDate.now().minusDays(10))
-        def end = TestDataFactory.asDate(LocalDate.now().plusDays(5))
-        def gmh = [new GroupMembershipHistory(membershipStart: start, membershipEnd: end)]
-        def date = TestDataFactory.asDate(LocalDate.now())
+        def start = DateUtils.toDate(TestData.REFERENCE_DATE.minusDays(10))
+        def end = DateUtils.toDate(TestData.REFERENCE_DATE.plusDays(5))
+        def gmh = [TestData.membership(membershipStart: start, membershipEnd: end)]
+        def date = DateUtils.toDate(TestData.REFERENCE_DATE)
 
         when:
         service.verifyDatePurchasedWithinMembershipPeriod(gmh, date)

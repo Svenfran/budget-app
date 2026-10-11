@@ -1,6 +1,5 @@
-package com.github.svenfran.budgetapp.budgetappbackend.service.integration
+package com.github.svenfran.budgetapp.budgetappbackend.helper
 
-import com.github.svenfran.budgetapp.budgetappbackend.helper.Translator
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
 import org.springframework.beans.factory.annotation.Autowired
 import spock.lang.Unroll
