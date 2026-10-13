@@ -103,7 +103,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         'noChange'      | { CartDto c, otherCategory -> }                                                                || 40d
     }
 
-    def "Wiederholung #oldType → #newType: altes Template aktiv = #originalActive, aktive Templates #activeTypes"() {
+    def "Wiederholung #oldType -> #newType: altes Template aktiv = #originalActive, aktive Templates #activeTypes"() {
         given:
         def wg = fixtures.group()
         def cart = fixtures.cart(wg)
