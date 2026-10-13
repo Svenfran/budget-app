@@ -14,6 +14,8 @@ import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartTemplateRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CategoryRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.service.mapper.CartDtoMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -30,6 +32,8 @@ import java.util.Objects;
 
 @Service
 public class CartService {
+
+    private final Logger logger = LoggerFactory.getLogger(CartService.class);
 
     @Autowired
     private CartRepository cartRepository;
@@ -186,6 +190,11 @@ public class CartService {
         var today = LocalDate.now();
 
         for (CartTemplate template : templates) {
+            if (template.getRecurrenceType() == null || template.getRecurrenceType() == RecurrenceType.NONE) {
+                logger.warn("Aktives CartTemplate {} ohne Wiederholung wird übersprungen", template.getId());
+                continue;
+            }
+
             var nextDate = template.getNextExecutionDate();
 
             if (nextDate.equals(today)) {
@@ -353,7 +362,7 @@ public class CartService {
                 ? cart.getTemplate().getRecurrenceType()
                 : RecurrenceType.NONE;
 
-        RecurrenceType newType = dto.getRecurrenceType() != null ? dto.getRecurrenceType() : RecurrenceType.NONE;
+        RecurrenceType newType = normalizedRecurrenceType(dto);
 
         if (oldType != newType) {
             if (cart.getTemplate() != null && cart.getTemplate().isActive()) {
@@ -371,8 +380,9 @@ public class CartService {
             deactivateTemplate(cart.getTemplate());
         }
 
-        if (dto.getRecurrenceType() != RecurrenceType.NONE) {
-            createNewCartTemplate(dto, user, group, cart, dto.getRecurrenceType());
+        RecurrenceType newType = normalizedRecurrenceType(dto);
+        if (newType != RecurrenceType.NONE) {
+            createNewCartTemplate(dto, user, group, cart, newType);
         }
     }
 
@@ -394,7 +404,7 @@ public class CartService {
 
     private boolean hasTemplateChanged(CartDto dto, Cart cart) {
         CartTemplate tpl = cart.getTemplate();
-        RecurrenceType newType = dto.getRecurrenceType() != null ? dto.getRecurrenceType() : RecurrenceType.NONE;
+        RecurrenceType newType = normalizedRecurrenceType(dto);
 
         if (tpl == null) {
             return newType != RecurrenceType.NONE;
@@ -405,7 +415,9 @@ public class CartService {
         if (!Objects.equals(tpl.getTitle(), dto.getTitle())) return true;
         if (!Objects.equals(tpl.getDescription(), dto.getDescription())) return true;
         if (!Objects.equals(tpl.getCategoryId(), dto.getCategoryDto().getId())) return true;
-        if (!Objects.equals(tpl.getNextExecutionDate(), calculateNextDate(asLocalDate(dto.getDatePurchased()), dto.getRecurrenceType()))) return true;
+        // Ohne Wiederholung gibt es kein Folgedatum
+        if (newType != RecurrenceType.NONE
+                && !Objects.equals(tpl.getNextExecutionDate(), calculateNextDate(asLocalDate(dto.getDatePurchased()), newType))) return true;
 
         return false;
     }
@@ -414,8 +426,12 @@ public class CartService {
         RecurrenceType oldType = (cart.getTemplate() != null && cart.getTemplate().isActive())
                 ? cart.getTemplate().getRecurrenceType()
                 : RecurrenceType.NONE;
-        RecurrenceType newType = dto.getRecurrenceType() != null ? dto.getRecurrenceType() : RecurrenceType.NONE;
+        RecurrenceType newType = normalizedRecurrenceType(dto);
         return oldType != newType;
+    }
+
+    private RecurrenceType normalizedRecurrenceType(CartDto dto) {
+        return dto.getRecurrenceType() != null ? dto.getRecurrenceType() : RecurrenceType.NONE;
     }
 
     private Date asDate(LocalDate date) {

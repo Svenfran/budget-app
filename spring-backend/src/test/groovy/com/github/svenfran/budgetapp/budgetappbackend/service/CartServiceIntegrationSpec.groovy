@@ -20,7 +20,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
     @Autowired CartRepository cartRepository
     @Autowired CartTemplateRepository templateRepository
 
-    def "Bearbeiten #originalRecurrenceType → #updatedRecurrenceType mit Titel '#newTitle' (Template-Update: #updateSelected) hinterlässt aktive Templates #expectedActiveTypes"() {
+    def "Bearbeiten #originalRecurrenceType -> #updatedRecurrenceType mit Titel '#newTitle' (Template-Update: #updateSelected) hinterlässt aktive Templates #expectedActiveTypes"() {
         given:
         def wg = fixtures.group()
         def cart = fixtures.cart(wg, title: 'Lunch')
@@ -40,7 +40,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
 
         then:
         result.title == expectedTitle
-        result.recurrenceType == updatedRecurrenceType
+        result.recurrenceType == (updatedRecurrenceType ?: NONE)
         cartRepository.findById(cart.id).get().title == expectedTitle
 
         and:
@@ -55,6 +55,9 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         MONTHLY                | MONTHLY               | 'Lunch Updated' | true           || 'Lunch Updated' | [MONTHLY]
         DAILY                  | NONE                  | 'Lunch'         | true           || 'Lunch'         | []
         DAILY                  | NONE                  | 'Lunch Updated' | true           || 'Lunch Updated' | []
+        MONTHLY                | null                  | 'Lunch'         | true           || 'Lunch'         | []
+        NONE                   | null                  | 'Lunch Updated' | true           || 'Lunch Updated' | []
+        NONE                   | null                  | 'Lunch'         | false          || 'Lunch'         | []
     }
 
     def "Änderung an #feld speichert den Einkauf mit Durchschnitt #expectedAverage"() {
@@ -126,6 +129,8 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         MONTHLY | DAILY   || false          | [DAILY]
         DAILY   | WEEKLY  || false          | [WEEKLY]
         WEEKLY  | WEEKLY  || true           | [WEEKLY]
+        NONE    | NONE    || true           | [NONE]
+        MONTHLY | null    || false          | []
     }
 
     def "Template-Anlage mit #inputRecurrenceType ergibt aktive Templates #expectedTypes"() {
@@ -300,6 +305,32 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
 
         and: "Template auf den nächsten Termin verschoben"
         templateRepository.findById(template.id).get().nextExecutionDate == today.plusMonths(1)
+    }
+
+    def "Scheduler überspringt ein aktives Template ohne Wiederholung und verarbeitet die übrigen"() {
+        given:
+        def today = LocalDate.now()
+        def wg = fixtures.group()
+        def broken = fixtures.cart(wg, title: 'Einmalig', amount: 5d, datePurchased: DateUtils.toDate(today.minusDays(1)))
+        def brokenTemplate = fixtures.template(broken, recurrenceType: NONE, nextExecutionDate: today)
+        def valid = fixtures.cart(wg, title: 'Spotify', amount: 9.99d, datePurchased: DateUtils.toDate(today.minusDays(1)))
+        def validTemplate = fixtures.template(valid, nextExecutionDate: today)
+
+        when:
+        cartService.generateRecurringCarts()
+        flushAndClear()
+
+        then: "nur aus dem gültigen Template ein neuer Einkauf"
+        def created = cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id)
+                .findAll { !(it.id in [broken.id, valid.id]) }
+        created*.title == ['Spotify']
+        created.first().template.id == validTemplate.id
+
+        and: "gültiges Template verschoben, Template ohne Wiederholung unverändert"
+        templateRepository.findById(validTemplate.id).get().nextExecutionDate == today.plusMonths(1)
+        def skipped = templateRepository.findById(brokenTemplate.id).get()
+        skipped.nextExecutionDate == today
+        skipped.active
     }
 
     def "Scheduler erzeugt bei #recurrenceType einen Einkauf und setzt den nächsten Termin auf #expectedNextDate"() {
