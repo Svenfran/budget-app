@@ -24,6 +24,7 @@ import org.springframework.validation.annotation.Validated;
 
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.Date;
@@ -55,6 +56,9 @@ public class CartService {
 
     @Autowired
     private Translator translator;
+
+    @Autowired
+    private Clock clock;
 
     private static final String SETTLEMENT_CATEGORY_NAME = "categories.default.settlement";
 
@@ -187,7 +191,7 @@ public class CartService {
     @Transactional
     public void generateRecurringCarts() throws UserNotFoundException, GroupNotFoundException, CategoryNotFoundException {
         List<CartTemplate> templates = templateRepository.findByActiveTrue();
-        var today = LocalDate.now();
+        var today = LocalDate.now(clock);
 
         for (CartTemplate template : templates) {
             if (template.getRecurrenceType() == null || template.getRecurrenceType() == RecurrenceType.NONE) {
@@ -252,7 +256,7 @@ public class CartService {
 
     private LocalDate calculateNextDate(LocalDate lastExecutionDate, RecurrenceType recurrenceType) {
         LocalDate next;
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(clock);
 
         switch (recurrenceType) {
             case DAILY:
@@ -292,7 +296,7 @@ public class CartService {
 
     private void deactivateCartTemplate(Cart cart) {
         cart.getTemplate().setActive(false);
-        cart.getTemplate().setEndDate(LocalDate.now());
+        cart.getTemplate().setEndDate(LocalDate.now(clock));
     }
 
     private void createNewCartTemplate(@Validated CartDto cartDto, User user, Group group, Cart cart, RecurrenceType recurrenceType) {
@@ -307,7 +311,7 @@ public class CartService {
         newTemplate.setAmount(cartDto.getAmount());
         newTemplate.setRecurrenceType(recurrenceType);
         newTemplate.setActive(true);
-        newTemplate.setStartDate(LocalDate.now());
+        newTemplate.setStartDate(LocalDate.now(clock));
         newTemplate.setNextExecutionDate(
                 calculateNextDate(
                         asLocalDate(cartDto.getDatePurchased()),
@@ -388,7 +392,7 @@ public class CartService {
 
     private void deactivateTemplate(CartTemplate template) {
         template.setActive(false);
-        template.setEndDate(LocalDate.now());
+        template.setEndDate(LocalDate.now(clock));
         templateRepository.save(template);
     }
 
