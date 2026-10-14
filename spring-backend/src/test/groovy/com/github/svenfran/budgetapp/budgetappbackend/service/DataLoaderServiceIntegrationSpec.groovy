@@ -3,7 +3,6 @@ package com.github.svenfran.budgetapp.budgetappbackend.service
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupMembershipHistoryRepository
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
-import org.springframework.aop.AopInvocationException
 import org.springframework.beans.factory.annotation.Autowired
 
 import static com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData.REFERENCE_DATE
@@ -81,20 +80,11 @@ class DataLoaderServiceIntegrationSpec extends IntegrationSpec {
         'Mitglied später eingetreten' | REFERENCE_DATE.plusDays(10) | null                         || 1
     }
 
-    /*
-     * Ist-Verhalten (Konzept Q3): Ohne Mitgliedschaft zum Kaufdatum liefert die Query keine Zeile, und Spring Data
-     * kann das nicht auf den int-Rückgabetyp abbilden. Fachlich muss das Kaufdatum immer im Mitgliedszeitraum liegen;
-     * addCart/updateCart/addSettlementPayment prüfen das, die wiederkehrenden Carts und GroupService.calculateCarts
-     * nicht. Korrektur in DIV-21.
-     */
-    def "Ohne Mitgliedschaft zum Kaufdatum schlägt die Abfrage der Mitgliederzahl fehl"() {
+    def "Ohne Mitgliedschaft zum Kaufdatum ist die Mitgliederzahl 0"() {
         given:
         def wg = fixtures.group()
 
-        when:
-        dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(DateUtils.toDate(REFERENCE_DATE.minusYears(2)), wg.group.id)
-
-        then:
-        thrown(AopInvocationException)
+        expect:
+        dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(DateUtils.toDate(REFERENCE_DATE.minusYears(2)), wg.group.id) == 0
     }
 }

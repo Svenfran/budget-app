@@ -202,8 +202,16 @@ public class CartService {
             var nextDate = template.getNextExecutionDate();
 
             if (nextDate.equals(today)) {
+                var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(asDate(nextDate), template.getGroupId());
+                if (groupMemberCount == 0) {
+                    logger.warn("CartTemplate {} wird deaktiviert: keine Mitglieder in Gruppe {} am {}", template.getId(), template.getGroupId(), nextDate);
+                    template.setActive(false);
+                    template.setEndDate(today);
+                    templateRepository.save(template);
+                    continue;
+                }
                 if (checkIfCartAlreadyExists(template) < 1) {
-                    createCartFromTemplate(template, nextDate);
+                    createCartFromTemplate(template, nextDate, groupMemberCount);
                 }
                 template.setNextExecutionDate(calculateNextDate(nextDate, template.getRecurrenceType()));
                 templateRepository.save(template);
@@ -234,12 +242,11 @@ public class CartService {
         }
     }
 
-    private void createCartFromTemplate(CartTemplate template, LocalDate nextDate) throws UserNotFoundException, GroupNotFoundException, CategoryNotFoundException {
+    private void createCartFromTemplate(CartTemplate template, LocalDate nextDate, int groupMemberCount) throws UserNotFoundException, GroupNotFoundException, CategoryNotFoundException {
         var newCart = new Cart();
         var user = dataLoaderService.loadUser(template.getUserId());
         var group = dataLoaderService.loadGroup(template.getGroupId());
         var category = dataLoaderService.loadCategory(template.getCategoryId());
-        var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(asDate(nextDate), group.getId());
         newCart.setUser(user);
         newCart.setGroup(group);
         newCart.setTitle(template.getTitle());

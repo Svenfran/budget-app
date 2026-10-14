@@ -119,6 +119,31 @@ class RecurringCartsIntegrationSpec extends IntegrationSpec {
         skipped.active
     }
 
+    def "Scheduler deaktiviert ein fälliges Template ohne Mitglieder zum Datum und verarbeitet die übrigen"() {
+        given:
+        def today = testClock.today
+        def leer = fixtures.group(memberSince: today.plusDays(1))
+        def verwaist = fixtures.cart(leer, title: 'Strom', amount: 60d, datePurchased: DateUtils.toDate(today.minusDays(1)))
+        def verwaistTemplate = fixtures.template(verwaist, nextExecutionDate: today)
+        def wg = fixtures.group()
+        def valid = fixtures.cart(wg, title: 'Spotify', amount: 9.99d, datePurchased: DateUtils.toDate(today.minusDays(1)))
+        def validTemplate = fixtures.template(valid, nextExecutionDate: today)
+
+        when:
+        cartService.generateRecurringCarts()
+
+        then: "kein Einkauf in der Gruppe ohne Mitglieder, Template deaktiviert"
+        cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(leer.group.id)*.id == [verwaist.id]
+        def deaktiviert = templateRepository.findById(verwaistTemplate.id).get()
+        !deaktiviert.active
+        deaktiviert.endDate == today
+        deaktiviert.nextExecutionDate == today
+
+        and: "übriges Template normal verarbeitet"
+        cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id).size() == 2
+        templateRepository.findById(validTemplate.id).get().nextExecutionDate == today.plusMonths(1)
+    }
+
     def "Scheduler erzeugt bei #recurrenceType einen Einkauf und setzt den nächsten Termin auf #expectedNextDate"() {
         given:
         def today = testClock.today
@@ -147,7 +172,7 @@ class RecurringCartsIntegrationSpec extends IntegrationSpec {
     def "Fälliges #recurrenceType-Template am #heute erzeugt den Einkauf und setzt den nächsten Termin auf #erwartet"() {
         given:
         testClock.today = heute
-        // Mitgliedschaft vor allen Terminen der Tabelle, sonst zählt der Job 0 Mitglieder zum Kaufdatum
+        // Mitgliedschaft vor allen Terminen der Tabelle, sonst zählt der Job 0 Mitglieder zum Kaufdatum und deaktiviert das Template
         def wg = fixtures.group(memberSince: LocalDate.of(2023, 1, 1))
         def cart = fixtures.cart(wg, title: 'Miete', amount: 900d, datePurchased: DateUtils.toDate(heute.minusDays(1)))
         def template = fixtures.template(cart, recurrenceType: recurrenceType, nextExecutionDate: heute)

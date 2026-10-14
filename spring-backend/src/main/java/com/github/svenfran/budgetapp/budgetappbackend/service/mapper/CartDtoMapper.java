@@ -13,7 +13,7 @@ public class CartDtoMapper {
         cart.setTitle(dto.getTitle());
         cart.setDescription(dto.getDescription());
         cart.setAmount(dto.getAmount());
-        cart.setAveragePerMember(dto.getAmount() / groupMemberCount);
+        cart.setAveragePerMember(groupMemberCount > 0 ? dto.getAmount() / groupMemberCount : 0.0);
         cart.setDeleted(false);
         cart.setDatePurchased(dto.getDatePurchased());
         cart.setGroup(group);
