@@ -16,7 +16,8 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
 
     def "Neuberechnung setzt den Durchschnitt pro Mitglied auf 0, wenn zum Kaufdatum niemand Mitglied ist"() {
         given: "Owner und Ben sind seit REFERENCE_DATE - 1 Jahr Mitglied"
-        def wg = fixtures.group(members: [fixtures.user()])
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
         def imZeitraum = fixtures.cart(wg, amount: 60d, datePurchased: DateUtils.toDate(REFERENCE_DATE))
         def vorZeitraum = fixtures.cart(wg, amount: 40d, datePurchased: DateUtils.toDate(REFERENCE_DATE.minusYears(2)))
         flushAndClear()
