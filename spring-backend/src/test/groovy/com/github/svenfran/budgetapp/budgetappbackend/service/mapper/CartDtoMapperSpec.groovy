@@ -31,4 +31,15 @@ class CartDtoMapperSpec extends Specification {
         cart.user.id == 5L
         cart.category.id == 20L
     }
+
+    def "Durchschnitt pro Mitglied ist 0 bei 0 Mitgliedern"() {
+        given:
+        def dto = TestData.cartDto(amount: 55d, datePurchased: DateUtils.toDate(TestData.REFERENCE_DATE))
+
+        when:
+        def cart = mapper.cartDtoToEntity(dto, TestData.category(), TestData.user(), TestData.group(), 0)
+
+        then:
+        cart.averagePerMember == 0d
+    }
 }

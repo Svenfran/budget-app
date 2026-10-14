@@ -32,7 +32,6 @@ public interface CartRepository extends CrudRepository<Cart, Long> {
             select count(distinct gmh.userId) from GroupMembershipHistory as gmh where gmh.groupId = :groupId
             and cast(gmh.membershipStart as date) <= :datePurchased
             and ((cast(gmh.membershipEnd as date) >= :datePurchased) or gmh.membershipEnd IS NULL)
-            group by gmh.groupId
             """)
     int getGroupMemberCountForCartDatePurchased(@Param("datePurchased") Date datePurchased, @Param("groupId") Long groupId);
 
