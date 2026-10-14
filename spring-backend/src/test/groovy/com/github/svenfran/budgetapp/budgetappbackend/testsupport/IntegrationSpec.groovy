@@ -30,6 +30,8 @@ import javax.persistence.EntityManager
  * - NotificationService ist gemockt: Benachrichtigungen als Interaktion prüfen,
  *   z. B. 1 * notificationService.sendGroupUpdateNotification(groupId, _).
  * - Testdaten kommen über fixtures (persistierte Szenarien) bzw. TestData (nicht persistiert).
+ * - Zeit: testClock (Standard TestData.REFERENCE_DATE), nie LocalDate.now(); eine verstellte Uhr wird nach jedem
+ *   Feature in cleanup() zurückgesetzt.
  *
  * Isolation:
  * - Standard: Rollback über das @Transactional dieser Klasse; Service und Test teilen einen Persistence Context.
@@ -49,6 +51,7 @@ abstract class IntegrationSpec extends Specification {
     @Autowired Fixtures fixtures
     @Autowired MockMvc mockMvc
     @Autowired EntityManager entityManager
+    @Autowired TestClock testClock
 
     @SpringBean
     NotificationService notificationService = Mock()
@@ -62,10 +65,11 @@ abstract class IntegrationSpec extends Specification {
 
     def cleanup() {
         SecurityContextHolder.clearContext()
+        testClock.reset()
     }
 
     /** Setzt den Nutzer direkt in den SecurityContext (DataLoaderService.getAuthenticatedUser() lädt ihn per E-Mail). */
-    protected void loginAs(User user) {
+    protected static void loginAs(User user) {
         SecurityContextHolder.context.authentication =
                 new UsernamePasswordAuthenticationToken(user, null, user.authorities)
     }

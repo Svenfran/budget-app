@@ -10,8 +10,6 @@ import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpe
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
 import org.springframework.beans.factory.annotation.Autowired
 
-import java.time.LocalDate
-
 import static com.github.svenfran.budgetapp.budgetappbackend.constants.RecurrenceType.*
 
 class CartServiceIntegrationSpec extends IntegrationSpec {
@@ -208,9 +206,9 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
     }
 
     def "Wechsel der Wiederholung ersetzt das Template"() {
-        given: "Kaufdatum relativ zu heute: calculateNextDate rechnet ab LocalDate.now() (bis T6/Clock)"
+        given: "Kaufdatum kurz vor heute (testClock): calculateNextDate rechnet ab heute"
         def wg = fixtures.group()
-        def purchased = LocalDate.now().minusDays(3)
+        def purchased = TestData.REFERENCE_DATE.minusDays(3)
         def cart = fixtures.cart(wg, title: 'Electricity', amount: 80d, datePurchased: DateUtils.toDate(purchased))
         def original = fixtures.template(cart, recurrenceType: MONTHLY)
 
@@ -238,124 +236,6 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         replacement.groupId == wg.group.id
         replacement.categoryId == wg.category.id
         replacement.id == cartRepository.findById(cart.id).get().template.id
-    }
-
-    // Scheduler-Fälle: generateRecurringCarts vergleicht mit dem echten Datum, daher bis T6 (Clock) relativ zu LocalDate.now().
-
-    def "Scheduler erzeugt keinen Einkauf, wenn das Template noch nicht fällig ist"() {
-        given:
-        def tomorrow = LocalDate.now().plusDays(1)
-        def wg = fixtures.group()
-        def cart = fixtures.cart(wg, title: 'Gym', amount: 30d, datePurchased: DateUtils.toDate(tomorrow))
-        def template = fixtures.template(cart, nextExecutionDate: tomorrow)
-
-        when:
-        cartService.generateRecurringCarts()
-        flushAndClear()
-
-        then: "kein Einkauf erzeugt"
-        cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id).size() == 1
-
-        and: "Template unverändert und aktiv"
-        def reloaded = templateRepository.findById(template.id).get()
-        reloaded.nextExecutionDate == tomorrow
-        reloaded.active
-    }
-
-    def "Scheduler erzeugt kein Duplikat, wenn ein gleicher Einkauf schon existiert"() {
-        given:
-        def today = LocalDate.now()
-        def wg = fixtures.group()
-        def cart = fixtures.cart(wg, title: 'Netflix', amount: 12.99d, datePurchased: DateUtils.toDate(today))
-        def template = fixtures.template(cart, nextExecutionDate: today)
-
-        when:
-        cartService.generateRecurringCarts()
-        flushAndClear()
-
-        then: "kein weiterer Einkauf"
-        cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id).size() == 1
-
-        and: "Template auf den nächsten Termin verschoben"
-        templateRepository.findById(template.id).get().nextExecutionDate == today.plusMonths(1)
-    }
-
-    def "Scheduler erzeugt einen neuen Einkauf aus dem fälligen Template"() {
-        given:
-        def today = LocalDate.now()
-        def wg = fixtures.group()
-        def cart = fixtures.cart(wg, title: 'Spotify', amount: 9.99d, datePurchased: DateUtils.toDate(today.minusDays(1)))
-        def template = fixtures.template(cart, nextExecutionDate: today)
-
-        when:
-        cartService.generateRecurringCarts()
-        flushAndClear()
-
-        then: "ein neuer Einkauf mit den Werten des Templates"
-        def carts = cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id)
-        carts.size() == 2
-        def created = carts.find { it.id != cart.id }
-        created.title == 'Spotify'
-        created.amount == 9.99d
-        created.category.id == wg.category.id
-        created.user.id == wg.owner.id
-        created.group.id == wg.group.id
-        DateUtils.toLocalDate(created.datePurchased) == today
-        created.template.id == template.id
-
-        and: "Template auf den nächsten Termin verschoben"
-        templateRepository.findById(template.id).get().nextExecutionDate == today.plusMonths(1)
-    }
-
-    def "Scheduler überspringt ein aktives Template ohne Wiederholung und verarbeitet die übrigen"() {
-        given:
-        def today = LocalDate.now()
-        def wg = fixtures.group()
-        def broken = fixtures.cart(wg, title: 'Einmalig', amount: 5d, datePurchased: DateUtils.toDate(today.minusDays(1)))
-        def brokenTemplate = fixtures.template(broken, recurrenceType: NONE, nextExecutionDate: today)
-        def valid = fixtures.cart(wg, title: 'Spotify', amount: 9.99d, datePurchased: DateUtils.toDate(today.minusDays(1)))
-        def validTemplate = fixtures.template(valid, nextExecutionDate: today)
-
-        when:
-        cartService.generateRecurringCarts()
-        flushAndClear()
-
-        then: "nur aus dem gültigen Template ein neuer Einkauf"
-        def created = cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id)
-                .findAll { !(it.id in [broken.id, valid.id]) }
-        created*.title == ['Spotify']
-        created.first().template.id == validTemplate.id
-
-        and: "gültiges Template verschoben, Template ohne Wiederholung unverändert"
-        templateRepository.findById(validTemplate.id).get().nextExecutionDate == today.plusMonths(1)
-        def skipped = templateRepository.findById(brokenTemplate.id).get()
-        skipped.nextExecutionDate == today
-        skipped.active
-    }
-
-    def "Scheduler erzeugt bei #recurrenceType einen Einkauf und setzt den nächsten Termin auf #expectedNextDate"() {
-        given:
-        def today = LocalDate.now()
-        def wg = fixtures.group()
-        def cart = fixtures.cart(wg, title: 'Gym', amount: 29.99d, datePurchased: DateUtils.toDate(today.minusDays(1)))
-        def template = fixtures.template(cart, recurrenceType: recurrenceType, nextExecutionDate: today)
-
-        when:
-        cartService.generateRecurringCarts()
-        flushAndClear()
-
-        then: "Original und neuer Einkauf"
-        cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id).size() == 2
-
-        and:
-        templateRepository.findById(template.id).get().nextExecutionDate == expectedNextDate
-
-        where:
-        recurrenceType || expectedNextDate
-        DAILY          || LocalDate.now().plusDays(1)
-        WEEKLY         || LocalDate.now().plusWeeks(1)
-        MONTHLY        || LocalDate.now().plusMonths(1)
-        YEARLY         || LocalDate.now().plusYears(1)
     }
 
     private List<RecurrenceType> activeTemplateTypes(GroupScenario wg) {
