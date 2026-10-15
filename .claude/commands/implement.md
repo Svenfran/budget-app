@@ -178,7 +178,7 @@ Follow existing Angular/Ionic conventions:
 - Preserve NgModule architecture.
 - Use existing signal-based services.
 - Reuse REST clients and DTO patterns.
-- Preserve optimistic updates and rollback.
+- Preserve the state-update pattern: update signals after a successful response, restore the snapshot on error.
 - Respect active-group filtering.
 - Reuse WebSocket infrastructure.
 - Maintain i18n for de/en/es.
@@ -219,14 +219,18 @@ Only modify repositories where necessary.
 
 ## 8. Testing
 
-Use existing project build and test commands.
+Follow the Testing sections of the root, `spring-backend` and `ionic-frontend` CLAUDE.md files (test level, suffix, `TestData`/`Fixtures`, `src/testing/`).
 
-Perform relevant verification:
-- Frontend build and lint
-- Backend compilation and tests
-- Relevant existing unit/integration tests
-- Focused tests for changed behavior where practical
+Before the first change, record the current test count of the affected side(s).
+
+Perform relevant verification for the affected side(s):
+- Backend: `./mvnw test` (unit specs, fast) while working; `./mvnw verify` (all specs, Docker must be running) before finishing
+- Frontend: `npm run test:ci`, `npm run lint`, `npm run build`
+- Single specs: `./mvnw test -Dtest=XyzSpec`, `./mvnw verify -Dit.test=XyzIntegrationSpec -Dtest=NONE -Dsurefire.failIfNoSpecifiedTests=false`, `npm run test:ci -- --include='**/xyz.service.spec.ts'`
+- Tests for new or changed behavior; for a bugfix a regression test that fails without the fix
 - Manual verification recommendations
+
+Report the commands that ran and the test count before/after; a count that didn't go up after adding a spec usually means a wrong suffix or file name.
 
 Do not rebuild the test infrastructure.
 

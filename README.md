@@ -39,7 +39,7 @@ Mobile app for shared expenses within groups: members record purchases ("carts")
 
 ### Frontend
 
-1. Point `ionic-frontend/src/config/config.ts` at your backend (LAN IP, port 9090). New origins must also be added to the backend's `app.cors.allowed-origins`.
+1. Copy `ionic-frontend/src/config/config.example.ts` to `config.ts` (and to `config.prod.ts` for production builds; both are git-ignored) and point `config.ts` at your backend (LAN IP, port 9090). New origins must also be added to the backend's `app.cors.allowed-origins`.
 2. Run:
    ```bash
    cd ionic-frontend
@@ -54,7 +54,7 @@ Mobile app for shared expenses within groups: members record purchases ("carts")
 ```bash
 cd spring-backend && ./mvnw test   # unit tests only, no Docker needed
 cd spring-backend && ./mvnw verify # all tests incl. integration tests (Testcontainers, Docker must be running)
-cd ionic-frontend && npm test      # Karma + Jasmine
+cd ionic-frontend && npm run test:ci   # Karma + Jasmine, headless
 cd ionic-frontend && npm run lint
 ```
 

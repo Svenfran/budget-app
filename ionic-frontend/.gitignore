@@ -69,4 +69,6 @@ testem.log
 .DS_Store
 Thumbs.db
 
-src/config/
+# Backend-URLs (lokal); Vorlage: src/config/config.example.ts
+src/config/*
+!src/config/config.example.ts
