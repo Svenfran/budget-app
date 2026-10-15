@@ -1,0 +1,24 @@
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!-- DIV-22: e-mail addresses are case-insensitive. Normalize existing data (same rule as EmailUtils.normalize)
+         and enforce uniqueness. Halts if addresses would collide after normalization; clean them up manually first. -->
+    <changeSet author="sven" id="20261015120000-1">
+        <preConditions onFail="HALT" onFailMessage="DIV-22: user_details contains e-mail addresses that differ only in case/whitespace. Clean them up before running this migration.">
+            <sqlCheck expectedResult="0">
+                SELECT count(*) FROM (
+                    SELECT lower(trim(email)) FROM user_details
+                    GROUP BY lower(trim(email)) HAVING count(*) > 1
+                ) AS duplicates
+            </sqlCheck>
+        </preConditions>
+        <update tableName="user_details">
+            <column name="email" valueComputed="lower(trim(email))"/>
+        </update>
+        <addUniqueConstraint tableName="user_details" columnNames="email" constraintName="uk_user_details_email"/>
+    </changeSet>
+
+</databaseChangeLog>

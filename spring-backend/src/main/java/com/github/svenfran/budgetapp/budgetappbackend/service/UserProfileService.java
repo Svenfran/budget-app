@@ -8,6 +8,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.entity.CartTemplate;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
+import com.github.svenfran.budgetapp.budgetappbackend.helper.EmailUtils;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.Translator;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.*;
 import liquibase.repackaged.org.apache.commons.lang3.RandomStringUtils;
@@ -154,9 +155,13 @@ public class UserProfileService {
         var userChange = dataLoaderService.loadUser(userDto.getId());
         verificationService.verifyIsAuthenticatedUser(userChange, userAuth);
         verificationService.verifyEmailIsValid(bindingResult);
+        // Same address as before after normalization (e.g. only case differs): nothing to change
+        if (EmailUtils.normalize(userDto.getUserEmail()).equals(userChange.getEmail())) {
+            return new UserDto(userChange, userChange.getEmail());
+        }
         verificationService.verifyEmailNotExists(userDto.getUserEmail());
         userChange.setEmail(userDto.getUserEmail());
-        return new UserDto(userRepository.save(userChange), userDto.getUserEmail());
+        return new UserDto(userRepository.save(userChange), userChange.getEmail());
     }
 
     public void changePassword(PasswordChangeDto passwordChangeDto) throws UserNotFoundException, UserIsNotAuthenticatedUser, WrongPasswordException {
@@ -192,6 +197,6 @@ public class UserProfileService {
 
         user.setPassword(passwordEncoder.encode(generatedPassword));
         userRepository.save(user);
-        senderService.sendEmail(email, body, subject);
+        senderService.sendEmail(user.getEmail(), body, subject);
     }
 }

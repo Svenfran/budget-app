@@ -2,6 +2,7 @@ package com.github.svenfran.budgetapp.budgetappbackend.entity;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.github.svenfran.budgetapp.budgetappbackend.helper.EmailUtils;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
@@ -54,7 +55,7 @@ public class User implements UserDetails {
     public User(Long id, String name, String email, String password, Set<Group> groups, Set<Group> groupList, Set<Cart> carts, List<Token> tokens) {
         this.id = id;
         this.name = name;
-        this.email = email;
+        this.email = EmailUtils.normalize(email);
         this.password = password;
         this.groups = groups;
         this.groupList = groupList;
@@ -87,7 +88,7 @@ public class User implements UserDetails {
     }
 
     public void setEmail(String email) {
-        this.email = email;
+        this.email = EmailUtils.normalize(email);
     }
 
     @JsonIgnore

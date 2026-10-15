@@ -4,6 +4,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.constants.UserEnum;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.*;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
+import com.github.svenfran.budgetapp.budgetappbackend.helper.EmailUtils;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -154,7 +155,7 @@ public class VerificationService {
     }
 
     private boolean emailExists(String email) {
-        return userRepository.findByEmail(email).isPresent();
+        return userRepository.findByEmail(EmailUtils.normalize(email)).isPresent();
     }
 
     private boolean userNameExists(String userNAme) {

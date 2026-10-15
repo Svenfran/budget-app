@@ -1,5 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service
 
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupMembershipHistoryRepository
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
@@ -11,6 +12,26 @@ class DataLoaderServiceIntegrationSpec extends IntegrationSpec {
 
     @Autowired DataLoaderService dataLoaderService
     @Autowired GroupMembershipHistoryRepository membershipRepository
+
+    def "Nutzer wird unabhängig von Schreibweise und Leerzeichen per E-Mail gefunden ('#gesucht')"() {
+        given:
+        def alfred = fixtures.user(email: 'alfred@divvy.test')
+
+        expect:
+        dataLoaderService.loadUserByEmail(gesucht).id == alfred.id
+
+        where:
+        gesucht << ['alfred@divvy.test', 'Alfred@Divvy.test', '  ALFRED@divvy.test ']
+    }
+
+    def "Nicht gefundene E-Mail: Meldung enthält die Eingabe unverändert (Frontend gleicht per Substring ab)"() {
+        when:
+        dataLoaderService.loadUserByEmail('Unbekannt@Divvy.test')
+
+        then:
+        def e = thrown(UserNotFoundException)
+        e.message == 'User with email Unbekannt@Divvy.test not found'
+    }
 
     def "Cart-Liste enthält nur Carts der Gruppe, neueste zuerst"() {
         given:
