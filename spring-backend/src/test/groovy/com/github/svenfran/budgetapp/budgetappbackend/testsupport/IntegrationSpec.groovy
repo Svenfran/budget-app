@@ -1,6 +1,7 @@
 package com.github.svenfran.budgetapp.budgetappbackend.testsupport
 
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User
+import com.github.svenfran.budgetapp.budgetappbackend.service.EmailSenderService
 import com.github.svenfran.budgetapp.budgetappbackend.service.NotificationService
 import org.spockframework.spring.SpringBean
 import org.springframework.beans.factory.annotation.Autowired
@@ -29,6 +30,7 @@ import javax.persistence.EntityManager
  * - Kein withReuse(true) am Container (siehe PostgresTestContainer).
  * - NotificationService ist gemockt: Benachrichtigungen als Interaktion prüfen,
  *   z. B. 1 * notificationService.sendGroupUpdateNotification(groupId, _).
+ * - EmailSenderService ist gemockt: kein Spec löst echte Brevo-Calls aus.
  * - Testdaten kommen über fixtures (persistierte Szenarien) bzw. TestData (nicht persistiert).
  * - Zeit: testClock (Standard TestData.REFERENCE_DATE), nie LocalDate.now(); eine verstellte Uhr wird nach jedem
  *   Feature in cleanup() zurückgesetzt.
@@ -55,6 +57,9 @@ abstract class IntegrationSpec extends Specification {
 
     @SpringBean
     NotificationService notificationService = Mock()
+
+    @SpringBean
+    EmailSenderService emailSenderService = Mock()
 
     @DynamicPropertySource
     static void datasource(DynamicPropertyRegistry registry) {

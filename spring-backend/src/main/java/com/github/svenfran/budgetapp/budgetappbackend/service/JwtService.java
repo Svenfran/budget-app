@@ -1,6 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
-import io.github.cdimascio.dotenv.Dotenv;
+import com.github.svenfran.budgetapp.budgetappbackend.helper.EmailUtils;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
@@ -8,6 +8,7 @@ import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
@@ -23,8 +24,6 @@ import java.util.function.Function;
 @Service
 public class JwtService {
 
-    private static final String SECRET_KEY = "secret_key";
-
     /** Prefix of the HTTP Authorization header carrying a bearer token. */
     public static final String BEARER_PREFIX = "Bearer ";
 
@@ -33,10 +32,10 @@ public class JwtService {
 
     private final Logger logger = LoggerFactory.getLogger(JwtService.class);
 
-    private final Dotenv dotenv = Dotenv.configure().ignoreIfMissing().load();
-    private final String secretKey = System.getenv(SECRET_KEY) != null
-            ? System.getenv(SECRET_KEY)
-            : dotenv.get(SECRET_KEY);
+    // Env var in prod, .env (loaded into system properties by BudgetAppApplication.main) in dev,
+    // fixed dummy value in application-test.properties for tests.
+    @Value("${secret_key}")
+    private String secretKey;
 
 
     public String extractUsername(String token) {
@@ -69,7 +68,7 @@ public class JwtService {
     public boolean isTokenValid(String token, UserDetails userDetails) {
         // Here username is equal to email
         String username = extractUsername(token);
-        return (username.equals(userDetails.getUsername())) && !isTokenExpired(token);
+        return (EmailUtils.normalize(username).equals(userDetails.getUsername())) && !isTokenExpired(token);
     }
 
     private boolean isTokenExpired(String token) {

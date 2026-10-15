@@ -45,4 +45,6 @@
     <include context="prod" file="db/changelog/release-1.x/20250906130000-1_addColumnForTemplateIdToCartTable.xml" relativeToChangelogFile="false"/>
     <include context="prod" file="db/changelog/release-1.x/20250906130000-1_addForeignKeyForCartTemplateToCartTable.xml" relativeToChangelogFile="false"/>
 
+    <include context="prod" file="db/changelog/release-1.x/20261015120000-1_normalizeEmailAndAddUniqueConstraintToUserTable.xml" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

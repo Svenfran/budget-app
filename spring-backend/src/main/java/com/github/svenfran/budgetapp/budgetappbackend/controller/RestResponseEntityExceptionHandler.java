@@ -3,6 +3,8 @@ package com.github.svenfran.budgetapp.budgetappbackend.controller;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -58,6 +60,20 @@ public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionH
     })
     protected ResponseEntity<Object> handleForbidden(Exception ex, WebRequest request) {
         return buildResponse(ex, HttpStatus.FORBIDDEN);
+    }
+
+    /** Name of the unique constraint on user_details.email (Liquibase changeset 20261015120000-1). */
+    static final String UNIQUE_USER_EMAIL_CONSTRAINT = "uk_user_details_email";
+
+    // Concurrent registrations/e-mail changes can pass verifyEmailNotExists and only fail at the unique
+    // constraint. Other integrity violations keep the default handling (500).
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    protected ResponseEntity<Object> handleDataIntegrityViolation(DataIntegrityViolationException ex, WebRequest request) {
+        if (ex.getCause() instanceof ConstraintViolationException cve
+                && UNIQUE_USER_EMAIL_CONSTRAINT.equalsIgnoreCase(cve.getConstraintName())) {
+            return buildResponse(new UserAlreadyExistException("User with email already exists"), HttpStatus.BAD_REQUEST);
+        }
+        throw ex;
     }
 
     private ResponseEntity<Object> buildResponse(Exception ex, HttpStatus status) {

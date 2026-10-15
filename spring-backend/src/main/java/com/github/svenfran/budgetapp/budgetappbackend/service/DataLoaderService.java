@@ -2,6 +2,7 @@ package com.github.svenfran.budgetapp.budgetappbackend.service;
 
 import com.github.svenfran.budgetapp.budgetappbackend.entity.*;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
+import com.github.svenfran.budgetapp.budgetappbackend.helper.EmailUtils;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -86,7 +87,7 @@ public class DataLoaderService {
     }
 
     public User loadUserByEmail(String email) throws UserNotFoundException {
-        return userRepository.findByEmail(email)
+        return userRepository.findByEmail(EmailUtils.normalize(email))
                 .orElseThrow(() -> new UserNotFoundException(String.format("User with email %s not found", email)));
     }
 
@@ -118,7 +119,7 @@ public class DataLoaderService {
                 .getAuthentication()
                 .getPrincipal();
 
-        return userRepository.findByEmail(userDetails.getUsername())
+        return userRepository.findByEmail(EmailUtils.normalize(userDetails.getUsername()))
                 .orElseThrow(() -> new UserNotFoundException(String.format("User with email %s not found", userDetails.getUsername())));
     }
 

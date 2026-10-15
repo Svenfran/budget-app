@@ -58,12 +58,11 @@ public class AuthenticationService {
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         var savedUser = userRepository.save(user);
-        var registeredUserId = dataLoaderService.loadUserByEmail(request.getEmail()).getId();
         var token = jwtService.generateToken(user, request.getDeviceId());
         var expTime = jwtService.extractExpiration(token).getTime();
         saveUserToken(savedUser, token, request.getDeviceId());
         groupService.createDefaultGroup(savedUser);
-        return new AuthenticationResponse(registeredUserId, request.getName(), request.getEmail(), expTime, token);
+        return new AuthenticationResponse(savedUser.getId(), request.getName(), savedUser.getEmail(), expTime, token);
     }
 
     @Transactional

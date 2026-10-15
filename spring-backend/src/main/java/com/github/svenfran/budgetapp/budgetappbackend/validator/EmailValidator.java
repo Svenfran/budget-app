@@ -22,8 +22,12 @@ public class EmailValidator implements ConstraintValidator<ValidEmail, String> {
     }
 
     private boolean validateEmail(String email) {
+        if (email == null) {
+            return false;
+        }
         pattern = Pattern.compile(EMAIL_PATTERN);
-        matcher = pattern.matcher(email);
+        // Leading/trailing whitespace is ignored; the address is normalized on lookup and save (EmailUtils)
+        matcher = pattern.matcher(email.trim());
         return matcher.matches();
     }
 }
