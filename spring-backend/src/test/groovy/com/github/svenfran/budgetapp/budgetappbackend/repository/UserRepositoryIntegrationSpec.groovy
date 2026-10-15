@@ -1,6 +1,7 @@
 package com.github.svenfran.budgetapp.budgetappbackend.repository
 
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
+import org.hibernate.exception.ConstraintViolationException
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.dao.DataIntegrityViolationException
 
@@ -45,8 +46,10 @@ class UserRepositoryIntegrationSpec extends IntegrationSpec {
         when:
         fixtures.user(email: 'ALFRED@divvy.test')
 
-        then:
-        thrown(DataIntegrityViolationException)
+        then: 'Ursache und Constraint-Name so, wie RestResponseEntityExceptionHandler sie für die 400 erwartet'
+        def e = thrown(DataIntegrityViolationException)
+        e.cause instanceof ConstraintViolationException
+        (e.cause as ConstraintViolationException).constraintName == 'uk_user_details_email'
     }
 
     def "Suche per Name '#gesucht' findet den Nutzer: #gefunden"() {
