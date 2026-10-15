@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working in the 
 
 Project-specific details live in the sub-project files — read the relevant one before working in that directory; this file only covers what spans both:
 
-- [`ionic-frontend/CLAUDE.md`](ionic-frontend/CLAUDE.md) — Ionic 8 / Angular 19 / Capacitor app (commands, signals-based state, WebSocket client, Android flavors).
+- [`ionic-frontend/CLAUDE.md`](ionic-frontend/CLAUDE.md) — Ionic 8 / Angular 19 / Capacitor app (commands, signals-based state, WebSocket client, Android flavors, tests).
 - [`spring-backend/CLAUDE.md`](spring-backend/CLAUDE.md) — Spring Boot 2.7 / Java 17 API (commands, profiles, layered architecture, Liquibase, tests).
 
 ## Repository layout
@@ -14,14 +14,14 @@ Project-specific details live in the sub-project files — read the relevant one
 | `ionic-frontend/` | Mobile client (Android via Capacitor). Talks to the backend over REST + STOMP/SockJS. |
 | `spring-backend/` | REST API, WebSocket broker, scheduled jobs, Postgres via Liquibase. |
 | `railway.json` | Railway deployment of the backend (builds `spring-backend/Dockerfile`, `prod` profile). |
-| `docs/sketches`, `docs/sketches`, `docs/sketches` | Design notes for recurring carts (German, partly untracked). |
+| `docs/` | **Local only** (`/docs/*` is gitignored), German: implementation plans (`plans/`), reviews (`reviews/`), test architecture concept (`architecture/`), design notes for recurring carts (`sketches/`). Not available on a fresh checkout — don't make versioned files depend on it. |
 
 ## How frontend and backend fit together
 
 - **REST**: all endpoints under `/api` (`/api/auth` public). The frontend's `AuthHttpInterceptorService` sends `Authorization` (JWT), `DeviceId` and `Accept-Language` on every request; the backend uses `Accept-Language` for i18n and `DeviceId` for token handling.
-- **Backend URL**: frontend `src/config/config.ts` (dev, LAN IP on port 9090 = backend `dev` profile) / `config.prod.ts` (Railway). New client origins must be added to the backend's `app.cors.allowed-origins`, not in code.
+- **Backend URL**: frontend `src/config/config.ts` (dev, LAN IP on port 9090 = backend `dev` profile) / `config.prod.ts` (Railway) — both git-ignored, created from `src/config/config.example.ts`. New client origins must be added to the backend's `app.cors.allowed-origins`, not in code.
 - **DTO contract**: backend `dto/` classes ↔ frontend `model/*Dto` interfaces. There is no shared schema or code generation — a field change must be made on both sides by hand.
-- **WebSocket** (`/ws`, STOMP over SockJS): backend `NotificationService` pushes to `/user/{userId}/notification/<action>` for every group member **except the user who triggered the change** (that client relies on its own optimistic update). Plus a global `/notification/health` heartbeat every 10 s.
+- **WebSocket** (`/ws`, STOMP over SockJS): backend `NotificationService` pushes to `/user/{userId}/notification/<action>` for every group member **except the user who triggered the change** (that client updates its own state from the REST response). Plus a global `/notification/health` heartbeat every 10 s.
   - Currently synced live: groups, members, owner change, shopping lists and items (where each is subscribed: see `ionic-frontend/CLAUDE.md`).
   - **Not** synced live: carts, categories, settlements — other members only see them on refetch.
   - Notifications are sent from inside the `@Transactional` service method, i.e. **before commit**. Entities have no `@Version` / optimistic locking, so concurrent edits are last-write-wins.
@@ -46,12 +46,12 @@ Project-specific details live in the sub-project files — read the relevant one
 Group data (groups, members, carts, categories, shopping lists/items, settlements) is seen by several users at once. When changing it, consider all three layers together:
 - **REST API** — endpoint, DTO, `VerificationService` check, typed exception + mapping in `RestResponseEntityExceptionHandler`.
 - **WebSocket sync** — does the change need a (new or changed) notification in `NotificationService`, and a matching subscription in the frontend? Keep topic names and payload DTOs identical on both sides; remember the triggering user receives no notification.
-- **Frontend state** — signal services with optimistic update + rollback, `groupId` filter against the active group, refetch triggers (`triggerUpdate()`).
+- **Frontend state** — signal services that update state after a successful response and restore their snapshot on error (see `ionic-frontend/CLAUDE.md`), `groupId` filter against the active group, refetch triggers (`triggerUpdate()`).
 
 Also check explicitly:
 - **Permissions** — who may perform the change (member, owner, removed member); no endpoint without a `VerificationService` check.
 - **Transactions** — the change and its dependent writes (e.g. `Group.lastUpdate*`, templates, history) belong in one `@Transactional` method.
-- **Concurrent changes** — several members may edit the same data at once (last-write-wins today); consider what happens to a stale client state and to the optimistic update/rollback.
+- **Concurrent changes** — several members may edit the same data at once (last-write-wins today); consider what happens to a stale client state and to the state update/rollback.
 - **Notification timing** — notifications currently go out before commit, so a failing commit or a fast refetch can let clients see state that isn't persisted (yet). Keep this in mind for new notifications; changing the mechanism (e.g. after-commit events) is a separate proposal.
 
 If a data type is currently not synced live (e.g. carts), don't add sync as a side effect — mention it as a proposal.
@@ -60,10 +60,16 @@ If a data type is currently not synced live (e.g. carts), don't add sync as a si
 Shopping lists are meant to become offline-capable at some point. **This is a future requirement — do not implement it (local persistence, sync queues, conflict handling, etc.) without an explicit request.** Avoid choices in shopping-list code that would make it harder later (e.g. more coupling to the online-only `server-unavailable` flow), and point it out when a story touches it.
 
 ### Tests
-- Respect existing tests and conventions; keep them green and adjust them when behavior changes.
-  - Backend: Spock/Groovy preferred for new tests (unit in `service/unit/`, integration via Testcontainers in `service/integration/`). Needs Docker; with Docker 29+ set `DOCKER_API_VERSION=1.44`.
-  - Frontend: Karma + Jasmine `*.spec.ts` next to the code; currently mostly generated "should create" stubs.
-- The overall test concept will be reworked separately — don't build out new test infrastructure or restructure tests on your own initiative.
+The test conventions live in the sub-project files: [`spring-backend/CLAUDE.md` → Testing](spring-backend/CLAUDE.md#testing) (Spock only, test kind by class suffix, `IntegrationSpec`, `TestData`/`Fixtures`) and [`ionic-frontend/CLAUDE.md` → Testing](ionic-frontend/CLAUDE.md#testing) (Karma + Jasmine, helpers in `src/testing/`). Follow them for every new or changed test.
+
+- **Before every PR** (there is no CI), for each affected side:
+  - backend: `./mvnw verify` in `spring-backend/` (all specs; Docker must be running),
+  - frontend: `npm run test:ci`, `npm run lint` and `npm run build` in `ionic-frontend/`.
+- **New or changed behavior gets tests** on the lowest level that can show it (unit before integration before API). No generated "should create" stubs, no empty tests.
+- **Bugfixes need a regression test** that fails without the fix and passes with it. If that's not reasonably possible, say why in the PR.
+- **Every PR states the commands that were run and the test count before/after** (backend unit and integration separately, frontend). A spec with the wrong suffix or file name silently doesn't run — a test count that didn't go up is the only signal.
+- **Error-message contract:** the frontend recognizes some error cases by the text of the backend message (`includes(...)` or `===` on `err.error`). Each such message is pinned by an API test; the list lives in the Groovydoc of `CartControllerApiSpec` (see backend Testing). Changing a message or a frontend check means updating both sides and that list. This is a stopgap until error codes are decided.
+- Keep existing tests green and adjust them when behavior changes. The test infrastructure is in place — don't add test frameworks, base classes or helpers on your own initiative; extend `TestData`/`Fixtures`/`src/testing/` when a story needs it.
 
 ### Other
 - Don't modify these CLAUDE.md files as a side effect of a story; propose updates instead if they're outdated.

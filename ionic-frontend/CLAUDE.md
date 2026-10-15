@@ -15,11 +15,12 @@ npm start                  # ng serve, dev server in browser
 npm run build              # ng build (production by default)
 npm run build:dev          # ionic build, development config (APP_ENV=dev)
 npm run build:prod         # ionic build, production config (APP_ENV=prod)
-npm test                   # ng test — Karma + Jasmine, all *.spec.ts
+npm run test:ci            # Karma + Jasmine, single headless run (ChromeHeadless) — run before every PR
+npm test                   # Karma in a Chrome window, watch mode (local debugging)
 npm run lint               # ng lint — ESLint (angular-eslint)
 
-# Run a single test: use fdescribe/fit in the spec, or:
-ng test --include='**/group.service.spec.ts'
+# Run a single spec (a pattern that matches nothing runs 0 tests and still reports SUCCESS):
+npm run test:ci -- --include='**/cart.service.spec.ts'
 
 # Android (Windows, requires a connected device — check-device runs adb first)
 npm run android:dev        # sync + build/install Dev flavor debug APK (de.svenfran.divvyapp.dev)
@@ -31,7 +32,7 @@ npm run android:prod:apk   # sync + build Prod release APK only (no device neede
 
 The backend URL is **not** taken straight from `environment.ts`. The chain is:
 
-- `src/config/config.ts` (dev: `http://192.168.178.23:9090`) and `src/config/config.prod.ts` (prod: Railway URL) hold `appConfig.baseUrl`.
+- `src/config/config.ts` (dev: LAN IP of the backend machine, port 9090) and `src/config/config.prod.ts` (prod: Railway URL) hold `appConfig.baseUrl`. Both are **git-ignored** and missing on a fresh checkout: copy the versioned template `src/config/config.example.ts` to `config.ts` (needed for `npm start`, `npm run test:ci` and dev builds) and to `config.prod.ts` (needed for the production build, i.e. `npm run build`, `android:prod`), then set the URLs. Without them the build fails with `Can't resolve 'src/config/config'`.
 - `angular.json` `fileReplacements` swaps `config.ts` → `config.prod.ts` for the production build.
 - `environment.ts` (the only environment file — there is no `environment.prod.ts`) derives `apiBaseUrl` and `websocketUrl` (`${baseUrl}/ws`) from `appConfig`. Its `production` flag is always `false`; don't rely on it to detect prod.
 - `capacitor.config.ts` switches `appId`/`appName`/`cleartext`/`androidScheme` (`http` for dev, `https` otherwise) based on the `APP_ENV` env var (`dev` vs anything else), set via `cross-env` in the npm scripts.
@@ -55,7 +56,7 @@ When pointing the app at a different backend, edit `src/config/config.ts` (dev) 
 
 Cross-component "something changed, refetch" signaling uses an incrementing counter signal (e.g. `cartUpdated`, `memberUpdated`) bumped via `triggerUpdate()` and watched with `effect()`.
 
-**Mutations are optimistic with rollback.** Service write methods (e.g. `GroupService.addGroup/updateGroup/deleteGroup`) snapshot current signal state, update the signal immediately, fire the HTTP call, and on error reset the signal back to the snapshot.
+**Mutations update state after success, with a snapshot rollback.** Service write methods (e.g. `GroupService.addGroup/updateGroup/deleteGroup`, `CartService.addCart`) snapshot the current signal state, fire the HTTP call, update the signals from the response in `next`, and on error reset them to the snapshot (some, like `CartService`, also show an error alert). The UI therefore changes only after the backend answered; the restore on error is a safety net, not the undo of an optimistic change.
 
 **Auth.** `AuthService` holds the user in a `BehaviorSubject`, with a JWT-style token. Token + auth data persist via `StorageService` (`authData`) and `localStorage` (`token`). `autoLogin()` restores on launch and `autoLogout()` schedules a `setTimeout` to log out at `expirationDate`. `AuthHttpInterceptorService` (registered as a multi `HTTP_INTERCEPTORS` in `app.module.ts`) attaches `Authorization`, `DeviceId`, and `Accept-Language` headers to every request.
 
@@ -72,6 +73,33 @@ Incoming messages mutate the same service signals, keeping all open views in syn
 **i18n.** `@ngx-translate/core` with a `CustomTranslateLoader`. Languages `de`/`en`/`es` in `src/assets/i18n/*.json`; default `de`. `LanguageService` persists choice in `localStorage` (`appLang`) and is mirrored to the `Accept-Language` header by the interceptor. Use `translate.instant('key.path')` for alert/toast text rather than hardcoded strings.
 
 **Theming.** Dark/light theme toggled via the `color-theme` body attribute (set with `Renderer2`), persisted as `darkMode` in Preferences, with native status/navigation bar colors set through Capacitor plugins on mobile.
+
+## Testing
+
+Karma + Jasmine. `npm run test:ci` (needs a local Chrome/Chromium and `src/config/config.ts`, see Environment — tests mock all HTTP, so the template's URL is fine) is the run that counts; `npm run lint` and `npm run build` belong to the verification as well. The test target loads `src/window-global-fix.ts` (needed by `sockjs-client`), configured in `angular.json` and `tsconfig.spec.json`.
+
+**Test kinds**
+- **Service tests** (the focus): `*.service.spec.ts` next to the service, `TestBed` + `provideServiceTesting()` + `HttpTestingController`, `afterEach(() => http.verify())`.
+- **Plain unit tests** for pure functions (filters, sorting, date/sum logic): no `TestBed`. Move logic out of a service into a function when that makes it testable.
+- **Component tests** only when the component has its own logic: `IonicModule.forRoot()` + `provideServiceTesting()` + service fakes.
+
+**No generated stubs.** There are no "should create" specs, and `angular.json` `schematics` keep `ng generate` from creating any (`skipTests: true` for the Angular schematics, `spec: false` for the Ionic `page`/`component`). Every spec is written on purpose.
+
+**Helpers live only in `src/testing/`**
+- `test-providers.ts`: `provideServiceTesting()` (mocked HTTP, empty router, `TranslateService` without loader — `instant()` returns the key, so alerts are asserted by key) and `alertServiceSpy()`.
+- `test-data.ts`: factories `aUser`, `aGroup`, `aCategory`, `aCart` with `Partial<T>` overrides, unique ids and the fixed `REFERENCE_DATE` (2025-06-15). Never use the current date in tests.
+- Add a factory or helper only when a story needs it.
+
+**What to assert**
+- The request (URL, method, body), the signal state after success **and** after an error, the `triggerUpdate()` counters, and alert keys.
+- Pin the actual behavior: services update state only after success, so after an error the state is unchanged. (If a service ever does a real optimistic update: assert the state before `flush`, then flush an error and assert the rollback.)
+- **Error-message contract:** when a service checks `err.error` (`includes(...)`/`===`), use the exact backend message as the error body in the test. The backend pins the same text in an API spec; the list is in the Groovydoc of `spring-backend/.../controller/CartControllerApiSpec.groovy` (stopgap until error codes are decided).
+
+**WebSocket and shopping lists**
+- Handlers that change state (`AppComponent.subscribeToTopics`, `shoppinglist.page.ts`) are tested through the service methods they call, not through the component.
+- Shopping-list tests check state and HTTP, not the navigation to `server-unavailable` — keeps them valid once lists become offline-capable.
+
+**Reference test:** [`src/app/domains/cartlist/service/cart.service.spec.ts`](src/app/domains/cartlist/service/cart.service.spec.ts).
 
 ## Conventions
 

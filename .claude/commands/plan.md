@@ -151,6 +151,8 @@ Backend:
 - WebSocket notifications
 - Existing tests
 
+Tests (both sides): which existing specs cover the change, and which new or changed tests are needed — level and suffix per the Testing sections of `spring-backend/CLAUDE.md` and `ionic-frontend/CLAUDE.md` (`*Spec` / `*IntegrationSpec` / `*ApiSpec`, frontend service tests with `src/testing/`). A bugfix needs a regression test.
+
 Identify concrete affected files and reusable patterns.
 
 ## 5. Cross-repository consistency
@@ -227,7 +229,10 @@ Provide ordered, actionable steps.
 Include concurrency, authorization and error scenarios.
 
 ## 10. Verifikation
-Describe builds, tests and manual checks.
+Describe builds, tests and manual checks:
+- planned tests (spec class, level, cases; regression test for bugfixes),
+- commands for the affected side(s): backend `./mvnw test` / `./mvnw verify` (Docker), frontend `npm run test:ci`, `npm run lint`, `npm run build`,
+- test count before/after for the PR.
 
 Map relevant acceptance criteria to verification steps.
 

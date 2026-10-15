@@ -77,7 +77,7 @@ For every review mode:
 6. Support architecture findings with code evidence and the specific decision involved. Do not invent architecture rules or treat personal preferences as violations.
 7. If an applicable concept is missing, unapproved, or conflicts with Jira or the plan, state that explicitly. Use existing project conventions and established engineering practices for nonbinding assessments.
 
-For testing infrastructure, test data, test conventions, or JUnit-to-Spock migration, explicitly check `../../docs/architecture/testarchitektur-konzept.md` if it exists. Do not assume it is approved.
+For tests, test infrastructure or test data, the binding conventions are the Testing sections of the root, `spring-backend` and `ionic-frontend` CLAUDE.md files (approved and implemented with Epic DIV-3). The background concept `docs/architecture/testarchitektur-konzept.md` is local only and may be missing; use it for rationale, not as the rule set.
 
 ## 3. Review priorities
 
@@ -144,7 +144,7 @@ Do not automatically label every architectural preference as Must Fix. Rank find
 
 ## 7. Testing assessment
 
-Evaluate tests relevant to the review: important behavior and regression coverage, reliability, isolation, integration boundaries, and reusable test infrastructure.
+Evaluate tests relevant to the review: important behavior and regression coverage, reliability, isolation, integration boundaries, and reusable test infrastructure. Check in particular: a regression test for bugfixes, correct suffix/file name (a wrong one silently doesn't run — compare test counts), and adherence to the Testing conventions in the CLAUDE.md files.
 
 Distinguish tests that are missing, tests that exist but could not be run, and tests that ran and failed. If tests are executed, report the command and observed result; never claim execution without running them. Do not demand new frameworks without justification.
 

@@ -9,7 +9,7 @@ import org.testcontainers.containers.PostgreSQLContainer
  */
 final class PostgresTestContainer {
 
-    static final PostgreSQLContainer<?> INSTANCE = new PostgreSQLContainer<>("postgres:14-alpine")
+    static final PostgreSQLContainer<?> INSTANCE = new PostgreSQLContainer<>("postgres:17-alpine")
 
     static { INSTANCE.start() }
 
