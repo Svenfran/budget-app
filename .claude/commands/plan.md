@@ -137,7 +137,7 @@ Frontend:
 - Pages and components
 - Angular services and signals
 - REST clients and DTOs
-- Optimistic updates and rollback
+- State updates after success and snapshot rollback on error
 - WebSocket subscriptions
 - i18n and error handling
 

@@ -178,7 +178,7 @@ Follow existing Angular/Ionic conventions:
 - Preserve NgModule architecture.
 - Use existing signal-based services.
 - Reuse REST clients and DTO patterns.
-- Preserve optimistic updates and rollback.
+- Preserve the state-update pattern: update signals after a successful response, restore the snapshot on error.
 - Respect active-group filtering.
 - Reuse WebSocket infrastructure.
 - Maintain i18n for de/en/es.

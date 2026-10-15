@@ -99,7 +99,7 @@ Do not report subjective style preferences as defects. Prefer a few well-support
 
 When relevant, examine:
 
-**Frontend (`ionic-frontend`):** Components and lifecycle; Angular Signals and state consistency; REST requests and DTOs; optimistic updates and rollback; WebSocket subscriptions; resource cleanup; error handling and i18n.
+**Frontend (`ionic-frontend`):** Components and lifecycle; Angular Signals and state consistency; REST requests and DTOs; state updates after success and snapshot rollback on error; WebSocket subscriptions; resource cleanup; error handling and i18n.
 
 **Backend (`spring-backend`):** Controllers and services; authorization and group membership; DTO contracts and validation; transactions and persistence; exception handling; WebSocket notifications; Liquibase migrations; resource usage.
 
