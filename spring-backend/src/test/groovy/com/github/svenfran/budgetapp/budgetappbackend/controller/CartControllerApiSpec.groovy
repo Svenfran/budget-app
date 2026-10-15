@@ -1,11 +1,10 @@
 package com.github.svenfran.budgetapp.budgetappbackend.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.github.svenfran.budgetapp.budgetappbackend.testsupport.ApiRequests
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.http.MediaType
 
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 
@@ -13,7 +12,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * Referenz-API-Spec (MockMvc): HTTP-Status, Exception-Mapping von {@link RestResponseEntityExceptionHandler},
  * JSON-Form der DTOs, Security-Regeln und Fehlermeldungs-Vertrag zum Frontend.
  *
- * - Anmeldung über .with(user(entity)); ohne Anmeldung antwortet Spring Security mit 403, nicht 401.
+ * - Requests über ApiRequests.send (Anmeldung per user: → .with(user(entity))); ohne Anmeldung antwortet Spring Security mit 403, nicht 401.
  * - JSON über den Jackson-ObjectMapper und Groovy-Vergleiche statt jsonPath.
  *
  * Fehlermeldungs-Vertrag (Übergangslösung bis zur Entscheidung über Fehlercodes, Konzept Q4):
@@ -36,7 +35,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * Nicht abgedeckt: Bei parallelen Registrierungen/E-Mail-Änderungen liefert der Unique-Constraint-Handler
  * 'User with email already exists' ohne Adresse; das Frontend erkennt diesen Fall nicht (bekannt seit DIV-22).
  */
-class CartControllerApiSpec extends IntegrationSpec {
+class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
 
     @Autowired ObjectMapper objectMapper
 
@@ -46,12 +45,11 @@ class CartControllerApiSpec extends IntegrationSpec {
         fixtures.cart(wg, title: 'Pizza', amount: 25d)
 
         when:
-        def response = mockMvc.perform(get('/api/carts/carts-by-groupid/{id}', wg.group.id).with(user(wg.owner)))
-                .andReturn().response
+        def response = send(get('/api/carts/carts-by-groupid/{id}', wg.group.id), user: wg.owner)
 
         then:
         response.status == 200
-        def body = objectMapper.readValue(response.contentAsString, List)
+        def body = json(response)
         body*.title == ['Pizza']
         body[0].amount == 25
         body[0].groupId == wg.group.id
@@ -63,8 +61,7 @@ class CartControllerApiSpec extends IntegrationSpec {
         def wg = fixtures.group()
 
         expect:
-        mockMvc.perform(get('/api/carts/carts-by-groupid/{id}', wg.group.id).with(user(fixtures.user())))
-                .andReturn().response.status == 403
+        send(get('/api/carts/carts-by-groupid/{id}', wg.group.id), user: fixtures.user()).status == 403
     }
 
     def "Ohne Anmeldung wird der Zugriff mit 403 abgelehnt"() {
@@ -72,7 +69,7 @@ class CartControllerApiSpec extends IntegrationSpec {
         def wg = fixtures.group()
 
         expect: 'Ist-Verhalten: Spring Security antwortet ohne Authentifizierung mit 403, nicht 401'
-        mockMvc.perform(get('/api/carts/carts-by-groupid/{id}', wg.group.id)).andReturn().response.status == 403
+        send(get('/api/carts/carts-by-groupid/{id}', wg.group.id)).status == 403
     }
 
     def "Unbekannter Einkauf: 404"() {
@@ -80,8 +77,7 @@ class CartControllerApiSpec extends IntegrationSpec {
         def angemeldet = fixtures.user()
 
         when: 'Long.MAX_VALUE statt einer kleinen ID, die Restdaten aus Commit-Specs treffen könnte'
-        def response = mockMvc.perform(get('/api/carts/{id}', Long.MAX_VALUE).with(user(angemeldet)))
-                .andReturn().response
+        def response = send(get('/api/carts/{id}', Long.MAX_VALUE), user: angemeldet)
 
         then:
         response.status == 404
@@ -91,13 +87,11 @@ class CartControllerApiSpec extends IntegrationSpec {
     def "Kaufdatum vor Mitgliedschaftsbeginn: 400 mit der Meldung, die das Frontend auswertet"() {
         given: 'Mitgliedschaft beginnt 2024-06-15'
         def wg = fixtures.group()
-        def body = objectMapper.writeValueAsString([title: 'Alt', amount: 10, datePurchased: '2020-01-01',
-                                                    groupId: wg.group.id, categoryDto: [id: wg.category.id]])
+        def body = [title: 'Alt', amount: 10, datePurchased: '2020-01-01', groupId: wg.group.id,
+                    categoryDto: [id: wg.category.id]]
 
         when:
-        def response = mockMvc.perform(post('/api/carts/add').with(user(wg.owner))
-                .contentType(MediaType.APPLICATION_JSON).content(body))
-                .andReturn().response
+        def response = send(post('/api/carts/add'), user: wg.owner, body: body)
 
         then:
         response.status == 400

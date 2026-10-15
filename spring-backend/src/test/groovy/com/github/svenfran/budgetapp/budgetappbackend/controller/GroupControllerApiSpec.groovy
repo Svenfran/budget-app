@@ -3,16 +3,15 @@ package com.github.svenfran.budgetapp.budgetappbackend.controller
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.Fixtures.GroupScenario
+import com.github.svenfran.budgetapp.budgetappbackend.testsupport.ApiRequests
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.http.MediaType
 import org.springframework.mock.web.MockHttpServletResponse
 
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 
 /** Fehlermeldungs-Vertrag beim Hinzufügen von Mitgliedern (Liste der Meldungen: {@link CartControllerApiSpec}). */
-class GroupControllerApiSpec extends IntegrationSpec {
+class GroupControllerApiSpec extends IntegrationSpec implements ApiRequests {
 
     @Autowired ObjectMapper objectMapper
 
@@ -58,10 +57,6 @@ class GroupControllerApiSpec extends IntegrationSpec {
     }
 
     private MockHttpServletResponse addNewMember(GroupScenario wg, User angemeldet, String newMemberEmail) {
-        mockMvc.perform(post('/api/groups/add-new-member')
-                .with(user(angemeldet))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString([id: wg.group.id, newMemberEmail: newMemberEmail])))
-                .andReturn().response
+        send(post('/api/groups/add-new-member'), user: angemeldet, body: [id: wg.group.id, newMemberEmail: newMemberEmail])
     }
 }

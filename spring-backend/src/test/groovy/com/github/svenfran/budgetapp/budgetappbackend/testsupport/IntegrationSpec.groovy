@@ -27,6 +27,7 @@ import javax.persistence.EntityManager
  * - Keine zusätzliche Kontext-Konfiguration in einzelnen Specs (@SpringBean, @MockBean, @TestPropertySource,
  *   @DirtiesContext, eigenes @SpringBootTest): jede erzeugt einen weiteren Kontext (~26 s).
  *   Braucht eine Spec einen Mock, wird er hier ergänzt.
+ * - API-Specs führen Requests über den Trait ApiRequests aus (send/json), nicht über mockMvc direkt.
  * - Kein withReuse(true) am Container (siehe PostgresTestContainer).
  * - NotificationService ist gemockt: Benachrichtigungen als Interaktion prüfen,
  *   z. B. 1 * notificationService.sendGroupUpdateNotification(groupId, _).
