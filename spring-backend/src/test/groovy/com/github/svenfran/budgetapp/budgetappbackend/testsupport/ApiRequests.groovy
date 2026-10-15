@@ -38,7 +38,9 @@ trait ApiRequests {
      */
     MockHttpServletResponse send(Map options, MockHttpServletRequestBuilder request) {
         assert ['user', 'body'].containsAll(options.keySet()): "Unbekannte Option: ${options.keySet()}"
-        if (options.user) {
+        if (options.containsKey('user')) {
+            // user: null würde still ohne Anmeldung laufen (403) und Rechte-Tests zufällig grün machen
+            assert options.user != null: 'user: ist null; für Requests ohne Anmeldung die Option weglassen'
             request.with(user((UserDetails) options.user))
         }
         if (options.containsKey('body')) {
