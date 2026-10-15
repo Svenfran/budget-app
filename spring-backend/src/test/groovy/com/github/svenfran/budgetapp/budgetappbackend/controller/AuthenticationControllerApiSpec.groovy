@@ -12,8 +12,11 @@ import org.springframework.test.web.servlet.ResultActions
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 
-/** DIV-22: E-Mail-Adressen sind unabhängig von Groß-/Kleinschreibung und umgebenden Leerzeichen. */
-class AuthenticationApiSpec extends IntegrationSpec {
+/**
+ * DIV-22: E-Mail-Adressen sind unabhängig von Groß-/Kleinschreibung und umgebenden Leerzeichen.
+ * Enthält auch Fälle des Fehlermeldungs-Vertrags (Liste der Meldungen: {@link CartControllerApiSpec}).
+ */
+class AuthenticationControllerApiSpec extends IntegrationSpec {
 
     static final String DEVICE = 'device-1'
 
@@ -57,6 +60,19 @@ class AuthenticationApiSpec extends IntegrationSpec {
         response.andReturn().response.status == 400
         // Frontend erkennt den Fall per Substring der gesendeten Adresse (auth.page.ts)
         response.andReturn().response.contentAsString == 'User with email Max@EXAMPLE.de already exists'
+    }
+
+    def "Registrierung mit vergebenem Nutzernamen: 400 mit dem Namen in der Meldung"() {
+        given:
+        register('max', 'max@example.de')
+
+        when: 'andere E-Mail, sonst greift zuerst die E-Mail-Prüfung'
+        def response = register('max', 'moritz@example.de')
+
+        then:
+        // Frontend prüft status !== 403 und den Substring des gesendeten Namens (auth.page.ts)
+        response.andReturn().response.status == 400
+        response.andReturn().response.contentAsString == 'User with name max already exists'
     }
 
     def "Vor der Umstellung ausgestelltes Token mit abweichender Schreibweise im Subject bleibt gültig"() {
