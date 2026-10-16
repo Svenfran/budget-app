@@ -94,7 +94,7 @@ class EntityToStringSpec extends Specification {
         def group = TestData.group(id: 10L, name: 'WG')
         def category = TestData.category(id: 20L, name: 'Lebensmittel', group: group, carts: [] as Set)
         def list = TestData.shoppingList(id: 40L, name: 'Wocheneinkauf', group: group)
-        def item = new ShoppingItem(id: 50L, name: 'Milch', completed: true, shoppingList: list)
+        def item = TestData.shoppingItem(id: 50L, name: 'Milch', completed: true, shoppingList: list)
         group.categories.add(category)
         group.shoppingLists.add(list)
         list.shoppingItems.add(item)

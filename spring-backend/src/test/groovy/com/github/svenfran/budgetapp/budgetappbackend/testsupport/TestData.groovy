@@ -62,6 +62,10 @@ class TestData {
         new ShoppingList([name: "Liste ${nextId()}", shoppingItems: [] as Set] + overrides)
     }
 
+    static ShoppingItem shoppingItem(Map overrides = [:]) {
+        new ShoppingItem([name: "Eintrag ${nextId()}", completed: false] + overrides)
+    }
+
     /** Gültiges Token (weder abgelaufen noch widerrufen); Platzhalter statt echtem JWT. Nutzer setzt der Aufrufer. */
     static Token token(Map overrides = [:]) {
         new Token([token: "token-${nextId()}", tokenType: TokenType.BEARER, expired: false, revoked: false,
