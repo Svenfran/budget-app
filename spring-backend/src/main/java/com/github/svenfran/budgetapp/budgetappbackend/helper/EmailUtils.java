@@ -8,7 +8,6 @@ import java.util.Locale;
  * same user.
  */
 public final class EmailUtils {
-    int ciCompileCheck = ; // TEMP DIV-37: absichtlicher Compile-Fehler
 
     private EmailUtils() {
     }
