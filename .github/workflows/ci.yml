@@ -51,6 +51,8 @@ jobs:
     timeout-minutes: 30
     defaults:
       run:
+        # Job-defaults ersetzen die Workflow-defaults komplett, shell daher hier wiederholen.
+        shell: bash
         working-directory: spring-backend
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -83,6 +85,8 @@ jobs:
     timeout-minutes: 20
     defaults:
       run:
+        # Job-defaults ersetzen die Workflow-defaults komplett, shell daher hier wiederholen.
+        shell: bash
         working-directory: ionic-frontend
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
