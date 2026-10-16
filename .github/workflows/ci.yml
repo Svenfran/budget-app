@@ -37,7 +37,7 @@ jobs:
         with:
           filters: |
             backend:
-              - 'spring-backend/**'
+              - [ungültig: 'spring-backend/**'
               - '.github/workflows/ci.yml'
             frontend:
               - 'ionic-frontend/**'
