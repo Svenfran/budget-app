@@ -54,6 +54,15 @@ class Fixtures {
         new GroupScenario(group, owner, members, category)
     }
 
+    /**
+     * Zusätzliche Mitgliedschaft eines Nutzers (nur Historie; group.members bleibt unverändert). Named args: Felder von
+     * GroupMembershipHistory, z. B. membershipStart/membershipEnd als Date (DateUtils.toDate). Den Nutzer danach nicht
+     * erneut speichern: User.groupList bildet dieselbe Tabelle ab (siehe group()).
+     */
+    GroupMembershipHistory membership(Map overrides = [:], GroupScenario scenario, User user) {
+        membershipRepository.save(TestData.membership([userId: user.id, groupId: scenario.group.id] + overrides))
+    }
+
     Category category(Map overrides = [:], GroupScenario scenario) {
         categoryRepository.save(TestData.category([group: scenario.group] + overrides))
     }
