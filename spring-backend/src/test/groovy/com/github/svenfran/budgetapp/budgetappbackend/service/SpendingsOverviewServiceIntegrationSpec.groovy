@@ -174,6 +174,40 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         zeitraeume == [[of(2025, 1, 1), of(2025, 2, 28)], [of(2025, 2, 28), of(2025, 3, 31)], [of(2025, 5, 1), null]]
     }
 
+    def "Mitgliedschaft innerhalb eines Monats: Anteile nur an Carts von Eintritts- bis Austrittstag"() {
+        given: "Anna (Owner) seit 01.01.2025, Ben nur 10.–20.03.2025"
+        def anna = fixtures.user(name: 'Anna')
+        def ben = fixtures.user(name: 'Ben')
+        def (annaId, benId) = [anna, ben]*.id
+        def wg = fixtures.group(owner: anna, memberSince: of(2025, 1, 1))
+        fixtures.membership(wg, ben, membershipStart: DateUtils.toDate(of(2025, 3, 10)), membershipEnd: DateUtils.toDate(of(2025, 3, 20)))
+
+        and: "Anna bezahlt alles; Carts am Tag vor dem Eintritt, am Eintritts-, am Austrittstag und am Tag danach"
+        fixtures.cart(wg, user: anna, amount: 10d, averagePerMember: 10d, datePurchased: DateUtils.toDate(of(2025, 3, 9)))   // nur Anna
+        fixtures.cart(wg, user: anna, amount: 20d, averagePerMember: 10d, datePurchased: DateUtils.toDate(of(2025, 3, 10)))  // Anna, Ben
+        fixtures.cart(wg, user: anna, amount: 8d, averagePerMember: 4d, datePurchased: DateUtils.toDate(of(2025, 3, 20)))    // Anna, Ben
+        fixtures.cart(wg, user: anna, amount: 6d, averagePerMember: 6d, datePurchased: DateUtils.toDate(of(2025, 3, 21)))    // nur Anna
+        flushAndClear()
+        loginAs(anna)
+
+        when:
+        def jahr = spendingsOverviewService.getSpendingsForGroupAndYear(2025, wg.group.id)
+
+        then:
+        jahr.spendingsTotalYear.sumTotalYear == 44d   // 10 + 20 + 8 + 6
+        // Anna: bezahlt 44, Anteil 10 + 10 + 4 + 6 = 30 → diff 14
+        // Ben: bezahlt 0, Anteil nur 10.03. und 20.03.: 10 + 4 = 14 → diff −14
+        // (bei Beteiligung für den ganzen Mitgliedsmonat wäre Bens Anteil 10 + 10 + 4 + 6 = 30)
+        werte(jahr.spendingsTotalYear.spendingsTotalUser) == [(annaId): [44d, 14d], (benId): [0d, -14d]]
+        anteile(jahr.spendingsTotalYear.spendingsTotalUser) == [(annaId): 30d, (benId): 14d]
+
+        and: "im März erscheint Ben in der Monatsliste, trägt aber nur die Carts seines Zeitraums"
+        jahr.spendingsPerMonth*.month == [3]
+        jahr.spendingsPerMonth[0].sumTotalMonth == 44d
+        jahr.spendingsPerMonth[0].spendingsMonthlyUser*.userId.sort() == [annaId, benId].sort()
+        werte(jahr.spendingsPerMonth[0].spendingsMonthlyUser) == [(annaId): [44d, 14d], (benId): [0d, -14d]]
+    }
+
     def "Rundung (#fall): Anna bezahlt #betrag für #mitglieder Mitglieder, diff #annaDiff, andere #andereDiff"() {
         given:
         def anna = fixtures.user(name: 'Anna')
