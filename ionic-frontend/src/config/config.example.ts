@@ -4,3 +4,4 @@
 export const appConfig = {
   baseUrl: "http://localhost:9090"
 };
+// CI-Prüfung DIV-37: nur Frontend
