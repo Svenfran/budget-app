@@ -28,7 +28,6 @@ import { LanguageService } from './service/language.service';
 })
 export class AppComponent {
   private authSub!: Subscription;
-  private ciBuildCheck: number = 'kein number'; // TEMP DIV-37: absichtlicher TypeScript-Fehler
   private userSub!: Subscription;
   private previousAuthState: boolean = false;
   public shoppingLists: Group[] = [];
