@@ -134,7 +134,8 @@ Layout: the package mirrors `main` (`controller/`, `service/`, `service/mapper/`
 ### Spock pitfalls
 
 - Conditions inside `if` blocks or closures need `assert` (or `every`), otherwise they check nothing. Every `where:` column must be used.
-- **No entities in conditions — only ids and DTOs.** When a condition fails, Spock renders every sub-expression. `User.toString` and `Group.toString` call each other, so a `User`/`Group` anywhere in a failing condition (e.g. `users.collectEntries { [it.id, …] }`, `wg.group.id`, `repo.findById(id).get()`) throws a `StackOverflowError` in the Surefire/Failsafe listener: the failure is **swallowed**, the build exits 0 and the report shows one test fewer. Extract ids first (`def annaId = anna.id`) or assign the value to a variable in `then:` and compare that. Until the `toString` cycle is fixed (DIV-35), check a new spec once by breaking it on purpose. Example: `service/SpendingsOverviewServiceIntegrationSpec.groovy`.
+- **Prefer ids and DTOs in conditions** — when a condition fails, Spock renders every sub-expression, and ids keep the failure output readable. Extract ids first (`def annaId = anna.id`) or assign the value to a variable in `then:` and compare that. Example: `service/SpendingsOverviewServiceIntegrationSpec.groovy`.
+- **Entity `toString`** only prints the entity's own scalars and the ids of its `@ManyToOne` references (`entity/EntityToStringSpec`, `EntityToStringIntegrationSpec`). Never print collections, lazy associations or secrets (password, token values) in a new `toString`: a `User` ↔ `Group` cycle throws a `StackOverflowError` in the Surefire/Failsafe listener, which **swallows** the failure (exit 0, one test fewer in the report), and a lazy association triggers queries or a `LazyInitializationException`.
 - No reflection on private methods, no empty specs.
 
 ### Error-message contract

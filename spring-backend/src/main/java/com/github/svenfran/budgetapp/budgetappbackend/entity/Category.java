@@ -67,4 +67,13 @@ public class Category implements Serializable{
     public void setGroup(Group group) {
         this.group = group;
     }
+
+    @Override
+    public String toString() {
+        return "Category{" +
+                "id=" + id +
+                ", name='" + name + '\'' +
+                ", groupId=" + (group == null ? null : group.getId()) +
+                '}';
+    }
 }

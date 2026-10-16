@@ -4,7 +4,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
 import spock.lang.Specification
 
 /**
- * toString von User, Group und Cart: nur eigene Werte und IDs der @ManyToOne-Beziehungen, keine Collections.
+ * toString der Entities: nur eigene Werte und IDs der @ManyToOne-Beziehungen, keine Collections.
  *
  * - Gegenseitige Referenzen (User ↔ Group, Group ↔ Cart) dürfen keinen StackOverflowError auslösen — sonst
  *   verschluckt der Surefire-/Failsafe-Listener einen scheiternden Spock-Vergleich, der eine Entity rendert.
@@ -87,5 +87,39 @@ class EntityToStringSpec extends Specification {
         then:
         groupText.endsWith(", ownerId=null}")
         cartText.endsWith(", groupId=10, userId=1, categoryId=null, templateId=null}")
+    }
+
+    def "toString von Kategorie, Einkaufsliste und Eintrag gibt Beziehungen nur als ID aus"() {
+        given:
+        def group = TestData.group(id: 10L, name: 'WG')
+        def category = TestData.category(id: 20L, name: 'Lebensmittel', group: group, carts: [] as Set)
+        def list = TestData.shoppingList(id: 40L, name: 'Wocheneinkauf', group: group)
+        def item = new ShoppingItem(id: 50L, name: 'Milch', completed: true, shoppingList: list)
+        group.categories.add(category)
+        group.shoppingLists.add(list)
+        list.shoppingItems.add(item)
+
+        when:
+        def categoryText = category.toString()
+        def listText = list.toString()
+        def itemText = item.toString()
+
+        then:
+        categoryText == "Category{id=20, name='Lebensmittel', groupId=10}"
+        listText == "ShoppingList{id=40, name='Wocheneinkauf', dateCreated=null, lastUpdate=null, groupId=10}"
+        itemText == "ShoppingItem{id=50, name='Milch', isCompleted=true, dateCreated=null, lastUpdate=null, shoppingListId=40}"
+    }
+
+    def "toString des Tokens enthält weder Tokenwert noch Geräte-ID"() {
+        given:
+        def anna = TestData.user(id: 1L)
+        def token = TestData.token(id: 60L, token: 'jwt-wert-4711', deviceId: 'geraet-4711', user: anna)
+        anna.tokens = [token]
+
+        when:
+        def text = token.toString()
+
+        then:
+        text == "Token{id=60, tokenType=BEARER, expired=false, revoked=false, userId=1}"
     }
 }

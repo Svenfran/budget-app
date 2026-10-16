@@ -52,8 +52,9 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
         def body = json(response)
         body*.title == ['Pizza']
         body[0].amount == 25
-        body[0].groupId == wg.group.id
-        body[0].userDto.userName == wg.owner.name
+        def (groupId, ownerName) = [wg.group.id, wg.owner.name]
+        body[0].groupId == groupId
+        body[0].userDto.userName == ownerName
     }
 
     def "Nicht-Mitglied erhält 403"() {

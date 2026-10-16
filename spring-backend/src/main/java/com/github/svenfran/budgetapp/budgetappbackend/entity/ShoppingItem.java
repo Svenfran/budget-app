@@ -93,4 +93,16 @@ public class ShoppingItem implements Serializable {
     public void setLastUpdate(Date lastUpdate) {
         this.lastUpdate = lastUpdate;
     }
+
+    @Override
+    public String toString() {
+        return "ShoppingItem{" +
+                "id=" + id +
+                ", name='" + name + '\'' +
+                ", isCompleted=" + isCompleted +
+                ", dateCreated=" + dateCreated +
+                ", lastUpdate=" + lastUpdate +
+                ", shoppingListId=" + (shoppingList == null ? null : shoppingList.getId()) +
+                '}';
+    }
 }
