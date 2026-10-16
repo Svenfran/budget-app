@@ -96,4 +96,15 @@ public class ShoppingList implements Serializable {
     public void setLastUpdate(Date lastUpdate) {
         this.lastUpdate = lastUpdate;
     }
+
+    @Override
+    public String toString() {
+        return "ShoppingList{" +
+                "id=" + id +
+                ", name='" + name + '\'' +
+                ", dateCreated=" + dateCreated +
+                ", lastUpdate=" + lastUpdate +
+                ", groupId=" + (group == null ? null : group.getId()) +
+                '}';
+    }
 }

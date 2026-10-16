@@ -27,7 +27,9 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
         flushAndClear()
 
         then:
-        cartRepository.findById(imZeitraum.id).get().averagePerMember == 30d
-        cartRepository.findById(vorZeitraum.id).get().averagePerMember == 0d
+        def averageImZeitraum = cartRepository.findById(imZeitraum.id).get().averagePerMember
+        def averageVorZeitraum = cartRepository.findById(vorZeitraum.id).get().averagePerMember
+        averageImZeitraum == 30d
+        averageVorZeitraum == 0d
     }
 }

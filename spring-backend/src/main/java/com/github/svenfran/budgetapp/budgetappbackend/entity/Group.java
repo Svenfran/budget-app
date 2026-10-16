@@ -188,12 +188,7 @@ public class Group implements Serializable {
                 ", dateCreated=" + dateCreated +
                 ", lastUpdate=" + lastUpdate +
                 ", lastUpdateShoppingList=" + lastUpdateShoppingList +
-                ", carts=" + carts +
-                ", shoppingLists=" + shoppingLists +
-                ", categories=" + categories +
-                ", owner=" + owner +
-                ", members=" + members +
-                ", memberList=" + memberList +
+                ", ownerId=" + (owner == null ? null : owner.getId()) +
                 '}';
     }
 }

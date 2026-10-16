@@ -101,4 +101,15 @@ public class Token {
     public void setDeviceId(String deviceId) {
         this.deviceId = deviceId;
     }
+
+    @Override
+    public String toString() {
+        return "Token{" +
+                "id=" + id +
+                ", tokenType=" + tokenType +
+                ", expired=" + expired +
+                ", revoked=" + revoked +
+                ", userId=" + (user == null ? null : user.getId()) +
+                '}';
+    }
 }

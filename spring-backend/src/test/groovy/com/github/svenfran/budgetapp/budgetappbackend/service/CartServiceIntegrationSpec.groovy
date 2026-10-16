@@ -39,7 +39,8 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         then:
         result.title == expectedTitle
         result.recurrenceType == (updatedRecurrenceType ?: NONE)
-        cartRepository.findById(cart.id).get().title == expectedTitle
+        def savedTitle = cartRepository.findById(cart.id).get().title
+        savedTitle == expectedTitle
 
         and:
         activeTemplateTypes(wg) == expectedActiveTypes
@@ -117,7 +118,8 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         flushAndClear()
 
         then:
-        templateRepository.findById(original.id).get().active == originalActive
+        def originalStillActive = templateRepository.findById(original.id).get().active
+        originalStillActive == originalActive
         activeTemplateTypes(wg) == activeTypes
 
         where:
@@ -144,7 +146,8 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         def templates = templateRepository.findByGroupId(wg.group.id)
         templates*.recurrenceType == expectedTypes
         templates.every { it.active }
-        cartRepository.findById(cart.id).get().template?.recurrenceType == expectedTypes[0]
+        def cartRecurrenceType = cartRepository.findById(cart.id).get().template?.recurrenceType
+        cartRecurrenceType == expectedTypes[0]
 
         where:
         inputRecurrenceType || expectedTypes
@@ -222,7 +225,8 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
 
         then:
         result.recurrenceType == WEEKLY
-        !templateRepository.findById(original.id).get().active
+        def originalStillActive = templateRepository.findById(original.id).get().active
+        !originalStillActive
 
         and: "genau ein aktives, neues Template"
         def active = templateRepository.findByGroupId(wg.group.id).findAll { it.active }
@@ -232,10 +236,12 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         replacement.title == 'Electricity'
         replacement.amount == 80d
         replacement.nextExecutionDate == purchased.plusWeeks(1)
-        replacement.userId == wg.owner.id
-        replacement.groupId == wg.group.id
-        replacement.categoryId == wg.category.id
-        replacement.id == cartRepository.findById(cart.id).get().template.id
+        def (ownerId, groupId, categoryId) = [wg.owner.id, wg.group.id, wg.category.id]
+        replacement.userId == ownerId
+        replacement.groupId == groupId
+        replacement.categoryId == categoryId
+        def cartTemplateId = cartRepository.findById(cart.id).get().template.id
+        replacement.id == cartTemplateId
     }
 
     private List<RecurrenceType> activeTemplateTypes(GroupScenario wg) {

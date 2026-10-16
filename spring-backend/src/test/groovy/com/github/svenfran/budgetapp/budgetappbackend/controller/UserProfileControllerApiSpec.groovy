@@ -32,7 +32,8 @@ class UserProfileControllerApiSpec extends IntegrationSpec implements ApiRequest
         response.status == 400
         // Frontend erkennt den Fall per Substring der gesendeten Adresse (userprofile.service.ts)
         response.contentAsString == 'User with email Berta@Example.DE already exists'
-        userRepository.findById(max.id).get().email == 'max@example.de'
+        def email = userRepository.findById(max.id).get().email
+        email == 'max@example.de'
     }
 
     def "E-Mail ändern auf die eigene Adresse in anderer Schreibweise ist ein No-Op"() {
@@ -46,7 +47,8 @@ class UserProfileControllerApiSpec extends IntegrationSpec implements ApiRequest
         then:
         response.status == 201
         json(response).userEmail == 'max@example.de'
-        userRepository.findById(max.id).get().email == 'max@example.de'
+        def email = userRepository.findById(max.id).get().email
+        email == 'max@example.de'
     }
 
     def "E-Mail ändern speichert die neue Adresse normalisiert"() {
@@ -60,7 +62,8 @@ class UserProfileControllerApiSpec extends IntegrationSpec implements ApiRequest
         then:
         response.status == 201
         json(response).userEmail == 'maximilian@example.de'
-        userRepository.findById(max.id).get().email == 'maximilian@example.de'
+        def email = userRepository.findById(max.id).get().email
+        email == 'maximilian@example.de'
     }
 
     def "Passwort-Reset mit '#eingabe' findet den Nutzer und schreibt an die gespeicherte Adresse"() {

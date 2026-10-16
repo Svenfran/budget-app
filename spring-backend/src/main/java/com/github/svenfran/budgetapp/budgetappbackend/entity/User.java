@@ -168,12 +168,6 @@ public class User implements UserDetails {
         return "User{" +
                 "id=" + id +
                 ", name='" + name + '\'' +
-                ", email='" + email + '\'' +
-                ", password='" + password + '\'' +
-                ", groups=" + groups +
-                ", groupList=" + groupList +
-                ", carts=" + carts +
-                ", tokens=" + tokens +
                 '}';
     }
 }

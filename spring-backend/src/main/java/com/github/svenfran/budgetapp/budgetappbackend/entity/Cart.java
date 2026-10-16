@@ -194,10 +194,10 @@ public class Cart implements Serializable {
                 ", datePurchased=" + datePurchased +
                 ", dateCreated=" + dateCreated +
                 ", lastUpdate=" + lastUpdate +
-                ", group=" + group +
-                ", user=" + user +
-                ", category=" + category +
-                ", template=" + template +
+                ", groupId=" + (group == null ? null : group.getId()) +
+                ", userId=" + (user == null ? null : user.getId()) +
+                ", categoryId=" + (category == null ? null : category.getId()) +
+                ", templateId=" + (template == null ? null : template.getId()) +
                 '}';
     }
 }

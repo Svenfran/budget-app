@@ -14,14 +14,13 @@ class UserRepositoryIntegrationSpec extends IntegrationSpec {
     // (DataLoaderService, VerificationService) – siehe DataLoaderServiceIntegrationSpec.
     def "Suche per E-Mail '#gesucht' findet den Nutzer: #gefunden"() {
         given:
-        def alfred = fixtures.user(email: 'alfred@divvy.test')
+        def alfredId = fixtures.user(email: 'alfred@divvy.test').id
 
         when:
-        def result = userRepository.findByEmail(gesucht)
+        def foundId = userRepository.findByEmail(gesucht).map { it.id }.orElse(null)
 
         then:
-        result.isPresent() == gefunden
-        !gefunden || result.get().id == alfred.id
+        foundId == (gefunden ? alfredId : null)
 
         where:
         gesucht                || gefunden
@@ -31,12 +30,14 @@ class UserRepositoryIntegrationSpec extends IntegrationSpec {
 
     def "E-Mail wird normalisiert gespeichert"() {
         when:
-        def alfred = fixtures.user(email: '  Alfred@Divvy.TEST ')
+        def alfredId = fixtures.user(email: '  Alfred@Divvy.TEST ').id
         flushAndClear()
 
         then:
-        userRepository.findById(alfred.id).get().email == 'alfred@divvy.test'
-        userRepository.findByEmail('alfred@divvy.test').get().id == alfred.id
+        def email = userRepository.findById(alfredId).get().email
+        email == 'alfred@divvy.test'
+        def idByEmail = userRepository.findByEmail('alfred@divvy.test').get().id
+        idByEmail == alfredId
     }
 
     def "Unique-Constraint verhindert zwei Nutzer mit derselben E-Mail in anderer Schreibweise"() {
@@ -54,14 +55,13 @@ class UserRepositoryIntegrationSpec extends IntegrationSpec {
 
     def "Suche per Name '#gesucht' findet den Nutzer: #gefunden"() {
         given:
-        def alfred = fixtures.user(name: 'alfred')
+        def alfredId = fixtures.user(name: 'alfred').id
 
         when:
-        def result = userRepository.findByName(gesucht)
+        def foundId = userRepository.findByName(gesucht).map { it.id }.orElse(null)
 
         then:
-        result.isPresent() == gefunden
-        !gefunden || result.get().id == alfred.id
+        foundId == (gefunden ? alfredId : null)
 
         where:
         gesucht     || gefunden

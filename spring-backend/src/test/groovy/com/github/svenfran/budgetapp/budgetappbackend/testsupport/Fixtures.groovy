@@ -26,6 +26,8 @@ class Fixtures {
     @Autowired CartTemplateRepository templateRepository
     @Autowired GroupMembershipHistoryRepository membershipRepository
     @Autowired TokenRepository tokenRepository
+    @Autowired ShoppingListRepository shoppingListRepository
+    @Autowired ShoppingItemRepository shoppingItemRepository
 
     User user(Map overrides = [:]) {
         userRepository.save(TestData.user(overrides))
@@ -85,6 +87,14 @@ class Fixtures {
 
     Token token(Map overrides = [:], User user) {
         tokenRepository.save(TestData.token([user: user] + overrides))
+    }
+
+    ShoppingList shoppingList(Map overrides = [:], GroupScenario scenario) {
+        shoppingListRepository.save(TestData.shoppingList([group: scenario.group] + overrides))
+    }
+
+    ShoppingItem shoppingItem(Map overrides = [:], ShoppingList list) {
+        shoppingItemRepository.save(TestData.shoppingItem([shoppingList: list] + overrides))
     }
 
     @TupleConstructor

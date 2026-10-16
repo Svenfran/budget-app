@@ -84,14 +84,16 @@ class RecurringCartsIntegrationSpec extends IntegrationSpec {
         def created = carts.find { it.id != cart.id }
         created.title == 'Spotify'
         created.amount == 9.99d
-        created.category.id == wg.category.id
-        created.user.id == wg.owner.id
-        created.group.id == wg.group.id
+        def (categoryId, ownerId, groupId, templateId) = [wg.category.id, wg.owner.id, wg.group.id, template.id]
+        created.category.id == categoryId
+        created.user.id == ownerId
+        created.group.id == groupId
         DateUtils.toLocalDate(created.datePurchased) == today
-        created.template.id == template.id
+        created.template.id == templateId
 
         and: "Template auf den nächsten Termin verschoben"
-        templateRepository.findById(template.id).get().nextExecutionDate == today.plusMonths(1)
+        def nextExecutionDate = templateRepository.findById(templateId).get().nextExecutionDate
+        nextExecutionDate == today.plusMonths(1)
     }
 
     def "Scheduler überspringt ein aktives Template ohne Wiederholung und verarbeitet die übrigen"() {

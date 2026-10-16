@@ -20,8 +20,8 @@ import static java.time.LocalDate.of
  * - Nutzerwerte werden als [userId: [sum, diff]] verglichen; die Reihenfolge der Nutzer ist nicht garantiert.
  * - Anteil eines Nutzers = sum - diff.
  * - Ungerundete Summenfelder (sumTotalYear über alle Jahre, sumTotalMonth) nur mit exakt darstellbaren Beträgen.
- * - Bedingungen enthalten nur IDs, keine Entities: Spock rendert bei einem Fehlschlag jeden Teilausdruck, und das
- *   zyklische toString von User/Group läuft dabei in einen StackOverflowError, der den Fehlschlag im Report verschluckt.
+ * - Bedingungen enthalten nur IDs, keine Entities: Spock rendert bei einem Fehlschlag jeden Teilausdruck, und
+ *   IDs statt Entities halten die Fehlermeldung lesbar.
  */
 class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
 
