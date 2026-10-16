@@ -1,0 +1,136 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # PRs: neuer Lauf ersetzt den älteren. Push/Dispatch: eigene Gruppe pro Lauf, damit kein Lauf auf main verworfen wird.
+  group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    # Explizit bash, damit GitHub "bash -eo pipefail" nutzt (sonst verschluckt "| tee" Testfehler).
+    shell: bash
+
+jobs:
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'spring-backend/**'
+              - '.github/workflows/ci.yml'
+            frontend:
+              - 'ionic-frontend/**'
+              - '.github/workflows/ci.yml'
+
+  backend:
+    name: Backend
+    needs: changes
+    if: needs.changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        # Job-defaults ersetzen die Workflow-defaults komplett, shell daher hier wiederholen.
+        shell: bash
+        working-directory: spring-backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          cache-dependency-path: spring-backend/pom.xml
+      - name: Unit- und Integrations-Specs (./mvnw verify)
+        run: ./mvnw -B -ntp verify
+      - name: Testberichte hochladen
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: backend-test-reports
+          path: |
+            spring-backend/target/surefire-reports/
+            spring-backend/target/failsafe-reports/
+          if-no-files-found: warn
+          retention-days: 14
+
+  frontend:
+    name: Frontend
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        # Job-defaults ersetzen die Workflow-defaults komplett, shell daher hier wiederholen.
+        shell: bash
+        working-directory: ionic-frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ionic-frontend/package-lock.json
+      - name: Abhängigkeiten installieren
+        id: install
+        run: |
+          npm ci
+          cp src/config/config.example.ts src/config/config.ts
+          cp src/config/config.example.ts src/config/config.prod.ts
+      - name: Lint
+        run: npm run lint
+      # Tests und Build laufen auch nach einem Lint-Fehler, damit ein Lauf alle Fehler zeigt; der Job bleibt trotzdem rot.
+      - name: Tests (ChromeHeadless)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run test:ci 2>&1 | tee karma-result.log
+      - name: Build
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run build
+      - name: Testbericht hochladen
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: frontend-test-report
+          path: ionic-frontend/karma-result.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  # Einziger Pflicht-Check der Branch-Protection: übersprungene Jobs sind ok, failure/cancelled nicht.
+  ci-result:
+    name: CI result
+    needs: [changes, backend, frontend]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ergebnis der Jobs prüfen
+        run: |
+          echo "changes=${{ needs.changes.result }} backend=${{ needs.backend.result }} frontend=${{ needs.frontend.result }}"
+          if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            exit 1
+          fi

@@ -62,9 +62,10 @@ Shopping lists are meant to become offline-capable at some point. **This is a fu
 ### Tests
 The test conventions live in the sub-project files: [`spring-backend/CLAUDE.md` → Testing](spring-backend/CLAUDE.md#testing) (Spock only, test kind by class suffix, `IntegrationSpec`, `TestData`/`Fixtures`) and [`ionic-frontend/CLAUDE.md` → Testing](ionic-frontend/CLAUDE.md#testing) (Karma + Jasmine, helpers in `src/testing/`). Follow them for every new or changed test.
 
-- **Before every PR** (there is no CI), for each affected side:
+- **Before every PR**, for each affected side (CI runs them too, see below):
   - backend: `./mvnw verify` in `spring-backend/` (all specs; Docker must be running),
   - frontend: `npm run test:ci`, `npm run lint` and `npm run build` in `ionic-frontend/`.
+- **CI**: GitHub Actions (`.github/workflows/ci.yml`) runs the affected side(s) on every PR and push to `main` (path filter; a change to the workflow runs both). The check `CI result` must be green to merge. Test reports are attached to the run as artifacts `backend-test-reports` / `frontend-test-report`.
 - **New or changed behavior gets tests** on the lowest level that can show it (unit before integration before API). No generated "should create" stubs, no empty tests.
 - **Bugfixes need a regression test** that fails without the fix and passes with it. If that's not reasonably possible, say why in the PR.
 - **Every PR states the commands that were run and the test count before/after** (backend unit and integration separately, frontend). A spec with the wrong suffix or file name silently doesn't run — a test count that didn't go up is the only signal.
