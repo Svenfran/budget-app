@@ -30,16 +30,16 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
     @Autowired GroupMembershipHistoryRepository membershipRepository
 
     def "Austritt und Eintritt über den Jahreswechsel: Jahre 2024 und 2025 sowie Gesamtübersicht"() {
-        given: "Anna (Owner) seit 01.01.2024, Ben 01.01.–31.12.2024, Cleo ab 01.01.2025"
+        given: "Anna (Owner) seit 01.01.2024, Ben 01.01.–31.12.2024, Cleo ab 01.01.2025 10 Uhr (Beitritt mit Uhrzeit)"
         def anna = fixtures.user(name: 'Anna')
         def ben = fixtures.user(name: 'Ben')
         def cleo = fixtures.user(name: 'Cleo')
         def (annaId, benId, cleoId) = [anna, ben, cleo]*.id
         def wg = fixtures.group(owner: anna, memberSince: of(2024, 1, 1))
         fixtures.membership(wg, ben, membershipStart: DateUtils.toDate(of(2024, 1, 1)), membershipEnd: DateUtils.toDate(of(2024, 12, 31)))
-        fixtures.membership(wg, cleo, membershipStart: DateUtils.toDate(of(2025, 1, 1)))
+        fixtures.membership(wg, cleo, membershipStart: at(of(2025, 1, 1), 10))
 
-        and: "c1 31.12.2024 (Anna, Ben), c2 01.01.2025 (Anna, Cleo), c3 10.03.2025 (Anna, Cleo)"
+        and: "c1 31.12.2024 (Anna, Ben), c2 01.01.2025 (Anna, Cleo – zählt nur, weil die Uhrzeit des Beitritts abgeschnitten wird), c3 10.03.2025 (Anna, Cleo)"
         fixtures.cart(wg, user: anna, amount: 30d, averagePerMember: 15d, datePurchased: DateUtils.toDate(of(2024, 12, 31)))
         fixtures.cart(wg, user: cleo, amount: 20d, averagePerMember: 10d, datePurchased: DateUtils.toDate(of(2025, 1, 1)))
         fixtures.cart(wg, user: anna, amount: 10d, averagePerMember: 5d, datePurchased: DateUtils.toDate(of(2025, 3, 10)))
@@ -63,6 +63,7 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
 
         and: "I1/I2: keine doppelten Nutzer, Summe der Zahlungen = Jahressumme"
         jahr2024.spendingsTotalYear.spendingsTotalUser*.userId.sort() == [annaId, benId].sort()
+        jahr2024.spendingsPerMonth[0].spendingsMonthlyUser*.userId.sort() == [annaId, benId].sort()
         jahr2024.spendingsTotalYear.spendingsTotalUser*.sum.sum() == jahr2024.spendingsTotalYear.sumTotalYear
 
         when:
@@ -71,6 +72,7 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         then:
         jahr2025.spendingsTotalYear.sumTotalYear == 30d   // c2 20 + c3 10
         // Anna: bezahlt c3 10, Anteil c2 10 + c3 5 = 15 → diff −5; Cleo: bezahlt c2 20, Anteil 15 → diff 5; Ben ausgetreten 2024
+        // (ohne Abschneiden der Beitrittsuhrzeit fehlte Cleos Anteil an c2: Anteil 5 → diff 15)
         werte(jahr2025.spendingsTotalYear.spendingsTotalUser) == [(annaId): [10d, -5d], (cleoId): [20d, 5d]]
 
         and: "Monate absteigend: März (c3), Januar (c2)"
@@ -80,10 +82,8 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         werte(jahr2025.spendingsPerMonth[1].spendingsMonthlyUser) == [(annaId): [0d, -10d], (cleoId): [20d, 10d]]
 
         and: "I1/I2 je Monat"
-        jahr2025.spendingsPerMonth.every { monat ->
-            monat.spendingsMonthlyUser*.userId.sort() == [annaId, cleoId].sort() &&
-                    monat.spendingsMonthlyUser*.sum.sum() == monat.sumTotalMonth
-        }
+        jahr2025.spendingsPerMonth.collect { it.spendingsMonthlyUser*.userId.sort() } == [[annaId, cleoId].sort()] * 2
+        jahr2025.spendingsPerMonth.collect { it.spendingsMonthlyUser*.sum.sum() } == jahr2025.spendingsPerMonth*.sumTotalMonth
 
         when:
         def gesamt = spendingsOverviewService.getSpendingsForGroupAndAllYears(wg.group.id)
@@ -161,6 +161,11 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
 
         and: "I4: im April (Lücke) fehlt Ben, Anna trägt den Cart allein"
         werte(jahr.spendingsPerMonth[1].spendingsMonthlyUser) == [(annaId): [10d, 0d]]
+
+        and: "I1/I2 je Monat (Mai, April, Februar): jeder Nutzer höchstens einmal, Summe der Zahlungen = Monatssumme"
+        jahr.spendingsPerMonth.collect { it.spendingsMonthlyUser*.userId.sort() } ==
+                [[annaId, benId].sort(), [annaId], [annaId, benId].sort()]
+        jahr.spendingsPerMonth.collect { it.spendingsMonthlyUser*.sum.sum() } == [30d, 10d, 28d]
 
         and: "Fixture-Abgleich: alle drei Mitgliedschaften sind nach flushAndClear() erhalten"
         def zeitraeume = membershipRepository.findByGroupIdAndUserId(wg.group.id, benId)

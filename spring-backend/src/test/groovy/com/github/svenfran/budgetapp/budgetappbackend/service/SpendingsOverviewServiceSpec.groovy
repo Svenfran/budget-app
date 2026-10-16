@@ -52,7 +52,9 @@ class SpendingsOverviewServiceSpec extends Specification {
         [[of(2025, 2, 28), null]]                                     | 2025 | 2     || true     | 'Beginn am Monatsletzten'
         [[of(2024, 1, 1), of(2024, 12, 31)]]                          | 2025 | 1     || false    | 'Jahreswechsel nach Austritt'
         [[of(2024, 1, 1), of(2024, 12, 31)]]                          | 2024 | 12    || true     | 'Austrittsmonat'
-        // Austritt schreibt new Date() mit Uhrzeit; der Folgemonat zählt trotzdem nicht
+        // Ein- und Austritt schreiben new Date() mit Uhrzeit. Entscheidend ist der Beginn: 31.03. 20:00 liegt nach dem
+        // Monatsletzten 00:00 – zählt nur, weil die Uhrzeit abgeschnitten wird.
+        [[at(of(2025, 3, 31), 20), null]]                             | 2025 | 3     || true     | 'Beginn am Monatsletzten mit Uhrzeit'
         [[of(2024, 1, 1), at(of(2025, 1, 31), 18)]]                   | 2025 | 2     || false    | 'Ende mit Uhrzeit'
         [[of(2025, 1, 1), of(2025, 3, 31)], [of(2025, 5, 1), null]]   | 2025 | 4     || false    | 'Lücke zwischen zwei Mitgliedschaften'
         []                                                            | 2025 | 1     || false    | 'keine Historie'
@@ -133,7 +135,7 @@ class SpendingsOverviewServiceSpec extends Specification {
         value instanceof LocalDate ? DateUtils.toDate(value) : value as Date
     }
 
-    /** Zeitpunkt mit Uhrzeit, wie ihn GroupMembershipHistoryService beim Austritt mit new Date() schreibt. */
+    /** Zeitpunkt mit Uhrzeit, wie ihn GroupMembershipHistoryService beim Ein- und Austritt mit new Date() schreibt. */
     private static Date at(LocalDate day, int hour) {
         Date.from(DateUtils.toDate(day).toInstant().plus(Duration.ofHours(hour)))
     }
