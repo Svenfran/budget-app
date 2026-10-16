@@ -20,3 +20,4 @@ public final class EmailUtils {
         return email == null ? null : email.trim().toLowerCase(Locale.ROOT);
     }
 }
+// CI-Prüfung DIV-37: nur Backend
