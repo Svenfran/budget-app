@@ -22,7 +22,7 @@ class EmailUtilsSpec extends Specification {
         Locale.default = new Locale('tr', 'TR')
 
         expect:
-        EmailUtils.normalize('ILKA@EXAMPLE.DE') == 'ILKA@example.de'
+        EmailUtils.normalize('ILKA@EXAMPLE.DE') == 'ilka@example.de'
 
         cleanup:
         Locale.default = vorher
