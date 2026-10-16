@@ -28,7 +28,7 @@ describe('CartService', () => {
     http.expectOne(`${api}/carts-by-groupid/7`).flush([aCart({ amount: 10 }), aCart({ amount: 32.5 })]);
 
     expect(service.count()).toBe(2);
-    expect(service.sum()).toBe(42.5);
+    expect(service.sum()).toBe(43); // TEMP DIV-37: absichtlich falsch
   });
 
   it('fügt einen neuen Einkauf nach dem Speichern sortiert ein und meldet die Änderung', () => {
