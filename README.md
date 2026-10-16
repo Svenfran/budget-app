@@ -67,3 +67,4 @@ The backend is deployed on Railway from `railway.json` with the `prod` profile; 
 - [`CLAUDE.md`](CLAUDE.md) – how the projects fit together (REST, DTO contract, WebSocket topics, i18n) and working rules
 - [`ionic-frontend/CLAUDE.md`](ionic-frontend/CLAUDE.md) – frontend architecture, build configuration, Android flavors
 - [`spring-backend/CLAUDE.md`](spring-backend/CLAUDE.md) – backend architecture, profiles, Liquibase, testing
+<!-- CI-Prüfung DIV-37: nur Doku -->
