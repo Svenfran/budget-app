@@ -53,8 +53,12 @@ trait ApiRequests {
         send([:], request)
     }
 
-    /** JSON-Antwort als Map bzw. List (Zahlen mit == vergleichen, Integer/Long werden numerisch verglichen). */
+    /**
+     * JSON-Antwort als Map bzw. List (Zahlen mit == vergleichen, Integer/Long werden numerisch verglichen).
+     * Liest die Bytes statt contentAsString: Ohne charset im Content-Type dekodiert MockHttpServletResponse als
+     * ISO-8859-1, Jackson schreibt aber UTF-8 (aus "März" würde "MÃ¤rz").
+     */
     def json(MockHttpServletResponse response) {
-        objectMapper.readValue(response.contentAsString, Object)
+        objectMapper.readValue(response.contentAsByteArray, Object)
     }
 }
