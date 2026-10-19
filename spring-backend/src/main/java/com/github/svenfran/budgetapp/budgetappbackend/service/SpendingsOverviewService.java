@@ -11,13 +11,18 @@ import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
+import java.math.BigInteger;
 import java.time.LocalDate;
 import java.time.Month;
 import java.time.format.TextStyle;
 import java.util.*;
+import java.util.stream.Collectors;
 
+import static com.github.svenfran.budgetapp.budgetappbackend.helper.CostShareCalculator.commonDenominator;
+import static com.github.svenfran.budgetapp.budgetappbackend.helper.CostShareCalculator.roundBalances;
+import static com.github.svenfran.budgetapp.budgetappbackend.helper.CostShareCalculator.shareNumerator;
+import static com.github.svenfran.budgetapp.budgetappbackend.helper.CostShareCalculator.toCents;
+import static com.github.svenfran.budgetapp.budgetappbackend.helper.CostShareCalculator.toEuro;
 import static com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils.NO_END_DATE;
 import static com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils.toLocalDate;
 
@@ -53,42 +58,34 @@ public class SpendingsOverviewService {
         var membership = dataLoaderService.loadMembershipHistoryForGroup(groupId);
         var carts = dataLoaderService.loadCartListForGroup(groupId);
         var userIds = membership.stream().map(GroupMembershipHistory::getUserId).distinct().toList();
+        var shares = calculateShares(carts, membership);
         var spendingsOverviewTotalYearDto = new SpendingsOverviewTotalYearDto();
-        var spendingsTotalUserList = new ArrayList<SpendingsOverviewUserDto>();
+        var userTotals = new ArrayList<UserTotals>();
 
-        var totalSum = 0.0;
+        long totalCents = 0;
 
         if (hasCartsForGroup(carts, groupId)) {
             for (Long userId : userIds) {
-                double sum = 0.0;
-                double sumAveragePerMember = 0.0;
-
-                var validMemberships = membership.stream()
-                        .filter(gmh -> gmh.getUserId().equals(userId))
-                        .toList();
+                long sumCents = 0;
+                var shareNumerator = BigInteger.ZERO;
 
                 for (Cart cart : carts) {
                     if (cart.getUser().getId().equals(userId)) {
-                        sum += cart.getAmount();
+                        sumCents += toCents(cart.getAmount());
                     }
 
-                    for (GroupMembershipHistory gmh : validMemberships) {
-                        if (gmh.getUserId().equals(userId) && hasValidMembership(cart.getDatePurchased(), gmh)) {
-                            sumAveragePerMember += cart.getAveragePerMember();
-                            break; // Sobald eine gültige Mitgliedschaft gefunden wurde, weiter zum nächsten Cart
-                        }
-                    }
+                    shareNumerator = shareNumerator.add(shares.numerator(cart, userId));
                 }
 
-                double diff = sum - sumAveragePerMember;
-                totalSum += sum;
+                var diffNumerator = shares.toNumerator(sumCents).subtract(shareNumerator);
+                totalCents += sumCents;
                 var userName = handleUserName(userId, groupId);
-                spendingsTotalUserList.add(new SpendingsOverviewUserDto(userId, userName, roundValue(sum), roundValue(diff)));
+                userTotals.add(new UserTotals(userId, userName, sumCents, diffNumerator));
             }
         }
 
-        spendingsOverviewTotalYearDto.setSumTotalYear(totalSum);
-        spendingsOverviewTotalYearDto.setSpendingsTotalUser(spendingsTotalUserList);
+        spendingsOverviewTotalYearDto.setSumTotalYear(toEuro(totalCents));
+        spendingsOverviewTotalYearDto.setSpendingsTotalUser(toUserDtos(userTotals, shares));
 
         return spendingsOverviewTotalYearDto;
     }
@@ -97,18 +94,19 @@ public class SpendingsOverviewService {
         var membership = dataLoaderService.loadMembershipHistoryForGroup(groupId);
         var carts = dataLoaderService.loadCartListForGroup(groupId);
         var userIds = membership.stream().map(GroupMembershipHistory::getUserId).distinct().toList();
+        var shares = calculateShares(carts, membership);
         var spendingsOverviewPerYearDtoList = new ArrayList<SpendingsOverviewPerYearDto>();
 
         for (Integer year : availableYears) {
             var spendingsOverviewPerYearDto = new SpendingsOverviewPerYearDto();
-            var spendingsTotalUserList = new ArrayList<SpendingsOverviewUserDto>();
+            var userTotals = new ArrayList<UserTotals>();
 
-            spendingsOverviewPerYearDto.setSumTotalYear(roundValue(getTotalAmountForYear(carts, year)));
+            spendingsOverviewPerYearDto.setSumTotalYear(getTotalAmountForYear(carts, year));
             spendingsOverviewPerYearDto.setYear(year);
 
             for (Long userId : userIds) {
-                double sum = 0.0;
-                double sumAveragePerMember = 0.0;
+                long sumCents = 0;
+                var shareNumerator = BigInteger.ZERO;
 
                 var validMemberships = membership.stream()
                         .filter(gmh -> gmh.getUserId().equals(userId))
@@ -117,25 +115,20 @@ public class SpendingsOverviewService {
                 for (Cart cart : carts) {
                     if (toLocalDate(cart.getDatePurchased()).getYear() == year) {
                         if (cart.getUser().getId().equals(userId)) {
-                            sum += cart.getAmount();
+                            sumCents += toCents(cart.getAmount());
                         }
 
-                        for (GroupMembershipHistory gmh : validMemberships) {
-                            if (hasValidMembership(cart.getDatePurchased(), gmh)) {
-                                sumAveragePerMember += cart.getAveragePerMember();
-                                break; // Verhindert Mehrfachzählung!
-                            }
-                        }
+                        shareNumerator = shareNumerator.add(shares.numerator(cart, userId));
                     }
                 }
 
-                double diff = sum - sumAveragePerMember;
+                var diffNumerator = shares.toNumerator(sumCents).subtract(shareNumerator);
                 var userName = handleUserName(userId, groupId);
                 if (wasUserMemberInYear(validMemberships, year)) {
-                    spendingsTotalUserList.add(new SpendingsOverviewUserDto(userId, userName, roundValue(sum), roundValue(diff)));
+                    userTotals.add(new UserTotals(userId, userName, sumCents, diffNumerator));
                 }
             }
-            spendingsOverviewPerYearDto.setSpendingsYearlyUser(spendingsTotalUserList);
+            spendingsOverviewPerYearDto.setSpendingsYearlyUser(toUserDtos(userTotals, shares));
             spendingsOverviewPerYearDtoList.add(spendingsOverviewPerYearDto);
         }
 
@@ -162,15 +155,16 @@ public class SpendingsOverviewService {
         var membership = dataLoaderService.loadMembershipHistoryForGroup(groupId);
         var carts = dataLoaderService.loadCartListForGroup(groupId);
         var userIds = membership.stream().map(GroupMembershipHistory::getUserId).distinct().toList();
+        var shares = calculateShares(carts, membership);
         var spendingsOverviewTotalYearDto = new SpendingsOverviewTotalYearDto();
-        var spendingsTotalUserList = new ArrayList<SpendingsOverviewUserDto>();
+        var userTotals = new ArrayList<UserTotals>();
 
-        spendingsOverviewTotalYearDto.setSumTotalYear(roundValue(getTotalAmountForYear(carts, year)));
+        spendingsOverviewTotalYearDto.setSumTotalYear(getTotalAmountForYear(carts, year));
 
         if (hasCartsForYear(carts, year)) {
             for (Long userId : userIds) {
-                double sum = 0.0;
-                double sumAveragePerMember = 0.0;
+                long sumCents = 0;
+                var shareNumerator = BigInteger.ZERO;
 
                 var validMemberships = membership.stream()
                         .filter(gmh -> gmh.getUserId().equals(userId))
@@ -179,27 +173,22 @@ public class SpendingsOverviewService {
                 for (Cart cart : carts) {
                     if (toLocalDate(cart.getDatePurchased()).getYear() == year) {
                         if (cart.getUser().getId().equals(userId)) {
-                            sum += cart.getAmount();
+                            sumCents += toCents(cart.getAmount());
                         }
 
-                        for (GroupMembershipHistory gmh : validMemberships) {
-                            if (hasValidMembership(cart.getDatePurchased(), gmh)) {
-                                sumAveragePerMember += cart.getAveragePerMember();
-                                break; // Verhindert Mehrfachzählung!
-                            }
-                        }
+                        shareNumerator = shareNumerator.add(shares.numerator(cart, userId));
                     }
                 }
 
-                double diff = sum - sumAveragePerMember;
+                var diffNumerator = shares.toNumerator(sumCents).subtract(shareNumerator);
                 var userName = handleUserName(userId, groupId);
                 if (wasUserMemberInYear(validMemberships, year)) {
-                    spendingsTotalUserList.add(new SpendingsOverviewUserDto(userId, userName, roundValue(sum), roundValue(diff)));
+                    userTotals.add(new UserTotals(userId, userName, sumCents, diffNumerator));
                 }
             }
         }
 
-        spendingsOverviewTotalYearDto.setSpendingsTotalUser(spendingsTotalUserList);
+        spendingsOverviewTotalYearDto.setSpendingsTotalUser(toUserDtos(userTotals, shares));
 
         return spendingsOverviewTotalYearDto;
     }
@@ -208,20 +197,21 @@ public class SpendingsOverviewService {
         var membership = dataLoaderService.loadMembershipHistoryForGroup(groupId);
         var carts = dataLoaderService.loadCartListForGroup(groupId);
         var userIds = membership.stream().map(GroupMembershipHistory::getUserId).distinct().toList();
+        var shares = calculateShares(carts, membership);
         var spendingsOverviewPerMonthDtoList = new ArrayList<SpendingsOverviewPerMonthDto>();
         var availableMonth = getAvailableMonthsForYear(carts, year);
 
         for (Integer month : availableMonth) {
             var spendingsOverviewPerMonthDto = new SpendingsOverviewPerMonthDto();
-            var spendingsTotalUserList = new ArrayList<SpendingsOverviewUserDto>();
+            var userTotals = new ArrayList<UserTotals>();
 
             spendingsOverviewPerMonthDto.setMonth(month);
             spendingsOverviewPerMonthDto.setMonthName(getMonthName(month));
             spendingsOverviewPerMonthDto.setSumTotalMonth(getTotalAmountForMonth(carts, year, month));
 
             for (Long userId : userIds) {
-                double sum = 0.0;
-                double sumAveragePerMember = 0.0;
+                long sumCents = 0;
+                var shareNumerator = BigInteger.ZERO;
 
                 var validMemberships = membership.stream()
                         .filter(gmh -> gmh.getUserId().equals(userId))
@@ -231,25 +221,20 @@ public class SpendingsOverviewService {
                     if (toLocalDate(cart.getDatePurchased()).getMonthValue() == month
                         && toLocalDate(cart.getDatePurchased()).getYear() == year) {
                         if (cart.getUser().getId().equals(userId)) {
-                            sum += cart.getAmount();
+                            sumCents += toCents(cart.getAmount());
                         }
 
-                        for (GroupMembershipHistory gmh : validMemberships) {
-                            if (hasValidMembership(cart.getDatePurchased(), gmh)) {
-                                sumAveragePerMember += cart.getAveragePerMember();
-                                break; // Verhindert Mehrfachzählung!
-                            }
-                        }
+                        shareNumerator = shareNumerator.add(shares.numerator(cart, userId));
                     }
                 }
 
-                double diff = sum - sumAveragePerMember;
+                var diffNumerator = shares.toNumerator(sumCents).subtract(shareNumerator);
                 var userName = handleUserName(userId, groupId);
                 if (wasUserMemberInMonth(validMemberships, year, month)) {
-                    spendingsTotalUserList.add(new SpendingsOverviewUserDto(userId, userName, roundValue(sum), roundValue(diff)));
+                    userTotals.add(new UserTotals(userId, userName, sumCents, diffNumerator));
                 }
             }
-            spendingsOverviewPerMonthDto.setSpendingsMonthlyUser(spendingsTotalUserList);
+            spendingsOverviewPerMonthDto.setSpendingsMonthlyUser(toUserDtos(userTotals, shares));
             spendingsOverviewPerMonthDtoList.add(spendingsOverviewPerMonthDto);
         }
 
@@ -257,6 +242,57 @@ public class SpendingsOverviewService {
     }
 
     // Helper Methods
+
+    /**
+     * Beteiligte je Cart (DIV-38): alle, die am Kaufdatum laut Historie Mitglied waren. Anteile werden exakt als
+     * Bruch zum gemeinsamen Nenner geführt und erst als Saldo gerundet (toUserDtos). averagePerMember wird bewusst
+     * nicht verwendet.
+     */
+    private Shares calculateShares(List<Cart> carts, List<GroupMembershipHistory> membership) {
+        var participantsByCartId = new HashMap<Long, Set<Long>>();
+        for (Cart cart : carts) {
+            var participantIds = membership.stream()
+                    .filter(gmh -> hasValidMembership(cart.getDatePurchased(), gmh))
+                    .map(GroupMembershipHistory::getUserId)
+                    .collect(Collectors.toSet());
+            participantsByCartId.put(cart.getId(), participantIds);
+        }
+        var denominator = commonDenominator(participantsByCartId.values().stream().map(Set::size).toList());
+        return new Shares(participantsByCartId, denominator);
+    }
+
+    /** Rundet die exakten Salden einer Periode gemeinsam, sodass sie zusammen exakt 0 ergeben. */
+    private List<SpendingsOverviewUserDto> toUserDtos(List<UserTotals> userTotals, Shares shares) {
+        var exactDiffs = new LinkedHashMap<Long, BigInteger>();
+        userTotals.forEach(totals -> exactDiffs.put(totals.userId(), totals.diffNumerator()));
+        var diffs = roundBalances(exactDiffs, shares.denominator());
+
+        var userDtos = new ArrayList<SpendingsOverviewUserDto>();
+        for (UserTotals totals : userTotals) {
+            userDtos.add(new SpendingsOverviewUserDto(totals.userId(), totals.userName(),
+                    toEuro(totals.sumCents()), toEuro(diffs.get(totals.userId()))));
+        }
+        return userDtos;
+    }
+
+    private record Shares(Map<Long, Set<Long>> participantsByCartId, BigInteger denominator) {
+
+        /** Exakter Anteil des Nutzers am Cart als Zähler zum Nenner; 0, wenn er nicht beteiligt war. */
+        BigInteger numerator(Cart cart, Long userId) {
+            var participants = participantsByCartId.get(cart.getId());
+            return participants.contains(userId)
+                    ? shareNumerator(toCents(cart.getAmount()), participants.size(), denominator)
+                    : BigInteger.ZERO;
+        }
+
+        BigInteger toNumerator(long cents) {
+            return BigInteger.valueOf(cents).multiply(denominator);
+        }
+    }
+
+    private record UserTotals(Long userId, String userName, long sumCents, BigInteger diffNumerator) {
+    }
+
     private boolean hasValidMembership(Date datePurchased, GroupMembershipHistory gmh) {
         if (datePurchased == null || gmh == null || gmh.getMembershipStart() == null) {
             return false;
@@ -271,18 +307,14 @@ public class SpendingsOverviewService {
         return !purchasedDate.isBefore(startDate) && !purchasedDate.isAfter(endDate);
     }
 
-    private Double roundValue(Double value) {
-        return BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP).doubleValue();
-    }
-
     public double getTotalAmountForYear(List<Cart> carts, int year) {
-        return carts.stream()
+        return toEuro(carts.stream()
                 .filter(cart -> {
                     LocalDate date = toLocalDate(cart.getDatePurchased());
                     return date.getYear() == year;
                 })
-                .mapToDouble(Cart::getAmount)
-                .sum();
+                .mapToLong(cart -> toCents(cart.getAmount()))
+                .sum());
     }
 
     public List<Integer> getAvailableMonthsForYear(List<Cart> carts, int year) {
@@ -300,13 +332,13 @@ public class SpendingsOverviewService {
     }
 
     public double getTotalAmountForMonth(List<Cart> carts, int year, int month) {
-        return carts.stream()
+        return toEuro(carts.stream()
                 .filter(cart -> {
                     LocalDate date = toLocalDate(cart.getDatePurchased());
                     return date.getYear() == year && date.getMonthValue() == month;
                 })
-                .mapToDouble(Cart::getAmount)
-                .sum();
+                .mapToLong(cart -> toCents(cart.getAmount()))
+                .sum());
     }
 
     public boolean hasCartsForYear(List<Cart> carts, int year) {

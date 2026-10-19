@@ -25,6 +25,8 @@ public class Cart implements Serializable {
     @Column(name = "amount")
     private Double amount;
 
+    // Legacy-Wert (ungerundet), nicht Grundlage der Salden: SpendingsOverviewService berechnet die Anteile
+    // centgenau aus Betrag und Mitgliedschaftshistorie (DIV-38).
     @Column(name = "average_per_member")
     private Double averagePerMember;
 
