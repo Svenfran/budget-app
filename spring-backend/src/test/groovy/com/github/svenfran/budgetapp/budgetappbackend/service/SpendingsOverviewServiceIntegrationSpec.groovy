@@ -1,9 +1,15 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service
 
+import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.SpendingsOverviewUserDto
+import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto
+import com.github.svenfran.budgetapp.budgetappbackend.helper.CostShareCalculator
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
+import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupMembershipHistoryRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository
+import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository
+import com.github.svenfran.budgetapp.budgetappbackend.testsupport.Fixtures.GroupScenario
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
 import org.springframework.beans.factory.annotation.Autowired
@@ -14,12 +20,14 @@ import java.time.LocalDate
 import static java.time.LocalDate.of
 
 /**
- * Jahres- und Monatswerte der Ausgabenübersicht mit Ein- und Austritten (Ist-Verhalten).
+ * Jahres- und Monatswerte der Ausgabenübersicht mit Ein- und Austritten.
  *
- * - averagePerMember wird gesetzt, wie die App ihn beim Anlegen berechnet: Betrag / Mitglieder am Kaufdatum.
+ * - Anteile werden exakt aus Betrag und Mitgliedschaftshistorie am Kaufdatum berechnet, gerundet wird erst der Saldo
+ *   je Periode, sodass die Salden zusammen 0 ergeben (DIV-38, D6). averagePerMember wird dafür nicht gelesen; wo gesetzt,
+ *   dann wie von der App geschrieben.
  * - Nutzerwerte werden als [userId: [sum, diff]] verglichen; die Reihenfolge der Nutzer ist nicht garantiert.
  * - Anteil eines Nutzers = sum - diff.
- * - Ungerundete Summenfelder (sumTotalYear über alle Jahre, sumTotalMonth) nur mit exakt darstellbaren Beträgen.
+ * - Summen von Salden werden in Cent verglichen (diffSummeInCent), nicht als Double-Addition.
  * - Bedingungen enthalten nur IDs, keine Entities: Spock rendert bei einem Fehlschlag jeden Teilausdruck, und
  *   IDs statt Entities halten die Fehlermeldung lesbar.
  */
@@ -28,6 +36,9 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
     @Autowired SpendingsOverviewService spendingsOverviewService
     @Autowired GroupRepository groupRepository
     @Autowired GroupMembershipHistoryRepository membershipRepository
+    @Autowired CartRepository cartRepository
+    @Autowired UserRepository userRepository
+    @Autowired CartService cartService
 
     def "Austritt und Eintritt über den Jahreswechsel: Jahre 2024 und 2025 sowie Gesamtübersicht"() {
         given: "Anna (Owner) seit 01.01.2024, Ben 01.01.–31.12.2024, Cleo ab 01.01.2025 10 Uhr (Beitritt mit Uhrzeit)"
@@ -208,32 +219,273 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         werte(jahr.spendingsPerMonth[0].spendingsMonthlyUser) == [(annaId): [44d, 14d], (benId): [0d, -14d]]
     }
 
-    def "Rundung (#fall): Anna bezahlt #betrag für #mitglieder Mitglieder, diff #annaDiff, andere #andereDiff"() {
-        given:
-        def anna = fixtures.user(name: 'Anna')
-        def andere = (1..<mitglieder).collect { fixtures.user() }
-        def (annaId, andereIds) = [anna.id, andere*.id]
-        def wg = fixtures.group(owner: anna, members: andere)
-        fixtures.cart(wg, user: anna, amount: betrag, averagePerMember: betrag / mitglieder,
+    def "Rundung (#fall): #betrag auf #mitglieder Mitglieder, Zahler Nr. #zahler → diffs #diffs"() {
+        given: "Mitglieder in Anlagereihenfolge, also aufsteigender ID (entscheidet nur bei Gleichstand unter Schuldnern)"
+        def nutzer = (0..<mitglieder).collect { fixtures.user() }
+        def ids = nutzer*.id
+        assert ids == ids.sort(false)
+        def wg = fixtures.group(owner: nutzer[0], members: nutzer.drop(1))
+        // averagePerMember wie von der App geschrieben (ungerundet); für die Salden ohne Bedeutung
+        fixtures.cart(wg, user: nutzer[zahler], amount: betrag, averagePerMember: betrag / mitglieder,
                 datePurchased: DateUtils.toDate(TestData.REFERENCE_DATE))
         flushAndClear()
-        loginAs(anna)
+        loginAs(nutzer[0])
 
         when:
         def jahr = spendingsOverviewService.getSpendingsForGroupAndYear(TestData.REFERENCE_DATE.year, wg.group.id)
 
         then:
         jahr.spendingsTotalYear.sumTotalYear == betrag
-        werte(jahr.spendingsTotalYear.spendingsTotalUser) ==
-                [(annaId): [betrag, annaDiff]] + andereIds.collectEntries { [it, [0d, andereDiff]] }
+        jahr.spendingsTotalYear.spendingsTotalUser.collectEntries { [it.userId, it.diff] } == [ids, diffs].transpose().collectEntries()
+        diffSummeInCent(jahr.spendingsTotalYear.spendingsTotalUser) == 0
 
         where:
-        // Drittel: Ø 10/3 = 3,333…; Anna 10 − 3,333… = 6,666… → 6,67; andere −3,33. Die gerundeten diffs ergeben
-        // zusammen +0,01 (Ist-Verhalten; ob ein Rest-Cent-Ausgleich gewollt ist, ist fachlich offen – B3 im Plan).
-        // Halber Cent: Ø 0,05/2 = 0,025; HALF_UP rundet vom Nullpunkt weg: 0,025 → 0,03, −0,025 → −0,03.
-        fall          | mitglieder | betrag || annaDiff | andereDiff
-        'Drittel'     | 3          | 10d    || 6.67d    | -3.33d
-        'halber Cent' | 2          | 0.05d  || 0.03d    | -0.03d
+        // B3 (DIV-12): früher Anna +6,67 / andere −3,33 (Summe +0,01) bzw. halber Cent +0,03 / −0,03.
+        // Jetzt: exakte Salden, Largest Remainder; bei gleichem Rest zuerst Schuldner, dann kleinere ID.
+        fall                  | mitglieder | betrag | zahler || diffs
+        'Drittel (AC2)'       | 3          | 10d    | 0      || [6.66d, -3.33d, -3.33d]   // exakt 6,666… / −3,333…
+        'Zahler nicht zuerst' | 3          | 10d    | 1      || [-3.33d, 6.66d, -3.33d]   // unabhängig davon, wer zahlt
+        '10,01 € auf drei'    | 3          | 10.01d | 0      || [6.67d, -3.33d, -3.34d]   // exakt 6,673… / −3,336…
+        'halber Cent'         | 2          | 0.05d  | 0      || [0.02d, -0.02d]           // exakt 0,025 / −0,025
+        'ein Cent (AC3)'      | 3          | 0.01d  | 2      || [0d, 0d, 0d]              // exakt −0,003… / −0,003… / 0,006…
+        'ohne Rest (AC11)'    | 3          | 15d    | 0      || [10d, -5d, -5d]
+    }
+
+    def "Mehrere Einkäufe mit wechselnden Zahlern: Salden je Monat, Jahr und gesamt centgenau mit Summe 0 (AC6, AC9)"() {
+        given: "Anna, Ben, Cleo (aufsteigende IDs) seit 01.01.2024"
+        def anna = fixtures.user(name: 'Anna')
+        def ben = fixtures.user(name: 'Ben')
+        def cleo = fixtures.user(name: 'Cleo')
+        def (annaId, benId, cleoId) = [anna, ben, cleo]*.id
+        assert annaId < benId && benId < cleoId
+        def wg = fixtures.group(owner: anna, members: [ben, cleo], memberSince: of(2024, 1, 1))
+
+        and: "exakte Anteile je Person: 1000/3, 701/3, 5/3, 2002/3, 100/3 Cent"
+        fixtures.cart(wg, user: anna, amount: 10d, datePurchased: DateUtils.toDate(of(2024, 11, 5)))
+        fixtures.cart(wg, user: ben, amount: 7.01d, datePurchased: DateUtils.toDate(of(2024, 12, 20)))
+        fixtures.cart(wg, user: cleo, amount: 0.05d, datePurchased: DateUtils.toDate(of(2025, 3, 1)))
+        fixtures.cart(wg, user: anna, amount: 20.02d, datePurchased: DateUtils.toDate(of(2025, 3, 15)))
+        fixtures.cart(wg, user: ben, amount: 1d, datePurchased: DateUtils.toDate(of(2025, 4, 10)))
+        flushAndClear()
+        loginAs(anna)
+
+        when:
+        def gesamt = spendingsOverviewService.getSpendingsForGroupAndAllYears(wg.group.id)
+        def jahre = [2024, 2025].collect { spendingsOverviewService.getSpendingsForGroupAndYear(it, wg.group.id) }
+
+        then: "Gesamt: Anteil je Person 3808/3 = 12,693…; Anna 30,02 → 17,326…, Ben 8,01 → −4,683…, Cleo 0,05 → −12,643…"
+        gesamt.spendingsTotalYear.sumTotalYear == 38.08d
+        werte(gesamt.spendingsTotalYear.spendingsTotalUser) ==
+                [(annaId): [30.02d, 17.32d], (benId): [8.01d, -4.68d], (cleoId): [0.05d, -12.64d]]
+
+        and: "2025: Anteil 2107/3 = 7,023…; Anna 12,996…, Ben −6,023…, Cleo −6,973…"
+        werte(jahre[1].spendingsTotalYear.spendingsTotalUser) ==
+                [(annaId): [20.02d, 12.99d], (benId): [1d, -6.02d], (cleoId): [0.05d, -6.97d]]
+        jahre[1].spendingsPerMonth*.sumTotalMonth == [1d, 20.07d]
+
+        and: "2025 je Monat: April 100/3 (Anna −0,333…, Ben 0,666…, Cleo −0,333…), März ganzzahlig"
+        jahre[1].spendingsPerMonth*.month == [4, 3]
+        werte(jahre[1].spendingsPerMonth[0].spendingsMonthlyUser) ==
+                [(annaId): [0d, -0.33d], (benId): [1d, 0.66d], (cleoId): [0d, -0.33d]]
+        werte(jahre[1].spendingsPerMonth[1].spendingsMonthlyUser) ==
+                [(annaId): [20.02d, 13.33d], (benId): [0d, -6.69d], (cleoId): [0.05d, -6.64d]]
+
+        and: "Summe der Salden ist 0 – gesamt, je Jahr (beide Ansichten) und je Monat"
+        diffSummeInCent(gesamt.spendingsTotalYear.spendingsTotalUser) == 0
+        gesamt.spendingsPerYear.every { diffSummeInCent(it.spendingsYearlyUser) == 0 }
+        jahre.every { diffSummeInCent(it.spendingsTotalYear.spendingsTotalUser) == 0 }
+        jahre*.spendingsPerMonth.flatten().every { diffSummeInCent(it.spendingsMonthlyUser) == 0 }
+
+        and: "D6: jede Periode wird für sich gerundet – Monate ergeben das Jahr nur bis auf Rundungscent"
+        // 2025: Anna Monate 13,33 − 0,33 = 13,00, Jahr 12,99; Ben −6,69 + 0,66 = −6,03, Jahr −6,02
+        diffInCentJeNutzer(jahre[1].spendingsPerMonth*.spendingsMonthlyUser.flatten()) ==
+                [(annaId): 1300L, (benId): -603L, (cleoId): -697L]
+        jahre.every { jahr ->
+            def monate = diffInCentJeNutzer(jahr.spendingsPerMonth*.spendingsMonthlyUser.flatten())
+            def ganzesJahr = diffInCentJeNutzer(jahr.spendingsTotalYear.spendingsTotalUser)
+            ganzesJahr.every { id, cent -> Math.abs(monate[id] - cent) <= jahr.spendingsPerMonth.size() }
+        }
+
+        and: "Jahreswerte in Gesamt- und Jahresansicht identisch"
+        gesamt.spendingsPerYear.collect { werte(it.spendingsYearlyUser) } ==
+                jahre.reverse().collect { werte(it.spendingsTotalYear.spendingsTotalUser) }
+    }
+
+    def "Mitgliederwechsel an einem späteren Tag ändern die Aufteilung früherer Einkäufe nicht (AC7)"() {
+        given: "Anna und Ben seit 01.01.2025, Cleo tritt am 01.04.2025 bei"
+        def anna = fixtures.user(name: 'Anna')
+        def ben = fixtures.user(name: 'Ben')
+        def cleo = fixtures.user(name: 'Cleo')
+        def (annaId, benId, cleoId) = [anna, ben, cleo]*.id
+        assert annaId < benId && benId < cleoId
+        def wg = fixtures.group(owner: anna, members: [ben], memberSince: of(2025, 1, 1))
+        fixtures.membership(wg, cleo, membershipStart: DateUtils.toDate(of(2025, 4, 1)))
+
+        and: "Anna bezahlt je 10 € am 01.03. (Anna, Ben: 5,00/5,00) und am 01.05. (alle drei: 3,34/3,33/3,33)"
+        fixtures.cart(wg, user: anna, amount: 10d, averagePerMember: 5d, datePurchased: DateUtils.toDate(of(2025, 3, 1)))
+        fixtures.cart(wg, user: anna, amount: 10d, averagePerMember: 10d / 3, datePurchased: DateUtils.toDate(of(2025, 5, 1)))
+        flushAndClear()
+        loginAs(anna)
+
+        when:
+        def jahr = spendingsOverviewService.getSpendingsForGroupAndYear(2025, wg.group.id)
+
+        then: "Anna 20 − 8,34 = 11,66; Ben −8,33; Cleo −3,33"
+        werte(jahr.spendingsTotalYear.spendingsTotalUser) ==
+                [(annaId): [20d, 11.66d], (benId): [0d, -8.33d], (cleoId): [0d, -3.33d]]
+        diffSummeInCent(jahr.spendingsTotalYear.spendingsTotalUser) == 0
+
+        and: "März unverändert 5,00/5,00 ohne Cleo, Mai auf drei verteilt"
+        jahr.spendingsPerMonth*.month == [5, 3]
+        werte(jahr.spendingsPerMonth[0].spendingsMonthlyUser) ==
+                [(annaId): [10d, 6.66d], (benId): [0d, -3.33d], (cleoId): [0d, -3.33d]]
+        werte(jahr.spendingsPerMonth[1].spendingsMonthlyUser) == [(annaId): [10d, 5d], (benId): [0d, -5d]]
+    }
+
+    def "Beitritt am Kauftag nach dem Einkauf beteiligt das neue Mitglied an diesem Einkauf (AC7, Tagessemantik D5)"() {
+        given: "Anna und Ben seit 01.01.2025; Cleo tritt am 10.03.2025 um 18 Uhr bei"
+        def anna = fixtures.user(name: 'Anna')
+        def ben = fixtures.user(name: 'Ben')
+        def cleo = fixtures.user(name: 'Cleo')
+        def (annaId, benId, cleoId) = [anna, ben, cleo]*.id
+        assert annaId < benId && benId < cleoId
+        def wg = fixtures.group(owner: anna, members: [ben], memberSince: of(2025, 1, 1))
+        fixtures.membership(wg, cleo, membershipStart: at(of(2025, 3, 10), 18))
+
+        and: "Anna bezahlt am 10.03. 10 € – erfasst, als Cleo noch nicht Mitglied war"
+        fixtures.cart(wg, user: anna, amount: 10d, averagePerMember: 5d, datePurchased: DateUtils.toDate(of(2025, 3, 10)))
+        flushAndClear()
+        loginAs(anna)
+
+        when:
+        def jahr = spendingsOverviewService.getSpendingsForGroupAndYear(2025, wg.group.id)
+
+        then: "Mitgliedschaft zählt tagesgenau inklusive Eintrittstag (gewollt, D5): Aufteilung auf drei"
+        werte(jahr.spendingsTotalYear.spendingsTotalUser) ==
+                [(annaId): [10d, 6.66d], (benId): [0d, -3.33d], (cleoId): [0d, -3.33d]]
+        diffSummeInCent(jahr.spendingsTotalYear.spendingsTotalUser) == 0
+    }
+
+    def "Altdaten: averagePerMember wird ignoriert, Salden centgenau aus Betrag und Historie (AC8)"() {
+        given:
+        def anna = fixtures.user(name: 'Anna')
+        def ben = fixtures.user(name: 'Ben')
+        def cleo = fixtures.user(name: 'Cleo')
+        def (annaId, benId, cleoId) = [anna, ben, cleo]*.id
+        assert annaId < benId && benId < cleoId
+        def wg = fixtures.group(owner: anna, members: [ben, cleo])
+
+        and: "ein ungerundeter Altwert (so wie ihn die NUMERIC-Spalte für 10/3 speichert) und ein bewusst falscher Wert"
+        def c1 = fixtures.cart(wg, user: anna, amount: 10d, averagePerMember: 3.33333333333333d, datePurchased: DateUtils.toDate(TestData.REFERENCE_DATE))
+        def c2 = fixtures.cart(wg, user: ben, amount: 5d, averagePerMember: 99d, datePurchased: DateUtils.toDate(TestData.REFERENCE_DATE))
+        def (c1Id, c2Id) = [c1, c2]*.id
+        flushAndClear()
+        loginAs(anna)
+
+        when:
+        def gesamt = spendingsOverviewService.getSpendingsForGroupAndAllYears(wg.group.id)
+
+        then: "exakter Anteil je Person (10 + 5) / 3 = 5,00: Anna +5, Ben 0, Cleo −5"
+        werte(gesamt.spendingsTotalYear.spendingsTotalUser) ==
+                [(annaId): [10d, 5d], (benId): [5d, 0d], (cleoId): [0d, -5d]]
+        diffSummeInCent(gesamt.spendingsTotalYear.spendingsTotalUser) == 0
+
+        and: "Beträge und Altwerte bleiben unverändert gespeichert"
+        [c1Id, c2Id].collect { cartRepository.findById(it).get() }.collect { [it.amount, it.averagePerMember] } ==
+                [[10d, 3.33333333333333d], [5d, 99d]]
+    }
+
+    def "Ausgleichszahlungen in Höhe der Salden gleichen centgenau aus, Unbeteiligte bleiben unverändert (AC10, D4)"() {
+        given: "Anna (Owner), Ben, Cleo; Anna bezahlt 10 € → Anna +6,66, Ben −3,33, Cleo −3,33"
+        def anna = fixtures.user(name: 'Anna')
+        def ben = fixtures.user(name: 'Ben')
+        def cleo = fixtures.user(name: 'Cleo')
+        def (annaId, benId, cleoId) = [anna, ben, cleo]*.id
+        assert annaId < benId && benId < cleoId
+        def wg = fixtures.group(owner: anna, members: [ben, cleo])
+        def tag = DateUtils.toDate(TestData.REFERENCE_DATE)
+        fixtures.cart(wg, user: anna, amount: 10d, averagePerMember: 10d / 3, datePurchased: tag)
+        flushAndClear()
+
+        when: "Ben zahlt Cleo 1,00 € (nicht durch drei teilbar)"
+        zahlung(benId, cleoId, 1d, wg, tag)
+
+        then: "nur Ben und Cleo verschieben sich um genau 1,00 €"
+        diffs(annaId, wg) == [(annaId): 6.66d, (benId): -2.33d, (cleoId): -4.33d]
+
+        when: "Ben und Cleo zahlen Anna ihren angezeigten Saldo"
+        zahlung(benId, annaId, 2.33d, wg, tag)
+        zahlung(cleoId, annaId, 4.33d, wg, tag)
+
+        then: "alle Salden exakt 0, keine Rest-Cent"
+        diffs(annaId, wg) == [(annaId): 0d, (benId): 0d, (cleoId): 0d]
+
+        and: "die Auswertung verändert keine Carts: Einkauf plus drei Zahlungen mit je Sender- und Empfänger-Cart"
+        cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id)*.amount.sort() ==
+                [-4.33d, -2.33d, -1d, 1d, 2.33d, 4.33d, 10d]
+    }
+
+    def "Beträge mit mehr als zwei Nachkommastellen werden je Cart auf Cent gerundet (D3)"() {
+        given:
+        def anna = fixtures.user(name: 'Anna')
+        def ben = fixtures.user(name: 'Ben')
+        def cleo = fixtures.user(name: 'Cleo')
+        def (annaId, benId, cleoId) = [anna, ben, cleo]*.id
+        assert annaId < benId && benId < cleoId
+        def wg = fixtures.group(owner: anna, members: [ben, cleo], memberSince: of(2025, 1, 1))
+
+        and: "in Cent (HALF_UP je Cart): 1, 1, −1, 944 – exakter Anteil je Person gesamt 945/3 = 315"
+        def carts = [
+                fixtures.cart(wg, user: anna, amount: 0.005d, datePurchased: DateUtils.toDate(of(2025, 3, 1))),
+                fixtures.cart(wg, user: anna, amount: 0.005d, datePurchased: DateUtils.toDate(of(2025, 3, 2))),
+                fixtures.cart(wg, user: ben, amount: -0.005d, datePurchased: DateUtils.toDate(of(2025, 4, 1))),
+                fixtures.cart(wg, user: cleo, amount: 9.43668881979196d, datePurchased: DateUtils.toDate(of(2025, 4, 2)))]
+        def cartIds = carts*.id
+        flushAndClear()
+        loginAs(anna)
+
+        when:
+        def gesamt = spendingsOverviewService.getSpendingsForGroupAndAllYears(wg.group.id)
+        def jahr = spendingsOverviewService.getSpendingsForGroupAndYear(2025, wg.group.id)
+
+        then: "Anna 0,02 − 3,15 = −3,13; Ben −0,01 − 3,15 = −3,16; Cleo 9,44 − 3,15 = 6,29 (Betrag erst nach Addition runden gäbe Anna 0,01)"
+        def erwartet = [(annaId): [0.02d, -3.13d], (benId): [-0.01d, -3.16d], (cleoId): [9.44d, 6.29d]]
+        werte(gesamt.spendingsTotalYear.spendingsTotalUser) == erwartet
+        werte(gesamt.spendingsPerYear[0].spendingsYearlyUser) == erwartet
+        werte(jahr.spendingsTotalYear.spendingsTotalUser) == erwartet
+        diffSummeInCent(jahr.spendingsTotalYear.spendingsTotalUser) == 0
+
+        and: "Summenfelder aus den je Cart gerundeten Beträgen"
+        gesamt.spendingsTotalYear.sumTotalYear == 9.45d
+        gesamt.spendingsPerYear*.sumTotalYear == [9.45d]
+        jahr.spendingsTotalYear.sumTotalYear == 9.45d
+        jahr.spendingsPerMonth*.month == [4, 3]
+        jahr.spendingsPerMonth*.sumTotalMonth == [9.43d, 0.02d]
+        // April exakt: Anna −314,33, Ben −315,33, Cleo 629,67 Cent; März: Anna 1,33, Ben −0,67, Cleo −0,67 Cent
+        werte(jahr.spendingsPerMonth[0].spendingsMonthlyUser) ==
+                [(annaId): [0d, -3.14d], (benId): [-0.01d, -3.15d], (cleoId): [9.44d, 6.29d]]
+        werte(jahr.spendingsPerMonth[1].spendingsMonthlyUser) ==
+                [(annaId): [0.02d, 0.01d], (benId): [0d, 0d], (cleoId): [0d, -0.01d]]
+
+        and: "gespeicherte Beträge unverändert"
+        cartIds.collect { cartRepository.findById(it).get().amount } == [0.005d, 0.005d, -0.005d, 9.43668881979196d]
+    }
+
+    def "Gesamtsumme über alle Jahre und Monatssumme sind centgenau: 0,10 + 0,20 ergibt 0,3 (DIV-29)"() {
+        given:
+        def wg = fixtures.group(memberSince: of(2025, 1, 1))
+        fixtures.cart(wg, amount: 0.1d, datePurchased: DateUtils.toDate(of(2025, 3, 1)))
+        fixtures.cart(wg, amount: 0.2d, datePurchased: DateUtils.toDate(of(2025, 3, 2)))
+        flushAndClear()
+        loginAs(wg.owner)
+
+        when:
+        def gesamt = spendingsOverviewService.getSpendingsForGroupAndAllYears(wg.group.id)
+        def jahr = spendingsOverviewService.getSpendingsForGroupAndYear(2025, wg.group.id)
+
+        then: "früher 0.30000000000000004"
+        gesamt.spendingsTotalYear.sumTotalYear == 0.3d
+        jahr.spendingsPerMonth*.sumTotalMonth == [0.3d]
     }
 
     def "Ohne Carts ist die Gesamtübersicht leer"() {
@@ -275,6 +527,30 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
 
     private static Map<Long, Double> anteile(List<SpendingsOverviewUserDto> users) {
         users.collectEntries { [it.userId, it.sum - it.diff] }
+    }
+
+    /** Summe der Salden in Cent – exakt, ohne Double-Addition. */
+    private static long diffSummeInCent(List<SpendingsOverviewUserDto> users) {
+        users.sum(0L) { CostShareCalculator.toCents(it.diff) } as long
+    }
+
+    /** Salden je Nutzer in Cent, über mehrere Listen (z. B. alle Monate eines Jahres) aufaddiert. */
+    private static Map<Long, Long> diffInCentJeNutzer(List<SpendingsOverviewUserDto> users) {
+        users.groupBy { it.userId }.collectEntries { id, eintraege -> [id, diffSummeInCent(eintraege)] }
+    }
+
+    /** Ausgleichszahlung über CartService, wie sie die App anlegt (Sender- und Empfänger-Cart). */
+    private void zahlung(Long vonId, Long anId, Double betrag, GroupScenario wg, Date tag) {
+        loginAs(userRepository.findById(vonId).get())
+        def an = userRepository.findById(anId).get()
+        cartService.addSettlementPayment(new SettlementPaymentDto(betrag, wg.group.id, new UserDto(an), tag))
+        flushAndClear()
+    }
+
+    private Map<Long, Double> diffs(Long betrachterId, GroupScenario wg) {
+        loginAs(userRepository.findById(betrachterId).get())
+        spendingsOverviewService.getSpendingsForGroupAndAllYears(wg.group.id)
+                .spendingsTotalYear.spendingsTotalUser.collectEntries { [it.userId, it.diff] }
     }
 
     /** Zeitpunkt mit Uhrzeit, wie ihn GroupMembershipHistoryService beim Ein- und Austritt mit new Date() schreibt. */

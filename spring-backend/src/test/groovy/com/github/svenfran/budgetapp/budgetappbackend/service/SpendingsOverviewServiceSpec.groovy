@@ -71,6 +71,17 @@ class SpendingsOverviewServiceSpec extends Specification {
         2026 || 0d      // keine Carts
     }
 
+    def "Jahres- und Monatssumme werden in Cent addiert: 0,10 + 0,20 ergibt 0,3 (DIV-29)"() {
+        given:
+        def carts = [0.1d, 0.2d].collect {
+            TestData.cart(datePurchased: DateUtils.toDate(of(2025, 3, 1)), amount: it)
+        }
+
+        expect:
+        service.getTotalAmountForYear(carts, 2025) == 0.3d
+        service.getTotalAmountForMonth(carts, 2025, 3) == 0.3d
+    }
+
     def "Summe im Monat #year-#month ist #expected"() {
         expect:
         service.getTotalAmountForMonth(betragsCarts(), year, month) == expected
