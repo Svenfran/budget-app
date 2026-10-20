@@ -9,6 +9,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOrMembe
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.math.BigInteger;
@@ -200,13 +201,14 @@ public class SpendingsOverviewService {
         var shares = calculateShares(carts, membership);
         var spendingsOverviewPerMonthDtoList = new ArrayList<SpendingsOverviewPerMonthDto>();
         var availableMonth = getAvailableMonthsForYear(carts, year);
+        var locale = LocaleContextHolder.getLocale();
 
         for (Integer month : availableMonth) {
             var spendingsOverviewPerMonthDto = new SpendingsOverviewPerMonthDto();
             var userTotals = new ArrayList<UserTotals>();
 
             spendingsOverviewPerMonthDto.setMonth(month);
-            spendingsOverviewPerMonthDto.setMonthName(getMonthName(month));
+            spendingsOverviewPerMonthDto.setMonthName(getMonthName(month, locale));
             spendingsOverviewPerMonthDto.setSumTotalMonth(getTotalAmountForMonth(carts, year, month));
 
             for (Long userId : userIds) {
@@ -327,8 +329,8 @@ public class SpendingsOverviewService {
                 .toList();
     }
 
-    public String getMonthName(Integer monthNumber) {
-        return Month.of(monthNumber).getDisplayName(TextStyle.FULL, Locale.GERMAN);
+    public String getMonthName(Integer monthNumber, Locale locale) {
+        return Month.of(monthNumber).getDisplayName(TextStyle.FULL, locale);
     }
 
     public double getTotalAmountForMonth(List<Cart> carts, int year, int month) {

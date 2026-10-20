@@ -103,6 +103,18 @@ class SpendingsOverviewServiceSpec extends Specification {
         2023 || []
     }
 
+    def "Monat #month heißt in '#locale' '#expected' (DIV-30)"() {
+        expect:
+        service.getMonthName(month, locale) == expected
+
+        where:
+        month | locale                      || expected
+        3     | Locale.GERMAN               || 'März'
+        3     | Locale.ENGLISH              || 'March'
+        3     | Locale.forLanguageTag('es') || 'marzo'
+        12    | Locale.ENGLISH              || 'December'
+    }
+
     def "Carts im Jahr #year vorhanden (Carts gegeben: #mitCarts): #expected"() {
         given:
         def carts = mitCarts ? monatsCarts() : []
