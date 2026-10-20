@@ -270,30 +270,11 @@ public class CartService {
         cartRepository.save(newCart);
     }
 
-    // Erster Termin nach heute
-    private LocalDate calculateNextDate(LocalDate lastExecutionDate, RecurrenceType recurrenceType) {
-        LocalDate today = LocalDate.now(clock);
-        LocalDate next = nextOccurrence(lastExecutionDate, recurrenceType);
-        while (!next.isAfter(today)) {
-            next = nextOccurrence(next, recurrenceType);
-        }
-        return next;
-    }
-
-    // Genau ein Wiederholungsschritt
-    private LocalDate nextOccurrence(LocalDate date, RecurrenceType recurrenceType) {
-        switch (recurrenceType) {
-            case DAILY:
-                return date.plusDays(1);
-            case WEEKLY:
-                return date.plusWeeks(1);
-            case MONTHLY:
-                return date.plusMonths(1);
-            case YEARLY:
-                return date.plusYears(1);
-            default:
-                throw new IllegalArgumentException("Unsupported recurrence type: " + recurrenceType);
-        }
+    // Ankertag für ein (neues) Template aus dem Einkauf: bisheriger Anker nur bei unverändertem Kaufdatum (DIV-25, E3)
+    private int resolveAnchorDay(LocalDate newDate, Cart cart) {
+        LocalDate previousDate = cart.getDatePurchased() != null ? asLocalDate(cart.getDatePurchased()) : null;
+        Integer previousAnchorDay = cart.getTemplate() != null ? cart.getTemplate().getAnchorDay() : null;
+        return RecurrenceCalculator.resolveAnchorDay(newDate, previousDate, previousAnchorDay);
     }
 
     private void deactivateCartTemplate(Cart cart) {
@@ -314,13 +295,12 @@ public class CartService {
         newTemplate.setRecurrenceType(recurrenceType);
         newTemplate.setActive(true);
         newTemplate.setStartDate(LocalDate.now(clock));
-        // DIV-25 Übergang (P2): Tag des Kaufdatums, die Ankerregel E3 folgt in P4
-        newTemplate.setAnchorDay(asLocalDate(cartDto.getDatePurchased()).getDayOfMonth());
+        // cart trägt hier noch Kaufdatum und Template vor der Bearbeitung
+        var datePurchased = asLocalDate(cartDto.getDatePurchased());
+        var anchorDay = resolveAnchorDay(datePurchased, cart);
+        newTemplate.setAnchorDay(anchorDay);
         newTemplate.setNextExecutionDate(
-                calculateNextDate(
-                        asLocalDate(cartDto.getDatePurchased()),
-                        recurrenceType
-                )
+                RecurrenceCalculator.firstOccurrenceAfter(datePurchased, recurrenceType, anchorDay, LocalDate.now(clock))
         );
         templateRepository.save(newTemplate);
         cart.setTemplate(newTemplate);
@@ -424,8 +404,15 @@ public class CartService {
         if (!Objects.equals(tpl.getDescription(), dto.getDescription())) return true;
         if (!Objects.equals(tpl.getCategoryId(), dto.getCategoryDto().getId())) return true;
         // Ohne Wiederholung gibt es kein Folgedatum
-        if (newType != RecurrenceType.NONE
-                && !Objects.equals(tpl.getNextExecutionDate(), calculateNextDate(asLocalDate(dto.getDatePurchased()), newType))) return true;
+        if (newType != RecurrenceType.NONE) {
+            var datePurchased = asLocalDate(dto.getDatePurchased());
+            var anchorDay = resolveAnchorDay(datePurchased, cart);
+            var nextDate = RecurrenceCalculator.firstOccurrenceAfter(datePurchased, newType, anchorDay, LocalDate.now(clock));
+            if (!Objects.equals(tpl.getNextExecutionDate(), nextDate)) return true;
+            // Verschiedene Ankertage können denselben nächsten Termin ergeben (30. und 31. → 28.02.)
+            if ((newType == RecurrenceType.MONTHLY || newType == RecurrenceType.YEARLY)
+                    && !Objects.equals(tpl.getAnchorDay(), anchorDay)) return true;
+        }
 
         return false;
     }

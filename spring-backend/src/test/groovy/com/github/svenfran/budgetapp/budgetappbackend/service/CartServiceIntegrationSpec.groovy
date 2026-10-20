@@ -2,6 +2,7 @@ package com.github.svenfran.budgetapp.budgetappbackend.service
 
 import com.github.svenfran.budgetapp.budgetappbackend.constants.RecurrenceType
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto
+import com.github.svenfran.budgetapp.budgetappbackend.entity.CartTemplate
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartTemplateRepository
@@ -9,6 +10,8 @@ import com.github.svenfran.budgetapp.budgetappbackend.testsupport.Fixtures.Group
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
 import org.springframework.beans.factory.annotation.Autowired
+
+import java.time.LocalDate
 
 import static com.github.svenfran.budgetapp.budgetappbackend.constants.RecurrenceType.*
 
@@ -242,6 +245,130 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         replacement.categoryId == categoryId
         def cartTemplateId = cartRepository.findById(cart.id).get().template.id
         replacement.id == cartTemplateId
+    }
+
+    // ----- Ankertag (DIV-25, Entscheidung E3) -----
+
+    def "Neues monatliches Template vom 31.01. merkt sich den 31. als Ankertag"() {
+        given:
+        testClock.today = LocalDate.of(2025, 1, 31)
+        def wg = fixtures.group()
+        def cart = fixtures.cart(wg, title: 'Miete', datePurchased: DateUtils.toDate(LocalDate.of(2025, 1, 31)))
+
+        when:
+        cartService.createTemplateForCartIfRecurrenceTypeValid(cart, wg.owner, wg.group, MONTHLY)
+        flushAndClear()
+
+        then:
+        def template = templateRepository.findByGroupId(wg.group.id).first()
+        template.anchorDay == 31
+        template.nextExecutionDate == LocalDate.of(2025, 2, 28)
+    }
+
+    def "Template-Update über einen gekappten Einkauf mit unverändertem Datum behält den Ankertag"() {
+        given: "Einkauf vom 28.02. aus einem Template vom 31."
+        testClock.today = LocalDate.of(2025, 2, 28)
+        def wg = fixtures.group()
+        def cart = fixtures.cart(wg, title: 'Miete', amount: 900d, datePurchased: DateUtils.toDate(LocalDate.of(2025, 2, 28)))
+        def original = fixtures.template(cart, recurrenceType: MONTHLY, nextExecutionDate: LocalDate.of(2025, 3, 31), anchorDay: 31)
+
+        and: "nur der Betrag ändert sich, Änderung gilt für alle zukünftigen Einträge"
+        def dto = new CartDto(cart)
+        dto.amount = 950d
+        dto.templateUpdateSelected = true
+
+        when:
+        cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category, 1)
+        flushAndClear()
+
+        then:
+        def replacement = activeTemplate(wg)
+        replacement.id != original.id
+        replacement.anchorDay == 31
+        replacement.nextExecutionDate == LocalDate.of(2025, 3, 31)
+    }
+
+    def "Template-Update mit geändertem Datum auf #neuesDatum übernimmt den Tag #erwarteterAnker als Ankertag"() {
+        given: "Einkauf vom 31.03. aus einem Template vom 31."
+        testClock.today = neuesDatum
+        def wg = fixtures.group()
+        def cart = fixtures.cart(wg, title: 'Miete', datePurchased: DateUtils.toDate(LocalDate.of(2025, 3, 31)))
+        fixtures.template(cart, recurrenceType: MONTHLY, nextExecutionDate: LocalDate.of(2025, 4, 30), anchorDay: 31)
+
+        and:
+        def dto = new CartDto(cart)
+        dto.datePurchased = DateUtils.toDate(neuesDatum)
+        dto.templateUpdateSelected = true
+
+        when:
+        cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category, 1)
+        flushAndClear()
+
+        then:
+        def replacement = activeTemplate(wg)
+        replacement.anchorDay == erwarteterAnker
+        replacement.nextExecutionDate == erwarteterTermin
+
+        where:
+        // 30.04. ist auch die gekappte Form von Anker 31; das geänderte Datum geht vor
+        neuesDatum                || erwarteterAnker | erwarteterTermin
+        LocalDate.of(2025, 4, 30) || 30              | LocalDate.of(2025, 5, 30)
+        LocalDate.of(2025, 4, 15) || 15              | LocalDate.of(2025, 5, 15)
+    }
+
+    def "Bearbeiten eines gekappten Einkaufs ohne Änderung erkennt keine Template-Änderung"() {
+        given:
+        testClock.today = LocalDate.of(2025, 2, 28)
+        def wg = fixtures.group()
+        def cart = fixtures.cart(wg, title: 'Miete', datePurchased: DateUtils.toDate(LocalDate.of(2025, 2, 28)))
+        def original = fixtures.template(cart, recurrenceType: MONTHLY, nextExecutionDate: LocalDate.of(2025, 3, 31), anchorDay: 31)
+
+        and:
+        def dto = new CartDto(cart)
+        dto.templateUpdateSelected = true
+
+        when:
+        def result = cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category, 1)
+        flushAndClear()
+
+        then:
+        !result.hasTemplateChanged
+        def unchanged = activeTemplate(wg)
+        unchanged.id == original.id
+        unchanged.nextExecutionDate == LocalDate.of(2025, 3, 31)
+    }
+
+    def "Anderer Ankertag bei gleichem nächsten Termin erzeugt ein neues Template"() {
+        given: "Einkauf vom 30.01. (Anker 30); am 31.01. ergeben Anker 30 und 31 beide den 28.02."
+        testClock.today = LocalDate.of(2025, 1, 31)
+        def wg = fixtures.group()
+        def cart = fixtures.cart(wg, title: 'Miete', datePurchased: DateUtils.toDate(LocalDate.of(2025, 1, 30)))
+        def original = fixtures.template(cart, recurrenceType: MONTHLY, nextExecutionDate: LocalDate.of(2025, 2, 28), anchorDay: 30)
+
+        and: "Datum auf den 31.01., sonst unverändert"
+        def dto = new CartDto(cart)
+        dto.datePurchased = DateUtils.toDate(LocalDate.of(2025, 1, 31))
+        dto.templateUpdateSelected = true
+
+        when:
+        def result = cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category, 1)
+        flushAndClear()
+
+        then:
+        result.hasTemplateChanged
+        def originalStillActive = templateRepository.findById(original.id).get().active
+        !originalStillActive
+
+        and:
+        def replacement = activeTemplate(wg)
+        replacement.anchorDay == 31
+        replacement.nextExecutionDate == LocalDate.of(2025, 2, 28)
+    }
+
+    private CartTemplate activeTemplate(GroupScenario wg) {
+        def active = templateRepository.findByGroupId(wg.group.id).findAll { it.active }
+        assert active.size() == 1
+        active.first()
     }
 
     private List<RecurrenceType> activeTemplateTypes(GroupScenario wg) {
