@@ -9,6 +9,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.entity.*;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.ExcelWriter;
+import com.github.svenfran.budgetapp.budgetappbackend.helper.RecurrenceCalculator;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.Translator;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartTemplateRepository;
@@ -219,7 +220,7 @@ public class CartService {
                     }
                     createCartFromTemplate(template, nextDate, groupMemberCount);
                 }
-                nextDate = nextOccurrence(nextDate, template.getRecurrenceType());
+                nextDate = RecurrenceCalculator.nextOccurrence(nextDate, template.getRecurrenceType(), template.getAnchorDay());
             }
             // Auch nach Deaktivierung setzen, damit der Abbruchtermin erhalten bleibt
             template.setNextExecutionDate(nextDate);
