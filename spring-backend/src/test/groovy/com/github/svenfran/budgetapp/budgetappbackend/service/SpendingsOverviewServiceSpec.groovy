@@ -108,11 +108,11 @@ class SpendingsOverviewServiceSpec extends Specification {
         service.getMonthName(month, locale) == expected
 
         where:
-        month | locale           || expected
-        3     | Locale.GERMAN    || 'März'
-        3     | Locale.ENGLISH   || 'March'
-        3     | new Locale('es') || 'marzo'
-        12    | Locale.ENGLISH   || 'December'
+        month | locale                      || expected
+        3     | Locale.GERMAN               || 'März'
+        3     | Locale.ENGLISH              || 'March'
+        3     | Locale.forLanguageTag('es') || 'marzo'
+        12    | Locale.ENGLISH              || 'December'
     }
 
     def "Carts im Jahr #year vorhanden (Carts gegeben: #mitCarts): #expected"() {

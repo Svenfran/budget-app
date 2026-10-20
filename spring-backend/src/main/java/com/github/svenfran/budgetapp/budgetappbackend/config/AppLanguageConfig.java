@@ -25,7 +25,7 @@ public class AppLanguageConfig {
     public LocaleResolver localeResolver() {
         AcceptHeaderLocaleResolver resolver = new AcceptHeaderLocaleResolver();
         resolver.setDefaultLocale(Locale.GERMAN);
-        resolver.setSupportedLocales(List.of(Locale.GERMAN, Locale.ENGLISH, new Locale("es")));
+        resolver.setSupportedLocales(List.of(Locale.GERMAN, Locale.ENGLISH, Locale.forLanguageTag("es")));
         return resolver;
     }
 
