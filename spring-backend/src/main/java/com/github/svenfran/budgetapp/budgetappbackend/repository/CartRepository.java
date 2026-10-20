@@ -48,7 +48,7 @@ public interface CartRepository extends CrudRepository<Cart, Long> {
     @Query("""
             select COUNT(*) from Cart c
                      where c.title = :title
-                           and c.description = :description
+                           and coalesce(c.description, '') = coalesce(:description, '')
                            and c.category.id = :categoryId
                            and c.datePurchased = :nextDate
                            and c.amount = :amount

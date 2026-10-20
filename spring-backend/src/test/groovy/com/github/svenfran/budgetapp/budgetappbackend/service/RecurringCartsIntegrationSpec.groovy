@@ -263,6 +263,30 @@ class RecurringCartsIntegrationSpec extends IntegrationSpec {
         templateRepository.findById(template.id).get().nextExecutionDate == today.plusWeeks(1)
     }
 
+    def "Scheduler erkennt einen gleichen Einkauf auch ohne Beschreibung (Template #templateDescription, Einkauf #existingDescription)"() {
+        given:
+        def today = testClock.today
+        def wg = fixtures.group()
+        def cart = fixtures.cart(wg, title: 'Gym', description: templateDescription, amount: 30d, datePurchased: DateUtils.toDate(today.minusDays(1)))
+        def template = fixtures.template(cart, nextExecutionDate: today)
+        def duplicate = fixtures.cart(wg, title: 'Gym', description: existingDescription, amount: 30d, datePurchased: DateUtils.toDate(today))
+
+        when:
+        cartService.generateRecurringCarts()
+
+        then: "kein weiterer Einkauf"
+        cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id)*.id == [duplicate.id, cart.id]
+
+        and:
+        templateRepository.findById(template.id).get().nextExecutionDate == today.plusMonths(1)
+
+        where:
+        templateDescription | existingDescription
+        null                | null
+        null                | ''
+        ''                  | null
+    }
+
     def "Nachgeholte Einkäufe teilen durch die Mitgliederzahl am jeweiligen Termin"() {
         given:
         def today = testClock.today
