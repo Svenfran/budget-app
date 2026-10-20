@@ -313,6 +313,8 @@ public class CartService {
         newTemplate.setRecurrenceType(recurrenceType);
         newTemplate.setActive(true);
         newTemplate.setStartDate(LocalDate.now(clock));
+        // DIV-25 Übergang (P2): Tag des Kaufdatums, die Ankerregel E3 folgt in P4
+        newTemplate.setAnchorDay(asLocalDate(cartDto.getDatePurchased()).getDayOfMonth());
         newTemplate.setNextExecutionDate(
                 calculateNextDate(
                         asLocalDate(cartDto.getDatePurchased()),

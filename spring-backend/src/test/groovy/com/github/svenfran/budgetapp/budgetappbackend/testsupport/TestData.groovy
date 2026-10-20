@@ -55,7 +55,7 @@ class TestData {
     static CartTemplate cartTemplate(Map overrides = [:]) {
         new CartTemplate([title: 'Einkauf', description: 'Wocheneinkauf', amount: 40.0d,
                           recurrenceType: RecurrenceType.MONTHLY, active: true, startDate: REFERENCE_DATE,
-                          nextExecutionDate: REFERENCE_DATE, endDate: null] + overrides)
+                          nextExecutionDate: REFERENCE_DATE, endDate: null, anchorDay: REFERENCE_DATE.dayOfMonth] + overrides)
     }
 
     static ShoppingList shoppingList(Map overrides = [:]) {

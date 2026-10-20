@@ -46,8 +46,12 @@ public class CartTemplate {
     @Column(name = "end_date")
     private LocalDate endDate; // null = unbegrenzt
 
+    @Column(name = "anchor_day")
+    private Integer anchorDay; // Tag des Monats, auf den monatliche/jährliche Termine fallen (DIV-25)
+
     public CartTemplate(Long id, Long userId, Long groupId, Long categoryId, String title, String description,
-                        Double amount, RecurrenceType recurrenceType, boolean active, LocalDate startDate, LocalDate nextExecutionDate, LocalDate endDate) {
+                        Double amount, RecurrenceType recurrenceType, boolean active, LocalDate startDate, LocalDate nextExecutionDate, LocalDate endDate,
+                        Integer anchorDay) {
         this.id = id;
         this.userId = userId;
         this.groupId = groupId;
@@ -60,6 +64,7 @@ public class CartTemplate {
         this.startDate = startDate;
         this.nextExecutionDate = nextExecutionDate;
         this.endDate = endDate;
+        this.anchorDay = anchorDay;
     }
 
     public CartTemplate() {}
@@ -160,6 +165,14 @@ public class CartTemplate {
         this.nextExecutionDate = nextExecutionDate;
     }
 
+    public Integer getAnchorDay() {
+        return anchorDay;
+    }
+
+    public void setAnchorDay(Integer anchorDay) {
+        this.anchorDay = anchorDay;
+    }
+
     @Override
     public String toString() {
         return "CartTemplate{" +
@@ -175,6 +188,7 @@ public class CartTemplate {
                 ", startDate=" + startDate +
                 ", nextExecutionDate=" + nextExecutionDate +
                 ", endDate=" + endDate +
+                ", anchorDay=" + anchorDay +
                 '}';
     }
 }
