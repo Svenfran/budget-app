@@ -200,31 +200,39 @@ public class CartService {
             }
 
             var nextDate = template.getNextExecutionDate();
+            if (nextDate.isAfter(today)) {
+                continue;
+            }
 
-            if (nextDate.equals(today)) {
+            // Verpasste Termine (z. B. Job lief nicht) werden einzeln nachgeholt
+            while (!nextDate.isAfter(today)) {
                 var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(asDate(nextDate), template.getGroupId());
                 if (groupMemberCount == 0) {
                     logger.warn("CartTemplate {} wird deaktiviert: keine Mitglieder in Gruppe {} am {}", template.getId(), template.getGroupId(), nextDate);
                     template.setActive(false);
                     template.setEndDate(today);
-                    templateRepository.save(template);
-                    continue;
+                    break;
                 }
-                if (checkIfCartAlreadyExists(template) < 1) {
+                if (checkIfCartAlreadyExists(template, nextDate) < 1) {
+                    if (nextDate.isBefore(today)) {
+                        logger.info("CartTemplate {}: verpasster Termin {} wird nachgeholt", template.getId(), nextDate);
+                    }
                     createCartFromTemplate(template, nextDate, groupMemberCount);
                 }
-                template.setNextExecutionDate(calculateNextDate(nextDate, template.getRecurrenceType()));
-                templateRepository.save(template);
+                nextDate = nextOccurrence(nextDate, template.getRecurrenceType());
             }
+            // Auch nach Deaktivierung setzen, damit der Abbruchtermin erhalten bleibt
+            template.setNextExecutionDate(nextDate);
+            templateRepository.save(template);
         }
     }
 
-    private int checkIfCartAlreadyExists(CartTemplate template) {
+    private int checkIfCartAlreadyExists(CartTemplate template, LocalDate date) {
         return cartRepository.numberOfSimilarCarts(
                 template.getTitle(),
                 template.getDescription(),
                 template.getCategoryId(),
-                asDate(template.getNextExecutionDate()),
+                asDate(date),
                 template.getAmount()
         );
     }
@@ -261,44 +269,30 @@ public class CartService {
         cartRepository.save(newCart);
     }
 
+    // Erster Termin nach heute
     private LocalDate calculateNextDate(LocalDate lastExecutionDate, RecurrenceType recurrenceType) {
-        LocalDate next;
         LocalDate today = LocalDate.now(clock);
+        LocalDate next = nextOccurrence(lastExecutionDate, recurrenceType);
+        while (!next.isAfter(today)) {
+            next = nextOccurrence(next, recurrenceType);
+        }
+        return next;
+    }
 
+    // Genau ein Wiederholungsschritt
+    private LocalDate nextOccurrence(LocalDate date, RecurrenceType recurrenceType) {
         switch (recurrenceType) {
             case DAILY:
-                next = lastExecutionDate.plusDays(1);
-                while (!next.isAfter(today)) {
-                    next = next.plusDays(1);
-                }
-                break;
-
+                return date.plusDays(1);
             case WEEKLY:
-                next = lastExecutionDate.plusWeeks(1);
-                while (!next.isAfter(today)) {
-                    next = next.plusWeeks(1);
-                }
-                break;
-
+                return date.plusWeeks(1);
             case MONTHLY:
-                next = lastExecutionDate.plusMonths(1);
-                while (!next.isAfter(today)) {
-                    next = next.plusMonths(1);
-                }
-                break;
-
+                return date.plusMonths(1);
             case YEARLY:
-                next = lastExecutionDate.plusYears(1);
-                while (!next.isAfter(today)) {
-                    next = next.plusYears(1);
-                }
-                break;
-
+                return date.plusYears(1);
             default:
                 throw new IllegalArgumentException("Unsupported recurrence type: " + recurrenceType);
         }
-
-        return next;
     }
 
     private void deactivateCartTemplate(Cart cart) {

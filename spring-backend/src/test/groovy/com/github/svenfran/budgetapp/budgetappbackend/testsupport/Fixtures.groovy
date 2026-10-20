@@ -33,11 +33,15 @@ class Fixtures {
         userRepository.save(TestData.user(overrides))
     }
 
-    /** Gruppe mit Owner, Mitgliedern, Mitgliedschaftshistorie und einer Kategorie. Named args: owner, members, memberSince (LocalDate). */
+    /**
+     * Gruppe mit Owner, Mitgliedern, Mitgliedschaftshistorie und einer Kategorie. Named args: owner, members,
+     * memberSince (LocalDate), memberUntil (LocalDate, Ende aller Mitgliedschaften; ohne Angabe offen).
+     */
     GroupScenario group(Map args = [:]) {
         User owner = args.owner ?: user()
         List<User> members = args.members ?: []
         LocalDate since = args.memberSince ?: TestData.REFERENCE_DATE.minusYears(1)
+        Date until = args.memberUntil ? DateUtils.toDate(args.memberUntil as LocalDate) : null
 
         def group = groupRepository.save(TestData.group(owner: owner))
         // Erst die Mitglieder verknüpfen und speichern, danach die Historie schreiben: User.groupList ist eine
@@ -47,10 +51,10 @@ class Fixtures {
         userRepository.saveAll(members)
 
         membershipRepository.save(TestData.membership(userId: owner.id, groupId: group.id, type: TypeEnum.OWNER,
-                membershipStart: DateUtils.toDate(since)))
+                membershipStart: DateUtils.toDate(since), membershipEnd: until))
         members.each { member ->
             membershipRepository.save(TestData.membership(userId: member.id, groupId: group.id,
-                    membershipStart: DateUtils.toDate(since)))
+                    membershipStart: DateUtils.toDate(since), membershipEnd: until))
         }
         def category = categoryRepository.save(TestData.category(group: group))
         new GroupScenario(group, owner, members, category)
