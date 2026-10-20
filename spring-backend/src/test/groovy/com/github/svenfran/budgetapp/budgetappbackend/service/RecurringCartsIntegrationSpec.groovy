@@ -177,7 +177,7 @@ class RecurringCartsIntegrationSpec extends IntegrationSpec {
         // Mitgliedschaft vor allen Terminen der Tabelle, sonst zählt der Job 0 Mitglieder zum Kaufdatum und deaktiviert das Template
         def wg = fixtures.group(memberSince: LocalDate.of(2023, 1, 1))
         def cart = fixtures.cart(wg, title: 'Miete', amount: 900d, datePurchased: DateUtils.toDate(heute.minusDays(1)))
-        def template = fixtures.template(cart, recurrenceType: recurrenceType, nextExecutionDate: heute)
+        def template = fixtures.template(cart, recurrenceType: recurrenceType, nextExecutionDate: heute, anchorDay: heute.dayOfMonth)
 
         when:
         cartService.generateRecurringCarts()
@@ -369,14 +369,14 @@ class RecurringCartsIntegrationSpec extends IntegrationSpec {
         reloaded.active
     }
 
-    def "Monatliches Template vom 31. bleibt nach Februar auf dem 28. (bestehendes Verhalten)"() {
-        // Dokumentiert das Ist-Verhalten (Drift): Der Folgetermin rechnet vom gekappten Datum weiter.
-        // Siehe Plan DIV-9 Abschnitt 11 bzw. Bug DIV-25; mit dem Fix ist dieser Test anzupassen.
+    // ----- Ankertag (DIV-25) -----
+
+    def "Monatliches Template vom 31. landet nach Februar wieder auf dem 31."() {
         given:
         testClock.today = LocalDate.of(2025, 1, 31)
         def wg = fixtures.group()
         def cart = fixtures.cart(wg, title: 'Miete', amount: 900d, datePurchased: DateUtils.toDate(LocalDate.of(2024, 12, 31)))
-        def template = fixtures.template(cart, recurrenceType: MONTHLY, nextExecutionDate: LocalDate.of(2025, 1, 31))
+        def template = fixtures.template(cart, recurrenceType: MONTHLY, nextExecutionDate: LocalDate.of(2025, 1, 31), anchorDay: 31)
 
         when: "Job am 31.01."
         cartService.generateRecurringCarts()
@@ -388,11 +388,30 @@ class RecurringCartsIntegrationSpec extends IntegrationSpec {
         testClock.today = LocalDate.of(2025, 2, 28)
         cartService.generateRecurringCarts()
 
-        then: "Folgetermin 28.03. statt 31.03."
-        templateRepository.findById(template.id).get().nextExecutionDate == LocalDate.of(2025, 3, 28)
+        then: "Folgetermin wieder auf dem Ankertag"
+        templateRepository.findById(template.id).get().nextExecutionDate == LocalDate.of(2025, 3, 31)
 
         and: "Einkäufe am 31.01. und 28.02."
         def created = cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id).findAll { it.id != cart.id }
         created.collect { DateUtils.toLocalDate(it.datePurchased) } == [LocalDate.of(2025, 2, 28), LocalDate.of(2025, 1, 31)]
+    }
+
+    def "Jährliches Template vom 29.02. trifft im nächsten Schaltjahr wieder den 29.02."() {
+        given: "Job lief seit Februar 2025 nicht; Mitgliedschaft vor allen Terminen"
+        testClock.today = LocalDate.of(2028, 2, 29)
+        def wg = fixtures.group(memberSince: LocalDate.of(2023, 1, 1))
+        def cart = fixtures.cart(wg, title: 'Versicherung', amount: 120d, datePurchased: DateUtils.toDate(LocalDate.of(2024, 2, 29)))
+        def template = fixtures.template(cart, recurrenceType: YEARLY, nextExecutionDate: LocalDate.of(2025, 2, 28), anchorDay: 29)
+
+        when:
+        cartService.generateRecurringCarts()
+
+        then: "in Nicht-Schaltjahren am 28.02., im Schaltjahr am 29.02."
+        def created = cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id).findAll { it.id != cart.id }
+        created.collect { DateUtils.toLocalDate(it.datePurchased) } ==
+                [LocalDate.of(2028, 2, 29), LocalDate.of(2027, 2, 28), LocalDate.of(2026, 2, 28), LocalDate.of(2025, 2, 28)]
+
+        and:
+        templateRepository.findById(template.id).get().nextExecutionDate == LocalDate.of(2029, 2, 28)
     }
 }

@@ -1,0 +1,19 @@
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!-- DIV-25: monthly/yearly recurrences keep their original day of month (anchor day) instead of drifting to the
+         capped day of a shorter month. Backfills existing templates and moves already drifted next dates back to the
+         anchor day within their month. The SQL file is also executed by AnchorDayBackfillIntegrationSpec. -->
+    <changeSet author="sven" id="20261020120000-1">
+        <addColumn tableName="cart_template">
+            <column name="anchor_day" type="INTEGER"/>
+        </addColumn>
+        <sqlFile path="db/changelog/release-1.x/sql/20261020120000-1_backfillAnchorDay.sql"
+                 relativeToChangelogFile="false" splitStatements="true"/>
+        <addNotNullConstraint tableName="cart_template" columnName="anchor_day" columnDataType="INTEGER"/>
+    </changeSet>
+
+</databaseChangeLog>

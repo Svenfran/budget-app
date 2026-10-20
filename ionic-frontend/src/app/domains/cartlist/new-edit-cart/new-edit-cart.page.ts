@@ -14,6 +14,7 @@ import { INIT_VALUES } from 'src/app/constants/default-values';
 import { RECURRENCE_TYPE } from 'src/app/constants/recurrence-type';
 import { TranslateService } from '@ngx-translate/core';
 import { LanguageService } from 'src/app/service/language.service';
+import { calculateNextExecutionDate } from './next-execution-date';
 
 
 @Component({
@@ -317,42 +318,7 @@ export class NewEditCartPage implements OnInit {
   }
 
   private calculateNextDate(lastExecutionDate: Date, recurrenceType: RECURRENCE_TYPE): void {
-    let next = new Date(lastExecutionDate);
-    const today = new Date();
-
-    switch (recurrenceType) {
-      case RECURRENCE_TYPE.DAILY:
-        next.setDate(next.getDate() + 1);
-        while (next <= today) {
-          next.setDate(next.getDate() + 1);
-        }
-        break;
-
-      case RECURRENCE_TYPE.WEEKLY:
-        next.setDate(next.getDate() + 7);
-        while (next <= today) {
-          next.setDate(next.getDate() + 7);
-        }
-        break;
-
-      case RECURRENCE_TYPE.MONTHLY:
-        next.setMonth(next.getMonth() + 1);
-        while (next <= today) {
-          next.setMonth(next.getMonth() + 1);
-        }
-        break;
-
-      case RECURRENCE_TYPE.YEARLY:
-        next.setFullYear(next.getFullYear() + 1);
-        while (next <= today) {
-          next.setFullYear(next.getFullYear() + 1);
-        }
-        break;
-
-      default:
-        throw new Error("Unsupported recurrence type: " + recurrenceType);
-    }
-    this.nextExecutionDate = next;
+    this.nextExecutionDate = calculateNextExecutionDate(lastExecutionDate, recurrenceType, new Date());
   }
 
 }

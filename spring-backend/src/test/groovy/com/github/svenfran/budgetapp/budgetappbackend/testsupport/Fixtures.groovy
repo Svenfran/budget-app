@@ -77,13 +77,17 @@ class Fixtures {
         cartRepository.save(TestData.cart([group: scenario.group, user: scenario.owner, category: scenario.category] + overrides))
     }
 
-    /** Aktives Template zum Cart (Werte aus dem Cart, Start/nächste Ausführung = Kaufdatum) und am Cart verknüpft. */
+    /**
+     * Aktives Template zum Cart (Werte aus dem Cart, Start/nächste Ausführung = Kaufdatum, Ankertag = Tag der nächsten
+     * Ausführung) und am Cart verknüpft.
+     */
     CartTemplate template(Map overrides = [:], Cart cart) {
         def purchased = DateUtils.toLocalDate(cart.datePurchased)
+        def nextExecution = (overrides.nextExecutionDate ?: purchased) as LocalDate
         def template = templateRepository.save(TestData.cartTemplate([
                 title: cart.title, description: cart.description, amount: cart.amount,
                 userId: cart.user.id, groupId: cart.group.id, categoryId: cart.category.id,
-                startDate: purchased, nextExecutionDate: purchased] + overrides))
+                startDate: purchased, nextExecutionDate: purchased, anchorDay: nextExecution.dayOfMonth] + overrides))
         cart.template = template
         cartRepository.save(cart)
         template
