@@ -152,7 +152,7 @@ class SpendingsOverviewControllerApiSpec extends IntegrationSpec implements ApiR
         def totalFelder = [sumTotalYear: Number, spendingsTotalUser: List]
         def monatFelder = [month: Number, monthName: String, sumTotalMonth: Number, spendingsMonthlyUser: List]
         def userFelder = [userId: Number, userName: String, sum: Number, diff: Number]
-        def passt = { Map objekt, Map felder -> felder.every { name, typ -> objekt.containsKey(name) && typ.isInstance(objekt[name]) } }
+        def passt = { objekt, Map felder -> felder.every { name, typ -> objekt.containsKey(name) && typ.isInstance(objekt[name]) } }
 
         when:
         def response = send(spendings(groupId, 2025), user: owner)
@@ -199,7 +199,7 @@ class SpendingsOverviewControllerApiSpec extends IntegrationSpec implements ApiR
         def totalFelder = [sumTotalYear: Number, spendingsTotalUser: List]
         def jahrFelder = [year: Number, sumTotalYear: Number, spendingsYearlyUser: List]
         def userFelder = [userId: Number, userName: String, sum: Number, diff: Number]
-        def passt = { Map objekt, Map felder -> felder.every { name, typ -> objekt.containsKey(name) && typ.isInstance(objekt[name]) } }
+        def passt = { objekt, Map felder -> felder.every { name, typ -> objekt.containsKey(name) && typ.isInstance(objekt[name]) } }
 
         when:
         def response = send(spendings(groupId, null), user: owner)
