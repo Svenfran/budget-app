@@ -2,10 +2,14 @@ package com.github.svenfran.budgetapp.budgetappbackend.repository
 
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
 import org.hibernate.exception.ConstraintViolationException
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.dao.DataIntegrityViolationException
 
 class UserRepositoryIntegrationSpec extends IntegrationSpec {
+
+    private static final Logger LOG = LoggerFactory.getLogger(UserRepositoryIntegrationSpec)
 
     @Autowired UserRepository userRepository
 
@@ -15,9 +19,11 @@ class UserRepositoryIntegrationSpec extends IntegrationSpec {
     def "Suche per E-Mail '#gesucht' findet den Nutzer: #gefunden"() {
         given:
         def alfredId = fixtures.user(email: 'alfred@divvy.test').id
+        LOG.info('Szenario: User {} mit alfred@divvy.test', alfredId)
 
         when:
         def foundId = userRepository.findByEmail(gesucht).map { it.id }.orElse(null)
+        LOG.info('userRepository.findByEmail(\'{}\') -> User {}', gesucht, foundId)
 
         then:
         foundId == (gefunden ? alfredId : null)
@@ -29,12 +35,16 @@ class UserRepositoryIntegrationSpec extends IntegrationSpec {
     }
 
     def "E-Mail wird normalisiert gespeichert"() {
+        given:
+        LOG.info('Szenario: neuer Nutzer mit \'  Alfred@Divvy.TEST \'')
+
         when:
         def alfredId = fixtures.user(email: '  Alfred@Divvy.TEST ').id
         flushAndClear()
+        def email = userRepository.findById(alfredId).get().email
+        LOG.info('fixtures.user(email: \'  Alfred@Divvy.TEST \') -> User {} gespeichert mit {}', alfredId, email)
 
         then:
-        def email = userRepository.findById(alfredId).get().email
         email == 'alfred@divvy.test'
         def idByEmail = userRepository.findByEmail('alfred@divvy.test').get().id
         idByEmail == alfredId
@@ -42,9 +52,11 @@ class UserRepositoryIntegrationSpec extends IntegrationSpec {
 
     def "Unique-Constraint verhindert zwei Nutzer mit derselben E-Mail in anderer Schreibweise"() {
         given:
-        fixtures.user(email: 'alfred@divvy.test')
+        def alfred = fixtures.user(email: 'alfred@divvy.test')
+        LOG.info('Szenario: User {} mit alfred@divvy.test', alfred.id)
 
         when:
+        LOG.info('fixtures.user(email: \'ALFRED@divvy.test\'), erwartet DataIntegrityViolationException')
         fixtures.user(email: 'ALFRED@divvy.test')
 
         then: 'Ursache und Constraint-Name so, wie RestResponseEntityExceptionHandler sie für die 400 erwartet'
@@ -56,9 +68,11 @@ class UserRepositoryIntegrationSpec extends IntegrationSpec {
     def "Suche per Name '#gesucht' findet den Nutzer: #gefunden"() {
         given:
         def alfredId = fixtures.user(name: 'alfred').id
+        LOG.info('Szenario: User {} mit Name alfred', alfredId)
 
         when:
         def foundId = userRepository.findByName(gesucht).map { it.id }.orElse(null)
+        LOG.info('userRepository.findByName(\'{}\') -> User {}', gesucht, foundId)
 
         then:
         foundId == (gefunden ? alfredId : null)

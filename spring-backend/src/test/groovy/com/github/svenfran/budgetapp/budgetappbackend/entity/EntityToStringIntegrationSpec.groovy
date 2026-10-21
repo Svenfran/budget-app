@@ -9,6 +9,8 @@ import com.github.svenfran.budgetapp.budgetappbackend.repository.TokenRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
 import org.hibernate.Hibernate
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 
 /**
@@ -21,6 +23,8 @@ import org.springframework.beans.factory.annotation.Autowired
  *   das vorab), und entityManager.clear() detacht sie wie nach dem Ende einer Session.
  */
 class EntityToStringIntegrationSpec extends IntegrationSpec {
+
+    private static final Logger LOG = LoggerFactory.getLogger(EntityToStringIntegrationSpec)
 
     @Autowired UserRepository userRepository
     @Autowired GroupRepository groupRepository
@@ -54,10 +58,13 @@ class EntityToStringIntegrationSpec extends IntegrationSpec {
              'User.tokens'       : Hibernate.isInitialized(loadedUser.tokens)]
         }
         def before = lazyState()
+        LOG.info('Szenario: Gruppe {}, Mitglied {}, Einkauf {} mit Template; geladen: Cart, Group, User', groupId, benId, cartId)
 
         when:
         [loadedCart, loadedGroup, loadedUser]*.toString()
         def after = lazyState()
+        LOG.info('toString von Cart {}, Group {}, User {} -> initialisiert vorher {}, nachher {}', cartId, groupId, benId,
+                before.findAll { it.value }.keySet(), after.findAll { it.value }.keySet())
 
         then:
         before.findAll { it.value } == [:]
@@ -75,12 +82,16 @@ class EntityToStringIntegrationSpec extends IntegrationSpec {
         def loadedCart = cartRepository.findById(cartId).get()
         def loadedGroup = groupRepository.findById(groupId).get()
         def loadedUser = userRepository.findById(benId).get()
+        LOG.info('Szenario: Gruppe {}, Owner {}, Mitglied {}, Einkauf {} mit Template {}; geladen: Cart, Group, User',
+                groupId, ownerId, benId, cartId, templateId)
 
         when: "Entities detachen; der Template-Proxy des Einkaufs ist nicht initialisiert"
         entityManager.clear()
         def cartText = loadedCart.toString()
         def groupText = loadedGroup.toString()
         def userText = loadedUser.toString()
+        LOG.info('toString detacht von Cart {}, Group {}, User {} -> ohne Exception', cartId, groupId, benId)
+        LOG.debug('toString: {} / {} / {}', cartText, groupText, userText)
 
         then:
         noExceptionThrown()
@@ -109,6 +120,8 @@ class EntityToStringIntegrationSpec extends IntegrationSpec {
              'ShoppingList.shoppingItems': Hibernate.isInitialized(loadedList.shoppingItems)]
         }
         def before = lazyState()
+        LOG.info('Szenario: Gruppe {}, Owner {}, Kategorie {} mit Einkauf, Einkaufsliste {} mit Eintrag {}, Token {}',
+                groupId, ownerId, categoryId, listId, itemId, tokenId)
 
         when: "toString im Persistence Context, danach detacht"
         [loadedCategory, loadedList, loadedItem, loadedToken]*.toString()
@@ -118,6 +131,9 @@ class EntityToStringIntegrationSpec extends IntegrationSpec {
         def listText = loadedList.toString()
         def itemText = loadedItem.toString()
         def tokenText = loadedToken.toString()
+        LOG.info('toString von Category, ShoppingList, ShoppingItem, Token -> initialisiert vorher {}, nachher {}, ' +
+                'detacht ohne Exception', before.findAll { it.value }.keySet(), after.findAll { it.value }.keySet())
+        LOG.debug('toString: {} / {} / {} / {}', categoryText, listText, itemText, tokenText)
 
         then:
         noExceptionThrown()
