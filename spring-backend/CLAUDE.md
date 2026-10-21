@@ -138,6 +138,17 @@ Layout: the package mirrors `main` (`controller/`, `service/`, `service/mapper/`
 - **Entity `toString`** only prints the entity's own scalars and the ids of its `@ManyToOne` references (`entity/EntityToStringSpec`, `EntityToStringIntegrationSpec`). Never print collections, lazy associations or secrets (password, token values) in a new `toString`: a `User` ↔ `Group` cycle throws a `StackOverflowError` in the Surefire/Failsafe listener, which **swallows** the failure (exit 0, one test fewer in the report), and a lazy association triggers queries or a `LazyInitializationException`.
 - No reflection on private methods, no empty specs.
 
+### Logging
+
+New and changed specs log what they do, so a run can be followed without a debugger. Reference: `controller/SpendingsOverviewControllerApiSpec.groovy` (structure features). Existing specs are brought in line in DIV-45; it may move parts of this (feature name, request line) into `testsupport/` — follow this section once it does.
+
+- SLF4J in the spec: `private static final Logger LOG = LoggerFactory.getLogger(XyzSpec)`.
+- **INFO, a few lines per feature (about 5):** the feature/iteration name (`specificationContext.currentIteration.displayName`), the scenario (ids and the test data that matters), one line per request or service call with its result (`GET /api/spendings/13/2025 als Owner -> 200`), a short summary of what the response contained. Full JSON bodies and large objects only on **DEBUG**; read bytes as UTF-8 like `ApiRequests.json`.
+- Log in `given:`/`when:`, not in `then:` — statements there are conditions. If the summary needs the parsed body, parse it in `when:`.
+- Never log secrets (tokens, passwords) or entities with collections or lazy associations (see Spock pitfalls above); log ids and DTO values.
+- Where to read it: the Maven/CI console, and per test case in `<system-out>` of the XML report `TEST-<fully.qualified.Spec>.xml` (`target/surefire-reports/` for unit specs, `target/failsafe-reports/` for integration and API specs). As a plain file per spec: add `-Dmaven.test.redirectTestOutputToFile=true` → `<fully.qualified.Spec>-output.txt` in the same directory (console stays empty). In IntelliJ, select the feature in the test tree. Full bodies: add `-Dlogging.level.com.github.svenfran.budgetapp.budgetappbackend.controller=DEBUG`.
+- The console is still noisy (Spring test transaction lines, Liquibase, Testcontainers, bootstrap DEBUG) and unit specs log through Logback's default config (DEBUG, long format). Reducing that and a short line format are DIV-44.
+
 ### Error-message contract
 
 The frontend recognizes some error cases by the text of the backend message. The list of these messages (M1–M10, X1–X2: frontend location, expected status and text, covering spec) is in the Groovydoc of `controller/CartControllerApiSpec.groovy`; each one has an API test. When you change such a message or add a frontend check on `err.error`, update the test and the list. **Stopgap until error codes are decided** — not a permanent contract.
