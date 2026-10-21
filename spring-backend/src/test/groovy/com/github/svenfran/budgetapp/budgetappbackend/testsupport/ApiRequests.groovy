@@ -109,7 +109,8 @@ trait ApiRequests {
 
     private String responseBody(MockHttpServletResponse response) {
         byte[] bytes = response.contentAsByteArray
-        if (!response.contentType?.contains('json')) {
+        // Media Types sind case-insensitiv; application/JSON darf nicht unmaskiert im Klartext-Zweig landen
+        if (!response.contentType?.toLowerCase(Locale.ROOT)?.contains('json')) {
             return new String(bytes, UTF_8)
         }
         try {
