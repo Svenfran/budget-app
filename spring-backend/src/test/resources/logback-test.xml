@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logging aller Specs (Unit, Integration, API). Logback lädt die Datei bei der ersten Logback-/SLF4J-Initialisierung,
+  Spring Boot beim Kontextstart erneut und wendet danach logging.level.* aus den Properties an.
+  Hier: Zeilenformat und Level der Bibliotheken. Level, die application.properties überschreiben
+  müssen, stehen in application-test.properties. DEBUG zuschalten: -Dlogging.level.<package>=DEBUG.
+-->
+<configuration>
+    <!-- Converter %wEx/%clr und Boots Default-Level für Bibliotheken -->
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level %logger{0} : %m%n%wEx</pattern>
+            <charset>${CONSOLE_LOG_CHARSET}</charset>
+        </encoder>
+    </appender>
+
+    <!-- Spring-Test-Bootstrap und TransactionContext ("Began/Rolled back transaction") -->
+    <logger name="org.springframework.test.context" level="WARN"/>
+    <logger name="org.springframework.boot.test.context" level="WARN"/>
+    <logger name="liquibase" level="WARN"/>
+    <logger name="org.testcontainers" level="WARN"/>
+    <!-- Testcontainers-Container-Logger (tc.<image>) -->
+    <logger name="tc" level="WARN"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>
