@@ -9,6 +9,8 @@ import com.github.svenfran.budgetapp.budgetappbackend.repository.CartTemplateRep
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.Fixtures.GroupScenario
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 
 import java.time.LocalDate
@@ -16,6 +18,8 @@ import java.time.LocalDate
 import static com.github.svenfran.budgetapp.budgetappbackend.constants.RecurrenceType.*
 
 class CartServiceIntegrationSpec extends IntegrationSpec {
+
+    private static final Logger LOG = LoggerFactory.getLogger(CartServiceIntegrationSpec)
 
     @Autowired CartService cartService
     @Autowired CartRepository cartRepository
@@ -34,10 +38,15 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         dto.title = newTitle
         dto.recurrenceType = updatedRecurrenceType
         dto.templateUpdateSelected = updateSelected
+        LOG.info('Szenario: Gruppe {}, Owner {}, Einkauf {} Lunch, Template {}', wg.group.id, wg.owner.id, cart.id,
+                originalRecurrenceType)
 
         when:
         def result = cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category, 1)
         flushAndClear()
+        LOG.info('cartService.updateCartAndTemplateIfValid(Cart {}: title {}, recurrenceType {}, templateUpdate {}) -> ' +
+                'title {}, recurrenceType {}', cart.id, newTitle, updatedRecurrenceType, updateSelected, result.title,
+                result.recurrenceType)
 
         then:
         result.title == expectedTitle
@@ -76,14 +85,18 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         change(dto, other)
         // wie CartService.updateCart: die Kategorie wird über die ID aus dem DTO bestimmt
         def category = [wg.category, other].find { it.id == dto.categoryDto.id }
+        LOG.info('Szenario: Gruppe {}, Owner {}, Ben {}, Einkauf {} 40.00 (averagePerMember 40.00), Kategorien {} / {}; ' +
+                'geändert: {}', wg.group.id, wg.owner.id, ben.id, cart.id, wg.category.id, other.id, feld)
 
         when:
         // groupMemberCount 2 = Owner + Ben (in CartService.updateCart aus der Mitgliedschaftshistorie ermittelt)
         cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, category, 2)
         flushAndClear()
+        def saved = cartRepository.findById(cart.id).get()
+        LOG.info('cartService.updateCartAndTemplateIfValid(Cart {}, 2 Mitglieder) -> averagePerMember {}', cart.id,
+                saved.averagePerMember)
 
         then:
-        def saved = cartRepository.findById(cart.id).get()
         saved.averagePerMember == expectedAverage
 
         and: "der gespeicherte Einkauf entspricht dem DTO"
@@ -115,13 +128,17 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         def dto = new CartDto(cart)
         dto.recurrenceType = newType
         dto.templateUpdateSelected = false
+        LOG.info('Szenario: Gruppe {}, Einkauf {}, Template {} {}; neue Wiederholung {}', wg.group.id, cart.id, original.id,
+                oldType, newType)
 
         when:
         cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category, 1)
         flushAndClear()
+        def originalStillActive = templateRepository.findById(original.id).get().active
+        LOG.info('cartService.updateCartAndTemplateIfValid(Cart {}: recurrenceType {}) -> Template {} aktiv={}', cart.id,
+                newType, original.id, originalStillActive)
 
         then:
-        def originalStillActive = templateRepository.findById(original.id).get().active
         originalStillActive == originalActive
         activeTemplateTypes(wg) == activeTypes
 
@@ -140,13 +157,16 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         given:
         def wg = fixtures.group()
         def cart = fixtures.cart(wg)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Einkauf {} ohne Template', wg.group.id, wg.owner.id, cart.id)
 
         when:
         cartService.createTemplateForCartIfRecurrenceTypeValid(cart, wg.owner, wg.group, inputRecurrenceType)
         flushAndClear()
+        def templates = templateRepository.findByGroupId(wg.group.id)
+        LOG.info('cartService.createTemplateForCartIfRecurrenceTypeValid(Cart {}, {}) -> Templates {} {}', cart.id,
+                inputRecurrenceType, templates*.id, templates*.recurrenceType)
 
         then:
-        def templates = templateRepository.findByGroupId(wg.group.id)
         templates*.recurrenceType == expectedTypes
         templates.every { it.active }
         def cartRecurrenceType = cartRepository.findById(cart.id).get().template?.recurrenceType
@@ -171,10 +191,13 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         dto.title = 'Weekly Groceries'
         dto.description = 'desc of Weekly Groceries'
         dto.amount = 75d
+        LOG.info('Szenario: Gruppe {}, Einkauf {} Groceries 50.00 ohne Template', wg.group.id, cart.id)
 
         when:
         def result = cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category, 1)
         flushAndClear()
+        LOG.info('cartService.updateCartAndTemplateIfValid(Cart {}: title, description, amount) -> title {}, amount {}, ' +
+                'recurrenceType {}', cart.id, result.title, result.amount, result.recurrenceType)
 
         then:
         result.title == 'Weekly Groceries'
@@ -200,10 +223,13 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         and:
         def dto = new CartDto(cart)
         dto.recurrenceType = NONE
+        LOG.info('Szenario: Gruppe {}, Einkauf {} Books 30.00 ohne Template', wg.group.id, cart.id)
 
         when:
         def result = cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category, 1)
         flushAndClear()
+        LOG.info('cartService.updateCartAndTemplateIfValid(Cart {}: recurrenceType NONE) -> title {}, recurrenceType {}',
+                cart.id, result.title, result.recurrenceType)
 
         then:
         result.title == 'Books'
@@ -221,10 +247,14 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         and:
         def dto = new CartDto(cart)
         dto.recurrenceType = WEEKLY
+        LOG.info('Szenario: heute {}, Gruppe {}, Owner {}, Einkauf {} Electricity 80.00 vom {}, Template {} MONTHLY',
+                testClock.today, wg.group.id, wg.owner.id, cart.id, purchased, original.id)
 
         when:
         def result = cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category, 1)
         flushAndClear()
+        LOG.info('cartService.updateCartAndTemplateIfValid(Cart {}: recurrenceType WEEKLY) -> recurrenceType {}', cart.id,
+                result.recurrenceType)
 
         then:
         result.recurrenceType == WEEKLY
@@ -254,13 +284,17 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         testClock.today = LocalDate.of(2025, 1, 31)
         def wg = fixtures.group()
         def cart = fixtures.cart(wg, title: 'Miete', datePurchased: DateUtils.toDate(LocalDate.of(2025, 1, 31)))
+        LOG.info('Szenario: heute {}, Gruppe {}, Einkauf {} Miete vom 2025-01-31 ohne Template', testClock.today,
+                wg.group.id, cart.id)
 
         when:
         cartService.createTemplateForCartIfRecurrenceTypeValid(cart, wg.owner, wg.group, MONTHLY)
         flushAndClear()
+        def template = templateRepository.findByGroupId(wg.group.id).first()
+        LOG.info('cartService.createTemplateForCartIfRecurrenceTypeValid(Cart {}, MONTHLY) -> Template {}: anchorDay {}, ' +
+                'nextExecutionDate {}', cart.id, template.id, template.anchorDay, template.nextExecutionDate)
 
         then:
-        def template = templateRepository.findByGroupId(wg.group.id).first()
         template.anchorDay == 31
         template.nextExecutionDate == LocalDate.of(2025, 2, 28)
     }
@@ -276,13 +310,17 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         def dto = new CartDto(cart)
         dto.amount = 950d
         dto.templateUpdateSelected = true
+        LOG.info('Szenario: heute {}, Gruppe {}, Einkauf {} Miete 900.00 vom 2025-02-28, Template {} MONTHLY anchorDay 31, ' +
+                'nextExecutionDate 2025-03-31; neuer Betrag 950.00', testClock.today, wg.group.id, cart.id, original.id)
 
         when:
         cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category, 1)
         flushAndClear()
+        def replacement = activeTemplate(wg)
+        LOG.info('cartService.updateCartAndTemplateIfValid(Cart {}: amount, templateUpdate) -> aktives Template {}: ' +
+                'anchorDay {}, nextExecutionDate {}', cart.id, replacement.id, replacement.anchorDay, replacement.nextExecutionDate)
 
         then:
-        def replacement = activeTemplate(wg)
         replacement.id != original.id
         replacement.anchorDay == 31
         replacement.nextExecutionDate == LocalDate.of(2025, 3, 31)
@@ -299,13 +337,17 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         def dto = new CartDto(cart)
         dto.datePurchased = DateUtils.toDate(neuesDatum)
         dto.templateUpdateSelected = true
+        LOG.info('Szenario: heute {}, Gruppe {}, Einkauf {} Miete vom 2025-03-31, Template MONTHLY anchorDay 31; ' +
+                'neues Datum {}', testClock.today, wg.group.id, cart.id, neuesDatum)
 
         when:
         cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category, 1)
         flushAndClear()
+        def replacement = activeTemplate(wg)
+        LOG.info('cartService.updateCartAndTemplateIfValid(Cart {}: datePurchased, templateUpdate) -> aktives Template {}: ' +
+                'anchorDay {}, nextExecutionDate {}', cart.id, replacement.id, replacement.anchorDay, replacement.nextExecutionDate)
 
         then:
-        def replacement = activeTemplate(wg)
         replacement.anchorDay == erwarteterAnker
         replacement.nextExecutionDate == erwarteterTermin
 
@@ -326,10 +368,14 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         and:
         def dto = new CartDto(cart)
         dto.templateUpdateSelected = true
+        LOG.info('Szenario: heute {}, Gruppe {}, Einkauf {} Miete vom 2025-02-28, Template {} MONTHLY anchorDay 31, ' +
+                'nextExecutionDate 2025-03-31; keine Änderung', testClock.today, wg.group.id, cart.id, original.id)
 
         when:
         def result = cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category, 1)
         flushAndClear()
+        LOG.info('cartService.updateCartAndTemplateIfValid(Cart {}: templateUpdate) -> hasTemplateChanged {}', cart.id,
+                result.hasTemplateChanged)
 
         then:
         !result.hasTemplateChanged
@@ -349,10 +395,14 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         def dto = new CartDto(cart)
         dto.datePurchased = DateUtils.toDate(LocalDate.of(2025, 1, 31))
         dto.templateUpdateSelected = true
+        LOG.info('Szenario: heute {}, Gruppe {}, Einkauf {} Miete vom 2025-01-30, Template {} MONTHLY anchorDay 30, ' +
+                'nextExecutionDate 2025-02-28; neues Datum 2025-01-31', testClock.today, wg.group.id, cart.id, original.id)
 
         when:
         def result = cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category, 1)
         flushAndClear()
+        LOG.info('cartService.updateCartAndTemplateIfValid(Cart {}: datePurchased, templateUpdate) -> hasTemplateChanged {}',
+                cart.id, result.hasTemplateChanged)
 
         then:
         result.hasTemplateChanged

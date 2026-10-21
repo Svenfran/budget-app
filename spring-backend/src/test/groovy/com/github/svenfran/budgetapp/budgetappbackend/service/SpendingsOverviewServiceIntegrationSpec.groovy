@@ -12,6 +12,8 @@ import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.Fixtures.GroupScenario
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 
 import java.time.Duration
@@ -32,6 +34,8 @@ import static java.time.LocalDate.of
  *   IDs statt Entities halten die Fehlermeldung lesbar.
  */
 class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
+
+    private static final Logger LOG = LoggerFactory.getLogger(SpendingsOverviewServiceIntegrationSpec)
 
     @Autowired SpendingsOverviewService spendingsOverviewService
     @Autowired GroupRepository groupRepository
@@ -56,9 +60,12 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         fixtures.cart(wg, user: anna, amount: 10d, averagePerMember: 5d, datePurchased: DateUtils.toDate(of(2025, 3, 10)))
         flushAndClear()
         loginAs(anna)
+        LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {} (2024), Cleo {} (ab 2025-01-01 10 Uhr); Einkäufe ' +
+                '2024-12-31 Anna 30, 2025-01-01 Cleo 20, 2025-03-10 Anna 10', wg.group.id, annaId, benId, cleoId)
 
         when:
         def jahr2024 = spendingsOverviewService.getSpendingsForGroupAndYear(2024, wg.group.id)
+        logUebersicht('spendingsOverviewService.getSpendingsForGroupAndYear(2024)', jahr2024)
 
         then:
         jahr2024.year == 2024
@@ -79,6 +86,7 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
 
         when:
         def jahr2025 = spendingsOverviewService.getSpendingsForGroupAndYear(2025, wg.group.id)
+        logUebersicht('spendingsOverviewService.getSpendingsForGroupAndYear(2025)', jahr2025)
 
         then:
         jahr2025.spendingsTotalYear.sumTotalYear == 30d   // c2 20 + c3 10
@@ -98,6 +106,7 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
 
         when:
         def gesamt = spendingsOverviewService.getSpendingsForGroupAndAllYears(wg.group.id)
+        logUebersicht('spendingsOverviewService.getSpendingsForGroupAndAllYears', gesamt)
 
         then: "alle Nutzer der Historie; ausgetretene mit Zusatz REMOVED"
         gesamt.availableYears == [2025, 2024]
@@ -142,9 +151,12 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         fixtures.cart(wg, user: ben, amount: 30d, averagePerMember: 15d, datePurchased: DateUtils.toDate(of(2025, 5, 1)))
         flushAndClear()
         loginAs(anna)
+        LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {} mit drei Mitgliedschaften; Einkäufe 2025-02-10, ' +
+                '2025-02-28, 2025-04-15 Anna, 2025-05-01 Ben', wg.group.id, annaId, benId)
 
         when:
         def jahr = spendingsOverviewService.getSpendingsForGroupAndYear(2025, wg.group.id)
+        logUebersicht('spendingsOverviewService.getSpendingsForGroupAndYear(2025)', jahr)
 
         then:
         jahr.spendingsTotalYear.sumTotalYear == 68d   // 20 + 8 + 10 + 30
@@ -200,9 +212,12 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         fixtures.cart(wg, user: anna, amount: 6d, averagePerMember: 6d, datePurchased: DateUtils.toDate(of(2025, 3, 21)))    // nur Anna
         flushAndClear()
         loginAs(anna)
+        LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {} 2025-03-10 bis 2025-03-20; Anna zahlt am 09., 10., 20., ' +
+                '21.03.', wg.group.id, annaId, benId)
 
         when:
         def jahr = spendingsOverviewService.getSpendingsForGroupAndYear(2025, wg.group.id)
+        logUebersicht('spendingsOverviewService.getSpendingsForGroupAndYear(2025)', jahr)
 
         then:
         jahr.spendingsTotalYear.sumTotalYear == 44d   // 10 + 20 + 8 + 6
@@ -230,9 +245,12 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
                 datePurchased: DateUtils.toDate(TestData.REFERENCE_DATE))
         flushAndClear()
         loginAs(nutzer[0])
+        LOG.info('Szenario: Gruppe {}, Mitglieder {}, Zahler {} zahlt {} am {}', wg.group.id, ids, ids[zahler], betrag,
+                TestData.REFERENCE_DATE)
 
         when:
         def jahr = spendingsOverviewService.getSpendingsForGroupAndYear(TestData.REFERENCE_DATE.year, wg.group.id)
+        logUebersicht('spendingsOverviewService.getSpendingsForGroupAndYear(REFERENCE_DATE.year)', jahr)
 
         then:
         jahr.spendingsTotalYear.sumTotalYear == betrag
@@ -268,10 +286,15 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         fixtures.cart(wg, user: ben, amount: 1d, datePurchased: DateUtils.toDate(of(2025, 4, 10)))
         flushAndClear()
         loginAs(anna)
+        LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {}, Cleo {} seit 2024-01-01; fünf Einkäufe ' +
+                '2024-11-05 bis 2025-04-10', wg.group.id, annaId, benId, cleoId)
 
         when:
         def gesamt = spendingsOverviewService.getSpendingsForGroupAndAllYears(wg.group.id)
+        logUebersicht('spendingsOverviewService.getSpendingsForGroupAndAllYears', gesamt)
         def jahre = [2024, 2025].collect { spendingsOverviewService.getSpendingsForGroupAndYear(it, wg.group.id) }
+        LOG.info('spendingsOverviewService.getSpendingsForGroupAndYear(2024, 2025) -> Nutzer [sum, diff] {}',
+                jahre.collect { werte(it.spendingsTotalYear.spendingsTotalUser) })
 
         then: "Gesamt: Anteil je Person 3808/3 = 12,693…; Anna 30,02 → 17,326…, Ben 8,01 → −4,683…, Cleo 0,05 → −12,643…"
         gesamt.spendingsTotalYear.sumTotalYear == 38.08d
@@ -326,9 +349,12 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         fixtures.cart(wg, user: anna, amount: 10d, averagePerMember: 10d / 3, datePurchased: DateUtils.toDate(of(2025, 5, 1)))
         flushAndClear()
         loginAs(anna)
+        LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {}, Cleo {} ab 2025-04-01; Anna zahlt 10 am 2025-03-01 ' +
+                'und am 2025-05-01', wg.group.id, annaId, benId, cleoId)
 
         when:
         def jahr = spendingsOverviewService.getSpendingsForGroupAndYear(2025, wg.group.id)
+        logUebersicht('spendingsOverviewService.getSpendingsForGroupAndYear(2025)', jahr)
 
         then: "Anna 20 − 8,34 = 11,66; Ben −8,33; Cleo −3,33"
         werte(jahr.spendingsTotalYear.spendingsTotalUser) ==
@@ -356,9 +382,12 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         fixtures.cart(wg, user: anna, amount: 10d, averagePerMember: 5d, datePurchased: DateUtils.toDate(of(2025, 3, 10)))
         flushAndClear()
         loginAs(anna)
+        LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {}, Cleo {} ab 2025-03-10 18 Uhr; Anna zahlt 10 am 2025-03-10',
+                wg.group.id, annaId, benId, cleoId)
 
         when:
         def jahr = spendingsOverviewService.getSpendingsForGroupAndYear(2025, wg.group.id)
+        logUebersicht('spendingsOverviewService.getSpendingsForGroupAndYear(2025)', jahr)
 
         then: "Mitgliedschaft zählt tagesgenau inklusive Eintrittstag (gewollt, D5): Aufteilung auf drei"
         werte(jahr.spendingsTotalYear.spendingsTotalUser) ==
@@ -381,9 +410,12 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         def (c1Id, c2Id) = [c1, c2]*.id
         flushAndClear()
         loginAs(anna)
+        LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {}, Cleo {}; Einkauf {} Anna 10 (averagePerMember 3.333…), ' +
+                'Einkauf {} Ben 5 (averagePerMember 99)', wg.group.id, annaId, benId, cleoId, c1Id, c2Id)
 
         when:
         def gesamt = spendingsOverviewService.getSpendingsForGroupAndAllYears(wg.group.id)
+        logUebersicht('spendingsOverviewService.getSpendingsForGroupAndAllYears', gesamt)
 
         then: "exakter Anteil je Person (10 + 5) / 3 = 5,00: Anna +5, Ben 0, Cleo −5"
         werte(gesamt.spendingsTotalYear.spendingsTotalUser) ==
@@ -406,6 +438,8 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         def tag = DateUtils.toDate(TestData.REFERENCE_DATE)
         fixtures.cart(wg, user: anna, amount: 10d, averagePerMember: 10d / 3, datePurchased: tag)
         flushAndClear()
+        LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {}, Cleo {}; Anna zahlt 10 am {}', wg.group.id, annaId, benId,
+                cleoId, TestData.REFERENCE_DATE)
 
         when: "Ben zahlt Cleo 1,00 € (nicht durch drei teilbar)"
         zahlung(benId, cleoId, 1d, wg, tag)
@@ -443,10 +477,14 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         def cartIds = carts*.id
         flushAndClear()
         loginAs(anna)
+        LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {}, Cleo {}; Einkäufe {} mit 0.005, 0.005, -0.005, 9.4366…',
+                wg.group.id, annaId, benId, cleoId, cartIds)
 
         when:
         def gesamt = spendingsOverviewService.getSpendingsForGroupAndAllYears(wg.group.id)
+        logUebersicht('spendingsOverviewService.getSpendingsForGroupAndAllYears', gesamt)
         def jahr = spendingsOverviewService.getSpendingsForGroupAndYear(2025, wg.group.id)
+        logUebersicht('spendingsOverviewService.getSpendingsForGroupAndYear(2025)', jahr)
 
         then: "Anna 0,02 − 3,15 = −3,13; Ben −0,01 − 3,15 = −3,16; Cleo 9,44 − 3,15 = 6,29 (Betrag erst nach Addition runden gäbe Anna 0,01)"
         def erwartet = [(annaId): [0.02d, -3.13d], (benId): [-0.01d, -3.16d], (cleoId): [9.44d, 6.29d]]
@@ -478,10 +516,13 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         fixtures.cart(wg, amount: 0.2d, datePurchased: DateUtils.toDate(of(2025, 3, 2)))
         flushAndClear()
         loginAs(wg.owner)
+        LOG.info('Szenario: Gruppe {}, Owner {}; Einkäufe 0.10 am 2025-03-01, 0.20 am 2025-03-02', wg.group.id, wg.owner.id)
 
         when:
         def gesamt = spendingsOverviewService.getSpendingsForGroupAndAllYears(wg.group.id)
+        logUebersicht('spendingsOverviewService.getSpendingsForGroupAndAllYears', gesamt)
         def jahr = spendingsOverviewService.getSpendingsForGroupAndYear(2025, wg.group.id)
+        logUebersicht('spendingsOverviewService.getSpendingsForGroupAndYear(2025)', jahr)
 
         then: "früher 0.30000000000000004"
         gesamt.spendingsTotalYear.sumTotalYear == 0.3d
@@ -493,9 +534,11 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         def wg = fixtures.group()
         flushAndClear()
         loginAs(wg.owner)
+        LOG.info('Szenario: Gruppe {}, Owner {}, keine Einkäufe', wg.group.id, wg.owner.id)
 
         when:
         def gesamt = spendingsOverviewService.getSpendingsForGroupAndAllYears(wg.group.id)
+        logUebersicht('spendingsOverviewService.getSpendingsForGroupAndAllYears', gesamt)
 
         then:
         gesamt.spendingsTotalYear.sumTotalYear == 0d
@@ -510,15 +553,23 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         fixtures.cart(wg, amount: 12.5d, averagePerMember: 12.5d, datePurchased: DateUtils.toDate(of(2024, 3, 1)))
         flushAndClear()
         loginAs(wg.owner)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Einkauf 12.50 am 2024-03-01', wg.group.id, wg.owner.id)
 
         when:
         def jahr = spendingsOverviewService.getSpendingsForGroupAndYear(2025, wg.group.id)
+        logUebersicht('spendingsOverviewService.getSpendingsForGroupAndYear(2025)', jahr)
 
         then:
         jahr.spendingsTotalYear.sumTotalYear == 0d
         jahr.spendingsTotalYear.spendingsTotalUser == []
         jahr.spendingsPerMonth == []
         jahr.availableYears == [2024]
+    }
+
+    /** Ergebnis eines Übersichts-Aufrufs (INFO): Summe und [sum, diff] je Nutzer. */
+    private static void logUebersicht(String aufruf, overview) {
+        LOG.info('{} -> sumTotalYear {}, Nutzer [sum, diff] {}', aufruf, overview.spendingsTotalYear.sumTotalYear,
+                werte(overview.spendingsTotalYear.spendingsTotalUser))
     }
 
     private static Map<Long, List<Double>> werte(List<SpendingsOverviewUserDto> users) {
@@ -545,6 +596,7 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         def an = userRepository.findById(anId).get()
         cartService.addSettlementPayment(new SettlementPaymentDto(betrag, wg.group.id, new UserDto(an), tag))
         flushAndClear()
+        LOG.info('cartService.addSettlementPayment(User {} an User {}, {})', vonId, anId, betrag)
     }
 
     private Map<Long, Double> diffs(Long betrachterId, GroupScenario wg) {
