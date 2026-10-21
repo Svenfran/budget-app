@@ -7,7 +7,7 @@ class TokenRepositoryIntegrationSpec extends IntegrationSpec {
 
     @Autowired TokenRepository tokenRepository
 
-    def "Token wird über seinen Wert gefunden, ein unbekannter Wert liefert nichts (#gesucht)"() {
+    def "Token wird über seinen Wert gefunden, ein unbekannter Wert liefert nichts (gefunden: #gefunden)"() {
         given:
         def token = fixtures.token(fixtures.user(), token: 'token-bekannt')
 

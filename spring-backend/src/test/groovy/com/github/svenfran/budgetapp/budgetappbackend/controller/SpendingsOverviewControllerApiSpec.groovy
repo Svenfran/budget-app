@@ -263,9 +263,8 @@ class SpendingsOverviewControllerApiSpec extends IntegrationSpec implements ApiR
         jahrBody.availableYears == []
     }
 
-    /** Feature-Name und Szenario (INFO), damit sich die folgenden Zeilen einem Feature zuordnen lassen. */
-    private void logSzenario(Long groupId, Long ownerId, Long memberId, String daten) {
-        LOG.info('>> {}', specificationContext.currentIteration.displayName)
+    /** Szenario (INFO); die Zeile mit dem Feature-Namen davor loggt FeatureLoggingExtension. */
+    private static void logSzenario(Long groupId, Long ownerId, Long memberId, String daten) {
         LOG.info('Szenario: Gruppe {}, Owner {}, Mitglied {}, {}', groupId, ownerId, memberId ?: '-', daten)
     }
 
