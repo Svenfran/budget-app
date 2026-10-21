@@ -7,10 +7,8 @@ import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpe
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder
 
-import static java.nio.charset.StandardCharsets.UTF_8
 import static java.time.LocalDate.of
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 
@@ -156,7 +154,6 @@ class SpendingsOverviewControllerApiSpec extends IntegrationSpec implements ApiR
 
         when:
         def response = send(spendings(groupId, 2025), user: owner)
-        logAntwort("GET /api/spendings/$groupId/2025 als Owner", response)
         def body = json(response)
         def totalUser = body.spendingsTotalYear?.spendingsTotalUser
         def monatsUser = body.spendingsPerMonth?.collectMany { it.spendingsMonthlyUser ?: [] }
@@ -203,7 +200,6 @@ class SpendingsOverviewControllerApiSpec extends IntegrationSpec implements ApiR
 
         when:
         def response = send(spendings(groupId, null), user: owner)
-        logAntwort("GET /api/spendings/$groupId als Owner", response)
         def body = json(response)
         def totalUser = body.spendingsTotalYear?.spendingsTotalUser
         def jahresUser = body.spendingsPerYear?.collectMany { it.spendingsYearlyUser ?: [] }
@@ -238,9 +234,7 @@ class SpendingsOverviewControllerApiSpec extends IntegrationSpec implements ApiR
 
         when:
         def gesamt = send(spendings(groupId, null), user: owner)
-        logAntwort("GET /api/spendings/$groupId als Owner", gesamt)
         def jahr = send(spendings(groupId, 2025), user: owner)
-        logAntwort("GET /api/spendings/$groupId/2025 als Owner", jahr)
         def gesamtBody = json(gesamt)
         def jahrBody = json(jahr)
         LOG.info('Antwort: Gesamtübersicht spendingsPerYear={}, spendingsTotalUser={}, availableYears={}; ' +
@@ -266,12 +260,6 @@ class SpendingsOverviewControllerApiSpec extends IntegrationSpec implements ApiR
     /** Szenario (INFO); die Zeile mit dem Feature-Namen davor loggt FeatureLoggingExtension. */
     private static void logSzenario(Long groupId, Long ownerId, Long memberId, String daten) {
         LOG.info('Szenario: Gruppe {}, Owner {}, Mitglied {}, {}', groupId, ownerId, memberId ?: '-', daten)
-    }
-
-    /** Request und Status (INFO), der vollständige Body nur auf DEBUG. Bytes als UTF-8, siehe ApiRequests.json. */
-    private static void logAntwort(String request, MockHttpServletResponse response) {
-        LOG.info('{} -> {}', request, response.status)
-        LOG.debug('Body: {}', new String(response.contentAsByteArray, UTF_8))
     }
 
     /** Ohne year die Gesamtübersicht über alle Jahre, sonst die Jahresübersicht. */
