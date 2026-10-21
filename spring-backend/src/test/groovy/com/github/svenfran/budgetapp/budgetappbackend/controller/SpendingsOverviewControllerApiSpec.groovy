@@ -26,9 +26,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * - Die Gesamtübersicht liefert year = 0 (nicht gesetzt); das Frontend liest es nicht, geprüft wird nur der Typ.
  * - Die Berechnung testen SpendingsOverviewServiceSpec und SpendingsOverviewServiceIntegrationSpec.
  *
- * - Logging der Struktur-Features: INFO je Feature eine Zeile Szenario, eine je Request (Status) und eine Zusammenfassung
- *   der geprüften Antwort; den vollständigen JSON-Body nur auf DEBUG
- *   (logging.level.com.github.svenfran.budgetapp.budgetappbackend.controller=DEBUG).
+ * - Logging: je Feature eine Zeile Szenario und, wo der Body geprüft wird, eine Zusammenfassung der Antwort.
+ *   Feature-Name, Request-Zeilen und DEBUG-Bodies loggen FeatureLoggingExtension und ApiRequests zentral.
  *
  * DIV-30: monthName der Jahresübersicht folgt der Sprache aus Accept-Language (de/en/es, Standard de).
  * Das Frontend zeigt monthName nicht an (eigene MonthNamePipe), das Feld ist aber Teil des DTO-Vertrags.
@@ -44,6 +43,7 @@ class SpendingsOverviewControllerApiSpec extends IntegrationSpec implements ApiR
         def wg = fixtures.group(memberSince: of(2025, 1, 1))
         fixtures.cart(wg, datePurchased: DateUtils.toDate(of(2025, 3, 10)))
         flushAndClear()
+        logSzenario(wg.group.id, wg.owner.id, null, "Einkauf 2025-03-10, Accept-Language ${header ?: '-'}")
 
         when:
         def request = get('/api/spendings/{groupId}/{year}', wg.group.id, 2025)
@@ -51,10 +51,11 @@ class SpendingsOverviewControllerApiSpec extends IntegrationSpec implements ApiR
             request.header('Accept-Language', header)
         }
         def response = send(request, user: wg.owner)
+        def body = json(response)
+        LOG.info('Antwort: Monate {}, monthName {}', body.spendingsPerMonth*.month, body.spendingsPerMonth*.monthName)
 
         then:
         response.status == 200
-        def body = json(response)
         body.spendingsPerMonth*.month == [3]
         body.spendingsPerMonth*.monthName == [expected]
 
@@ -69,6 +70,7 @@ class SpendingsOverviewControllerApiSpec extends IntegrationSpec implements ApiR
     def "#endpoint: ohne Anmeldung wird der Zugriff mit 403 abgelehnt"() {
         given:
         def wg = fixtures.group()
+        LOG.info('Szenario: Gruppe {}, Request ohne Anmeldung', wg.group.id)
 
         expect: 'Ist-Verhalten: Spring Security antwortet ohne Authentifizierung mit 403, nicht 401'
         send(spendings(wg.group.id, year)).status == 403
@@ -83,6 +85,7 @@ class SpendingsOverviewControllerApiSpec extends IntegrationSpec implements ApiR
         given:
         def wg = fixtures.group()
         def fremder = fixtures.user()
+        LOG.info('Szenario: Gruppe {}, Owner {}, Fremder {} (kein Mitglied)', wg.group.id, wg.owner.id, fremder.id)
 
         expect:
         send(spendings(wg.group.id, year), user: fremder).status == 403
@@ -96,9 +99,11 @@ class SpendingsOverviewControllerApiSpec extends IntegrationSpec implements ApiR
     def "#endpoint: unbekannte Gruppe liefert 404"() {
         given:
         def angemeldet = fixtures.user()
+        LOG.info('Szenario: angemeldeter User {}, Gruppe {} existiert nicht', angemeldet.id, Long.MAX_VALUE)
 
         when: 'Long.MAX_VALUE statt einer kleinen ID, die Restdaten aus Commit-Specs treffen könnte'
         def response = send(spendings(Long.MAX_VALUE, year), user: angemeldet)
+        LOG.info('Antwort: {}', response.contentAsString)
 
         then:
         response.status == 404
@@ -117,6 +122,7 @@ class SpendingsOverviewControllerApiSpec extends IntegrationSpec implements ApiR
         def groupId = wg.group.id
         def angemeldet = rolle == 'Owner' ? wg.owner : ben
         flushAndClear()
+        logSzenario(groupId, wg.owner.id, ben.id, "angemeldet als $rolle")
 
         when:
         def response = send(spendings(groupId, year), user: angemeldet)

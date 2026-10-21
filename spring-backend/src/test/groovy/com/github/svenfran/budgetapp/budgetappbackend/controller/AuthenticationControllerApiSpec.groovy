@@ -5,6 +5,8 @@ import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository
 import com.github.svenfran.budgetapp.budgetappbackend.service.JwtService
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.ApiRequests
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.security.core.userdetails.User as SpringUser
@@ -18,6 +20,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  */
 class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequests {
 
+    private static final Logger LOG = LoggerFactory.getLogger(AuthenticationControllerApiSpec)
+
     static final String DEVICE = 'device-1'
 
     @Autowired UserRepository userRepository
@@ -25,8 +29,13 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
     @Autowired JwtService jwtService
 
     def "Registrierung speichert die E-Mail normalisiert und liefert sie so zurück"() {
+        given:
+        LOG.info('Szenario: neuer Nutzer max mit \' Max@Example.de \'')
+
         when:
         def response = register('max', ' Max@Example.de ')
+        def body = json(response)
+        LOG.info('Antwort: User {}, email {}', body.id, body.email)
 
         then:
         response.status == 200
@@ -37,9 +46,11 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
     def "Login mit abweichender Schreibweise ('#login') funktioniert"() {
         given:
         register('max', 'Max@Example.de')
+        LOG.info('Szenario: registriert max mit Max@Example.de, Login mit \'{}\'', login)
 
         when:
         def response = authenticate(login)
+        LOG.info('Antwort: email {}', json(response).email)
 
         then:
         response.status == 200
@@ -52,9 +63,11 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
     def "Registrierung mit einer nur in der Schreibweise abweichenden Adresse wird als 'existiert bereits' abgelehnt"() {
         given:
         register('max', 'max@example.de')
+        LOG.info('Szenario: registriert max mit max@example.de, dann maximilian mit Max@EXAMPLE.de')
 
         when:
         def response = register('maximilian', 'Max@EXAMPLE.de')
+        LOG.info('Antwort: {}', response.contentAsString)
 
         then:
         response.status == 400
@@ -65,9 +78,11 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
     def "Registrierung mit vergebenem Nutzernamen: 400 mit dem Namen in der Meldung"() {
         given:
         register('max', 'max@example.de')
+        LOG.info('Szenario: registriert max mit max@example.de, dann max mit moritz@example.de')
 
         when: 'andere E-Mail, sonst greift zuerst die E-Mail-Prüfung'
         def response = register('max', 'moritz@example.de')
+        LOG.info('Antwort: {}', response.contentAsString)
 
         then:
         // Frontend prüft status !== 403 und den Substring des gesendeten Namens (auth.page.ts)
@@ -79,7 +94,9 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
         given: 'Token wurde ausgestellt, als die Adresse noch als Alfred@Divvy.test gespeichert war'
         def alfred = fixtures.user(email: 'alfred@divvy.test')
         def jwt = jwtService.generateToken(userDetails('Alfred@Divvy.test'), DEVICE)
-        fixtures.token(alfred, token: jwt, deviceId: DEVICE)
+        def token = fixtures.token(alfred, token: jwt, deviceId: DEVICE)
+        LOG.info('Szenario: Token {} für Subject Alfred@Divvy.test auf {}, Nutzer {} gespeichert als alfred@divvy.test',
+                token.id, DEVICE, alfred.id)
 
         expect:
         jwtService.extractUsername(jwt) == 'Alfred@Divvy.test'
@@ -90,7 +107,9 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
         given:
         def anderer = fixtures.user()
         def jwt = jwtService.generateToken(userDetails('geloescht@divvy.test'), DEVICE)
-        fixtures.token(anderer, token: jwt, deviceId: DEVICE)
+        def token = fixtures.token(anderer, token: jwt, deviceId: DEVICE)
+        LOG.info('Szenario: Token {} für Subject geloescht@divvy.test (kein Nutzer) auf {}, gespeichert bei Nutzer {}',
+                token.id, DEVICE, anderer.id)
 
         expect:
         callProtectedEndpoint(jwt).status == 403
