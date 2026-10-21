@@ -1,15 +1,23 @@
 package com.github.svenfran.budgetapp.budgetappbackend.helper
 
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 
 class TranslatorIntegrationSpec extends IntegrationSpec {
 
+    private static final Logger LOG = LoggerFactory.getLogger(TranslatorIntegrationSpec)
+
     @Autowired Translator translator
 
     def "Translator übersetzt '#key' in #locale"() {
-        expect:
-        translator.translate(key, args as Object[], locale) == expectedMessage
+        when:
+        def message = translator.translate(key, args as Object[], locale)
+        LOG.info('translator.translate(\'{}\', {}, {}) -> \'{}\'', key, args, locale, message)
+
+        then:
+        message == expectedMessage
 
         where:
         key                             | args       | locale           || expectedMessage

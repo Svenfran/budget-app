@@ -35,6 +35,8 @@ import javax.persistence.EntityManager
  * - Testdaten kommen über fixtures (persistierte Szenarien) bzw. TestData (nicht persistiert).
  * - Zeit: testClock (Standard TestData.REFERENCE_DATE), nie LocalDate.now(); eine verstellte Uhr wird nach jedem
  *   Feature in cleanup() zurückgesetzt.
+ * - Logging: Feature-Name (FeatureLoggingExtension) und Request-Zeilen (ApiRequests) loggen zentral; jede Spec loggt
+ *   selbst Szenario und Aufruf mit Ergebnis (spring-backend/CLAUDE.md → Testing → Logging).
  *
  * Isolation:
  * - Standard: Rollback über das @Transactional dieser Klasse; Service und Test teilen einen Persistence Context.

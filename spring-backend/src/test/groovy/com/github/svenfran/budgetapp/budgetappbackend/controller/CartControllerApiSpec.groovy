@@ -3,6 +3,8 @@ package com.github.svenfran.budgetapp.budgetappbackend.controller
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.ApiRequests
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
@@ -37,19 +39,23 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  */
 class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
 
+    private static final Logger LOG = LoggerFactory.getLogger(CartControllerApiSpec)
+
     @Autowired ObjectMapper objectMapper
 
     def "Mitglied erhält die Einkäufe der Gruppe als JSON"() {
         given:
         def wg = fixtures.group()
         fixtures.cart(wg, title: 'Pizza', amount: 25d)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Einkauf Pizza 25.00 vom Owner', wg.group.id, wg.owner.id)
 
         when:
         def response = send(get('/api/carts/carts-by-groupid/{id}', wg.group.id), user: wg.owner)
+        def body = json(response)
+        LOG.info('Antwort: {} Einkäufe, Titel {}, Beträge {}', body.size(), body*.title, body*.amount)
 
         then:
         response.status == 200
-        def body = json(response)
         body*.title == ['Pizza']
         body[0].amount == 25
         def (groupId, ownerName) = [wg.group.id, wg.owner.name]
@@ -60,6 +66,7 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
     def "Nicht-Mitglied erhält 403"() {
         given:
         def wg = fixtures.group()
+        LOG.info('Szenario: Gruppe {}, Owner {}, anfragender User ist kein Mitglied', wg.group.id, wg.owner.id)
 
         expect:
         send(get('/api/carts/carts-by-groupid/{id}', wg.group.id), user: fixtures.user()).status == 403
@@ -68,6 +75,7 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
     def "Ohne Anmeldung wird der Zugriff mit 403 abgelehnt"() {
         given:
         def wg = fixtures.group()
+        LOG.info('Szenario: Gruppe {}, Request ohne Anmeldung', wg.group.id)
 
         expect: 'Ist-Verhalten: Spring Security antwortet ohne Authentifizierung mit 403, nicht 401'
         send(get('/api/carts/carts-by-groupid/{id}', wg.group.id)).status == 403
@@ -76,9 +84,11 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
     def "Unbekannter Einkauf: 404"() {
         given:
         def angemeldet = fixtures.user()
+        LOG.info('Szenario: angemeldeter User {}, Einkauf {} existiert nicht', angemeldet.id, Long.MAX_VALUE)
 
         when: 'Long.MAX_VALUE statt einer kleinen ID, die Restdaten aus Commit-Specs treffen könnte'
         def response = send(get('/api/carts/{id}', Long.MAX_VALUE), user: angemeldet)
+        LOG.info('Antwort: {}', response.contentAsString)
 
         then:
         response.status == 404
@@ -90,9 +100,11 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
         def wg = fixtures.group()
         def body = [title: 'Alt', amount: 10, datePurchased: '2020-01-01', groupId: wg.group.id,
                     categoryDto: [id: wg.category.id]]
+        LOG.info('Szenario: Gruppe {}, Owner {} (Mitglied seit 2024-06-15), Kaufdatum 2020-01-01', wg.group.id, wg.owner.id)
 
         when:
         def response = send(post('/api/carts/add'), user: wg.owner, body: body)
+        LOG.info('Antwort: {}', response.contentAsString)
 
         then:
         response.status == 400

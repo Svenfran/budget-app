@@ -4,6 +4,8 @@ import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartTemplateRepository
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 
 import java.time.LocalDate
@@ -18,6 +20,8 @@ import static com.github.svenfran.budgetapp.budgetappbackend.constants.Recurrenc
  */
 class AnchorDayBackfillIntegrationSpec extends IntegrationSpec {
 
+    private static final Logger LOG = LoggerFactory.getLogger(AnchorDayBackfillIntegrationSpec)
+
     private static final String BACKFILL_SQL = '/db/changelog/release-1.x/sql/20261020120000-1_backfillAnchorDay.sql'
 
     @Autowired CartTemplateRepository templateRepository
@@ -31,13 +35,17 @@ class AnchorDayBackfillIntegrationSpec extends IntegrationSpec {
         kaufdaten.each { fixtures.cart(wg, template: template, datePurchased: DateUtils.toDate(it)) }
         def templateId = template.id
         flushAndClear()
+        LOG.info('Szenario: Template {} {} aktiv={}, anchorDay 1, nextExecutionDate {}, Einkäufe {}',
+                templateId, typ, aktiv, nextVorher, kaufdaten)
 
         when:
         runBackfill()
         flushAndClear()
+        def migrated = templateRepository.findById(templateId).get()
+        LOG.info('Backfill -> Template {}: anchorDay {}, nextExecutionDate {}', templateId, migrated.anchorDay,
+                migrated.nextExecutionDate)
 
         then:
-        def migrated = templateRepository.findById(templateId).get()
         migrated.anchorDay == erwarteterAnker
         migrated.nextExecutionDate == nextNachher
 

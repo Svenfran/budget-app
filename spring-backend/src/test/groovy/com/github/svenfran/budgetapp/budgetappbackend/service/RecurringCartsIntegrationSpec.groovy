@@ -6,6 +6,8 @@ import com.github.svenfran.budgetapp.budgetappbackend.repository.CartTemplateRep
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.DatabaseCleaner
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional
@@ -23,6 +25,8 @@ import static com.github.svenfran.budgetapp.budgetappbackend.constants.Recurrenc
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class RecurringCartsIntegrationSpec extends IntegrationSpec {
 
+    private static final Logger LOG = LoggerFactory.getLogger(RecurringCartsIntegrationSpec)
+
     @Autowired CartService cartService
     @Autowired CartRepository cartRepository
     @Autowired CartTemplateRepository templateRepository
@@ -38,9 +42,11 @@ class RecurringCartsIntegrationSpec extends IntegrationSpec {
         def wg = fixtures.group()
         def cart = fixtures.cart(wg, title: 'Gym', amount: 30d, datePurchased: DateUtils.toDate(tomorrow))
         def template = fixtures.template(cart, nextExecutionDate: tomorrow)
+        LOG.info('Szenario: heute {}, Gruppe {}, Einkauf {} Gym 30.00 vom {}, Template {} {} nextExecutionDate {}', testClock.today, wg.group.id, cart.id, tomorrow, template.id, template.recurrenceType, template.nextExecutionDate)
 
         when:
         cartService.generateRecurringCarts()
+        LOG.info('cartService.generateRecurringCarts() am {} aufgerufen', testClock.today)
 
         then: "kein Einkauf erzeugt"
         cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id).size() == 1
@@ -57,9 +63,11 @@ class RecurringCartsIntegrationSpec extends IntegrationSpec {
         def wg = fixtures.group()
         def cart = fixtures.cart(wg, title: 'Netflix', amount: 12.99d, datePurchased: DateUtils.toDate(today))
         def template = fixtures.template(cart, nextExecutionDate: today)
+        LOG.info('Szenario: heute {}, Gruppe {}, Einkauf {} Netflix 12.99 vom {}, Template {} {} nextExecutionDate {}', testClock.today, wg.group.id, cart.id, today, template.id, template.recurrenceType, template.nextExecutionDate)
 
         when:
         cartService.generateRecurringCarts()
+        LOG.info('cartService.generateRecurringCarts() am {} aufgerufen', testClock.today)
 
         then: "kein weiterer Einkauf"
         cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id).size() == 1
@@ -74,12 +82,15 @@ class RecurringCartsIntegrationSpec extends IntegrationSpec {
         def wg = fixtures.group()
         def cart = fixtures.cart(wg, title: 'Spotify', amount: 9.99d, datePurchased: DateUtils.toDate(today.minusDays(1)))
         def template = fixtures.template(cart, nextExecutionDate: today)
+        LOG.info('Szenario: heute {}, Gruppe {}, Einkauf {} Spotify 9.99 vom {}, Template {} {} nextExecutionDate {}', testClock.today, wg.group.id, cart.id, today.minusDays(1), template.id, template.recurrenceType, template.nextExecutionDate)
 
         when:
         cartService.generateRecurringCarts()
+        def carts = cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id)
+        LOG.info('cartService.generateRecurringCarts() am {} -> Einkäufe der Gruppe {} am {}', testClock.today,
+                carts*.id, carts.collect { DateUtils.toLocalDate(it.datePurchased) })
 
         then: "ein neuer Einkauf mit den Werten des Templates"
-        def carts = cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id)
         carts.size() == 2
         def created = carts.find { it.id != cart.id }
         created.title == 'Spotify'
@@ -104,13 +115,16 @@ class RecurringCartsIntegrationSpec extends IntegrationSpec {
         def brokenTemplate = fixtures.template(broken, recurrenceType: NONE, nextExecutionDate: today)
         def valid = fixtures.cart(wg, title: 'Spotify', amount: 9.99d, datePurchased: DateUtils.toDate(today.minusDays(1)))
         def validTemplate = fixtures.template(valid, nextExecutionDate: today)
+        LOG.info('Szenario: heute {}, Gruppe {}, Einkauf {} mit Template {} {} nextExecutionDate {}, Einkauf {} mit Template {} {} nextExecutionDate {}', testClock.today, wg.group.id, broken.id, brokenTemplate.id, brokenTemplate.recurrenceType, brokenTemplate.nextExecutionDate, valid.id, validTemplate.id, validTemplate.recurrenceType, validTemplate.nextExecutionDate)
 
         when:
         cartService.generateRecurringCarts()
-
-        then: "nur aus dem gültigen Template ein neuer Einkauf"
         def created = cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id)
                 .findAll { !(it.id in [broken.id, valid.id]) }
+        LOG.info('cartService.generateRecurringCarts() am {} -> neue Einkäufe {} {}', testClock.today, created*.id,
+                created*.title)
+
+        then: "nur aus dem gültigen Template ein neuer Einkauf"
         created*.title == ['Spotify']
         created.first().template.id == validTemplate.id
 
@@ -130,9 +144,11 @@ class RecurringCartsIntegrationSpec extends IntegrationSpec {
         def wg = fixtures.group()
         def valid = fixtures.cart(wg, title: 'Spotify', amount: 9.99d, datePurchased: DateUtils.toDate(today.minusDays(1)))
         def validTemplate = fixtures.template(valid, nextExecutionDate: today)
+        LOG.info('Szenario: heute {}, Gruppe {} (Mitglieder ab {}) mit Einkauf {} und Template {} {} nextExecutionDate {}; Gruppe {} mit Einkauf {} und Template {} {} nextExecutionDate {}', testClock.today, leer.group.id, today.plusDays(1), verwaist.id, verwaistTemplate.id, verwaistTemplate.recurrenceType, verwaistTemplate.nextExecutionDate, wg.group.id, valid.id, validTemplate.id, validTemplate.recurrenceType, validTemplate.nextExecutionDate)
 
         when:
         cartService.generateRecurringCarts()
+        LOG.info('cartService.generateRecurringCarts() am {} aufgerufen', testClock.today)
 
         then: "kein Einkauf in der Gruppe ohne Mitglieder, Template deaktiviert"
         cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(leer.group.id)*.id == [verwaist.id]
@@ -152,9 +168,11 @@ class RecurringCartsIntegrationSpec extends IntegrationSpec {
         def wg = fixtures.group()
         def cart = fixtures.cart(wg, title: 'Gym', amount: 29.99d, datePurchased: DateUtils.toDate(today.minusDays(1)))
         def template = fixtures.template(cart, recurrenceType: recurrenceType, nextExecutionDate: today)
+        LOG.info('Szenario: heute {}, Gruppe {}, Einkauf {} Gym 29.99 vom {}, Template {} {} nextExecutionDate {}', testClock.today, wg.group.id, cart.id, today.minusDays(1), template.id, template.recurrenceType, template.nextExecutionDate)
 
         when:
         cartService.generateRecurringCarts()
+        LOG.info('cartService.generateRecurringCarts() am {} aufgerufen', testClock.today)
 
         then: "Original und neuer Einkauf"
         cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id).size() == 2
@@ -178,12 +196,15 @@ class RecurringCartsIntegrationSpec extends IntegrationSpec {
         def wg = fixtures.group(memberSince: LocalDate.of(2023, 1, 1))
         def cart = fixtures.cart(wg, title: 'Miete', amount: 900d, datePurchased: DateUtils.toDate(heute.minusDays(1)))
         def template = fixtures.template(cart, recurrenceType: recurrenceType, nextExecutionDate: heute, anchorDay: heute.dayOfMonth)
+        LOG.info('Szenario: heute {}, Gruppe {}, Einkauf {} Miete 900.00 vom {}, Template {} {} nextExecutionDate {}, anchorDay {}', testClock.today, wg.group.id, cart.id, heute.minusDays(1), template.id, template.recurrenceType, template.nextExecutionDate, template.anchorDay)
 
         when:
         cartService.generateRecurringCarts()
+        def created = cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id).findAll { it.id != cart.id }
+        LOG.info('cartService.generateRecurringCarts() am {} -> neue Einkäufe {} am {}', testClock.today, created*.id,
+                created.collect { DateUtils.toLocalDate(it.datePurchased) })
 
         then: "Einkauf am fälligen Tag"
-        def created = cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id).findAll { it.id != cart.id }
         created.collect { DateUtils.toLocalDate(it.datePurchased) } == [heute]
 
         and: "nächster Termin auf das Monatsende gekappt"
@@ -206,12 +227,15 @@ class RecurringCartsIntegrationSpec extends IntegrationSpec {
         def wg = fixtures.group()
         def cart = fixtures.cart(wg, title: 'Spotify', amount: 9.99d, datePurchased: DateUtils.toDate(missed.minusMonths(1)))
         def template = fixtures.template(cart, recurrenceType: MONTHLY, nextExecutionDate: missed)
+        LOG.info('Szenario: heute {}, Gruppe {}, Einkauf {} Spotify 9.99 vom {}, Template {} {} nextExecutionDate {}', testClock.today, wg.group.id, cart.id, missed.minusMonths(1), template.id, template.recurrenceType, template.nextExecutionDate)
 
         when:
         cartService.generateRecurringCarts()
+        def created = cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id).findAll { it.id != cart.id }
+        LOG.info('cartService.generateRecurringCarts() am {} -> neue Einkäufe {} am {}', testClock.today, created*.id,
+                created.collect { DateUtils.toLocalDate(it.datePurchased) })
 
         then: "Einkauf am verpassten Termin"
-        def created = cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id).findAll { it.id != cart.id }
         created.collect { DateUtils.toLocalDate(it.datePurchased) } == [missed]
 
         and: "nächster Termin einen Monat nach dem verpassten"
@@ -223,12 +247,15 @@ class RecurringCartsIntegrationSpec extends IntegrationSpec {
         def wg = fixtures.group()
         def cart = fixtures.cart(wg, title: 'Gym', amount: 29.99d, datePurchased: DateUtils.toDate(firstMissed.minusDays(1)))
         def template = fixtures.template(cart, recurrenceType: recurrenceType, nextExecutionDate: firstMissed)
+        LOG.info('Szenario: heute {}, Gruppe {}, Einkauf {} Gym 29.99 vom {}, Template {} {} nextExecutionDate {}', testClock.today, wg.group.id, cart.id, firstMissed.minusDays(1), template.id, template.recurrenceType, template.nextExecutionDate)
 
         when:
         cartService.generateRecurringCarts()
+        def created = cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id).findAll { it.id != cart.id }
+        LOG.info('cartService.generateRecurringCarts() am {} -> neue Einkäufe {} am {}', testClock.today, created*.id,
+                created.collect { DateUtils.toLocalDate(it.datePurchased) })
 
         then: "ein Einkauf je verpasstem Termin bis einschließlich heute"
-        def created = cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id).findAll { it.id != cart.id }
         created.collect { DateUtils.toLocalDate(it.datePurchased) } == expectedDates
 
         and:
@@ -250,13 +277,16 @@ class RecurringCartsIntegrationSpec extends IntegrationSpec {
         def cart = fixtures.cart(wg, title: 'Gym', amount: 30d, datePurchased: DateUtils.toDate(today.minusWeeks(2).minusDays(1)))
         def template = fixtures.template(cart, recurrenceType: WEEKLY, nextExecutionDate: today.minusWeeks(2))
         def duplicate = fixtures.cart(wg, title: 'Gym', amount: 30d, datePurchased: DateUtils.toDate(today.minusWeeks(1)))
+        LOG.info('Szenario: heute {}, Gruppe {}, Einkauf {} Gym 30.00 vom {}, Template {} {} nextExecutionDate {}, gleicher Einkauf {} am {}', testClock.today, wg.group.id, cart.id, today.minusWeeks(2).minusDays(1), template.id, template.recurrenceType, template.nextExecutionDate, duplicate.id, today.minusWeeks(1))
 
         when:
         cartService.generateRecurringCarts()
-
-        then: "nur an den Terminen ohne gleichen Einkauf ein neuer Einkauf"
         def created = cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id)
                 .findAll { !(it.id in [cart.id, duplicate.id]) }
+        LOG.info('cartService.generateRecurringCarts() am {} -> neue Einkäufe {} am {}', testClock.today, created*.id,
+                created.collect { DateUtils.toLocalDate(it.datePurchased) })
+
+        then: "nur an den Terminen ohne gleichen Einkauf ein neuer Einkauf"
         created.collect { DateUtils.toLocalDate(it.datePurchased) } == [today, today.minusWeeks(2)]
 
         and:
@@ -270,9 +300,11 @@ class RecurringCartsIntegrationSpec extends IntegrationSpec {
         def cart = fixtures.cart(wg, title: 'Gym', description: templateDescription, amount: 30d, datePurchased: DateUtils.toDate(today.minusDays(1)))
         def template = fixtures.template(cart, nextExecutionDate: today)
         def duplicate = fixtures.cart(wg, title: 'Gym', description: existingDescription, amount: 30d, datePurchased: DateUtils.toDate(today))
+        LOG.info('Szenario: heute {}, Gruppe {}, Einkauf {} vom {}, Template {} {} nextExecutionDate {}, gleicher Einkauf {} am {}', testClock.today, wg.group.id, cart.id, today.minusDays(1), template.id, template.recurrenceType, template.nextExecutionDate, duplicate.id, today)
 
         when:
         cartService.generateRecurringCarts()
+        LOG.info('cartService.generateRecurringCarts() am {} aufgerufen', testClock.today)
 
         then: "kein weiterer Einkauf"
         cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id)*.id == [duplicate.id, cart.id]
@@ -295,12 +327,15 @@ class RecurringCartsIntegrationSpec extends IntegrationSpec {
         fixtures.membership(wg, ben, membershipStart: DateUtils.toDate(today.minusWeeks(1)))
         def cart = fixtures.cart(wg, title: 'Gym', amount: 30d, datePurchased: DateUtils.toDate(today.minusWeeks(2).minusDays(1)))
         fixtures.template(cart, recurrenceType: WEEKLY, nextExecutionDate: today.minusWeeks(2))
+        LOG.info('Szenario: heute {}, Gruppe {}, Owner {}, Ben {} ab {}, Einkauf {} Gym 30.00, Template WEEKLY nextExecutionDate {}', testClock.today, wg.group.id, wg.owner.id, ben.id, today.minusWeeks(1), cart.id, today.minusWeeks(2))
 
         when:
         cartService.generateRecurringCarts()
+        def created = cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id).findAll { it.id != cart.id }
+        LOG.info('cartService.generateRecurringCarts() am {} -> neue Einkäufe [Datum, averagePerMember] {}', testClock.today,
+                created.collect { [DateUtils.toLocalDate(it.datePurchased), it.averagePerMember] })
 
         then: "vor Bens Beitritt ein Mitglied, danach zwei"
-        def created = cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id).findAll { it.id != cart.id }
         created.collect { [DateUtils.toLocalDate(it.datePurchased), it.averagePerMember] } ==
                 [[today, 15d], [today.minusWeeks(1), 15d], [today.minusWeeks(2), 30d]]
     }
@@ -311,9 +346,11 @@ class RecurringCartsIntegrationSpec extends IntegrationSpec {
         def leer = fixtures.group(memberSince: today.minusDays(1))
         def cart = fixtures.cart(leer, title: 'Strom', amount: 60d, datePurchased: DateUtils.toDate(today.minusDays(3)))
         def template = fixtures.template(cart, recurrenceType: DAILY, nextExecutionDate: today.minusDays(2))
+        LOG.info('Szenario: heute {}, Gruppe {} (Mitglieder ab {}), Einkauf {} Strom 60.00, Template {} {} nextExecutionDate {}', testClock.today, leer.group.id, today.minusDays(1), cart.id, template.id, template.recurrenceType, template.nextExecutionDate)
 
         when:
         cartService.generateRecurringCarts()
+        LOG.info('cartService.generateRecurringCarts() am {} aufgerufen', testClock.today)
 
         then: "kein Einkauf"
         cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(leer.group.id)*.id == [cart.id]
@@ -332,12 +369,15 @@ class RecurringCartsIntegrationSpec extends IntegrationSpec {
         def wg = fixtures.group(memberUntil: today.minusDays(8))
         def cart = fixtures.cart(wg, title: 'Strom', amount: 60d, datePurchased: DateUtils.toDate(today.minusWeeks(2).minusDays(1)))
         def template = fixtures.template(cart, recurrenceType: WEEKLY, nextExecutionDate: today.minusWeeks(2))
+        LOG.info('Szenario: heute {}, Gruppe {} (Mitglieder bis {}), Einkauf {} Strom 60.00, Template {} {} nextExecutionDate {}', testClock.today, wg.group.id, today.minusDays(8), cart.id, template.id, template.recurrenceType, template.nextExecutionDate)
 
         when:
         cartService.generateRecurringCarts()
+        def created = cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id).findAll { it.id != cart.id }
+        LOG.info('cartService.generateRecurringCarts() am {} -> neue Einkäufe {} am {}', testClock.today, created*.id,
+                created.collect { DateUtils.toLocalDate(it.datePurchased) })
 
         then: "nur der Termin mit Mitgliedern wird nachgeholt"
-        def created = cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id).findAll { it.id != cart.id }
         created.collect { DateUtils.toLocalDate(it.datePurchased) } == [today.minusWeeks(2)]
 
         and: "Template deaktiviert, nächster Termin auf dem Abbruchtermin"
@@ -353,11 +393,15 @@ class RecurringCartsIntegrationSpec extends IntegrationSpec {
         def wg = fixtures.group()
         def cart = fixtures.cart(wg, title: 'Gym', amount: 30d, datePurchased: DateUtils.toDate(today.minusWeeks(2).minusDays(1)))
         def template = fixtures.template(cart, recurrenceType: WEEKLY, nextExecutionDate: today.minusWeeks(2))
+        LOG.info('Szenario: heute {}, Gruppe {}, Einkauf {} Gym 30.00, Template {} {} nextExecutionDate {}', testClock.today, wg.group.id, cart.id,
+                template.id, template.recurrenceType, template.nextExecutionDate)
         cartService.generateRecurringCarts()
         def idsAfterFirstRun = cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id)*.id
+        LOG.info('cartService.generateRecurringCarts() erster Lauf -> Einkäufe der Gruppe {}', idsAfterFirstRun)
 
         when:
         cartService.generateRecurringCarts()
+        LOG.info('cartService.generateRecurringCarts() zweiter Lauf am {} aufgerufen', testClock.today)
 
         then: "Ausgangseinkauf und drei nachgeholte Einkäufe, keine weiteren"
         idsAfterFirstRun.size() == 4
@@ -377,9 +421,12 @@ class RecurringCartsIntegrationSpec extends IntegrationSpec {
         def wg = fixtures.group()
         def cart = fixtures.cart(wg, title: 'Miete', amount: 900d, datePurchased: DateUtils.toDate(LocalDate.of(2024, 12, 31)))
         def template = fixtures.template(cart, recurrenceType: MONTHLY, nextExecutionDate: LocalDate.of(2025, 1, 31), anchorDay: 31)
+        LOG.info('Szenario: heute {}, Gruppe {}, Einkauf {} Miete 900.00 vom 2024-12-31, Template {} {} nextExecutionDate {}, anchorDay 31',
+                testClock.today, wg.group.id, cart.id, template.id, template.recurrenceType, template.nextExecutionDate)
 
         when: "Job am 31.01."
         cartService.generateRecurringCarts()
+        LOG.info('cartService.generateRecurringCarts() am {} aufgerufen', testClock.today)
 
         then:
         templateRepository.findById(template.id).get().nextExecutionDate == LocalDate.of(2025, 2, 28)
@@ -387,6 +434,7 @@ class RecurringCartsIntegrationSpec extends IntegrationSpec {
         when: "Job am 28.02."
         testClock.today = LocalDate.of(2025, 2, 28)
         cartService.generateRecurringCarts()
+        LOG.info('cartService.generateRecurringCarts() am {} aufgerufen', testClock.today)
 
         then: "Folgetermin wieder auf dem Ankertag"
         templateRepository.findById(template.id).get().nextExecutionDate == LocalDate.of(2025, 3, 31)
@@ -402,12 +450,15 @@ class RecurringCartsIntegrationSpec extends IntegrationSpec {
         def wg = fixtures.group(memberSince: LocalDate.of(2023, 1, 1))
         def cart = fixtures.cart(wg, title: 'Versicherung', amount: 120d, datePurchased: DateUtils.toDate(LocalDate.of(2024, 2, 29)))
         def template = fixtures.template(cart, recurrenceType: YEARLY, nextExecutionDate: LocalDate.of(2025, 2, 28), anchorDay: 29)
+        LOG.info('Szenario: heute {}, Gruppe {}, Einkauf {} Versicherung 120.00 vom 2024-02-29, Template {} {} nextExecutionDate {}, anchorDay 29', testClock.today, wg.group.id, cart.id, template.id, template.recurrenceType, template.nextExecutionDate)
 
         when:
         cartService.generateRecurringCarts()
+        def created = cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id).findAll { it.id != cart.id }
+        LOG.info('cartService.generateRecurringCarts() am {} -> neue Einkäufe {} am {}', testClock.today, created*.id,
+                created.collect { DateUtils.toLocalDate(it.datePurchased) })
 
         then: "in Nicht-Schaltjahren am 28.02., im Schaltjahr am 29.02."
-        def created = cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id).findAll { it.id != cart.id }
         created.collect { DateUtils.toLocalDate(it.datePurchased) } ==
                 [LocalDate.of(2028, 2, 29), LocalDate.of(2027, 2, 28), LocalDate.of(2026, 2, 28), LocalDate.of(2025, 2, 28)]
 
