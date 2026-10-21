@@ -72,6 +72,11 @@ The test conventions live in the sub-project files: [`spring-backend/CLAUDE.md` 
 - **Error-message contract:** the frontend recognizes some error cases by the text of the backend message (`includes(...)` or `===` on `err.error`). Each such message is pinned by an API test; the list lives in the Groovydoc of `CartControllerApiSpec` (see backend Testing). Changing a message or a frontend check means updating both sides and that list. This is a stopgap until error codes are decided.
 - Keep existing tests green and adjust them when behavior changes. The test infrastructure is in place — don't add test frameworks, base classes or helpers on your own initiative; extend `TestData`/`Fixtures`/`src/testing/` when a story needs it.
 
+### Pull requests
+- **Keep PR descriptions short** (roughly 15–25 lines, readable in under a minute): what and why in 1–3 sentences, the changed areas as a few bullets, the test commands with counts before/after (required, see Tests), and only noteworthy risks, limits or follow-up tickets.
+- Leave out what the diff, the commits, the plan or a review already show: no per-commit or per-phase lists, no review summaries, no restated acceptance criteria, no explanations of unchanged areas beyond one line.
+- Write the description in German, like the existing PRs.
+
 ### Other
 - Don't modify these CLAUDE.md files as a side effect of a story; propose updates instead if they're outdated.
 - Never commit or print secrets (`spring-backend/.env`, `ionic-frontend/android/keystore.properties`, keystores).

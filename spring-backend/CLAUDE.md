@@ -34,7 +34,7 @@ Surefire runs `**/*Spec.*` except `*IntegrationSpec`/`*ApiSpec`; Failsafe runs t
 - Profiles:
   - `dev` (forced by `spring-boot-maven-plugin` for `spring-boot:run`): port **9090** on `0.0.0.0`, Liquibase context `dev` (loads demo data). Reads `DB_URL`/`DB_USERNAME`/`DB_PASSWORD`.
   - `prod` (forced by the Dockerfile entrypoint; deployed on Railway): port `${PORT:8080}` (Railway injects `PORT`), Liquibase context `prod` with `db.changelog-master-prod.xml`. Reads `PGHOST`/`PGPORT`/`PGDATABASE`/`PGUSER`/`PGPASSWORD`.
-  - `test` (`src/test/resources/application-test.properties`): Liquibase context `test` (schema, no demo data), dummy Brevo sender, fixed dummy `secret_key` (tests never depend on a local `.env`), scheduled jobs off (`app.scheduling.enabled=false`), quieter logging; used by integration and API specs (see Testing).
+  - `test` (`src/test/resources/application-test.properties`): Liquibase context `test` (schema, no demo data), dummy Brevo sender, fixed dummy `secret_key` (tests never depend on a local `.env`), scheduled jobs off (`app.scheduling.enabled=false`), banner off and log-level overrides (format and library levels: `src/test/resources/logback-test.xml`, see Testing → Logging); used by integration and API specs (see Testing).
 - `ddl-auto=none` — schema is owned entirely by Liquibase, never Hibernate.
 
 ### Local Postgres
@@ -147,7 +147,12 @@ New and changed specs log what they do, so a run can be followed without a debug
 - Log in `given:`/`when:`, not in `then:` — statements there are conditions. If the summary needs the parsed body, parse it in `when:`.
 - Never log secrets (tokens, passwords) or entities with collections or lazy associations (see Spock pitfalls above); log ids and DTO values.
 - Where to read it: the Maven/CI console, and per test case in `<system-out>` of the XML report `TEST-<fully.qualified.Spec>.xml` (`target/surefire-reports/` for unit specs, `target/failsafe-reports/` for integration and API specs). As a plain file per spec: add `-Dmaven.test.redirectTestOutputToFile=true` → `<fully.qualified.Spec>-output.txt` in the same directory (console stays empty). In IntelliJ, select the feature in the test tree. Full bodies: add `-Dlogging.level.com.github.svenfran.budgetapp.budgetappbackend.controller=DEBUG`.
-- The console is still noisy (Spring test transaction lines, Liquibase, Testcontainers, bootstrap DEBUG) and unit specs log through Logback's default config (DEBUG, long format). Reducing that and a short line format are DIV-44.
+- Configuration:
+  - `src/test/resources/logback-test.xml` holds the line format and the library levels (root INFO; Spring test bootstrap/`TransactionContext`, Liquibase, Testcontainers on WARN). Logback loads it on its first initialization, so it covers unit specs and the Spring test bootstrap too; Spring Boot reloads it at context start and then applies `logging.level.*` from the properties on top. New library levels go into the XML.
+  - `application-test.properties` only holds what must override `application.properties` (app package INFO instead of TRACE, Spring Security WARN instead of DEBUG) plus `spring.main.banner-mode=off`. A logger set there wins over the XML in Spring specs — don't set the same logger in both places. `logging.pattern.console` has no effect (own appender).
+- Line format without colors, date, PID or thread: `11:56:17.976 INFO  SpendingsOverviewControllerApiSpec : …`; stack traces in full.
+- DEBUG: `-Dlogging.level.<package>=DEBUG` works in integration and API specs. Unit specs (no Spring) only read the XML — change the level there locally.
+- Not suppressible by logging: Liquibase 4.9 prints `Running Changeset: …` (one line per changeset, once per run) straight to stdout.
 
 ### Error-message contract
 
