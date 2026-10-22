@@ -4,6 +4,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.constants.UserEnum;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.*;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Cart;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.GroupMembershipHistory;
+import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.GroupNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOrMemberOfGroupException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException;
@@ -46,26 +47,27 @@ public class SpendingsOverviewService {
         var group = dataLoaderService.loadGroup(groupId);
         verificationService.verifyIsPartOfGroup(user, group);
         var availableYears = cartRepository.getAvailableYearsForGroup(groupId);
+        var data = loadOverviewData(groupId);
 
         var spendingsOverview = new SpendingsOverviewDto();
         spendingsOverview.setGroupId(groupId);
-        spendingsOverview.setSpendingsTotalYear(getSpendingsOverviewTotalAllYears(groupId));
-        spendingsOverview.setSpendingsPerYear(getSpendingsOverviewPerYear(groupId, availableYears));
+        spendingsOverview.setSpendingsTotalYear(getSpendingsOverviewTotalAllYears(data));
+        spendingsOverview.setSpendingsPerYear(getSpendingsOverviewPerYear(data, availableYears));
         spendingsOverview.setAvailableYears(availableYears);
         return spendingsOverview;
     }
 
-    private SpendingsOverviewTotalYearDto getSpendingsOverviewTotalAllYears(Long groupId) throws UserNotFoundException {
-        var membership = dataLoaderService.loadMembershipHistoryForGroup(groupId);
-        var carts = dataLoaderService.loadCartListForGroup(groupId);
-        var userIds = membership.stream().map(GroupMembershipHistory::getUserId).distinct().toList();
-        var shares = calculateShares(carts, membership);
+    private SpendingsOverviewTotalYearDto getSpendingsOverviewTotalAllYears(OverviewData data) throws UserNotFoundException {
+        var membership = data.membership();
+        var carts = data.carts();
+        var userIds = data.userIds();
+        var shares = data.shares();
         var spendingsOverviewTotalYearDto = new SpendingsOverviewTotalYearDto();
         var userTotals = new ArrayList<UserTotals>();
 
         long totalCents = 0;
 
-        if (hasCartsForGroup(carts, groupId)) {
+        if (hasCartsForGroup(carts, data.groupId())) {
             for (Long userId : userIds) {
                 long sumCents = 0;
                 var shareNumerator = BigInteger.ZERO;
@@ -80,7 +82,7 @@ public class SpendingsOverviewService {
 
                 var diffNumerator = shares.toNumerator(sumCents).subtract(shareNumerator);
                 totalCents += sumCents;
-                var userName = handleUserName(userId, groupId);
+                var userName = handleUserName(userId, data);
                 userTotals.add(new UserTotals(userId, userName, sumCents, diffNumerator));
             }
         }
@@ -91,11 +93,11 @@ public class SpendingsOverviewService {
         return spendingsOverviewTotalYearDto;
     }
 
-    private List<SpendingsOverviewPerYearDto> getSpendingsOverviewPerYear(Long groupId, List<Integer> availableYears) throws UserNotFoundException {
-        var membership = dataLoaderService.loadMembershipHistoryForGroup(groupId);
-        var carts = dataLoaderService.loadCartListForGroup(groupId);
-        var userIds = membership.stream().map(GroupMembershipHistory::getUserId).distinct().toList();
-        var shares = calculateShares(carts, membership);
+    private List<SpendingsOverviewPerYearDto> getSpendingsOverviewPerYear(OverviewData data, List<Integer> availableYears) throws UserNotFoundException {
+        var membership = data.membership();
+        var carts = data.carts();
+        var userIds = data.userIds();
+        var shares = data.shares();
         var spendingsOverviewPerYearDtoList = new ArrayList<SpendingsOverviewPerYearDto>();
 
         for (Integer year : availableYears) {
@@ -124,7 +126,7 @@ public class SpendingsOverviewService {
                 }
 
                 var diffNumerator = shares.toNumerator(sumCents).subtract(shareNumerator);
-                var userName = handleUserName(userId, groupId);
+                var userName = handleUserName(userId, data);
                 if (wasUserMemberInYear(validMemberships, year)) {
                     userTotals.add(new UserTotals(userId, userName, sumCents, diffNumerator));
                 }
@@ -142,21 +144,22 @@ public class SpendingsOverviewService {
         var group = dataLoaderService.loadGroup(groupId);
         verificationService.verifyIsPartOfGroup(user, group);
         var availableYears = cartRepository.getAvailableYearsForGroup(groupId);
+        var data = loadOverviewData(groupId);
 
         var spendingsOverview = new SpendingsOverviewDto();
         spendingsOverview.setGroupId(groupId);
         spendingsOverview.setYear(year);
-        spendingsOverview.setSpendingsTotalYear(getSpendingsOverviewTotalYear(year, groupId));
-        spendingsOverview.setSpendingsPerMonth(getSpendingsOverviewPerMonth(year, groupId));
+        spendingsOverview.setSpendingsTotalYear(getSpendingsOverviewTotalYear(year, data));
+        spendingsOverview.setSpendingsPerMonth(getSpendingsOverviewPerMonth(year, data));
         spendingsOverview.setAvailableYears(availableYears);
         return spendingsOverview;
     }
 
-    private SpendingsOverviewTotalYearDto getSpendingsOverviewTotalYear(int year, Long groupId) throws UserNotFoundException {
-        var membership = dataLoaderService.loadMembershipHistoryForGroup(groupId);
-        var carts = dataLoaderService.loadCartListForGroup(groupId);
-        var userIds = membership.stream().map(GroupMembershipHistory::getUserId).distinct().toList();
-        var shares = calculateShares(carts, membership);
+    private SpendingsOverviewTotalYearDto getSpendingsOverviewTotalYear(int year, OverviewData data) throws UserNotFoundException {
+        var membership = data.membership();
+        var carts = data.carts();
+        var userIds = data.userIds();
+        var shares = data.shares();
         var spendingsOverviewTotalYearDto = new SpendingsOverviewTotalYearDto();
         var userTotals = new ArrayList<UserTotals>();
 
@@ -182,7 +185,7 @@ public class SpendingsOverviewService {
                 }
 
                 var diffNumerator = shares.toNumerator(sumCents).subtract(shareNumerator);
-                var userName = handleUserName(userId, groupId);
+                var userName = handleUserName(userId, data);
                 if (wasUserMemberInYear(validMemberships, year)) {
                     userTotals.add(new UserTotals(userId, userName, sumCents, diffNumerator));
                 }
@@ -194,11 +197,11 @@ public class SpendingsOverviewService {
         return spendingsOverviewTotalYearDto;
     }
 
-    private List<SpendingsOverviewPerMonthDto> getSpendingsOverviewPerMonth(int year, Long groupId) throws UserNotFoundException {
-        var membership = dataLoaderService.loadMembershipHistoryForGroup(groupId);
-        var carts = dataLoaderService.loadCartListForGroup(groupId);
-        var userIds = membership.stream().map(GroupMembershipHistory::getUserId).distinct().toList();
-        var shares = calculateShares(carts, membership);
+    private List<SpendingsOverviewPerMonthDto> getSpendingsOverviewPerMonth(int year, OverviewData data) throws UserNotFoundException {
+        var membership = data.membership();
+        var carts = data.carts();
+        var userIds = data.userIds();
+        var shares = data.shares();
         var spendingsOverviewPerMonthDtoList = new ArrayList<SpendingsOverviewPerMonthDto>();
         var availableMonth = getAvailableMonthsForYear(carts, year);
         var locale = LocaleContextHolder.getLocale();
@@ -231,7 +234,7 @@ public class SpendingsOverviewService {
                 }
 
                 var diffNumerator = shares.toNumerator(sumCents).subtract(shareNumerator);
-                var userName = handleUserName(userId, groupId);
+                var userName = handleUserName(userId, data);
                 if (wasUserMemberInMonth(validMemberships, year, month)) {
                     userTotals.add(new UserTotals(userId, userName, sumCents, diffNumerator));
                 }
@@ -244,6 +247,19 @@ public class SpendingsOverviewService {
     }
 
     // Helper Methods
+
+    /** Carts, Mitgliedschaftshistorie und Anteile werden je Request einmal geladen bzw. berechnet (DIV-34). */
+    private OverviewData loadOverviewData(Long groupId) {
+        var membership = dataLoaderService.loadMembershipHistoryForGroup(groupId);
+        var carts = dataLoaderService.loadCartListForGroup(groupId);
+        var userIds = membership.stream().map(GroupMembershipHistory::getUserId).distinct().toList();
+        return new OverviewData(groupId, carts, membership, userIds, calculateShares(carts, membership), new HashMap<>());
+    }
+
+    /** userNames: Anzeigename je Nutzer, beim ersten Bedarf gefüllt (handleUserName). */
+    private record OverviewData(Long groupId, List<Cart> carts, List<GroupMembershipHistory> membership,
+                                List<Long> userIds, Shares shares, Map<Long, String> userNames) {
+    }
 
     /**
      * Beteiligte je Cart (DIV-38): alle, die am Kaufdatum laut Historie Mitglied waren. Anteile werden exakt als
@@ -383,24 +399,27 @@ public class SpendingsOverviewService {
                 });
     }
 
-    private boolean userIsCurrentlyMember(Long userId, Long groupId) throws UserNotFoundException {
-        var user = dataLoaderService.loadUser(userId);
+    private boolean userIsCurrentlyMember(User user, List<GroupMembershipHistory> membership) {
         if (user.getName().equals(UserEnum.USER_DELETED.getName())) {
             return true;
         }
 
-        return dataLoaderService.loadMembershipHistoryForGroupAndUser(groupId, userId)
-                .stream()
+        return membership.stream()
+                .filter(gmh -> gmh.getUserId().equals(user.getId()))
                 .anyMatch(gmh -> gmh.getMembershipEnd() == null);
     }
 
-    private String handleUserName(Long userId, Long groupId) throws UserNotFoundException {
-        var userName = dataLoaderService.loadUser(userId).getName();
-
-        if (userIsCurrentlyMember(userId, groupId)) {
-            return userName;
-        } else {
-            return String.format("%s %s",userName, UserEnum.USER_REMOVED.getName());
+    private String handleUserName(Long userId, OverviewData data) throws UserNotFoundException {
+        var cachedName = data.userNames().get(userId);
+        if (cachedName != null) {
+            return cachedName;
         }
+
+        var user = dataLoaderService.loadUser(userId);
+        var userName = userIsCurrentlyMember(user, data.membership())
+                ? user.getName()
+                : String.format("%s %s", user.getName(), UserEnum.USER_REMOVED.getName());
+        data.userNames().put(userId, userName);
+        return userName;
     }
 }
