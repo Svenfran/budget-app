@@ -62,7 +62,8 @@ public class SpendingsOverviewService {
         var spendingsOverviewTotalYearDto = new SpendingsOverviewTotalYearDto();
         List<UserTotals> userTotals = new ArrayList<>();
 
-        if (hasCartsForGroup(data.carts(), data.groupId())) {
+        // Carts sind nach groupId geladen: nicht leer = Gruppe hat Carts
+        if (!data.carts().isEmpty()) {
             userTotals = calculateUserTotals(data, cart -> true, memberships -> true);
         }
 
@@ -193,11 +194,11 @@ public class SpendingsOverviewService {
         var membership = dataLoaderService.loadMembershipHistoryForGroup(groupId);
         var carts = dataLoaderService.loadCartListForGroup(groupId);
         var userIds = membership.stream().map(GroupMembershipHistory::getUserId).distinct().toList();
-        return new OverviewData(groupId, carts, membership, userIds, calculateShares(carts, membership), new HashMap<>());
+        return new OverviewData(carts, membership, userIds, calculateShares(carts, membership), new HashMap<>());
     }
 
     /** userNames: Anzeigename je Nutzer, beim ersten Bedarf gefüllt (handleUserName). */
-    private record OverviewData(Long groupId, List<Cart> carts, List<GroupMembershipHistory> membership,
+    private record OverviewData(List<Cart> carts, List<GroupMembershipHistory> membership,
                                 List<Long> userIds, Shares shares, Map<Long, String> userNames) {
     }
 
@@ -303,11 +304,6 @@ public class SpendingsOverviewService {
         return carts.stream()
                 .map(cart -> toLocalDate(cart.getDatePurchased()))
                 .anyMatch(date -> date.getYear() == year);
-    }
-
-    public boolean hasCartsForGroup(List<Cart> carts, Long groupId) {
-        return carts.stream()
-                .anyMatch(cart -> Objects.equals(cart.getGroup().getId(), groupId));
     }
 
     public boolean wasUserMemberInYear(List<GroupMembershipHistory> membershipHistory, int year) {
