@@ -238,8 +238,30 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
         geschuetzt == 200
     }
 
-    private MockHttpServletResponse register(String name, String email) {
-        send(post('/api/auth/register'), body: [name: name, email: email, password: 'geheim123', deviceId: DEVICE])
+    def "Token aus einer Registrierung ohne DeviceId wird mit 403 abgelehnt (DeviceId-Header #fall)"() {
+        given:
+        def registrierung = register('max', 'max@example.de', null)
+        def body = json(registrierung)
+        LOG.info('Szenario: registriert max ohne DeviceId -> {}, Token für Nutzer {}, DeviceId-Header {}',
+                registrierung.status, body.id, headerDevice)
+
+        expect:
+        registrierung.status == 200
+        callProtectedEndpoint(body.token, headerDevice).status == 403
+
+        where:
+        fall      | headerDevice
+        'gesetzt' | DEVICE
+        'fehlt'   | null
+    }
+
+    /** deviceId null: Body ohne deviceId (wie ein Client, der keine sendet). */
+    private MockHttpServletResponse register(String name, String email, String deviceId = DEVICE) {
+        def body = [name: name, email: email, password: 'geheim123']
+        if (deviceId != null) {
+            body.deviceId = deviceId
+        }
+        send(post('/api/auth/register'), body: body)
     }
 
     /** bearer: optional mitgeschickter (z. B. alter) Bearer-Token. */
