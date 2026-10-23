@@ -1,21 +1,28 @@
 package com.github.svenfran.budgetapp.budgetappbackend.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
 import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository
 import com.github.svenfran.budgetapp.budgetappbackend.service.JwtService
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.ApiRequests
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
+import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.security.core.userdetails.User as SpringUser
+
+import java.time.LocalDate
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 
 /**
  * DIV-22: E-Mail-Adressen sind unabhängig von Groß-/Kleinschreibung und umgebenden Leerzeichen.
+ * DIV-18: JWT-Filter Ende-zu-Ende – widerrufene/abgelaufene Tokens (DB-Flags und JWT-exp), falsche DeviceId,
+ * Logout, nicht verwertbare JWTs (403 statt Serverfehler) und öffentliche Endpunkte mit ungültigem Bearer-Header.
  * Enthält auch Fälle des Fehlermeldungs-Vertrags (Liste der Meldungen: {@link CartControllerApiSpec}).
  */
 class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequests {
@@ -23,10 +30,15 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
     private static final Logger LOG = LoggerFactory.getLogger(AuthenticationControllerApiSpec)
 
     static final String DEVICE = 'device-1'
+    /** Dummy-Secret (Base64, 45 Byte), das nicht dem Test-Secret entspricht. */
+    static final String FREMDER_SECRET = 'ZGl2dnktZnJlbWRlci1kdW1teS1zY2hsdWVzc2VsLW51ci1mdWVyLXRlc3Rz'
+    static final Date ABGELAUFEN_AM = DateUtils.toDate(LocalDate.of(2025, 1, 1))
+    static final Date AUSGESTELLT_AM = DateUtils.toDate(LocalDate.of(2024, 12, 11))
 
     @Autowired UserRepository userRepository
     @Autowired ObjectMapper objectMapper
     @Autowired JwtService jwtService
+    @Value('${secret_key}') String secretKey
 
     def "Registrierung speichert die E-Mail normalisiert und liefert sie so zurück"() {
         given:
@@ -179,12 +191,64 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
         nachher == 403
     }
 
+    def "Nicht verwertbares JWT (#fall) führt zu 403 statt Serverfehler"() {
+        given:
+        def alfred = fixtures.user()
+        def jwt = [
+                'abgelaufen'    : { TestData.jwt(secret: secretKey, subject: alfred.email, deviceId: DEVICE,
+                                                 issuedAt: AUSGESTELLT_AM, expiration: ABGELAUFEN_AM) },
+                'fremd signiert': { TestData.jwt(secret: FREMDER_SECRET, subject: alfred.email, deviceId: DEVICE,
+                                                 expiration: DateUtils.toDate(DateUtils.NO_END_DATE)) },
+                'unlesbar'      : { 'kein-jwt' },
+                'leer'          : { '' },
+        ][fall]()
+        // unlesbar/leer ohne DB-Zeile: das JWT wird vor dem Token-Lookup geparst
+        def tokenId = gespeichert ? fixtures.token(alfred, token: jwt, deviceId: DEVICE).id : null
+        LOG.info('Szenario: JWT {} für Nutzer {} auf {}, gespeichert als Token {}', fall, alfred.id, DEVICE, tokenId)
+
+        expect:
+        callProtectedEndpoint(jwt).status == 403
+
+        where:
+        fall             | gespeichert
+        'abgelaufen'     | true
+        'fremd signiert' | true
+        'unlesbar'       | false
+        'leer'           | false
+    }
+
+    def "Login mit abgelaufenem Bearer-Header liefert 200 und einen verwendbaren Token"() {
+        given:
+        def max = json(register('max', 'max@example.de'))
+        def abgelaufen = TestData.jwt(secret: secretKey, subject: 'max@example.de', deviceId: DEVICE,
+                issuedAt: AUSGESTELLT_AM, expiration: ABGELAUFEN_AM)
+        LOG.info('Szenario: registriert max (Nutzer {}), Login auf {} mit abgelaufenem Bearer-Token für max (exp 2025-01-01)',
+                max.id, DEVICE)
+
+        when:
+        def response = authenticate('max@example.de', abgelaufen)
+        def neuerToken = json(response).token
+        def geschuetzt = callProtectedEndpoint(neuerToken).status
+        LOG.info('Antwort: Login {}, neuer Token erhalten {}, geschützter Request damit {}',
+                response.status, neuerToken as boolean, geschuetzt)
+
+        then:
+        response.status == 200
+        neuerToken
+        geschuetzt == 200
+    }
+
     private MockHttpServletResponse register(String name, String email) {
         send(post('/api/auth/register'), body: [name: name, email: email, password: 'geheim123', deviceId: DEVICE])
     }
 
-    private MockHttpServletResponse authenticate(String email) {
-        send(post('/api/auth/authenticate'), body: [email: email, password: 'geheim123', deviceId: DEVICE])
+    /** bearer: optional mitgeschickter (z. B. alter) Bearer-Token. */
+    private MockHttpServletResponse authenticate(String email, String bearer = null) {
+        def request = post('/api/auth/authenticate')
+        if (bearer != null) {
+            request.header('Authorization', JwtService.BEARER_PREFIX + bearer).header('deviceId', DEVICE)
+        }
+        send(request, body: [email: email, password: 'geheim123', deviceId: DEVICE])
     }
 
     /** deviceId null: Header wird weggelassen. */

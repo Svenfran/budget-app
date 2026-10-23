@@ -2,6 +2,7 @@ package com.github.svenfran.budgetapp.budgetappbackend.config;
 
 import com.github.svenfran.budgetapp.budgetappbackend.repository.TokenRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.service.JwtService;
+import io.jsonwebtoken.JwtException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -34,19 +35,24 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull FilterChain filterChain) throws ServletException, IOException {
         final String authHeader = request.getHeader("Authorization");
-        final String deviceIdFromRequest = request.getHeader("deviceId");
-        final String jwt;
-        final String userEmail;
-        final String deviceIdFromToken;
 
         if (authHeader == null || !authHeader.startsWith(JwtService.BEARER_PREFIX)) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        jwt = authHeader.substring(JwtService.BEARER_PREFIX.length());
-        userEmail = jwtService.extractUsername(jwt);
-        deviceIdFromToken = jwtService.extractDeviceId(jwt);
+        try {
+            authenticateIfValid(request, authHeader.substring(JwtService.BEARER_PREFIX.length()));
+        } catch (JwtException | IllegalArgumentException e) {
+            // expired, tampered or malformed JWT: continue unauthenticated
+        }
+        filterChain.doFilter(request, response);
+    }
+
+    private void authenticateIfValid(HttpServletRequest request, String jwt) {
+        final String deviceIdFromRequest = request.getHeader("deviceId");
+        final String userEmail = jwtService.extractUsername(jwt);
+        final String deviceIdFromToken = jwtService.extractDeviceId(jwt);
 
         if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             UserDetails userDetails;
@@ -54,7 +60,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 userDetails = this.userDetailsService.loadUserByUsername(userEmail);
             } catch (UsernameNotFoundException e) {
                 // e.g. token of a deleted (anonymized) user: continue unauthenticated
-                filterChain.doFilter(request, response);
                 return;
             }
             var isTokenValid = tokenRepository.findByToken(jwt)
@@ -76,6 +81,5 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 SecurityContextHolder.getContext().setAuthentication(authToken);
             }
         }
-        filterChain.doFilter(request, response);
     }
 }
