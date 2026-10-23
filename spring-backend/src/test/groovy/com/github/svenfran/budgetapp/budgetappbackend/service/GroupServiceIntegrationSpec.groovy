@@ -1,5 +1,10 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service
 
+import com.github.svenfran.budgetapp.budgetappbackend.dto.AddGroupMemberDto
+import com.github.svenfran.budgetapp.budgetappbackend.dto.ChangeGroupOwnerDto
+import com.github.svenfran.budgetapp.budgetappbackend.dto.GroupDto
+import com.github.svenfran.budgetapp.budgetappbackend.dto.RemoveGroupMemberDto
+import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository
@@ -40,5 +45,107 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
         then:
         averageImZeitraum == 30d
         averageVorZeitraum == 0d
+    }
+
+    // Auslösung der Benachrichtigungen (Konzept 3.8, Ebene 1). Topic, Empfänger und Payload prüft NotificationServiceSpec.
+
+    def "Gruppe umbenennen löst update-group mit dem neuen Namen aus"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def groupId = wg.group.id
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), Mitglied {}; neuer Name "Neue WG"', groupId, wg.owner.id, ben.id)
+
+        when:
+        def updated = groupService.updateGroup(new GroupDto(id: groupId, name: 'Neue WG'))
+        LOG.info('groupService.updateGroup(Gruppe {}, name "Neue WG") -> name "{}"', groupId, updated.name)
+
+        then:
+        1 * notificationService.sendGroupUpdateNotification(groupId, { it.id == groupId && it.name == 'Neue WG' })
+        0 * notificationService._
+    }
+
+    def "Mitglied hinzufügen löst add-group-member mit dem neuen Mitglied aus"() {
+        given:
+        def wg = fixtures.group()
+        def ben = fixtures.user()
+        def groupId = wg.group.id
+        def benId = ben.id
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), neues Mitglied {}', groupId, wg.owner.id, benId)
+
+        when:
+        def result = groupService.addMemberToGroup(new AddGroupMemberDto(id: groupId, newMemberEmail: ben.email))
+        LOG.info('groupService.addMemberToGroup(Gruppe {}, Nutzer {}) -> updatedMember {}', groupId, benId, result.updatedMember.id)
+
+        then:
+        1 * notificationService.sendGroupMemberAddedNotification(groupId, { it.id == groupId && it.updatedMember.id == benId })
+        0 * notificationService._
+    }
+
+    def "Mitglied entfernen löst remove-group-member mit der Mitgliederliste von vor der Entfernung aus"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def groupId = wg.group.id
+        def ownerId = wg.owner.id
+        def benId = ben.id
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet) entfernt Mitglied {}', groupId, ownerId, benId)
+
+        when:
+        def result = groupService.removeMemberFromGroup(new RemoveGroupMemberDto(id: groupId, member: new UserDto(id: benId)))
+        LOG.info('groupService.removeMemberFromGroup(Gruppe {}, Nutzer {}) -> updatedMember {}', groupId, benId, result.updatedMember.id)
+
+        then: "die Liste enthält das entfernte Mitglied, damit dessen Client die Gruppe verwirft"
+        1 * notificationService.sendGroupMemberRemovedNotification(
+                { it*.userId as Set == [ownerId, benId] as Set },
+                { it.id == groupId && it.updatedMember.id == benId })
+        0 * notificationService._
+    }
+
+    def "Gruppe löschen löst delete-group mit den aktiven Mitgliedern aus"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def groupId = wg.group.id
+        def ownerId = wg.owner.id
+        def benId = ben.id
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), Mitglied {}', groupId, ownerId, benId)
+
+        when:
+        groupService.deleteGroup(groupId)
+        LOG.info('groupService.deleteGroup(Gruppe {}) aufgerufen', groupId)
+
+        then:
+        1 * notificationService.sendGroupDeletedNotification(
+                { it*.userId as Set == [ownerId, benId] as Set },
+                { it.id == groupId })
+        0 * notificationService._
+    }
+
+    def "Ownerwechsel löst change-group-owner mit dem neuen Owner aus"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def groupId = wg.group.id
+        def benId = ben.id
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet) übergibt an Mitglied {}', groupId, wg.owner.id, benId)
+
+        when:
+        groupService.changeGroupOwner(new ChangeGroupOwnerDto(new UserDto(id: benId), groupId))
+        LOG.info('groupService.changeGroupOwner(Gruppe {}, neuer Owner {}) aufgerufen', groupId, benId)
+
+        then:
+        1 * notificationService.sendGroupOwnerChangedNotification(groupId, { it.id == benId })
+        0 * notificationService._
     }
 }

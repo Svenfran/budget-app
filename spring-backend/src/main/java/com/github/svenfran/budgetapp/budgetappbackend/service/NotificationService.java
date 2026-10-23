@@ -6,7 +6,6 @@ import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.actuate.health.HealthEndpoint;
 import org.springframework.context.ApplicationContext;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -20,25 +19,20 @@ public class NotificationService {
 
     Logger logger = LoggerFactory.getLogger(NotificationService.class);
 
-    @Autowired
-    GroupMembershipHistoryService gmhService;
-
-    @Autowired
-    VerificationService verificationService;
-
-    @Autowired
-    DataLoaderService dataLoaderService;
-
-    @Autowired
-    HealthCheckService healthCheckService;
-
     private final SimpMessagingTemplate messagingTemplate;
 
     private final ApplicationContext applicationContext;
 
-    public NotificationService(SimpMessagingTemplate messagingTemplate, ApplicationContext applicationContext) {
+    private final GroupMembershipHistoryService gmhService;
+
+    private final DataLoaderService dataLoaderService;
+
+    public NotificationService(SimpMessagingTemplate messagingTemplate, ApplicationContext applicationContext,
+                               GroupMembershipHistoryService gmhService, DataLoaderService dataLoaderService) {
         this.messagingTemplate = messagingTemplate;
         this.applicationContext = applicationContext;
+        this.gmhService = gmhService;
+        this.dataLoaderService = dataLoaderService;
     }
 
     public void sendShoppingListNotification(Long groupId, AddEditShoppingListDto dto, String action) throws UserNotFoundException {
@@ -54,6 +48,7 @@ public class NotificationService {
     }
 
     public void sendShoppingItemDeleteAllNotification(Long groupId, List<AddEditShoppingItemDto> dtos) throws UserNotFoundException {
+        if (dtos.isEmpty()) return;
         var history = gmhService.getGroupMembersAndOwner(groupId);
         notifyMembers(history, "/notification/delete-all-items", dtos,
                 "deleted all shopping items of list with id {} and group with id {}",
