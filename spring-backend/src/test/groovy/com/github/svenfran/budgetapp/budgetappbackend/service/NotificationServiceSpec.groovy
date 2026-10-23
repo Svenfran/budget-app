@@ -32,14 +32,9 @@ class NotificationServiceSpec extends Specification {
     def dataLoaderService = Stub(DataLoaderService) {
         getAuthenticatedUser() >> TestData.user(id: 1L)
     }
-    def service = new NotificationService(messagingTemplate, applicationContext)
+    def service = new NotificationService(messagingTemplate, applicationContext, gmhService, dataLoaderService)
 
     def aktiveMitglieder = [1L, 2L, 3L].collect { TestData.membership(userId: it, groupId: GRUPPE_ID) }
-
-    def setup() {
-        service.gmhService = gmhService
-        service.dataLoaderService = dataLoaderService
-    }
 
     def "Gruppen-Update geht an alle aktiven Mitglieder außer dem auslösenden Nutzer"() {
         given:
@@ -178,15 +173,14 @@ class NotificationServiceSpec extends Specification {
         0 * messagingTemplate._
     }
 
-    def "Leere Liste bei delete-all-items wirft IndexOutOfBoundsException und sendet nichts"() {
-        // Ist-Verhalten: Die Log-Argumente lesen dtos.get(0) vor dem Versand. Im Betrieb tritt der Fall nicht auf,
-        // weil ShoppingItemService.deleteAllCompletedShoppingItems bei leerer Liste vorher abbricht.
+    def "Leere Liste bei delete-all-items sendet nichts und wirft nicht"() {
+        // Regression: Früher las das Logging dtos.get(0) und warf eine IndexOutOfBoundsException.
         when:
         service.sendShoppingItemDeleteAllNotification(GRUPPE_ID, [])
 
         then:
-        thrown(IndexOutOfBoundsException)
-        1 * gmhService.getGroupMembersAndOwner(GRUPPE_ID) >> aktiveMitglieder
+        noExceptionThrown()
+        0 * gmhService._
         0 * messagingTemplate._
     }
 
