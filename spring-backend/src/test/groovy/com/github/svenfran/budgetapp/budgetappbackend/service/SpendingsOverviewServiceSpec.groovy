@@ -1,9 +1,15 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service
 
+import com.github.svenfran.budgetapp.budgetappbackend.constants.UserEnum
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Cart
+import com.github.svenfran.budgetapp.budgetappbackend.entity.Group
 import com.github.svenfran.budgetapp.budgetappbackend.entity.GroupMembershipHistory
+import com.github.svenfran.budgetapp.budgetappbackend.entity.User
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
+import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository
+import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
+import org.springframework.security.crypto.password.PasswordEncoder
 import spock.lang.Specification
 
 import java.time.Duration
@@ -14,10 +20,110 @@ import static java.time.LocalDate.of
 /**
  * Öffentliche Hilfsmethoden von SpendingsOverviewService (ohne Spring). Mitgliedschaften als Liste von
  * [Beginn, Ende]-Paaren; Ende null = offen (NO_END_DATE).
+ *
+ * Die Übersichts-Features (DIV-34) laufen mit gemocktem DataLoaderService/CartRepository und prüfen Ladeaufrufe,
+ * Nutzernamen und Nutzerreihenfolge; die Werte selbst prüft SpendingsOverviewServiceIntegrationSpec.
  */
 class SpendingsOverviewServiceSpec extends Specification {
 
+    static final Long GRUPPE_ID = 1L
+
+    def dataLoaderService = Mock(DataLoaderService)
+    def cartRepository = Mock(CartRepository)
     def service = new SpendingsOverviewService()
+
+    def setup() {
+        service.dataLoaderService = dataLoaderService
+        service.cartRepository = cartRepository
+        service.verificationService = new VerificationService(Mock(PasswordEncoder), Mock(UserRepository))
+    }
+
+    def "#endpoint lädt Carts und Mitgliedschaftshistorie genau einmal und jeden Nutzer höchstens einmal"() {
+        given: "Anna (Owner) und Ben seit 2024; Einkäufe 2024 und in zwei Monaten 2025, also mehrere Perioden"
+        def anna = TestData.user(id: 101L, name: 'Anna')
+        def ben = TestData.user(id: 102L, name: 'Ben')
+        def gruppe = gruppe(anna, [ben])
+        def historie = [anna, ben].collect { mitgliedschaft(it, of(2024, 1, 1), null) }
+        def carts = [einkauf(1L, gruppe, anna, of(2024, 5, 1)),
+                     einkauf(2L, gruppe, ben, of(2025, 1, 10)),
+                     einkauf(3L, gruppe, anna, of(2025, 3, 10))]
+        angemeldet(anna, gruppe, [2025, 2024])
+
+        when:
+        aufruf(service)
+
+        then:
+        1 * dataLoaderService.loadCartListForGroup(GRUPPE_ID) >> carts
+        1 * dataLoaderService.loadMembershipHistoryForGroup(GRUPPE_ID) >> historie
+        0 * dataLoaderService.loadMembershipHistoryForGroupAndUser(*_)
+        1 * dataLoaderService.loadUser(101L) >> anna
+        1 * dataLoaderService.loadUser(102L) >> ben
+
+        where:
+        endpoint               | aufruf
+        'Gesamtübersicht'      | { SpendingsOverviewService s -> s.getSpendingsForGroupAndAllYears(GRUPPE_ID) }
+        'Jahresübersicht 2025' | { SpendingsOverviewService s -> s.getSpendingsForGroupAndYear(2025, GRUPPE_ID) }
+    }
+
+    def "Gelöschter Nutzer ohne offene Mitgliedschaft erscheint ohne REMOVED-Zusatz"() {
+        given: "Anna (Owner) offen; gelöschter Nutzer und Ben nur 2024 Mitglied"
+        def anna = TestData.user(id: 101L, name: 'Anna')
+        def ben = TestData.user(id: 102L, name: 'Ben')
+        def geloescht = TestData.user(id: 103L, name: UserEnum.USER_DELETED.getName())
+        def gruppe = gruppe(anna, [])
+        def historie = [mitgliedschaft(anna, of(2024, 1, 1), null),
+                        mitgliedschaft(ben, of(2024, 1, 1), of(2024, 12, 31)),
+                        mitgliedschaft(geloescht, of(2024, 1, 1), of(2024, 12, 31))]
+        angemeldet(anna, gruppe, [2024])
+        stammdaten([anna, ben, geloescht], historie, [einkauf(1L, gruppe, anna, of(2024, 5, 1))])
+
+        when:
+        def gesamt = service.getSpendingsForGroupAndAllYears(GRUPPE_ID)
+
+        then:
+        gesamt.spendingsTotalYear.spendingsTotalUser.collectEntries { [it.userId, it.userName] } ==
+                [(101L): 'Anna', (102L): 'Ben REMOVED', (103L): 'DELETED']
+    }
+
+    def "Nutzer erscheinen in der Reihenfolge der Mitgliedschaftshistorie, auch bei mehreren Mitgliedschaften"() {
+        given: "Historie Ben, Anna, Ben (Wiedereintritt) – nicht nach ID sortiert"
+        def anna = TestData.user(id: 101L, name: 'Anna')
+        def ben = TestData.user(id: 102L, name: 'Ben')
+        def gruppe = gruppe(anna, [ben])
+        def historie = [mitgliedschaft(ben, of(2024, 1, 1), of(2024, 6, 30)),
+                        mitgliedschaft(anna, of(2024, 1, 1), null),
+                        mitgliedschaft(ben, of(2024, 9, 1), null)]
+        angemeldet(anna, gruppe, [2024])
+        stammdaten([anna, ben], historie, [einkauf(1L, gruppe, anna, of(2024, 10, 1))])
+
+        when:
+        def gesamt = service.getSpendingsForGroupAndAllYears(GRUPPE_ID)
+        def jahr = service.getSpendingsForGroupAndYear(2024, GRUPPE_ID)
+
+        then:
+        gesamt.spendingsTotalYear.spendingsTotalUser*.userId == [102L, 101L]
+        gesamt.spendingsPerYear.collect { it.spendingsYearlyUser*.userId } == [[102L, 101L]]
+        jahr.spendingsTotalYear.spendingsTotalUser*.userId == [102L, 101L]
+        jahr.spendingsPerMonth.collect { it.spendingsMonthlyUser*.userId } == [[102L, 101L]]
+    }
+
+    def "Jahresübersicht für ein Jahr ohne Carts lädt keine Nutzer"() {
+        given: "Einkauf nur 2024"
+        def anna = TestData.user(id: 101L, name: 'Anna')
+        def gruppe = gruppe(anna, [])
+        def historie = [mitgliedschaft(anna, of(2024, 1, 1), null)]
+        angemeldet(anna, gruppe, [2024])
+        dataLoaderService.loadCartListForGroup(GRUPPE_ID) >> [einkauf(1L, gruppe, anna, of(2024, 5, 1))]
+        dataLoaderService.loadMembershipHistoryForGroup(GRUPPE_ID) >> historie
+
+        when:
+        def jahr = service.getSpendingsForGroupAndYear(2025, GRUPPE_ID)
+
+        then:
+        0 * dataLoaderService.loadUser(_)
+        jahr.spendingsTotalYear.spendingsTotalUser == []
+        jahr.spendingsPerMonth == []
+    }
 
     def "Mitgliedschaften #zeitraeume zählen im Jahr #year: #expected (#fall)"() {
         expect:
@@ -146,6 +252,36 @@ class SpendingsOverviewServiceSpec extends Specification {
          of(2025, 11, 30),
          of(2024, 12, 31)]
                 .collect { TestData.cart(datePurchased: DateUtils.toDate(it)) }
+    }
+
+    private static Group gruppe(User owner, List<User> mitglieder) {
+        TestData.group(id: GRUPPE_ID, owner: owner, members: mitglieder as Set)
+    }
+
+    private static GroupMembershipHistory mitgliedschaft(User user, LocalDate beginn, LocalDate ende) {
+        TestData.membership(userId: user.id, groupId: GRUPPE_ID, membershipStart: DateUtils.toDate(beginn),
+                membershipEnd: ende == null ? null : DateUtils.toDate(ende))
+    }
+
+    private static Cart einkauf(Long id, Group gruppe, User zahler, LocalDate tag) {
+        TestData.cart(id: id, group: gruppe, user: zahler, amount: 10d, datePurchased: DateUtils.toDate(tag))
+    }
+
+    /** Angemeldeter Nutzer, Gruppe und verfügbare Jahre – Voraussetzungen beider Einstiegspunkte. */
+    private void angemeldet(User user, Group gruppe, List<Integer> jahre) {
+        dataLoaderService.getAuthenticatedUser() >> user
+        dataLoaderService.loadGroup(GRUPPE_ID) >> gruppe
+        cartRepository.getAvailableYearsForGroup(GRUPPE_ID) >> jahre
+    }
+
+    /** Carts, Historie und Nutzer ohne Aufrufzählung (auch die Pro-Nutzer-Historie, die der Service vor DIV-34 lud). */
+    private void stammdaten(List<User> nutzer, List<GroupMembershipHistory> historie, List<Cart> carts) {
+        dataLoaderService.loadCartListForGroup(GRUPPE_ID) >> carts
+        dataLoaderService.loadMembershipHistoryForGroup(GRUPPE_ID) >> historie
+        dataLoaderService.loadMembershipHistoryForGroupAndUser(GRUPPE_ID, _) >> { Long groupId, Long userId ->
+            historie.findAll { it.userId == userId }
+        }
+        dataLoaderService.loadUser(_) >> { Long id -> nutzer.find { it.id == id } }
     }
 
     private static List<GroupMembershipHistory> history(List zeitraeume) {
