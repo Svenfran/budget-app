@@ -115,6 +115,70 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
         callProtectedEndpoint(jwt).status == 403
     }
 
+    def "Gespeicherter Token mit expired=#expired, revoked=#revoked wird mit 403 abgelehnt"() {
+        given:
+        def alfred = fixtures.user()
+        def jwt = jwtService.generateToken(alfred, DEVICE)
+        def token = fixtures.token(alfred, token: jwt, deviceId: DEVICE, expired: expired, revoked: revoked)
+        LOG.info('Szenario: Token {} von Nutzer {} auf {}, expired {}, revoked {}', token.id, alfred.id, DEVICE, expired, revoked)
+
+        expect:
+        callProtectedEndpoint(jwt).status == 403
+
+        where:
+        expired | revoked
+        true    | false
+        false   | true
+        true    | true
+    }
+
+    def "Falsche DeviceId (#fall) führt zu 403"() {
+        given:
+        def alfred = fixtures.user()
+        def jwt = jwtService.generateToken(alfred, claimDevice)
+        def token = fixtures.token(alfred, token: jwt, deviceId: gespeichertesDevice)
+        LOG.info('Szenario: Token {} von Nutzer {}, DeviceId im Claim {}, gespeichert {}, im Header {}',
+                token.id, alfred.id, claimDevice, gespeichertesDevice, headerDevice)
+
+        expect:
+        callProtectedEndpoint(jwt, headerDevice).status == 403
+
+        where:
+        fall                              | claimDevice | gespeichertesDevice | headerDevice
+        'Header weicht ab'                | DEVICE      | DEVICE              | 'device-2'
+        'Header fehlt'                    | DEVICE      | DEVICE              | null
+        'gespeicherte DeviceId weicht ab' | DEVICE      | 'device-2'          | DEVICE
+        'Claim weicht ab'                 | 'device-2'  | DEVICE              | DEVICE
+    }
+
+    def "Mit dem beim Login ausgegebenen Token ist ein geschützter Request erlaubt"() {
+        given:
+        register('max', 'max@example.de')
+        def login = json(authenticate('max@example.de'))
+        LOG.info('Szenario: registriert max mit max@example.de, Login auf {} liefert Token für Nutzer {}', DEVICE, login.id)
+
+        expect:
+        callProtectedEndpoint(login.token).status == 200
+    }
+
+    def "Nach dem Logout wird derselbe Token mit 403 abgelehnt"() {
+        given:
+        def registrierung = json(register('max', 'max@example.de'))
+        def jwt = registrierung.token
+        LOG.info('Szenario: registriert max mit max@example.de, Token für Nutzer {} auf {}', registrierung.id, DEVICE)
+
+        when:
+        def vorher = callProtectedEndpoint(jwt).status
+        def abgemeldet = logout(jwt).status
+        def nachher = callProtectedEndpoint(jwt).status
+        LOG.info('Antwort: vor dem Logout {}, Logout {}, nach dem Logout {}', vorher, abgemeldet, nachher)
+
+        then:
+        vorher == 200
+        abgemeldet == 200
+        nachher == 403
+    }
+
     private MockHttpServletResponse register(String name, String email) {
         send(post('/api/auth/register'), body: [name: name, email: email, password: 'geheim123', deviceId: DEVICE])
     }
@@ -123,8 +187,17 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
         send(post('/api/auth/authenticate'), body: [email: email, password: 'geheim123', deviceId: DEVICE])
     }
 
-    private MockHttpServletResponse callProtectedEndpoint(String jwt) {
-        send(get('/api/groups/sidenav')
+    /** deviceId null: Header wird weggelassen. */
+    private MockHttpServletResponse callProtectedEndpoint(String jwt, String deviceId = DEVICE) {
+        def request = get('/api/groups/sidenav').header('Authorization', JwtService.BEARER_PREFIX + jwt)
+        if (deviceId != null) {
+            request.header('deviceId', deviceId)
+        }
+        send(request)
+    }
+
+    private MockHttpServletResponse logout(String jwt) {
+        send(post('/api/auth/logout')
                 .header('Authorization', JwtService.BEARER_PREFIX + jwt)
                 .header('deviceId', DEVICE))
     }
