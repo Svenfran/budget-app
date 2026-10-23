@@ -1,9 +1,13 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service
 
+import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto
+import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingListDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.GroupDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.GroupMembersDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
+import org.springframework.boot.actuate.health.Health
+import org.springframework.boot.actuate.health.HealthEndpoint
 import org.springframework.context.ApplicationContext
 import org.springframework.messaging.simp.SimpMessagingTemplate
 import spock.lang.Specification
@@ -113,6 +117,91 @@ class NotificationServiceSpec extends Specification {
         1 * messagingTemplate.convertAndSendToUser('2', '/notification/remove-group-member', dto)
         1 * messagingTemplate.convertAndSendToUser('3', '/notification/remove-group-member', dto)  // entferntes Mitglied
         0 * messagingTemplate.convertAndSendToUser('1', _, _)
+        0 * messagingTemplate._
+    }
+
+    def "Einkaufsliste #action geht auf /notification/#action-list an alle außer dem auslösenden Nutzer"() {
+        given:
+        def dto = new AddEditShoppingListDto(id: 5L, name: 'Wocheneinkauf', groupId: GRUPPE_ID)
+
+        when:
+        service.sendShoppingListNotification(GRUPPE_ID, dto, action)
+
+        then:
+        1 * gmhService.getGroupMembersAndOwner(GRUPPE_ID) >> aktiveMitglieder
+        1 * messagingTemplate.convertAndSendToUser('2', topic, dto)
+        1 * messagingTemplate.convertAndSendToUser('3', topic, dto)
+        0 * messagingTemplate.convertAndSendToUser('1', _, _)
+        0 * messagingTemplate._
+
+        where:
+        action   || topic
+        'add'    || '/notification/add-list'
+        'update' || '/notification/update-list'
+        'delete' || '/notification/delete-list'
+    }
+
+    def "Eintrag #action geht auf /notification/#action-item an alle außer dem auslösenden Nutzer"() {
+        given:
+        def dto = new AddEditShoppingItemDto(id: 11L, name: 'Milch', shoppingListId: 5L, groupId: GRUPPE_ID)
+
+        when:
+        service.sendShoppingItemNotification(GRUPPE_ID, dto, action)
+
+        then:
+        1 * gmhService.getGroupMembersAndOwner(GRUPPE_ID) >> aktiveMitglieder
+        1 * messagingTemplate.convertAndSendToUser('2', topic, dto)
+        1 * messagingTemplate.convertAndSendToUser('3', topic, dto)
+        0 * messagingTemplate.convertAndSendToUser('1', _, _)
+        0 * messagingTemplate._
+
+        where:
+        action   || topic
+        'add'    || '/notification/add-item'
+        'update' || '/notification/update-item'
+        'delete' || '/notification/delete-item'
+    }
+
+    def "Alle erledigten Einträge gelöscht: Liste der DTOs geht auf delete-all-items an alle außer dem auslösenden Nutzer"() {
+        given: "zwei unterschiedliche Einträge, damit eine gekürzte oder umsortierte Liste auffällt"
+        def milch = new AddEditShoppingItemDto(id: 11L, name: 'Milch', shoppingListId: 5L, groupId: GRUPPE_ID)
+        def brot = new AddEditShoppingItemDto(id: 12L, name: 'Brot', shoppingListId: 5L, groupId: GRUPPE_ID)
+
+        when:
+        service.sendShoppingItemDeleteAllNotification(GRUPPE_ID, [milch, brot])
+
+        then: "Listen werden nach Inhalt und Reihenfolge verglichen, die Einträge selbst per Referenz"
+        1 * gmhService.getGroupMembersAndOwner(GRUPPE_ID) >> aktiveMitglieder
+        1 * messagingTemplate.convertAndSendToUser('2', '/notification/delete-all-items', [milch, brot])
+        1 * messagingTemplate.convertAndSendToUser('3', '/notification/delete-all-items', [milch, brot])
+        0 * messagingTemplate.convertAndSendToUser('1', _, _)
+        0 * messagingTemplate._
+    }
+
+    def "Leere Liste bei delete-all-items wirft IndexOutOfBoundsException und sendet nichts"() {
+        // Ist-Verhalten: Die Log-Argumente lesen dtos.get(0) vor dem Versand. Im Betrieb tritt der Fall nicht auf,
+        // weil ShoppingItemService.deleteAllCompletedShoppingItems bei leerer Liste vorher abbricht.
+        when:
+        service.sendShoppingItemDeleteAllNotification(GRUPPE_ID, [])
+
+        then:
+        thrown(IndexOutOfBoundsException)
+        1 * gmhService.getGroupMembersAndOwner(GRUPPE_ID) >> aktiveMitglieder
+        0 * messagingTemplate._
+    }
+
+    def "Health-Status wird als Broadcast auf /notification/health gesendet"() {
+        given:
+        def healthEndpoint = Mock(HealthEndpoint)
+        def health = Health.up().build()
+
+        when:
+        service.sendHealthStatus()
+
+        then:
+        1 * applicationContext.getBean(HealthEndpoint) >> healthEndpoint
+        1 * healthEndpoint.health() >> health
+        1 * messagingTemplate.convertAndSend('/notification/health', health)
         0 * messagingTemplate._
     }
 }
