@@ -43,7 +43,10 @@ public class ShoppingItemService {
         verificationService.verifyShoppingListIsPartOfGroup(shoppingList, group);
         group.setLastUpdateShoppingList(new Date());
         groupRepository.save(group);
-        var addedItem =  new AddEditShoppingItemDto(shoppingItemRepository.save(shoppingItemDtoMapper.addEditShoppingItemDtoToEntity(dto, shoppingList)));
+        var newItem = shoppingItemDtoMapper.addEditShoppingItemDtoToEntity(dto, shoppingList);
+        // Anlegen legt immer neu an: eine mitgesendete ID würde per merge einen bestehenden (auch fremden) Eintrag überschreiben
+        newItem.setId(null);
+        var addedItem = new AddEditShoppingItemDto(shoppingItemRepository.save(newItem));
 
         notificationService.sendShoppingItemNotification(
                 group.getId(),
@@ -104,10 +107,17 @@ public class ShoppingItemService {
         verificationService.verifyIsPartOfGroup(user, group);
         var shoppingList = dataLoaderService.loadShoppingList(dtos.get(0).getShoppingListId());
         verificationService.verifyShoppingListIsPartOfGroup(shoppingList, group);
-        var shoppingItem = dataLoaderService.loadShoppingItem(dtos.get(0).getId());
-        verificationService.verifyShoppingItemIsPartOfShoppingList(shoppingList, shoppingItem);
-        var itemIds = new ArrayList<>(dtos.stream()
+        // Jeden Eintrag prüfen (auch nicht erledigte), bevor etwas geschrieben wird: die Exceptions sind checked und
+        // lösen keinen Rollback aus
+        for (var itemDto : dtos) {
+            var shoppingItem = dataLoaderService.loadShoppingItem(itemDto.getId());
+            verificationService.verifyShoppingItemIsPartOfShoppingList(shoppingList, shoppingItem);
+        }
+        // Nur erledigte Einträge werden gelöscht und gemeldet: Empfänger entfernen alle übermittelten IDs
+        var completedDtos = dtos.stream()
                 .filter(AddEditShoppingItemDto::isCompleted)
+                .toList();
+        var itemIds = new ArrayList<>(completedDtos.stream()
                 .map(AddEditShoppingItemDto::getId)
                 .toList());
         group.setLastUpdateShoppingList(new Date());
@@ -115,7 +125,7 @@ public class ShoppingItemService {
         shoppingItemRepository.deleteAllById(itemIds);
         notificationService.sendShoppingItemDeleteAllNotification(
                 group.getId(),
-                dtos
+                completedDtos
         );
     }
 
