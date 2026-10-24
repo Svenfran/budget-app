@@ -426,6 +426,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
     }
 
     // ----- addCart (DIV-14): öffentlicher Ablauf mit Anmeldung, Prüfungen und Mitgliederzahl -----
+    // Kategorien stammen immer aus der eigenen Gruppe (fremde Kategorie wird nicht geprüft, DIV-49, bewusst nicht getestet).
 
     def "Mitglied legt einen Einkauf an: gespeichert mit Durchschnitt pro Mitglied"() {
         given:
@@ -704,7 +705,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
     }
 
     // ----- updateCart (DIV-14): öffentlicher Ablauf mit Anmeldung und Prüfungen -----
-    // Die Requests senden immer die groupId des Einkaufs (Bug-Kandidat B1, Gruppenwechsel per DTO, bewusst nicht getestet).
+    // Die Requests senden immer die groupId des Einkaufs (Gruppenwechsel per DTO, DIV-48, bewusst nicht getestet).
 
     def "Eigentümer bearbeitet seinen Einkauf: Werte und Durchschnitt aus der Mitgliederzahl gespeichert"() {
         given:
@@ -879,7 +880,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
 
     // ----- deleteCart (DIV-14) -----
     // Rollback-Spec: Service und Test teilen den Persistence Context. Geprüft wird die Logik der Template-Deaktivierung,
-    // nicht ihr Persistieren ohne eigene Transaktion (deleteCart ist nicht @Transactional, Bug-Kandidat B3).
+    // nicht ihr Persistieren ohne eigene Transaktion (deleteCart ist nicht @Transactional, DIV-50).
 
     def "Eigentümer löscht seinen Einkauf ohne Template"() {
         given:
@@ -1003,7 +1004,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
 
     // ----- addSettlementPayment (DIV-14) -----
     // Ohne Request liest der Translator die JVM-Locale (lokal de, in CI ggf. en): die Features setzen Locale.GERMAN
-    // und setzen sie im cleanup:-Block zurück. Bug-Kandidat B4 (Kategorie per übersetztem Namen) bewusst nicht getestet.
+    // und setzen sie im cleanup:-Block zurück. Kategorie per übersetztem Namen (DIV-51) bewusst nicht getestet.
 
     def "Ausgleichszahlung ohne Settlement-Kategorie legt die Kategorie an und erzeugt zwei gegenläufige Einkäufe"() {
         given:
