@@ -2,16 +2,24 @@ package com.github.svenfran.budgetapp.budgetappbackend.service
 
 import com.github.svenfran.budgetapp.budgetappbackend.constants.RecurrenceType
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto
+import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto
+import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto
 import com.github.svenfran.budgetapp.budgetappbackend.entity.CartTemplate
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.DatePurchasedNotWithinMembershipPeriodException
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOfCartException
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOrMemberOfGroupException
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartTemplateRepository
+import com.github.svenfran.budgetapp.budgetappbackend.repository.CategoryRepository
+import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupMembershipHistoryRepository
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.Fixtures.GroupScenario
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.context.i18n.LocaleContextHolder
 
 import java.time.LocalDate
 
@@ -24,6 +32,8 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
     @Autowired CartService cartService
     @Autowired CartRepository cartRepository
     @Autowired CartTemplateRepository templateRepository
+    @Autowired GroupMembershipHistoryRepository membershipRepository
+    @Autowired CategoryRepository categoryRepository
 
     def "Bearbeiten #originalRecurrenceType -> #updatedRecurrenceType mit Titel '#newTitle' (Template-Update: #updateSelected) hinterlässt aktive Templates #expectedActiveTypes"() {
         given:
@@ -415,10 +425,782 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         replacement.nextExecutionDate == LocalDate.of(2025, 2, 28)
     }
 
+    // ----- addCart (DIV-14): öffentlicher Ablauf mit Anmeldung, Prüfungen und Mitgliederzahl -----
+    // Kategorien stammen immer aus der eigenen Gruppe (fremde Kategorie wird nicht geprüft, DIV-49, bewusst nicht getestet).
+
+    def "Mitglied legt einen Einkauf an: gespeichert mit Durchschnitt pro Mitglied"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def (groupId, benId) = [wg.group.id, ben.id]
+        def dto = TestData.cartDto(groupId: groupId, categoryDto: TestData.categoryDto(wg.category), title: 'Pizza',
+                amount: 40d, datePurchased: DateUtils.toDate(TestData.REFERENCE_DATE))
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Ben {} (angemeldet); Einkauf Pizza 40.00 am {}', groupId, wg.owner.id,
+                benId, TestData.REFERENCE_DATE)
+
+        when:
+        def result = cartService.addCart(dto)
+        flushAndClear()
+        def saved = cartRepository.findById(result.id).get()
+        LOG.info('cartService.addCart(Pizza 40.00) -> Cart {}: User {}, averagePerMember {}, recurrenceType {}', result.id,
+                saved.user.id, saved.averagePerMember, result.recurrenceType)
+
+        then: "Carts werden nicht live synchronisiert"
+        0 * notificationService._
+
+        and:
+        saved.group.id == groupId
+        saved.user.id == benId
+        saved.title == 'Pizza'
+        saved.amount == 40d
+        saved.averagePerMember == 20d
+        saved.template == null
+        templateRepository.findByGroupId(groupId).isEmpty()
+    }
+
+    def "Nicht-Mitglied kann keinen Einkauf anlegen"() {
+        given:
+        def wg = fixtures.group()
+        def fremder = fixtures.user()
+        def groupId = wg.group.id
+        def dto = TestData.cartDto(groupId: groupId, categoryDto: TestData.categoryDto(wg.category))
+        flushAndClear()
+        loginAs(fremder)
+        LOG.info('Szenario: Gruppe {}, Owner {}, angemeldeter User {} ist kein Mitglied', groupId, wg.owner.id, fremder.id)
+
+        when:
+        LOG.info('cartService.addCart(Gruppe {}) als User {}, erwartet NotOwnerOrMemberOfGroupException', groupId, fremder.id)
+        cartService.addCart(dto)
+
+        then:
+        thrown(NotOwnerOrMemberOfGroupException)
+        cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(groupId).isEmpty()
+    }
+
+    def "Ausgetretenes Mitglied kann keinen Einkauf anlegen, auch nicht innerhalb seiner alten Mitgliedschaft"() {
+        given: "Ehemaliger hat eine beendete Mitgliedschaft und steht nicht mehr in group.members"
+        def wg = fixtures.group()
+        def ehemalig = fixtures.user()
+        def groupId = wg.group.id
+        def austritt = TestData.REFERENCE_DATE.minusDays(10)
+        fixtures.membership(wg, ehemalig, membershipStart: DateUtils.toDate(TestData.REFERENCE_DATE.minusYears(1)),
+                membershipEnd: DateUtils.toDate(austritt))
+        def kaufdatum = austritt.minusDays(10)
+        def dto = TestData.cartDto(groupId: groupId, categoryDto: TestData.categoryDto(wg.category),
+                datePurchased: DateUtils.toDate(kaufdatum))
+        flushAndClear()
+        loginAs(ehemalig)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Ehemaliger {} (angemeldet, Mitglied bis {}); Kaufdatum {}', groupId,
+                wg.owner.id, ehemalig.id, austritt, kaufdatum)
+
+        when:
+        LOG.info('cartService.addCart(Gruppe {}, {}) als User {}, erwartet NotOwnerOrMemberOfGroupException', groupId,
+                kaufdatum, ehemalig.id)
+        cartService.addCart(dto)
+
+        then:
+        thrown(NotOwnerOrMemberOfGroupException)
+        cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(groupId).isEmpty()
+    }
+
+    def "Kaufdatum vor Beginn der Mitgliedschaft wird abgelehnt, weder Einkauf noch Template werden gespeichert"() {
+        given: "Ben ist seit REFERENCE_DATE - 1 Jahr Mitglied; der monatliche Einkauf liegt einen Tag davor"
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def groupId = wg.group.id
+        def kaufdatum = TestData.REFERENCE_DATE.minusYears(1).minusDays(1)
+        def dto = TestData.cartDto(groupId: groupId, categoryDto: TestData.categoryDto(wg.category),
+                datePurchased: DateUtils.toDate(kaufdatum), recurrenceType: MONTHLY)
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Ben {} (angemeldet, Mitglied seit {}); Kaufdatum {}, MONTHLY', groupId,
+                wg.owner.id, ben.id, TestData.REFERENCE_DATE.minusYears(1), kaufdatum)
+
+        when:
+        LOG.info('cartService.addCart(Gruppe {}, {}) als Ben, erwartet DatePurchasedNotWithinMembershipPeriodException',
+                groupId, kaufdatum)
+        cartService.addCart(dto)
+
+        then:
+        thrown(DatePurchasedNotWithinMembershipPeriodException)
+        cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(groupId).isEmpty()
+        templateRepository.findByGroupId(groupId).isEmpty()
+    }
+
+    def "Wiederholung #typ legt ein aktives Template mit nächstem Termin #erwartet an"() {
+        given: "Kaufdatum = heute (testClock)"
+        def wg = fixtures.group()
+        def (groupId, ownerId, categoryId) = [wg.group.id, wg.owner.id, wg.category.id]
+        def dto = TestData.cartDto(groupId: groupId, categoryDto: TestData.categoryDto(wg.category), title: 'Miete',
+                amount: 900d, datePurchased: DateUtils.toDate(testClock.today), recurrenceType: typ)
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: heute {}, Gruppe {}, Owner {} (angemeldet); Einkauf Miete 900.00 am {}, {}', testClock.today,
+                groupId, ownerId, testClock.today, typ)
+
+        when:
+        def result = cartService.addCart(dto)
+        flushAndClear()
+        def templates = templateRepository.findByGroupId(groupId)
+        def cartTemplateId = cartRepository.findById(result.id).get().template.id
+        LOG.info('cartService.addCart(Miete, {}) -> Cart {}, Templates {}: nextExecutionDate {}, active {}', typ, result.id,
+                templates*.id, templates*.nextExecutionDate, templates*.active)
+
+        then:
+        templates.size() == 1
+        def template = templates.first()
+        template.active
+        template.recurrenceType == typ
+        template.nextExecutionDate == erwartet
+        template.startDate == testClock.today
+        template.title == 'Miete'
+        template.amount == 900d
+        template.userId == ownerId
+        template.groupId == groupId
+        template.categoryId == categoryId
+        cartTemplateId == template.id
+
+        and: "das zurückgegebene DTO zeigt das Template"
+        result.recurrenceType == typ
+        result.hasActiveTemplate
+        result.templateId == template.id
+
+        where:
+        typ     || erwartet
+        DAILY   || LocalDate.of(2025, 6, 16)
+        WEEKLY  || LocalDate.of(2025, 6, 22)
+        MONTHLY || LocalDate.of(2025, 7, 15)
+        YEARLY  || LocalDate.of(2026, 6, 15)
+    }
+
+    def "Ohne Wiederholung (#typ) legt addCart kein Template an"() {
+        given:
+        def wg = fixtures.group()
+        def groupId = wg.group.id
+        def dto = TestData.cartDto(groupId: groupId, categoryDto: TestData.categoryDto(wg.category), recurrenceType: typ)
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet); Einkauf mit recurrenceType {}', groupId, wg.owner.id, typ)
+
+        when:
+        def result = cartService.addCart(dto)
+        flushAndClear()
+        def templates = templateRepository.findByGroupId(groupId)
+        LOG.info('cartService.addCart(recurrenceType {}) -> Cart {}, recurrenceType {}, Templates {}', typ, result.id,
+                result.recurrenceType, templates*.id)
+
+        then:
+        templates.isEmpty()
+        result.recurrenceType == NONE
+        !result.hasActiveTemplate
+
+        where:
+        typ << [NONE, null]
+    }
+
+    def "Mitgliederzahl zum Kaufdatum: #fall ergibt Durchschnitt #erwartet"() {
+        given: """Owner (seit REFERENCE_DATE - 1 Jahr) legt am REFERENCE_DATE an; Bens Zeitraum liegt auf der Grenze.
+                  Prüft die SQL-Zählung (inklusiv). 0 Mitglieder ist über addCart nicht erreichbar, weil der anlegende
+                  Nutzer selbst Mitglied sein muss; Query bei 0: DataLoaderServiceIntegrationSpec 'Ohne Mitgliedschaft
+                  zum Kaufdatum ist die Mitgliederzahl 0', Mapper bei 0: CartDtoMapperSpec 'Durchschnitt pro Mitglied
+                  ist 0 bei 0 Mitgliedern' (DIV-21)."""
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def groupId = wg.group.id
+        def benMembership = membershipRepository.findByGroupIdAndUserId(groupId, ben.id).first()
+        if (benStart) benMembership.membershipStart = DateUtils.toDate(benStart)
+        benMembership.membershipEnd = benEnde ? DateUtils.toDate(benEnde) : null
+        membershipRepository.save(benMembership)
+        def dto = TestData.cartDto(groupId: groupId, categoryDto: TestData.categoryDto(wg.category), amount: 40d,
+                datePurchased: DateUtils.toDate(TestData.REFERENCE_DATE))
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), Ben {} (Beginn {}, Ende {}); Einkauf 40.00 am {}', groupId,
+                wg.owner.id, ben.id, benStart ?: 'Standard', benEnde ?: 'offen', TestData.REFERENCE_DATE)
+
+        when:
+        def result = cartService.addCart(dto)
+        flushAndClear()
+        def average = cartRepository.findById(result.id).get().averagePerMember
+        LOG.info('cartService.addCart(40.00 am {}) -> Cart {}, averagePerMember {}', TestData.REFERENCE_DATE, result.id,
+                average)
+
+        then:
+        average == erwartet
+
+        where:
+        fall                            | benStart                            | benEnde                              || erwartet
+        'Kauf am Eintrittstag'          | TestData.REFERENCE_DATE             | null                                 || 20d
+        'Kauf am Tag vor dem Eintritt'  | TestData.REFERENCE_DATE.plusDays(1) | null                                 || 40d
+        'Kauf am Austrittstag'          | null                                | TestData.REFERENCE_DATE              || 20d
+        'Kauf am Tag nach dem Austritt' | null                                | TestData.REFERENCE_DATE.minusDays(1) || 40d
+    }
+
+    // Grenztage des anlegenden Nutzers (Java-Verifikation, inklusiv): Ben war bis 20.05.2025 Mitglied, ist ab
+    // 01.06.2025 wieder Mitglied und steht weiter in group.members. Keine offene Historie überdeckt die Lücke.
+
+    def "Kaufdatum am #fall wird angenommen"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def groupId = wg.group.id
+        def aktuell = membershipRepository.findByGroupIdAndUserId(groupId, ben.id).first()
+        aktuell.membershipStart = DateUtils.toDate(LocalDate.of(2025, 6, 1))
+        membershipRepository.save(aktuell)
+        fixtures.membership(wg, ben, membershipStart: DateUtils.toDate(LocalDate.of(2024, 6, 15)),
+                membershipEnd: DateUtils.toDate(LocalDate.of(2025, 5, 20)))
+        def dto = TestData.cartDto(groupId: groupId, categoryDto: TestData.categoryDto(wg.category), amount: 40d,
+                datePurchased: DateUtils.toDate(kaufdatum))
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Ben {} (angemeldet, Mitglied 2024-06-15..2025-05-20 und ab 2025-06-01); ' +
+                'Einkauf 40.00 am {}', groupId, wg.owner.id, ben.id, kaufdatum)
+
+        when:
+        def result = cartService.addCart(dto)
+        flushAndClear()
+        def average = cartRepository.findById(result.id).get().averagePerMember
+        LOG.info('cartService.addCart(40.00 am {}) als Ben -> Cart {}, averagePerMember {}', kaufdatum, result.id, average)
+
+        then: "Owner und Ben zählen am Grenztag mit"
+        average == 20d
+
+        where:
+        fall                                             | kaufdatum
+        'letzten Tag der früheren eigenen Mitgliedschaft' | LocalDate.of(2025, 5, 20)
+        'ersten Tag der neuen eigenen Mitgliedschaft'     | LocalDate.of(2025, 6, 1)
+    }
+
+    def "Kaufdatum am #fall zwischen zwei Mitgliedschaften wird abgelehnt, nichts gespeichert"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def groupId = wg.group.id
+        def aktuell = membershipRepository.findByGroupIdAndUserId(groupId, ben.id).first()
+        aktuell.membershipStart = DateUtils.toDate(LocalDate.of(2025, 6, 1))
+        membershipRepository.save(aktuell)
+        fixtures.membership(wg, ben, membershipStart: DateUtils.toDate(LocalDate.of(2024, 6, 15)),
+                membershipEnd: DateUtils.toDate(LocalDate.of(2025, 5, 20)))
+        def dto = TestData.cartDto(groupId: groupId, categoryDto: TestData.categoryDto(wg.category),
+                datePurchased: DateUtils.toDate(kaufdatum))
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Ben {} (angemeldet, Mitglied 2024-06-15..2025-05-20 und ab 2025-06-01); ' +
+                'Kaufdatum {}', groupId, wg.owner.id, ben.id, kaufdatum)
+
+        when:
+        LOG.info('cartService.addCart(am {}) als Ben, erwartet DatePurchasedNotWithinMembershipPeriodException', kaufdatum)
+        cartService.addCart(dto)
+
+        then:
+        thrown(DatePurchasedNotWithinMembershipPeriodException)
+        cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(groupId).isEmpty()
+
+        where:
+        fall                    | kaufdatum
+        'ersten Tag der Lücke'  | LocalDate.of(2025, 5, 21)
+        'letzten Tag der Lücke' | LocalDate.of(2025, 5, 31)
+    }
+
+    // ----- updateCart (DIV-14): öffentlicher Ablauf mit Anmeldung und Prüfungen -----
+    // Die Requests senden immer die groupId des Einkaufs (Gruppenwechsel per DTO, DIV-48, bewusst nicht getestet).
+
+    def "#rolle bearbeitet seinen Einkauf: Werte und Durchschnitt aus der Mitgliederzahl gespeichert"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def eigentuemer = rolle == 'Gruppen-Owner' ? wg.owner : ben
+        def cart = fixtures.cart(wg, user: eigentuemer, title: 'Einkauf', amount: 40d, averagePerMember: 20d)
+        def dto = new CartDto(cart)
+        dto.title = 'Großeinkauf'
+        dto.amount = 60d
+        flushAndClear()
+        loginAs(eigentuemer)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Ben {}; Einkauf {} von User {} ({}, angemeldet) 40.00 -> Großeinkauf 60.00',
+                wg.group.id, wg.owner.id, ben.id, cart.id, eigentuemer.id, rolle)
+
+        when:
+        def result = cartService.updateCart(dto)
+        flushAndClear()
+        def saved = cartRepository.findById(cart.id).get()
+        LOG.info('cartService.updateCart(Cart {}: Großeinkauf 60.00) -> title {}, amount {}, averagePerMember {}', cart.id,
+                result.title, saved.amount, saved.averagePerMember)
+
+        then:
+        result.title == 'Großeinkauf'
+        saved.title == 'Großeinkauf'
+        saved.amount == 60d
+        saved.averagePerMember == 30d
+
+        where:
+        rolle << ['Gruppen-Owner', 'Mitglied']
+    }
+
+    def "#rolle kann den Einkauf eines anderen nicht bearbeiten"() {
+        given: "Eigentümer des Einkaufs ist jeweils der andere Nutzer der Gruppe"
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def (eigentuemer, bearbeiter) = rolle == 'Mitglied' ? [wg.owner, ben] : [ben, wg.owner]
+        def cart = fixtures.cart(wg, user: eigentuemer, title: 'Einkauf', amount: 40d)
+        def dto = new CartDto(cart)
+        dto.amount = 99d
+        flushAndClear()
+        loginAs(bearbeiter)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Ben {}; Einkauf {} von User {}, angemeldet User {} ({})', wg.group.id,
+                wg.owner.id, ben.id, cart.id, eigentuemer.id, bearbeiter.id, rolle)
+
+        when:
+        LOG.info('cartService.updateCart(Cart {}: amount 99.00) als User {}, erwartet NotOwnerOfCartException', cart.id,
+                bearbeiter.id)
+        cartService.updateCart(dto)
+
+        then:
+        thrown(NotOwnerOfCartException)
+        def savedAmount = cartRepository.findById(cart.id).get().amount
+        savedAmount == 40d
+
+        where:
+        rolle << ['Mitglied', 'Gruppen-Owner']
+    }
+
+    def "Nicht-Mitglied kann keinen Einkauf bearbeiten"() {
+        given:
+        def wg = fixtures.group()
+        def fremder = fixtures.user()
+        def cart = fixtures.cart(wg, amount: 40d)
+        def dto = new CartDto(cart)
+        dto.amount = 99d
+        flushAndClear()
+        loginAs(fremder)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Einkauf {} vom Owner; angemeldeter User {} ist kein Mitglied', wg.group.id,
+                wg.owner.id, cart.id, fremder.id)
+
+        when:
+        LOG.info('cartService.updateCart(Cart {}) als User {}, erwartet NotOwnerOrMemberOfGroupException', cart.id, fremder.id)
+        cartService.updateCart(dto)
+
+        then:
+        thrown(NotOwnerOrMemberOfGroupException)
+        def savedAmount = cartRepository.findById(cart.id).get().amount
+        savedAmount == 40d
+    }
+
+    def "Neues Kaufdatum außerhalb der Mitgliedschaft wird abgelehnt, Einkauf und Template bleiben unverändert"() {
+        given: "Owner ist seit REFERENCE_DATE - 1 Jahr Mitglied; neues Datum einen Tag davor"
+        def wg = fixtures.group()
+        def cart = fixtures.cart(wg, amount: 40d)
+        def template = fixtures.template(cart, recurrenceType: MONTHLY)
+        def neuesDatum = TestData.REFERENCE_DATE.minusYears(1).minusDays(1)
+        def dto = new CartDto(cart)
+        dto.datePurchased = DateUtils.toDate(neuesDatum)
+        dto.templateUpdateSelected = true
+        def (groupId, templateId) = [wg.group.id, template.id]
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet, Mitglied seit {}), Einkauf {} vom {}, Template {} MONTHLY; ' +
+                'neues Datum {}', groupId, wg.owner.id, TestData.REFERENCE_DATE.minusYears(1), cart.id,
+                TestData.REFERENCE_DATE, templateId, neuesDatum)
+
+        when:
+        LOG.info('cartService.updateCart(Cart {}: datePurchased {}, templateUpdate), erwartet ' +
+                'DatePurchasedNotWithinMembershipPeriodException', cart.id, neuesDatum)
+        cartService.updateCart(dto)
+
+        then:
+        thrown(DatePurchasedNotWithinMembershipPeriodException)
+        def savedDate = DateUtils.toLocalDate(cartRepository.findById(cart.id).get().datePurchased)
+        savedDate == TestData.REFERENCE_DATE
+        def templates = templateRepository.findByGroupId(groupId)
+        templates*.id == [templateId]
+        templates.every { it.active }
+    }
+
+    def "Template-Update über updateCart ersetzt das Template"() {
+        given:
+        def wg = fixtures.group()
+        def cart = fixtures.cart(wg, title: 'Miete', amount: 900d)
+        def original = fixtures.template(cart, recurrenceType: MONTHLY)
+        def dto = new CartDto(cart)
+        dto.amount = 950d
+        dto.templateUpdateSelected = true
+        def (groupId, originalId) = [wg.group.id, original.id]
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: heute {}, Gruppe {}, Owner {} (angemeldet), Einkauf {} Miete 900.00 vom {}, Template {} MONTHLY; ' +
+                'neuer Betrag 950.00 für alle zukünftigen Einträge', testClock.today, groupId, wg.owner.id, cart.id,
+                TestData.REFERENCE_DATE, originalId)
+
+        when:
+        def result = cartService.updateCart(dto)
+        flushAndClear()
+        def alt = templateRepository.findById(originalId).get()
+        def cartTemplateId = cartRepository.findById(cart.id).get().template.id
+        LOG.info('cartService.updateCart(Cart {}: amount 950.00, templateUpdate) -> hasTemplateChanged {}, Template {} ' +
+                'active {}, endDate {}; Einkauf verknüpft mit Template {}', cart.id, result.hasTemplateChanged, originalId,
+                alt.active, alt.endDate, cartTemplateId)
+
+        then:
+        result.hasTemplateChanged
+        !alt.active
+        alt.endDate == testClock.today
+
+        and: "genau ein neues aktives Template mit dem neuen Betrag, am Einkauf verknüpft"
+        def neu = activeTemplate(wg)
+        neu.id != originalId
+        neu.amount == 950d
+        neu.recurrenceType == MONTHLY
+        neu.nextExecutionDate == LocalDate.of(2025, 7, 15)
+        cartTemplateId == neu.id
+    }
+
+    def "Wiederholung auf NONE über updateCart deaktiviert das Template"() {
+        given:
+        def wg = fixtures.group()
+        def cart = fixtures.cart(wg, title: 'Miete')
+        def original = fixtures.template(cart, recurrenceType: MONTHLY)
+        def dto = new CartDto(cart)
+        dto.recurrenceType = NONE
+        def (groupId, originalId) = [wg.group.id, original.id]
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: heute {}, Gruppe {}, Owner {} (angemeldet), Einkauf {}, Template {} MONTHLY; neue Wiederholung NONE',
+                testClock.today, groupId, wg.owner.id, cart.id, originalId)
+
+        when:
+        def result = cartService.updateCart(dto)
+        flushAndClear()
+        def alt = templateRepository.findById(originalId).get()
+        LOG.info('cartService.updateCart(Cart {}: recurrenceType NONE) -> recurrenceType {}, Template {} active {}, endDate {}',
+                cart.id, result.recurrenceType, originalId, alt.active, alt.endDate)
+
+        then:
+        result.recurrenceType == NONE
+        !alt.active
+        alt.endDate == testClock.today
+        activeTemplateTypes(wg).isEmpty()
+    }
+
+    // ----- deleteCart (DIV-14) -----
+    // Rollback-Spec: Service und Test teilen den Persistence Context. Geprüft wird die Logik der Template-Deaktivierung,
+    // nicht ihr Persistieren ohne eigene Transaktion (deleteCart ist nicht @Transactional, DIV-50).
+
+    def "#rolle löscht seinen Einkauf ohne Template"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def eigentuemer = rolle == 'Gruppen-Owner' ? wg.owner : ben
+        def cart = fixtures.cart(wg, user: eigentuemer)
+        def cartId = cart.id
+        flushAndClear()
+        loginAs(eigentuemer)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Ben {}; Einkauf {} ohne Template von User {} ({}, angemeldet)', wg.group.id,
+                wg.owner.id, ben.id, cartId, eigentuemer.id, rolle)
+
+        when:
+        cartService.deleteCart(cartId)
+        flushAndClear()
+        def stillThere = cartRepository.findById(cartId).isPresent()
+        LOG.info('cartService.deleteCart(Cart {}) -> noch vorhanden {}', cartId, stillThere)
+
+        then:
+        !stillThere
+
+        where:
+        rolle << ['Gruppen-Owner', 'Mitglied']
+    }
+
+    def "Löschen des einzigen Einkaufs eines Templates deaktiviert das Template"() {
+        given:
+        def wg = fixtures.group()
+        def cart = fixtures.cart(wg, title: 'Miete')
+        def template = fixtures.template(cart, recurrenceType: MONTHLY)
+        def (cartId, templateId) = [cart.id, template.id]
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: heute {}, Gruppe {}, Owner {} (angemeldet), Einkauf {} mit Template {} MONTHLY (einziger Einkauf)',
+                testClock.today, wg.group.id, wg.owner.id, cartId, templateId)
+
+        when:
+        cartService.deleteCart(cartId)
+        flushAndClear()
+        def stillThere = cartRepository.findById(cartId).isPresent()
+        def saved = templateRepository.findById(templateId).get()
+        LOG.info('cartService.deleteCart(Cart {}) -> noch vorhanden {}, Template {} active {}, endDate {}', cartId, stillThere,
+                templateId, saved.active, saved.endDate)
+
+        then:
+        !stillThere
+        !saved.active
+        saved.endDate == testClock.today
+    }
+
+    def "Löschen eines von zwei Einkäufen desselben Templates lässt das Template aktiv"() {
+        given:
+        def wg = fixtures.group()
+        def erster = fixtures.cart(wg, title: 'Miete')
+        def template = fixtures.template(erster, recurrenceType: MONTHLY)
+        def zweiter = fixtures.cart(wg, title: 'Miete', template: template,
+                datePurchased: DateUtils.toDate(TestData.REFERENCE_DATE.minusMonths(1)))
+        def (ersterId, zweiterId, templateId) = [erster.id, zweiter.id, template.id]
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), Einkäufe {} und {} aus Template {} MONTHLY; gelöscht wird {}',
+                wg.group.id, wg.owner.id, ersterId, zweiterId, templateId, ersterId)
+
+        when:
+        cartService.deleteCart(ersterId)
+        flushAndClear()
+        def saved = templateRepository.findById(templateId).get()
+        def zweiterVorhanden = cartRepository.findById(zweiterId).isPresent()
+        LOG.info('cartService.deleteCart(Cart {}) -> Template {} active {}, endDate {}; Einkauf {} vorhanden {}', ersterId,
+                templateId, saved.active, saved.endDate, zweiterId, zweiterVorhanden)
+
+        then:
+        saved.active
+        saved.endDate == null
+        zweiterVorhanden
+        !cartRepository.findById(ersterId).isPresent()
+    }
+
+    def "#rolle kann den Einkauf eines anderen nicht löschen, Einkauf und Template bleiben erhalten"() {
+        given: "Eigentümer des Einkaufs ist jeweils der andere Nutzer der Gruppe"
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def (eigentuemer, loescher) = rolle == 'Mitglied' ? [wg.owner, ben] : [ben, wg.owner]
+        def cart = fixtures.cart(wg, user: eigentuemer)
+        def template = fixtures.template(cart, recurrenceType: MONTHLY)
+        def (cartId, templateId) = [cart.id, template.id]
+        flushAndClear()
+        loginAs(loescher)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Ben {}; Einkauf {} von User {} mit Template {}, angemeldet User {} ({})',
+                wg.group.id, wg.owner.id, ben.id, cartId, eigentuemer.id, templateId, loescher.id, rolle)
+
+        when:
+        LOG.info('cartService.deleteCart(Cart {}) als User {}, erwartet NotOwnerOfCartException', cartId, loescher.id)
+        cartService.deleteCart(cartId)
+
+        then:
+        thrown(NotOwnerOfCartException)
+        cartRepository.findById(cartId).isPresent()
+        def templateActive = templateRepository.findById(templateId).get().active
+        templateActive
+
+        where:
+        rolle << ['Mitglied', 'Gruppen-Owner']
+    }
+
+    def "Nicht-Mitglied kann keinen Einkauf löschen"() {
+        given:
+        def wg = fixtures.group()
+        def fremder = fixtures.user()
+        def cart = fixtures.cart(wg)
+        def cartId = cart.id
+        flushAndClear()
+        loginAs(fremder)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Einkauf {} vom Owner; angemeldeter User {} ist kein Mitglied', wg.group.id,
+                wg.owner.id, cartId, fremder.id)
+
+        when:
+        LOG.info('cartService.deleteCart(Cart {}) als User {}, erwartet NotOwnerOrMemberOfGroupException', cartId, fremder.id)
+        cartService.deleteCart(cartId)
+
+        then:
+        thrown(NotOwnerOrMemberOfGroupException)
+        cartRepository.findById(cartId).isPresent()
+    }
+
+    // ----- addSettlementPayment (DIV-14) -----
+    // Ohne Request liest der Translator die JVM-Locale (lokal de, in CI ggf. en): die Features setzen Locale.GERMAN
+    // und setzen sie im cleanup:-Block zurück. Kategorie per übersetztem Namen (DIV-51) bewusst nicht getestet.
+
+    def "#rolle zahlt aus: ohne Settlement-Kategorie wird sie angelegt und es entstehen zwei gegenläufige Einkäufe"() {
+        given: "Anna ist Owner, Ben Mitglied; es zahlt jeweils die Rolle an den anderen"
+        LocaleContextHolder.setLocale(Locale.GERMAN)
+        def anna = fixtures.user(name: "Anna${TestData.nextId()}")
+        def ben = fixtures.user(name: "Ben${TestData.nextId()}")
+        def wg = fixtures.group(owner: anna, members: [ben])
+        def (zahler, partner) = rolle == 'Gruppen-Owner' ? [anna, ben] : [ben, anna]
+        def (groupId, zahlerId, partnerId, standardKategorieId) = [wg.group.id, zahler.id, partner.id, wg.category.id]
+        def (zahlerName, partnerName) = [zahler.name, partner.name]
+        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: partnerId), DateUtils.toDate(TestData.REFERENCE_DATE))
+        flushAndClear()
+        loginAs(zahler)
+        LOG.info('Szenario: Locale de, Gruppe {} ohne Settlement-Kategorie (Standardkategorie {}), Owner {}, Mitglied {}; ' +
+                'User {} {} ({}, angemeldet) zahlt 30.00 an User {} {} am {}', groupId, standardKategorieId, anna.id, ben.id,
+                zahlerId, zahlerName, rolle, partnerId, partnerName, TestData.REFERENCE_DATE)
+
+        when:
+        def result = cartService.addSettlementPayment(dto)
+        flushAndClear()
+        def sender = cartRepository.findById(result[0].id).get()
+        def empfaenger = cartRepository.findById(result[1].id).get()
+        def settlementIds = settlementCategoryIds(groupId)
+        LOG.info('cartService.addSettlementPayment(30.00 an User {}) -> Cart {} "{}" {} (User {}, avg {}), Cart {} "{}" {} ' +
+                '(User {}, avg {}); Settlement-Kategorien {}', partnerId, sender.id, sender.title, sender.amount, sender.user.id,
+                sender.averagePerMember, empfaenger.id, empfaenger.title, empfaenger.amount, empfaenger.user.id,
+                empfaenger.averagePerMember, settlementIds)
+
+        then: "Carts werden nicht live synchronisiert"
+        0 * notificationService._
+
+        and: "genau eine neue Settlement-Kategorie neben der Standardkategorie"
+        settlementIds.size() == 1
+        def settlementId = settlementIds.first()
+        settlementId != standardKategorieId
+
+        and: "Sender bucht +30 an den Empfänger"
+        sender.title == "Ausgleichszahlung an ${partnerName}".toString()
+        sender.user.id == zahlerId
+        sender.amount == 30d
+        sender.averagePerMember == 15d
+        sender.category.id == settlementId
+        DateUtils.toLocalDate(sender.datePurchased) == TestData.REFERENCE_DATE
+
+        and: "Empfänger bucht -30 vom Sender"
+        empfaenger.title == "Ausgleichszahlung von ${zahlerName}".toString()
+        empfaenger.user.id == partnerId
+        empfaenger.amount == -30d
+        empfaenger.averagePerMember == -15d
+        empfaenger.category.id == settlementId
+        DateUtils.toLocalDate(empfaenger.datePurchased) == TestData.REFERENCE_DATE
+
+        cleanup:
+        LocaleContextHolder.resetLocaleContext()
+
+        where:
+        rolle << ['Gruppen-Owner', 'Mitglied']
+    }
+
+    def "Vorhandene Settlement-Kategorie wird wiederverwendet"() {
+        given:
+        LocaleContextHolder.setLocale(Locale.GERMAN)
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def vorhanden = fixtures.category(wg, name: 'Ausgleichszahlung')
+        def (groupId, vorhandenId) = [wg.group.id, vorhanden.id]
+        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE))
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: Locale de, Gruppe {} mit Settlement-Kategorie {}, Owner {} (angemeldet), Ben {}; ' +
+                'Ausgleichszahlung 30.00 an Ben', groupId, vorhandenId, wg.owner.id, ben.id)
+
+        when:
+        def result = cartService.addSettlementPayment(dto)
+        flushAndClear()
+        def kategorien = result.collect { cartRepository.findById(it.id).get().category.id }
+        def settlementIds = settlementCategoryIds(groupId)
+        LOG.info('cartService.addSettlementPayment(30.00 an User {}) -> Carts {} mit Kategorien {}; Settlement-Kategorien {}',
+                ben.id, result*.id, kategorien, settlementIds)
+
+        then:
+        settlementIds == [vorhandenId]
+        kategorien == [vorhandenId, vorhandenId]
+
+        cleanup:
+        LocaleContextHolder.resetLocaleContext()
+    }
+
+    def "Lange Namen werden im Titel der Ausgleichszahlung nach 10 Zeichen gekürzt"() {
+        given:
+        LocaleContextHolder.setLocale(Locale.GERMAN)
+        def ben = fixtures.user(name: "Maximilian${TestData.nextId()}")
+        def wg = fixtures.group(members: [ben])
+        def (groupId, benName) = [wg.group.id, ben.name]
+        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE))
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: Locale de, Gruppe {}, Owner {} (angemeldet), Mitglied {} "{}" ({} Zeichen); Ausgleichszahlung an ihn',
+                groupId, wg.owner.id, ben.id, benName, benName.length())
+
+        when:
+        def result = cartService.addSettlementPayment(dto)
+        flushAndClear()
+        def senderTitle = cartRepository.findById(result[0].id).get().title
+        LOG.info('cartService.addSettlementPayment(an User {}) -> Titel "{}"', ben.id, senderTitle)
+
+        then:
+        senderTitle == 'Ausgleichszahlung an Maximilian...'
+
+        cleanup:
+        LocaleContextHolder.resetLocaleContext()
+    }
+
+    def "#fall wird abgelehnt, weder Settlement-Kategorie noch Einkäufe werden angelegt"() {
+        given: "Fremder ist weder Owner noch Mitglied der Gruppe"
+        LocaleContextHolder.setLocale(Locale.GERMAN)
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def fremder = fixtures.user()
+        def (zahler, empfaenger) = fall == 'Ausgleichszahlung an ein Nicht-Mitglied' ? [wg.owner, fremder] : [fremder, ben]
+        def groupId = wg.group.id
+        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: empfaenger.id),
+                DateUtils.toDate(TestData.REFERENCE_DATE))
+        flushAndClear()
+        loginAs(zahler)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Ben {}, Fremder {}; angemeldet User {} zahlt an User {}', groupId,
+                wg.owner.id, ben.id, fremder.id, zahler.id, empfaenger.id)
+
+        when:
+        LOG.info('cartService.addSettlementPayment(an User {}) als User {}, erwartet NotOwnerOrMemberOfGroupException',
+                empfaenger.id, zahler.id)
+        cartService.addSettlementPayment(dto)
+
+        then:
+        thrown(NotOwnerOrMemberOfGroupException)
+        settlementCategoryIds(groupId).isEmpty()
+        cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(groupId).isEmpty()
+
+        cleanup:
+        LocaleContextHolder.resetLocaleContext()
+
+        where:
+        fall << ['Ausgleichszahlung an ein Nicht-Mitglied', 'Ausgleichszahlung durch ein Nicht-Mitglied']
+    }
+
+    def "Kaufdatum außerhalb der Mitgliedschaft des #wer wird abgelehnt, nichts angelegt"() {
+        given: "Owner zahlt am REFERENCE_DATE an Ben; einer der beiden ist erst ab dem Folgetag Mitglied"
+        LocaleContextHolder.setLocale(Locale.GERMAN)
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def groupId = wg.group.id
+        def spaeter = wer == 'Senders' ? wg.owner : ben
+        def membership = membershipRepository.findByGroupIdAndUserId(groupId, spaeter.id).first()
+        membership.membershipStart = DateUtils.toDate(TestData.REFERENCE_DATE.plusDays(1))
+        membershipRepository.save(membership)
+        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE))
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet, Sender), Ben {} (Empfänger); User {} Mitglied erst ab {}; ' +
+                'Kaufdatum {}', groupId, wg.owner.id, ben.id, spaeter.id, TestData.REFERENCE_DATE.plusDays(1),
+                TestData.REFERENCE_DATE)
+
+        when:
+        LOG.info('cartService.addSettlementPayment(an User {} am {}), erwartet DatePurchasedNotWithinMembershipPeriodException',
+                ben.id, TestData.REFERENCE_DATE)
+        cartService.addSettlementPayment(dto)
+
+        then:
+        thrown(DatePurchasedNotWithinMembershipPeriodException)
+        settlementCategoryIds(groupId).isEmpty()
+        cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(groupId).isEmpty()
+
+        cleanup:
+        LocaleContextHolder.resetLocaleContext()
+
+        where:
+        wer << ['Senders', 'Empfängers']
+    }
+
     private CartTemplate activeTemplate(GroupScenario wg) {
         def active = templateRepository.findByGroupId(wg.group.id).findAll { it.active }
         assert active.size() == 1
         active.first()
+    }
+
+    private List<Long> settlementCategoryIds(Long groupId) {
+        categoryRepository.findAllByGroup_IdOrderByName(groupId).findAll { it.name == 'Ausgleichszahlung' }*.id
     }
 
     private List<RecurrenceType> activeTemplateTypes(GroupScenario wg) {
