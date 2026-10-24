@@ -7,6 +7,10 @@ import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CategoryDto
 import com.github.svenfran.budgetapp.budgetappbackend.entity.*
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
+import io.jsonwebtoken.Jwts
+import io.jsonwebtoken.SignatureAlgorithm
+import io.jsonwebtoken.io.Decoders
+import io.jsonwebtoken.security.Keys
 
 import java.time.LocalDate
 import java.util.concurrent.atomic.AtomicLong
@@ -70,6 +74,26 @@ class TestData {
     static Token token(Map overrides = [:]) {
         new Token([token: "token-${nextId()}", tokenType: TokenType.BEARER, expired: false, revoked: false,
                    deviceId: 'device-1'] + overrides)
+    }
+
+    /**
+     * Signiertes JWT wie JwtService.generateToken (Header typ JWT, HS256, Claim deviceId, Subject), aber mit festen
+     * Zeitpunkten statt der realen Uhr. Pflicht: secret (Base64 wie secret_key, nur Dummy-Werte) und expiration
+     * (Date, Umrechnung über DateUtils.toDate beim Aufrufer); issuedAt ist standardmäßig 21 Tage davor.
+     */
+    static String jwt(Map overrides = [:]) {
+        def values = [subject: "user${nextId()}@divvy.test", deviceId: 'device-1'] + overrides
+        assert values.secret && values.expiration: 'TestData.jwt: secret und expiration angeben'
+        Date expiration = values.expiration
+        Date issuedAt = values.issuedAt ?: new Date(expiration.time - 21L * 24 * 60 * 60 * 1000)
+        Jwts.builder()
+                .setHeaderParam('typ', 'JWT')
+                .setClaims([deviceId: values.deviceId])
+                .setSubject(values.subject as String)
+                .setIssuedAt(issuedAt)
+                .setExpiration(expiration)
+                .signWith(Keys.hmacShaKeyFor(Decoders.BASE64.decode(values.secret as String)), SignatureAlgorithm.HS256)
+                .compact()
     }
 
     static CartDto cartDto(Map overrides = [:]) {

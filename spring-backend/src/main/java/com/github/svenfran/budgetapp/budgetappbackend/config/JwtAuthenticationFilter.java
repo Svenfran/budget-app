@@ -2,6 +2,9 @@ package com.github.svenfran.budgetapp.budgetappbackend.config;
 
 import com.github.svenfran.budgetapp.budgetappbackend.repository.TokenRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.service.JwtService;
+import io.jsonwebtoken.JwtException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -22,6 +25,9 @@ import java.io.IOException;
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
+    // not named "logger": that would hide GenericFilterBean.logger
+    private final Logger LOG = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
+
     @Autowired
     private JwtService jwtService;
 
@@ -34,19 +40,26 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull FilterChain filterChain) throws ServletException, IOException {
         final String authHeader = request.getHeader("Authorization");
-        final String deviceIdFromRequest = request.getHeader("deviceId");
-        final String jwt;
-        final String userEmail;
-        final String deviceIdFromToken;
 
         if (authHeader == null || !authHeader.startsWith(JwtService.BEARER_PREFIX)) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        jwt = authHeader.substring(JwtService.BEARER_PREFIX.length());
-        userEmail = jwtService.extractUsername(jwt);
-        deviceIdFromToken = jwtService.extractDeviceId(jwt);
+        try {
+            authenticateIfValid(request, authHeader.substring(JwtService.BEARER_PREFIX.length()));
+        } catch (JwtException | IllegalArgumentException e) {
+            // expired, tampered or malformed JWT: continue unauthenticated
+            // only the type is logged: the exception message may contain claims (e.g. the e-mail)
+            LOG.debug("JWT rejected: {}", e.getClass().getSimpleName());
+        }
+        filterChain.doFilter(request, response);
+    }
+
+    private void authenticateIfValid(HttpServletRequest request, String jwt) {
+        final String deviceIdFromRequest = request.getHeader("deviceId");
+        final String userEmail = jwtService.extractUsername(jwt);
+        final String deviceIdFromToken = jwtService.extractDeviceId(jwt);
 
         if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             UserDetails userDetails;
@@ -54,15 +67,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 userDetails = this.userDetailsService.loadUserByUsername(userEmail);
             } catch (UsernameNotFoundException e) {
                 // e.g. token of a deleted (anonymized) user: continue unauthenticated
-                filterChain.doFilter(request, response);
+                LOG.debug("JWT rejected: subject not found");
                 return;
             }
             var isTokenValid = tokenRepository.findByToken(jwt)
                     .map(token ->
                             !token.isExpired()
                             && !token.isRevoked()
-                            && token.getDeviceId().equals(deviceIdFromRequest)
-                            && deviceIdFromToken.equals(deviceIdFromRequest))
+                            // a missing deviceId never matches, not even null == null
+                            && deviceIdFromRequest != null
+                            && deviceIdFromRequest.equals(token.getDeviceId())
+                            && deviceIdFromRequest.equals(deviceIdFromToken))
                     .orElse(false);
             if (jwtService.isTokenValid(jwt, userDetails) && isTokenValid) {
                 UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
@@ -74,8 +89,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         new WebAuthenticationDetailsSource().buildDetails(request)
                 );
                 SecurityContextHolder.getContext().setAuthentication(authToken);
+            } else {
+                LOG.debug("JWT rejected: token not stored, expired, revoked, deviceId mismatch or invalid");
             }
         }
-        filterChain.doFilter(request, response);
     }
 }
