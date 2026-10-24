@@ -113,8 +113,11 @@ public class ShoppingItemService {
             var shoppingItem = dataLoaderService.loadShoppingItem(itemDto.getId());
             verificationService.verifyShoppingItemIsPartOfShoppingList(shoppingList, shoppingItem);
         }
-        var itemIds = new ArrayList<>(dtos.stream()
+        // Nur erledigte Einträge werden gelöscht und gemeldet: Empfänger entfernen alle übermittelten IDs
+        var completedDtos = dtos.stream()
                 .filter(AddEditShoppingItemDto::isCompleted)
+                .toList();
+        var itemIds = new ArrayList<>(completedDtos.stream()
                 .map(AddEditShoppingItemDto::getId)
                 .toList());
         group.setLastUpdateShoppingList(new Date());
@@ -122,7 +125,7 @@ public class ShoppingItemService {
         shoppingItemRepository.deleteAllById(itemIds);
         notificationService.sendShoppingItemDeleteAllNotification(
                 group.getId(),
-                dtos
+                completedDtos
         );
     }
 

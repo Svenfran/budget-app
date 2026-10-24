@@ -263,11 +263,43 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
         LOG.info('shoppingItemService.deleteAllCompletedShoppingItems(Liste {}, {} erledigt, {} offen) -> Einträge der Liste {}, lastUpdateShoppingList {}',
                 listId, milchId, brotId, eintraegeDerListe, lastUpdate)
 
-        then:
-        // Payload hier bewusst nicht geprüft: er enthält auch das nicht gelöschte DTO (Befund B1 im Plan DIV-16).
-        1 * notificationService.sendShoppingItemDeleteAllNotification(groupId, _)
+        then: 'die Benachrichtigung enthält nur den gelöschten Eintrag: Empfänger entfernen alle übermittelten IDs'
+        1 * notificationService.sendShoppingItemDeleteAllNotification(groupId, { it*.id == [milchId] })
         eintraegeDerListe == [brotId, kaffeeId]
         lastUpdate.time > START.time
+    }
+
+    def "Erledigte Einträge löschen mit nur offenen Einträgen löscht nichts und benachrichtigt mit leerer Liste"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        wg.group.lastUpdateShoppingList = START
+        def liste = fixtures.shoppingList(wg)
+        def milch = fixtures.shoppingItem(liste, completed: false)
+        def brot = fixtures.shoppingItem(liste, completed: false)
+        def groupId = wg.group.id
+        def listId = liste.id
+        def milchId = milch.id
+        def brotId = brot.id
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Mitglied {} (angemeldet), Liste {}: gesendet {} und {}, beide offen',
+                groupId, ben.id, listId, milchId, brotId)
+
+        when:
+        shoppingItemService.deleteAllCompletedShoppingItems([milchId, brotId].collect {
+            new AddEditShoppingItemDto(id: it, completed: false, shoppingListId: listId, groupId: groupId)
+        })
+        flushAndClear()
+        def eintraegeDerListe = eintragIds(listId)
+        def lastUpdate = lastUpdateShoppingList(groupId)
+        LOG.info('shoppingItemService.deleteAllCompletedShoppingItems(Liste {}, {} und {} offen) -> Einträge der Liste {}, lastUpdateShoppingList {} (Ist-Verhalten: wird erhöht)',
+                listId, milchId, brotId, eintraegeDerListe, lastUpdate)
+
+        then: 'NotificationService verwirft eine leere Liste (NotificationServiceSpec), Empfänger erhalten also nichts'
+        1 * notificationService.sendShoppingItemDeleteAllNotification(groupId, { it.isEmpty() })
+        0 * notificationService._
+        eintraegeDerListe == [milchId, brotId]
     }
 
     def "Erledigte Einträge löschen mit leerer Liste ändert nichts und benachrichtigt niemanden"() {
