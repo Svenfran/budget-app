@@ -2,6 +2,8 @@ package com.github.svenfran.budgetapp.budgetappbackend.service
 
 import com.github.svenfran.budgetapp.budgetappbackend.constants.RecurrenceType
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto
+import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto
+import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto
 import com.github.svenfran.budgetapp.budgetappbackend.entity.CartTemplate
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.DatePurchasedNotWithinMembershipPeriodException
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOfCartException
@@ -9,6 +11,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOrMembe
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartTemplateRepository
+import com.github.svenfran.budgetapp.budgetappbackend.repository.CategoryRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupMembershipHistoryRepository
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.Fixtures.GroupScenario
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
@@ -16,6 +19,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.context.i18n.LocaleContextHolder
 
 import java.time.LocalDate
 
@@ -29,6 +33,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
     @Autowired CartRepository cartRepository
     @Autowired CartTemplateRepository templateRepository
     @Autowired GroupMembershipHistoryRepository membershipRepository
+    @Autowired CategoryRepository categoryRepository
 
     def "Bearbeiten #originalRecurrenceType -> #updatedRecurrenceType mit Titel '#newTitle' (Template-Update: #updateSelected) hinterlässt aktive Templates #expectedActiveTypes"() {
         given:
@@ -996,10 +1001,192 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         cartRepository.findById(cartId).isPresent()
     }
 
+    // ----- addSettlementPayment (DIV-14) -----
+    // Ohne Request liest der Translator die JVM-Locale (lokal de, in CI ggf. en): die Features setzen Locale.GERMAN
+    // und setzen sie im cleanup:-Block zurück. Bug-Kandidat B4 (Kategorie per übersetztem Namen) bewusst nicht getestet.
+
+    def "Ausgleichszahlung ohne Settlement-Kategorie legt die Kategorie an und erzeugt zwei gegenläufige Einkäufe"() {
+        given:
+        LocaleContextHolder.setLocale(Locale.GERMAN)
+        def anna = fixtures.user(name: "Anna${TestData.nextId()}")
+        def ben = fixtures.user(name: "Ben${TestData.nextId()}")
+        def wg = fixtures.group(owner: anna, members: [ben])
+        def (groupId, annaId, benId, standardKategorieId) = [wg.group.id, anna.id, ben.id, wg.category.id]
+        def (annaName, benName) = [anna.name, ben.name]
+        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: benId), DateUtils.toDate(TestData.REFERENCE_DATE))
+        flushAndClear()
+        loginAs(anna)
+        LOG.info('Szenario: Locale de, Gruppe {} ohne Settlement-Kategorie (Standardkategorie {}), Owner {} {} (angemeldet), ' +
+                'Mitglied {} {}; Ausgleichszahlung 30.00 an Ben am {}', groupId, standardKategorieId, annaId, annaName, benId,
+                benName, TestData.REFERENCE_DATE)
+
+        when:
+        def result = cartService.addSettlementPayment(dto)
+        flushAndClear()
+        def sender = cartRepository.findById(result[0].id).get()
+        def empfaenger = cartRepository.findById(result[1].id).get()
+        def settlementIds = settlementCategoryIds(groupId)
+        LOG.info('cartService.addSettlementPayment(30.00 an User {}) -> Cart {} "{}" {} (User {}, avg {}), Cart {} "{}" {} ' +
+                '(User {}, avg {}); Settlement-Kategorien {}', benId, sender.id, sender.title, sender.amount, sender.user.id,
+                sender.averagePerMember, empfaenger.id, empfaenger.title, empfaenger.amount, empfaenger.user.id,
+                empfaenger.averagePerMember, settlementIds)
+
+        then: "Carts werden nicht live synchronisiert"
+        0 * notificationService._
+
+        and: "genau eine neue Settlement-Kategorie neben der Standardkategorie"
+        settlementIds.size() == 1
+        def settlementId = settlementIds.first()
+        settlementId != standardKategorieId
+
+        and: "Sender bucht +30 an den Empfänger"
+        sender.title == "Ausgleichszahlung an ${benName}".toString()
+        sender.user.id == annaId
+        sender.amount == 30d
+        sender.averagePerMember == 15d
+        sender.category.id == settlementId
+        DateUtils.toLocalDate(sender.datePurchased) == TestData.REFERENCE_DATE
+
+        and: "Empfänger bucht -30 vom Sender"
+        empfaenger.title == "Ausgleichszahlung von ${annaName}".toString()
+        empfaenger.user.id == benId
+        empfaenger.amount == -30d
+        empfaenger.averagePerMember == -15d
+        empfaenger.category.id == settlementId
+        DateUtils.toLocalDate(empfaenger.datePurchased) == TestData.REFERENCE_DATE
+
+        cleanup:
+        LocaleContextHolder.resetLocaleContext()
+    }
+
+    def "Vorhandene Settlement-Kategorie wird wiederverwendet"() {
+        given:
+        LocaleContextHolder.setLocale(Locale.GERMAN)
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def vorhanden = fixtures.category(wg, name: 'Ausgleichszahlung')
+        def (groupId, vorhandenId) = [wg.group.id, vorhanden.id]
+        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE))
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: Locale de, Gruppe {} mit Settlement-Kategorie {}, Owner {} (angemeldet), Ben {}; ' +
+                'Ausgleichszahlung 30.00 an Ben', groupId, vorhandenId, wg.owner.id, ben.id)
+
+        when:
+        def result = cartService.addSettlementPayment(dto)
+        flushAndClear()
+        def kategorien = result.collect { cartRepository.findById(it.id).get().category.id }
+        def settlementIds = settlementCategoryIds(groupId)
+        LOG.info('cartService.addSettlementPayment(30.00 an User {}) -> Carts {} mit Kategorien {}; Settlement-Kategorien {}',
+                ben.id, result*.id, kategorien, settlementIds)
+
+        then:
+        settlementIds == [vorhandenId]
+        kategorien == [vorhandenId, vorhandenId]
+
+        cleanup:
+        LocaleContextHolder.resetLocaleContext()
+    }
+
+    def "Lange Namen werden im Titel der Ausgleichszahlung nach 10 Zeichen gekürzt"() {
+        given:
+        LocaleContextHolder.setLocale(Locale.GERMAN)
+        def ben = fixtures.user(name: "Maximilian${TestData.nextId()}")
+        def wg = fixtures.group(members: [ben])
+        def (groupId, benName) = [wg.group.id, ben.name]
+        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE))
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: Locale de, Gruppe {}, Owner {} (angemeldet), Mitglied {} "{}" ({} Zeichen); Ausgleichszahlung an ihn',
+                groupId, wg.owner.id, ben.id, benName, benName.length())
+
+        when:
+        def result = cartService.addSettlementPayment(dto)
+        flushAndClear()
+        def senderTitle = cartRepository.findById(result[0].id).get().title
+        LOG.info('cartService.addSettlementPayment(an User {}) -> Titel "{}"', ben.id, senderTitle)
+
+        then:
+        senderTitle == 'Ausgleichszahlung an Maximilian...'
+
+        cleanup:
+        LocaleContextHolder.resetLocaleContext()
+    }
+
+    def "#fall wird abgelehnt, weder Settlement-Kategorie noch Einkäufe werden angelegt"() {
+        given: "Fremder ist weder Owner noch Mitglied der Gruppe"
+        LocaleContextHolder.setLocale(Locale.GERMAN)
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def fremder = fixtures.user()
+        def (zahler, empfaenger) = fall == 'Ausgleichszahlung an ein Nicht-Mitglied' ? [wg.owner, fremder] : [fremder, ben]
+        def groupId = wg.group.id
+        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: empfaenger.id),
+                DateUtils.toDate(TestData.REFERENCE_DATE))
+        flushAndClear()
+        loginAs(zahler)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Ben {}, Fremder {}; angemeldet User {} zahlt an User {}', groupId,
+                wg.owner.id, ben.id, fremder.id, zahler.id, empfaenger.id)
+
+        when:
+        LOG.info('cartService.addSettlementPayment(an User {}) als User {}, erwartet NotOwnerOrMemberOfGroupException',
+                empfaenger.id, zahler.id)
+        cartService.addSettlementPayment(dto)
+
+        then:
+        thrown(NotOwnerOrMemberOfGroupException)
+        settlementCategoryIds(groupId).isEmpty()
+        cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(groupId).isEmpty()
+
+        cleanup:
+        LocaleContextHolder.resetLocaleContext()
+
+        where:
+        fall << ['Ausgleichszahlung an ein Nicht-Mitglied', 'Ausgleichszahlung durch ein Nicht-Mitglied']
+    }
+
+    def "Kaufdatum außerhalb der Mitgliedschaft des #wer wird abgelehnt, nichts angelegt"() {
+        given: "Owner zahlt am REFERENCE_DATE an Ben; einer der beiden ist erst ab dem Folgetag Mitglied"
+        LocaleContextHolder.setLocale(Locale.GERMAN)
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def groupId = wg.group.id
+        def spaeter = wer == 'Senders' ? wg.owner : ben
+        def membership = membershipRepository.findByGroupIdAndUserId(groupId, spaeter.id).first()
+        membership.membershipStart = DateUtils.toDate(TestData.REFERENCE_DATE.plusDays(1))
+        membershipRepository.save(membership)
+        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE))
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet, Sender), Ben {} (Empfänger); User {} Mitglied erst ab {}; ' +
+                'Kaufdatum {}', groupId, wg.owner.id, ben.id, spaeter.id, TestData.REFERENCE_DATE.plusDays(1),
+                TestData.REFERENCE_DATE)
+
+        when:
+        LOG.info('cartService.addSettlementPayment(an User {} am {}), erwartet DatePurchasedNotWithinMembershipPeriodException',
+                ben.id, TestData.REFERENCE_DATE)
+        cartService.addSettlementPayment(dto)
+
+        then:
+        thrown(DatePurchasedNotWithinMembershipPeriodException)
+        settlementCategoryIds(groupId).isEmpty()
+        cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(groupId).isEmpty()
+
+        cleanup:
+        LocaleContextHolder.resetLocaleContext()
+
+        where:
+        wer << ['Senders', 'Empfängers']
+    }
+
     private CartTemplate activeTemplate(GroupScenario wg) {
         def active = templateRepository.findByGroupId(wg.group.id).findAll { it.active }
         assert active.size() == 1
         active.first()
+    }
+
+    private List<Long> settlementCategoryIds(Long groupId) {
+        categoryRepository.findAllByGroup_IdOrderByName(groupId).findAll { it.name == 'Ausgleichszahlung' }*.id
     }
 
     private List<RecurrenceType> activeTemplateTypes(GroupScenario wg) {
