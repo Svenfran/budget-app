@@ -494,6 +494,95 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
         lastUpdateShoppingList(groupId).time == START.time
     }
 
+    def "Anlegen mit der ID eines fremden Eintrags legt einen neuen Eintrag an, der fremde bleibt unverändert"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg)
+        def andereGruppe = fixtures.group()
+        def fremdeListe = fixtures.shoppingList(andereGruppe)
+        def fremderEintrag = fixtures.shoppingItem(fremdeListe, name: 'Fremd', completed: false)
+        def groupId = wg.group.id
+        def listId = liste.id
+        def fremdeListId = fremdeListe.id
+        def fremderEintragId = fremderEintrag.id
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Mitglied {} (angemeldet), Liste {}; Eintrag {} "Fremd" in Liste {} der Gruppe {}; Anlegen mit id {}',
+                groupId, ben.id, listId, fremderEintragId, fremdeListId, andereGruppe.group.id, fremderEintragId)
+
+        when:
+        def result = shoppingItemService.addShoppingItem(new AddEditShoppingItemDto(
+                id: fremderEintragId, name: 'Gekapert', completed: true, shoppingListId: listId, groupId: groupId))
+        flushAndClear()
+        def eigeneEintraege = eintragIds(listId)
+        def fremd = shoppingItemRepository.findById(fremderEintragId).get()
+        def fremdListId = fremd.shoppingList.id
+        LOG.info('shoppingItemService.addShoppingItem(id {}, Liste {}) -> Eintrag {}; Einträge der Liste {}; Eintrag {} "{}", completed {}, Liste {}',
+                fremderEintragId, listId, result.id, eigeneEintraege, fremderEintragId, fremd.name, fremd.completed, fremdListId)
+
+        then:
+        1 * notificationService.sendShoppingItemNotification(groupId, _, 'add')
+        result.id != fremderEintragId
+        eigeneEintraege == [result.id]
+        fremd.name == 'Fremd'
+        !fremd.completed
+        fremdListId == fremdeListId
+    }
+
+    def "Erledigte Einträge löschen mit #zweiter (#completedText) an zweiter Stelle: #erwartet.simpleName, nichts wird gelöscht"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        wg.group.lastUpdateShoppingList = START
+        def liste = fixtures.shoppingList(wg)
+        def milch = fixtures.shoppingItem(liste, completed: true)
+        def andereListe = fixtures.shoppingList(wg)
+        def andererEintrag = fixtures.shoppingItem(andereListe, completed: true)
+        def andereGruppe = fixtures.group()
+        def fremdeListe = fixtures.shoppingList(andereGruppe)
+        def fremderEintrag = fixtures.shoppingItem(fremdeListe, completed: true)
+        def groupId = wg.group.id
+        def listId = liste.id
+        def milchId = milch.id
+        def andererEintragId = andererEintrag.id
+        def fremderEintragId = fremderEintrag.id
+        def zweiteId = ['Eintrag einer anderen Liste'    : andererEintragId,
+                        'Eintrag einer fremden Gruppe'   : fremderEintragId,
+                        'unbekannte ID'                  : UNBEKANNT][zweiter]
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Mitglied {} (angemeldet), Liste {} mit erledigtem Eintrag {}; Eintrag {} in anderer Liste {}, Eintrag {} in Gruppe {}; gesendet: {}, dann {} (completed {})',
+                groupId, ben.id, listId, milchId, andererEintragId, andereListe.id, fremderEintragId, andereGruppe.group.id,
+                milchId, zweiteId, completed)
+
+        when:
+        LOG.info('shoppingItemService.deleteAllCompletedShoppingItems(Liste {}, Einträge {}, {}), erwartet {}',
+                listId, milchId, zweiteId, erwartet.simpleName)
+        shoppingItemService.deleteAllCompletedShoppingItems([
+                new AddEditShoppingItemDto(id: milchId, completed: true, shoppingListId: listId, groupId: groupId),
+                new AddEditShoppingItemDto(id: zweiteId, completed: completed, shoppingListId: listId, groupId: groupId)])
+
+        then:
+        thrown(erwartet)
+        0 * notificationService._
+        flushAndClear()
+        eintragIds(listId) == [milchId]
+        shoppingItemRepository.existsById(andererEintragId)
+        shoppingItemRepository.existsById(fremderEintragId)
+        lastUpdateShoppingList(groupId).time == START.time
+
+        where:
+        zweiter                        | completed || erwartet
+        'Eintrag einer anderen Liste'  | true      || ShoppingItemDoesNotBelongToShoppingListException
+        'Eintrag einer fremden Gruppe' | true      || ShoppingItemDoesNotBelongToShoppingListException
+        'Eintrag einer fremden Gruppe' | false     || ShoppingItemDoesNotBelongToShoppingListException
+        'unbekannte ID'                | true      || ShoppingItemNotFoundException
+        'unbekannte ID'                | false     || ShoppingItemNotFoundException
+
+        completedText = completed ? 'erledigt' : 'offen'
+    }
+
     private void ausfuehren(String aktion, Long groupId, Long listId, Long itemId) {
         switch (aktion) {
             case 'add':

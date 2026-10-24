@@ -184,6 +184,35 @@ class ShoppingListControllerApiSpec extends IntegrationSpec implements ApiReques
         0 * notificationService._
     }
 
+    def "Liste mit der ID einer fremden Liste anlegen: 201 mit neuer ID, die fremde Liste bleibt unverändert"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def andereGruppe = fixtures.group()
+        def fremdeListe = fixtures.shoppingList(andereGruppe, name: 'Fremd')
+        def fremderEintrag = fixtures.shoppingItem(fremdeListe, name: 'Kaffee')
+        def (groupId, andereGroupId, fremdeListId, fremderEintragId) = [wg.group.id, andereGruppe.group.id, fremdeListe.id, fremderEintrag.id]
+        flushAndClear()
+        LOG.info('Szenario: Gruppe {}, Mitglied {}; Liste {} "Fremd" mit Eintrag {} gehört Gruppe {} (Owner {}); Anlegen mit id {}',
+                groupId, ben.id, fremdeListId, fremderEintragId, andereGroupId, andereGruppe.owner.id, fremdeListId)
+
+        when:
+        def response = send(post('/api/groups/shopping-list/add'), user: ben,
+                body: [id: fremdeListId, name: 'Gekapert', groupId: groupId])
+        def body = json(response)
+        flushAndClear()
+        def fremdeListen = json(getShoppingLists(andereGroupId, andereGruppe.owner))
+        LOG.info('Antwort: {}; Listen der Gruppe {}: {}', body, andereGroupId, fremdeListen.collect { [it.id, it.name, it.shoppingItems*.id] })
+
+        then:
+        response.status == 201
+        body.id != fremdeListId
+        body.groupId == groupId
+        fremdeListen*.id == [fremdeListId]
+        fremdeListen[0].name == 'Fremd'
+        fremdeListen[0].shoppingItems*.id == [fremderEintragId]
+    }
+
     private MockHttpServletResponse getShoppingLists(Long groupId, User angemeldet) {
         send(get('/api/groups/shopping-lists-with-items/{groupId}', groupId)
                 .param('requestTimeStamp', FRONTEND_TIMESTAMP as String), user: angemeldet)

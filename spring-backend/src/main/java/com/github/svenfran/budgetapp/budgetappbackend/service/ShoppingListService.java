@@ -99,7 +99,10 @@ public class ShoppingListService {
         group.setLastUpdateShoppingList(new Date());
         groupRepository.save(group);
 
-        var addedList = new AddEditShoppingListDto(shoppingListRepository.save(shoppingListDtoMapper.addEditShoppingListDtoToEntity(addEditShoppingListDto, group)));
+        var newList = shoppingListDtoMapper.addEditShoppingListDtoToEntity(addEditShoppingListDto, group);
+        // Anlegen legt immer neu an: eine mitgesendete ID würde per merge eine bestehende (auch fremde) Liste überschreiben
+        newList.setId(null);
+        var addedList = new AddEditShoppingListDto(shoppingListRepository.save(newList));
 
         notificationService.sendShoppingListNotification(
                 group.getId(),

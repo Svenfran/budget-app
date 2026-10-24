@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.mock.web.MockHttpServletResponse
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 
@@ -158,6 +159,63 @@ class ShoppingItemControllerApiSpec extends IntegrationSpec implements ApiReques
         then:
         response.status == 404
         response.contentAsString.contains('does not belong to shopping list')
+        0 * notificationService._
+    }
+
+    def "Eintrag mit der ID eines fremden Eintrags anlegen: 201 mit neuer ID, der fremde Eintrag bleibt unverändert"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg)
+        def andereGruppe = fixtures.group()
+        def fremdeListe = fixtures.shoppingList(andereGruppe)
+        def fremderEintrag = fixtures.shoppingItem(fremdeListe, name: 'Fremd', completed: false)
+        def (groupId, listId, andereGroupId, fremderEintragId) = [wg.group.id, liste.id, andereGruppe.group.id, fremderEintrag.id]
+        flushAndClear()
+        LOG.info('Szenario: Gruppe {}, Mitglied {}, Liste {}; Eintrag {} "Fremd" in Liste {} der Gruppe {} (Owner {}); Anlegen mit id {}',
+                groupId, ben.id, listId, fremderEintragId, fremdeListe.id, andereGroupId, andereGruppe.owner.id, fremderEintragId)
+
+        when:
+        def response = send(post('/api/groups/shopping-list/add-item'), user: ben,
+                body: [id: fremderEintragId, name: 'Gekapert', completed: true, shoppingListId: listId, groupId: groupId])
+        def body = json(response)
+        flushAndClear()
+        def fremdeListen = json(send(get('/api/groups/shopping-lists-with-items/{groupId}', andereGroupId), user: andereGruppe.owner))
+        def fremdeEintraege = fremdeListen[0].shoppingItems
+        LOG.info('Antwort: {}; Einträge der Liste {}: {}', body, fremdeListe.id, fremdeEintraege)
+
+        then:
+        response.status == 201
+        body.id != fremderEintragId
+        body.shoppingListId == listId
+        fremdeEintraege*.id == [fremderEintragId]
+        fremdeEintraege[0].name == 'Fremd'
+        fremdeEintraege[0].completed == false
+    }
+
+    def "Erledigte Einträge löschen mit unbekannter ID an zweiter Stelle: 404, nichts wird gelöscht"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg)
+        def milch = fixtures.shoppingItem(liste, completed: true)
+        def (groupId, listId, milchId) = [wg.group.id, liste.id, milch.id]
+        flushAndClear()
+        LOG.info('Szenario: Gruppe {}, Mitglied {}, Liste {} mit erledigtem Eintrag {}; gesendet: {}, dann unbekannte ID {}',
+                groupId, ben.id, listId, milchId, milchId, Long.MAX_VALUE)
+
+        when: 'Long.MAX_VALUE statt einer kleinen ID, die Restdaten aus Commit-Specs treffen könnte'
+        def response = deleteAllItems(ben, [milchId, Long.MAX_VALUE].collect {
+            [id: it, completed: true, shoppingListId: listId, groupId: groupId]
+        })
+        flushAndClear()
+        def eintraege = json(send(get('/api/groups/shopping-lists-with-items/{groupId}', groupId), user: ben))[0].shoppingItems
+        LOG.info('Antwort: {}; Einträge der Liste {}: {}', response.contentAsString, listId, eintraege*.id)
+
+        then:
+        response.status == 404
+        response.contentAsString.contains('not found')
+        eintraege*.id == [milchId]
         0 * notificationService._
     }
 

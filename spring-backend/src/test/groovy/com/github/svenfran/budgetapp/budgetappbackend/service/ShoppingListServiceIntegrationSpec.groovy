@@ -417,6 +417,45 @@ class ShoppingListServiceIntegrationSpec extends IntegrationSpec {
         thrown(NotOwnerOrMemberOfGroupException)
     }
 
+    def "Anlegen mit der ID einer fremden Liste legt eine neue Liste an, die fremde bleibt unverändert"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def andereGruppe = fixtures.group()
+        andereGruppe.group.lastUpdateShoppingList = START
+        def fremdeListe = fixtures.shoppingList(andereGruppe, name: 'Fremd')
+        def fremderEintrag = fixtures.shoppingItem(fremdeListe)
+        def groupId = wg.group.id
+        def andereGroupId = andereGruppe.group.id
+        def fremdeListId = fremdeListe.id
+        def fremderEintragId = fremderEintrag.id
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Mitglied {} (angemeldet); Liste {} "Fremd" mit Eintrag {} gehört Gruppe {}; Anlegen mit id {}',
+                groupId, ben.id, fremdeListId, fremderEintragId, andereGroupId, fremdeListId)
+
+        when:
+        def result = shoppingListService.addShoppingList(new AddEditShoppingListDto(id: fremdeListId, name: 'Gekapert', groupId: groupId))
+        flushAndClear()
+        def eigeneListen = shoppingListRepository.findAllByGroup_IdOrderById(groupId)
+        def fremd = shoppingListRepository.findById(fremdeListId).get()
+        def fremdName = fremd.name
+        def fremdGroupId = fremd.group.id
+        def fremdEintraege = fremd.shoppingItems*.id
+        LOG.info('shoppingListService.addShoppingList(id {}, Gruppe {}) -> Liste {}; eigene Listen {}; Liste {} "{}" in Gruppe {} mit Einträgen {}',
+                fremdeListId, groupId, result.id, eigeneListen*.id, fremdeListId, fremdName, fremdGroupId, fremdEintraege)
+
+        then:
+        1 * notificationService.sendShoppingListNotification(groupId, _, 'add')
+        result.id != fremdeListId
+        eigeneListen*.id == [result.id]
+        eigeneListen*.name == ['Gekapert']
+        fremdName == 'Fremd'
+        fremdGroupId == andereGroupId
+        fremdEintraege == [fremderEintragId]
+        lastUpdateShoppingList(andereGroupId).time == START.time
+    }
+
     private void ausfuehren(String aktion, Long groupId, Long listId) {
         switch (aktion) {
             case 'add':
