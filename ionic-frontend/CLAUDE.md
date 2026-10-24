@@ -86,8 +86,9 @@ Karma + Jasmine. `npm run test:ci` (needs a local Chrome/Chromium and `src/confi
 **No generated stubs.** There are no "should create" specs, and `angular.json` `schematics` keep `ng generate` from creating any (`skipTests: true` for the Angular schematics, `spec: false` for the Ionic `page`/`component`). Every spec is written on purpose.
 
 **Helpers live only in `src/testing/`**
-- `test-providers.ts`: `provideServiceTesting()` (mocked HTTP, empty router, `TranslateService` without loader — `instant()` returns the key, so alerts are asserted by key) and `alertServiceSpy()`.
-- `test-data.ts`: factories `aUser`, `aGroup`, `aCategory`, `aCart` with `Partial<T>` overrides, unique ids and the fixed `REFERENCE_DATE` (2025-06-15). Never use the current date in tests.
+- `test-providers.ts`: `provideServiceTesting()` (mocked HTTP, empty router, `TranslateService` without loader — `instant()` returns the key, so alerts are asserted by key), `alertServiceSpy()` (`showErrorAlert`, `showToast`), `storageServiceFake()` (in-memory `StorageService`, stores JSON like the original — never let tests touch Capacitor Preferences) and `authServiceStub(user)` (`user` observable plus `logout`/`setUserData` spies).
+- `test-data.ts`: factories `aUser`, `aGroup`, `aCategory`, `aCart`, `aShoppingList`, `aShoppingItem` with `Partial<T>` overrides, unique ids and the fixed `REFERENCE_DATE` (2025-06-15); `aLoggedInUser()` returns a `User` whose token expires one hour after `REFERENCE_DATE` — combine it with `jasmine.clock().mockDate(REFERENCE_DATE)` (and `uninstall()` in `afterEach`), since `User.token` checks the current time. Never use the current date in tests.
+- Because the loader-less `TranslateService` doesn't interpolate, alert parameters (e.g. `{userName}`) are asserted on the call: `spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough()`, then `toHaveBeenCalledWith(key, params)`.
 - Add a factory or helper only when a story needs it.
 
 **What to assert**

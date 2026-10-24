@@ -1,5 +1,6 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { TranslateService } from '@ngx-translate/core';
 import { CategoryDto } from 'src/app/model/category-dto';
 import { environment } from 'src/environments/environment';
 import { aCategory, aGroup } from 'src/testing/test-data';
@@ -123,6 +124,7 @@ describe('CategoryService', () => {
       const toDelete = aCategory({ id: 1, name: 'Drogerie' });
       const existing = [toDelete, aCategory({ id: 2, name: 'Lebensmittel' })];
       service.categories.set(existing);
+      const instant = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
 
       service.deleteCategory(toDelete);
       http.expectOne(`${api}/category/delete`).flush('Category with Id 1 is used by carts',
@@ -131,6 +133,8 @@ describe('CategoryService', () => {
       expect(service.categories()).toEqual(existing);
       expect(alerts.showErrorAlert).toHaveBeenCalledWith(
         'alerts.category.delete.error_message_service.header', 'alerts.category.delete.error_message_service.message');
+      expect(instant).toHaveBeenCalledWith(
+        'alerts.category.delete.error_message_service.message', { categoryName: 'Drogerie' });
     });
 
     it('lässt die Kategorien bei einem anderen Fehler unverändert und zeigt keinen Hinweis', () => {

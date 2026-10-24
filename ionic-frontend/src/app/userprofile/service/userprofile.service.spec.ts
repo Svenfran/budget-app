@@ -1,6 +1,7 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
+import { TranslateService } from '@ngx-translate/core';
 import { AuthService } from 'src/app/auth/auth.service';
 import { User } from 'src/app/auth/user';
 import { AlertService } from 'src/app/service/alert.service';
@@ -15,6 +16,7 @@ describe('UserprofileService', () => {
   let alerts: jasmine.SpyObj<AlertService>;
   let auth: jasmine.SpyObj<AuthService>;
   let navigate: jasmine.Spy;
+  let instant: jasmine.Spy;
   let user: User;
   const api = `${environment.apiBaseUrl}/api/userprofile`;
   const badRequest = { status: 400, statusText: 'Bad Request' };
@@ -38,6 +40,8 @@ describe('UserprofileService', () => {
     service = TestBed.inject(UserprofileService);
     http = TestBed.inject(HttpTestingController);
     navigate = spyOn(TestBed.inject(Router), 'navigateByUrl').and.resolveTo(true);
+    // TranslateService ohne Loader setzt keine Parameter ein – Platzhalter werden am Aufruf von instant() geprüft.
+    instant = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
   });
 
   afterEach(() => {
@@ -102,6 +106,7 @@ describe('UserprofileService', () => {
 
         const prefix = `alerts.user_profile.change_username.error_message_service.${c.key}`;
         expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(`${prefix}.header`, `${prefix}.message`);
+        expect(instant).toHaveBeenCalledWith(`${prefix}.message`, { userName: c.userName });
         expect(auth.setUserData).not.toHaveBeenCalled();
       });
     });
@@ -200,11 +205,15 @@ describe('UserprofileService', () => {
 
       expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(
         'alerts.reset_password.success.header', 'alerts.reset_password.success.message');
+      expect(instant).toHaveBeenCalledWith('alerts.reset_password.success.message', { email: 'anna@example.com' });
     });
 
     [
-      { name: 'unbekannte E-Mail', status: 404, body: 'User with email anna@example.com not found', key: 'error_email_not_exists' },
-      { name: 'ungültige E-Mail', status: 400, body: 'Invalid Email', key: 'error_invalid_email' },
+      {
+        name: 'unbekannte E-Mail', status: 404, body: 'User with email anna@example.com not found', key: 'error_email_not_exists',
+        params: { email: 'anna@example.com' },
+      },
+      { name: 'ungültige E-Mail', status: 400, body: 'Invalid Email', key: 'error_invalid_email', params: undefined },
     ].forEach(c => {
       it(`zeigt bei einem Fehler (${c.name}) den passenden Hinweis`, () => {
         service.resetPassword(dto);
@@ -212,6 +221,9 @@ describe('UserprofileService', () => {
 
         expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(
           `alerts.reset_password.${c.key}.header`, `alerts.reset_password.${c.key}.message`);
+        if (c.params) {
+          expect(instant).toHaveBeenCalledWith(`alerts.reset_password.${c.key}.message`, c.params);
+        }
       });
     });
 

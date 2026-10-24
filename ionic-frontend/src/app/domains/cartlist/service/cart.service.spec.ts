@@ -1,5 +1,6 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { TranslateService } from '@ngx-translate/core';
 import { Init } from 'src/app/constants/default-values';
 import { RECURRENCE_TYPE } from 'src/app/constants/recurrence-type';
 import { AlertService } from 'src/app/service/alert.service';
@@ -278,6 +279,7 @@ describe('CartService', () => {
       service.cartList.set(cartList);
       service.initCartList.set(initCartList);
       const updatesBefore = service.cartUpdated();
+      const instant = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
 
       service.addSettlementPayment(payment());
       http.expectOne(`${api}/settlement-payment/add`).flush(notWithinMembership,
@@ -286,9 +288,11 @@ describe('CartService', () => {
       expect(service.cartList()).toEqual(cartList);
       expect(service.initCartList()).toEqual(initCartList);
       expect(service.cartUpdated()).toBe(updatesBefore);
-      // TranslateService ohne Loader liefert den Key, die Parameter werden dabei nicht eingesetzt.
       expect(alerts.showErrorAlert).toHaveBeenCalledWith(
         'alerts.cart.invalid_membership.header', 'alerts.cart.invalid_membership.message_settlementpayment');
+      // TranslateService ohne Loader setzt keine Parameter ein – deshalb am Aufruf von instant() prüfen.
+      expect(instant).toHaveBeenCalledWith(
+        'alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Anna' });
     });
   });
 
