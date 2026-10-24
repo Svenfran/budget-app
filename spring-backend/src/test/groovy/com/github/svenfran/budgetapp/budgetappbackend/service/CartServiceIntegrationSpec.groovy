@@ -707,18 +707,19 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
     // ----- updateCart (DIV-14): öffentlicher Ablauf mit Anmeldung und Prüfungen -----
     // Die Requests senden immer die groupId des Einkaufs (Gruppenwechsel per DTO, DIV-48, bewusst nicht getestet).
 
-    def "Eigentümer bearbeitet seinen Einkauf: Werte und Durchschnitt aus der Mitgliederzahl gespeichert"() {
+    def "#rolle bearbeitet seinen Einkauf: Werte und Durchschnitt aus der Mitgliederzahl gespeichert"() {
         given:
         def ben = fixtures.user()
         def wg = fixtures.group(members: [ben])
-        def cart = fixtures.cart(wg, title: 'Einkauf', amount: 40d, averagePerMember: 20d)
+        def eigentuemer = rolle == 'Gruppen-Owner' ? wg.owner : ben
+        def cart = fixtures.cart(wg, user: eigentuemer, title: 'Einkauf', amount: 40d, averagePerMember: 20d)
         def dto = new CartDto(cart)
         dto.title = 'Großeinkauf'
         dto.amount = 60d
         flushAndClear()
-        loginAs(wg.owner)
-        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet, Eigentümer), Ben {}; Einkauf {} 40.00 -> Großeinkauf 60.00',
-                wg.group.id, wg.owner.id, ben.id, cart.id)
+        loginAs(eigentuemer)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Ben {}; Einkauf {} von User {} ({}, angemeldet) 40.00 -> Großeinkauf 60.00',
+                wg.group.id, wg.owner.id, ben.id, cart.id, eigentuemer.id, rolle)
 
         when:
         def result = cartService.updateCart(dto)
@@ -732,6 +733,9 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         saved.title == 'Großeinkauf'
         saved.amount == 60d
         saved.averagePerMember == 30d
+
+        where:
+        rolle << ['Gruppen-Owner', 'Mitglied']
     }
 
     def "#rolle kann den Einkauf eines anderen nicht bearbeiten"() {
@@ -882,15 +886,17 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
     // Rollback-Spec: Service und Test teilen den Persistence Context. Geprüft wird die Logik der Template-Deaktivierung,
     // nicht ihr Persistieren ohne eigene Transaktion (deleteCart ist nicht @Transactional, DIV-50).
 
-    def "Eigentümer löscht seinen Einkauf ohne Template"() {
+    def "#rolle löscht seinen Einkauf ohne Template"() {
         given:
-        def wg = fixtures.group()
-        def cart = fixtures.cart(wg)
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def eigentuemer = rolle == 'Gruppen-Owner' ? wg.owner : ben
+        def cart = fixtures.cart(wg, user: eigentuemer)
         def cartId = cart.id
         flushAndClear()
-        loginAs(wg.owner)
-        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet, Eigentümer), Einkauf {} ohne Template', wg.group.id, wg.owner.id,
-                cartId)
+        loginAs(eigentuemer)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Ben {}; Einkauf {} ohne Template von User {} ({}, angemeldet)', wg.group.id,
+                wg.owner.id, ben.id, cartId, eigentuemer.id, rolle)
 
         when:
         cartService.deleteCart(cartId)
@@ -900,6 +906,9 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
 
         then:
         !stillThere
+
+        where:
+        rolle << ['Gruppen-Owner', 'Mitglied']
     }
 
     def "Löschen des einzigen Einkaufs eines Templates deaktiviert das Template"() {
@@ -1006,20 +1015,21 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
     // Ohne Request liest der Translator die JVM-Locale (lokal de, in CI ggf. en): die Features setzen Locale.GERMAN
     // und setzen sie im cleanup:-Block zurück. Kategorie per übersetztem Namen (DIV-51) bewusst nicht getestet.
 
-    def "Ausgleichszahlung ohne Settlement-Kategorie legt die Kategorie an und erzeugt zwei gegenläufige Einkäufe"() {
-        given:
+    def "#rolle zahlt aus: ohne Settlement-Kategorie wird sie angelegt und es entstehen zwei gegenläufige Einkäufe"() {
+        given: "Anna ist Owner, Ben Mitglied; es zahlt jeweils die Rolle an den anderen"
         LocaleContextHolder.setLocale(Locale.GERMAN)
         def anna = fixtures.user(name: "Anna${TestData.nextId()}")
         def ben = fixtures.user(name: "Ben${TestData.nextId()}")
         def wg = fixtures.group(owner: anna, members: [ben])
-        def (groupId, annaId, benId, standardKategorieId) = [wg.group.id, anna.id, ben.id, wg.category.id]
-        def (annaName, benName) = [anna.name, ben.name]
-        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: benId), DateUtils.toDate(TestData.REFERENCE_DATE))
+        def (zahler, partner) = rolle == 'Gruppen-Owner' ? [anna, ben] : [ben, anna]
+        def (groupId, zahlerId, partnerId, standardKategorieId) = [wg.group.id, zahler.id, partner.id, wg.category.id]
+        def (zahlerName, partnerName) = [zahler.name, partner.name]
+        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: partnerId), DateUtils.toDate(TestData.REFERENCE_DATE))
         flushAndClear()
-        loginAs(anna)
-        LOG.info('Szenario: Locale de, Gruppe {} ohne Settlement-Kategorie (Standardkategorie {}), Owner {} {} (angemeldet), ' +
-                'Mitglied {} {}; Ausgleichszahlung 30.00 an Ben am {}', groupId, standardKategorieId, annaId, annaName, benId,
-                benName, TestData.REFERENCE_DATE)
+        loginAs(zahler)
+        LOG.info('Szenario: Locale de, Gruppe {} ohne Settlement-Kategorie (Standardkategorie {}), Owner {}, Mitglied {}; ' +
+                'User {} {} ({}, angemeldet) zahlt 30.00 an User {} {} am {}', groupId, standardKategorieId, anna.id, ben.id,
+                zahlerId, zahlerName, rolle, partnerId, partnerName, TestData.REFERENCE_DATE)
 
         when:
         def result = cartService.addSettlementPayment(dto)
@@ -1028,7 +1038,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         def empfaenger = cartRepository.findById(result[1].id).get()
         def settlementIds = settlementCategoryIds(groupId)
         LOG.info('cartService.addSettlementPayment(30.00 an User {}) -> Cart {} "{}" {} (User {}, avg {}), Cart {} "{}" {} ' +
-                '(User {}, avg {}); Settlement-Kategorien {}', benId, sender.id, sender.title, sender.amount, sender.user.id,
+                '(User {}, avg {}); Settlement-Kategorien {}', partnerId, sender.id, sender.title, sender.amount, sender.user.id,
                 sender.averagePerMember, empfaenger.id, empfaenger.title, empfaenger.amount, empfaenger.user.id,
                 empfaenger.averagePerMember, settlementIds)
 
@@ -1041,16 +1051,16 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         settlementId != standardKategorieId
 
         and: "Sender bucht +30 an den Empfänger"
-        sender.title == "Ausgleichszahlung an ${benName}".toString()
-        sender.user.id == annaId
+        sender.title == "Ausgleichszahlung an ${partnerName}".toString()
+        sender.user.id == zahlerId
         sender.amount == 30d
         sender.averagePerMember == 15d
         sender.category.id == settlementId
         DateUtils.toLocalDate(sender.datePurchased) == TestData.REFERENCE_DATE
 
         and: "Empfänger bucht -30 vom Sender"
-        empfaenger.title == "Ausgleichszahlung von ${annaName}".toString()
-        empfaenger.user.id == benId
+        empfaenger.title == "Ausgleichszahlung von ${zahlerName}".toString()
+        empfaenger.user.id == partnerId
         empfaenger.amount == -30d
         empfaenger.averagePerMember == -15d
         empfaenger.category.id == settlementId
@@ -1058,6 +1068,9 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
 
         cleanup:
         LocaleContextHolder.resetLocaleContext()
+
+        where:
+        rolle << ['Gruppen-Owner', 'Mitglied']
     }
 
     def "Vorhandene Settlement-Kategorie wird wiederverwendet"() {
