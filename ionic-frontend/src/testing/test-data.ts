@@ -1,3 +1,4 @@
+import { User } from 'src/app/auth/user';
 import { RECURRENCE_TYPE } from 'src/app/constants/recurrence-type';
 import { Cart } from 'src/app/domains/cartlist/model/cart';
 import { ShoppingitemDto } from 'src/app/domains/shoppinglist/model/shoppingitem-dto';
@@ -49,4 +50,18 @@ export function aShoppingItem(overrides: Partial<ShoppingitemDto> = {}): Shoppin
 export function aShoppingList(overrides: Partial<ShoppinglistDto> = {}): ShoppinglistDto {
   const id = nextId();
   return { id, name: `Liste ${id}`, shoppingItems: [], ...overrides };
+}
+
+/** Angemeldeter Nutzer, dessen Token eine Stunde nach `REFERENCE_DATE` abläuft. */
+export function aLoggedInUser(
+  overrides: Partial<{ id: number; name: string; email: string; expirationDate: number; token: string }> = {},
+): User {
+  const id = overrides.id ?? nextId();
+  return new User(
+    id,
+    overrides.name ?? `Nutzer ${id}`,
+    overrides.email ?? `nutzer${id}@example.com`,
+    overrides.expirationDate ?? REFERENCE_DATE.getTime() + 60 * 60 * 1000,
+    overrides.token ?? `Bearer token-${id}`,
+  );
 }
