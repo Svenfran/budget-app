@@ -295,6 +295,8 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
     }
 
     // ----- removeMemberFromGroup (DIV-13): Rechte, Historie, isDeleted, Templates, Neuberechnung -----
+    // Entfernt wird immer ein aktuelles Mitglied, nie der Owner. Bewusst nicht getestet: Owner entfernt sich selbst
+    // (DIV-53), Außenstehender „verlässt“ eine fremde Gruppe (DIV-54), Owner entfernt ein Nicht-Mitglied (DIV-55).
 
     def "#wer entfernt Ben: Bens Historie endet heute, er ist nicht mehr Mitglied"() {
         given: "Owner, Ben und Cleo seit 2024-06-15"
@@ -461,6 +463,8 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
     }
 
     // ----- changeGroupOwner (DIV-13): Rechte, Rollentausch in Gruppe und Historie -----
+    // Neuer Owner ist immer ein aktuelles Mitglied. Bewusst nicht getestet: Übergabe an Nicht-Mitglieder oder an sich
+    // selbst (DIV-52).
 
     def "Ownerwechsel tauscht die Rollen in Gruppe und Historie"() {
         given: "Anna ist Owner, Ben Mitglied, beide seit 2024-06-15"
