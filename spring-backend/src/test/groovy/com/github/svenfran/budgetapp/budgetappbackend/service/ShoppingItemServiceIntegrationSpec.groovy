@@ -21,14 +21,14 @@ import static com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestDat
  * Einträge der Einkaufslisten: Zustand vorher/nachher, Rechte (VerificationService) und Auslösung der
  * Benachrichtigungen (Konzept 3.8, Ebene 1). Topic, Empfänger und Payload prüft NotificationServiceSpec.
  *
- * lastUpdateShoppingList setzt der Service mit new Date() (nicht über den Clock). Die Gruppen starten deshalb mit
- * einem festen alten Wert (START); geprüft wird „erhöht“ bzw. „unverändert“.
+ * lastUpdateShoppingList setzt der Service aus dem Clock (testClock, Standard REFERENCE_DATE). Die Gruppen starten
+ * mit einem Wert einen Tag davor (START); geprüft wird „auf testClock gesetzt“ bzw. „unverändert“.
  */
 class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
 
     private static final Logger LOG = LoggerFactory.getLogger(ShoppingItemServiceIntegrationSpec)
 
-    private static final Date START = DateUtils.toDate(REFERENCE_DATE)
+    private static final Date START = DateUtils.toDate(REFERENCE_DATE.minusDays(1))
 
     /** ID, die es in keiner Tabelle gibt. */
     private static final Long UNBEKANNT = -1L
@@ -136,7 +136,7 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
         0 * notificationService._
     }
 
-    def "Eintrag anlegen speichert ihn offen an der Liste und erhöht lastUpdateShoppingList"() {
+    def "Eintrag anlegen speichert ihn offen an der Liste und setzt lastUpdateShoppingList auf jetzt"() {
         given:
         def ben = fixtures.user()
         def wg = fixtures.group(members: [ben])
@@ -146,8 +146,8 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
         def listId = liste.id
         flushAndClear()
         loginAs(ben)
-        LOG.info('Szenario: Gruppe {}, lastUpdateShoppingList {}, Mitglied {} (angemeldet), leere Liste {}; neuer Eintrag "Milch"',
-                groupId, START, ben.id, listId)
+        LOG.info('Szenario: heute {}, Gruppe {}, lastUpdateShoppingList {}, Mitglied {} (angemeldet), leere Liste {}; neuer Eintrag "Milch"',
+                testClock.today, groupId, START, ben.id, listId)
 
         when:
         def result = shoppingItemService.addShoppingItem(
@@ -167,7 +167,7 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
         gespeichertListId == listId
         eintraegeDerListe == [result.id]
         result.groupId == groupId
-        lastUpdate.time > START.time
+        lastUpdate.time == testClock.instant().toEpochMilli()
     }
 
     def "Eintrag ändern speichert Name und Erledigt-Status, die Liste bleibt"() {
@@ -200,7 +200,7 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
         gespeichert.name == 'Hafermilch'
         gespeichert.completed
         gespeichertListId == listId
-        lastUpdate.time > START.time
+        lastUpdate.time == testClock.instant().toEpochMilli()
     }
 
     def "Eintrag löschen entfernt nur diesen Eintrag"() {
@@ -231,7 +231,7 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
         then:
         1 * notificationService.sendShoppingItemNotification(groupId, _, 'delete')
         eintraegeDerListe == [brotId]
-        lastUpdate.time > START.time
+        lastUpdate.time == testClock.instant().toEpochMilli()
     }
 
     def "Erledigte Einträge löschen entfernt nur die als erledigt gesendeten Einträge"() {
@@ -266,7 +266,7 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
         then: 'die Benachrichtigung enthält nur den gelöschten Eintrag: Empfänger entfernen alle übermittelten IDs'
         1 * notificationService.sendShoppingItemDeleteAllNotification(groupId, { it*.id == [milchId] })
         eintraegeDerListe == [brotId, kaffeeId]
-        lastUpdate.time > START.time
+        lastUpdate.time == testClock.instant().toEpochMilli()
     }
 
     def "Erledigte Einträge löschen mit nur offenen Einträgen löscht nichts und benachrichtigt mit leerer Liste"() {
@@ -293,7 +293,7 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
         flushAndClear()
         def eintraegeDerListe = eintragIds(listId)
         def lastUpdate = lastUpdateShoppingList(groupId)
-        LOG.info('shoppingItemService.deleteAllCompletedShoppingItems(Liste {}, {} und {} offen) -> Einträge der Liste {}, lastUpdateShoppingList {} (Ist-Verhalten: wird erhöht)',
+        LOG.info('shoppingItemService.deleteAllCompletedShoppingItems(Liste {}, {} und {} offen) -> Einträge der Liste {}, lastUpdateShoppingList {} (Ist-Verhalten: wird auf jetzt gesetzt)',
                 listId, milchId, brotId, eintraegeDerListe, lastUpdate)
 
         then: 'NotificationService verwirft eine leere Liste (NotificationServiceSpec), Empfänger erhalten also nichts'
