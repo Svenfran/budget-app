@@ -18,7 +18,7 @@ export function provideServiceTesting(): (Provider | EnvironmentProviders)[] {
 }
 
 export function alertServiceSpy(): jasmine.SpyObj<AlertService> {
-  return jasmine.createSpyObj<AlertService>('AlertService', ['showErrorAlert', 'showToast']);
+  return jasmine.createSpyObj<AlertService>('AlertService', ['showErrorAlert', 'showToast', 'showAlertSeverUnavailable']);
 }
 
 /**
@@ -48,7 +48,15 @@ export function storageServiceFake(): StorageService {
   };
 }
 
-/** AuthService mit festem angemeldetem Nutzer; `logout` und `setUserData` sind Spies. */
-export function authServiceStub(user: User): jasmine.SpyObj<AuthService> {
-  return jasmine.createSpyObj<AuthService>('AuthService', ['logout', 'setUserData'], { user: of(user) });
+/**
+ * AuthService mit festem Nutzer (`null` = nicht angemeldet); `logout`, `setUserData`, `getDeviceId`, `login` und
+ * `register` sind Spies. `token` wird beim Anlegen gelesen – bei `aLoggedInUser()` also vorher die Uhr stellen.
+ * `getDeviceId` liefert standardmäßig sofort 'device-1'.
+ */
+export function authServiceStub(user: User | null): jasmine.SpyObj<AuthService> {
+  const stub = jasmine.createSpyObj<AuthService>('AuthService',
+    ['logout', 'setUserData', 'getDeviceId', 'login', 'register'],
+    { user: of(user), token: of(user?.token ?? null) });
+  stub.getDeviceId.and.returnValue(of('device-1'));
+  return stub;
 }

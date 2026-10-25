@@ -166,6 +166,8 @@ export class AuthPage implements OnInit {
         if (errRes.status === 0) {
           loadingEl.dismiss();
           this.alertService.showAlertSeverUnavailable();
+          // kein zweiter Alert: Passwort/E-Mail waren nicht das Problem
+          return;
         } else {
           message = this.translate.instant(
             authErrorMessageKey(errRes.error, errRes.status, !this.isLogin, USER_EMAIL, USER_NAME));
