@@ -11,6 +11,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import java.security.Key;
+import java.time.Clock;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -29,8 +30,11 @@ public class JwtService {
     // fixed dummy value in application-test.properties for tests.
     private final String secretKey;
 
-    public JwtService(@Value("${secret_key}") String secretKey) {
+    private final Clock clock;
+
+    public JwtService(@Value("${secret_key}") String secretKey, Clock clock) {
         this.secretKey = secretKey;
+        this.clock = clock;
     }
 
 
@@ -55,9 +59,9 @@ public class JwtService {
                 .setHeaderParam("typ", "JWT")
                 .setClaims(extraClaims)
                 .setSubject(userDetails.getUsername())
-                .setIssuedAt(new Date(System.currentTimeMillis()))
+                .setIssuedAt(Date.from(clock.instant()))
                 .signWith(getSignInKey(), SignatureAlgorithm.HS256)
-                .setExpiration(new Date(System.currentTimeMillis() + TOKEN_VALIDITY_MS))
+                .setExpiration(new Date(clock.millis() + TOKEN_VALIDITY_MS))
                 .compact();
     }
 
@@ -68,7 +72,7 @@ public class JwtService {
     }
 
     private boolean isTokenExpired(String token) {
-        return extractExpiration(token).before(new Date());
+        return extractExpiration(token).before(Date.from(clock.instant()));
     }
 
     public Date extractExpiration(String token) {
@@ -88,6 +92,8 @@ public class JwtService {
         return Jwts
                 .parserBuilder()
                 .setSigningKey(getSignInKey())
+                // expiry check against the same clock as issuing and isTokenExpired
+                .setClock(() -> Date.from(clock.instant()))
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
