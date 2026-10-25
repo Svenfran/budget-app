@@ -12,7 +12,8 @@ import { StatusBar, Style } from '@capacitor/status-bar';
 import { NavigationBar } from '@hugotomazi/capacitor-navigation-bar';
 import { StorageService } from './service/storage.service';
 import { GroupOverview } from './groupoverview/model/group-overview';
-import { UserDto } from './model/user-dto';
+import { ChangeGroupOwnerDto } from './groupmembers/model/change-group-owner-dto';
+import { applyOwnerChange, renameGroup } from './service/group-events';
 import { CategoryDto } from './model/category-dto';
 import { CategoryService } from './service/category.service';
 import { INIT_NUMBERS, INIT_VALUES } from './constants/default-values';
@@ -285,45 +286,31 @@ export class AppComponent {
   }
 
   subscribeToTopics() {
-    this.webSocketService.subscribe(
+    this.webSocketService.subscribe<Group>(
       `/user/notification/update-group`,
-      (parsedData: any) => {
-        const foundGroup = this.sideNavGroups().find(group => group.id === parsedData.id);
-        const group = { id: parsedData.id, name: parsedData.name, dateCreated: foundGroup!.dateCreated };
-        console.log(group);
+      data => {
+        this.sideNavGroups.update(groups => renameGroup(groups, data));
+        this.groupOverviewList.update(groups => renameGroup(groups, data));
 
-        this.sideNavGroups.update(groups => groups.map(group => 
-          group.id === parsedData.id ? { ...group, name: parsedData.name } : group
-        ));
-
-        this.groupOverviewList.update(groups => groups.map(group => 
-          group.id === parsedData.id ? { ...group, name: parsedData.name } : group
-        ));
-        
-        if (this.activeGroup.id === parsedData.id) {
-          this.groupService.setActiveGroup(group);
+        if (this.activeGroup.id === data.id) {
+          this.groupService.setActiveGroup({ ...this.activeGroup, name: data.name });
         }
       },
       { owner: 'app' }
     );
 
-    this.webSocketService.subscribe(
+    this.webSocketService.subscribe<Group>(
       `/user/notification/delete-group`,
-      (parsedData: any) => {
-        const foundGroup = this.sideNavGroups().find(group => group.id === parsedData.id);
-        const group = { id: parsedData.id, name: parsedData.name, dateCreated: foundGroup!.dateCreated };
-        console.log(group);
-        console.log(this.activeGroup);
-
+      data => {
         this.sideNavGroups.update(groups => 
-          groups.filter(group => group.id !== parsedData.id)
+          groups.filter(group => group.id !== data.id)
         );
 
         this.groupOverviewList.update(groups => 
-          groups.filter(group => group.id !== parsedData.id)
+          groups.filter(group => group.id !== data.id)
         );
         
-        if (this.activeGroup.id === group.id) {
+        if (this.activeGroup.id === data.id) {
           this.groupService.updateActiveGroup(this.sideNavGroups(), this.activeGroup);
         }
 
@@ -402,32 +389,13 @@ export class AppComponent {
       { owner: 'app' }
     );
 
-    this.webSocketService.subscribe(
+    this.webSocketService.subscribe<ChangeGroupOwnerDto>(
       `/user/notification/change-group-owner`,
-      (parsedData: any) => {
-        const previousOwner: UserDto = { id: this.groupMembers().id, userName: this.groupMembers().ownerName };
-        console.log(parsedData);
-
-        this.groupMembers.update(group => {
-        return {
-          ...group,
-          ownerName: parsedData.newOwner.userName,
-          ownerId: parsedData.newOwner.id,
-          members: [
-            ...group.members.filter(member => member.id !== parsedData.newOwner.id),
-            previousOwner
-          ]
-        };
-      });
-      
-      this.groupOverviewList.update(groups => {
-        return groups.map(group =>
-          group.id === parsedData.groupId 
-            ? { ...group, ownerName: parsedData.newOwner.userName }
-            : group
-        );
-      });
-
+      data => {
+        this.groupMembers.update(groupMembers => applyOwnerChange(groupMembers, data));
+        this.groupOverviewList.update(groups => groups.map(group =>
+          group.id === data.groupId ? { ...group, ownerName: data.newOwner.userName } : group
+        ));
       },
       { owner: 'app' }
     );

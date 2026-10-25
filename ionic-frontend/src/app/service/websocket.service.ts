@@ -93,8 +93,14 @@ export class WebSocketService {
       onConnect: () => this.onConnect(client),
       onStompError: (frame: IFrame) => {
         if (client !== this.client) return;
-        // z. B. abgelehnte Anmeldung: nicht endlos neu verbinden (kein App-Logout, D-002)
-        console.warn('STOMP-Fehler, WebSocket wird deaktiviert:', frame.headers['message']);
+        if (this.connected) {
+          // bestehende Sitzung, z. B. vom Server wegen ausgebliebener Heartbeats beendet ("Session closed."):
+          // der Client verbindet sich selbst neu
+          console.warn('STOMP-Fehler, Verbindung wird neu aufgebaut:', frame.headers['message']);
+          return;
+        }
+        // Fehler beim Verbindungsaufbau = abgelehnte Anmeldung: nicht endlos neu verbinden (kein App-Logout, D-002)
+        console.warn('STOMP-Anmeldung abgelehnt, WebSocket wird deaktiviert:', frame.headers['message']);
         this.deactivate(client);
       },
       onWebSocketClose: () => this.onWebSocketClose(client),

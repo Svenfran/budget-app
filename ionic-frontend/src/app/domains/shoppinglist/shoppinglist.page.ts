@@ -10,6 +10,7 @@ import { WebSocketService } from 'src/app/service/websocket.service';
 import { GroupService } from 'src/app/service/group.service';
 import { INIT_NUMBERS, INIT_VALUES } from 'src/app/constants/default-values';
 import { TranslateService } from '@ngx-translate/core';
+import { addItem, addList, deleteAllItems, deleteItem, deleteList, updateItem, updateList } from './shoppinglist-events';
 
 @Component({
   selector: 'app-shoppinglist',
@@ -21,7 +22,8 @@ export class ShoppinglistPage implements OnInit {
   @ViewChildren(IonInput) inputFields!: QueryList<IonInput>; 
   public shoppingLists = this.shoppinglistService.getShoppingLists();
   public isLoading: boolean = true;
-  public toggleLists: any = {};
+  /** Aufklappzustand je Listen-ID (nicht Index), damit hinzukommende/entfernte Listen ihn nicht verschieben. */
+  public toggleLists: { [listId: number]: boolean } = {};
   public newItemInputs: { [listId: number]: string } = {};
   public activeGroup = this.groupService.activeGroup();
 
@@ -274,129 +276,29 @@ export class ShoppinglistPage implements OnInit {
   }
 
   private subscribeToTopics() {
+    const options = { owner: 'shoppinglist', filterByActiveGroup: true };
+    const onList = (action: string, apply: (lists: ShoppinglistDto[], data: AddEditShoppinglistDto) => ShoppinglistDto[]) =>
+      this.webSocketService.subscribe<AddEditShoppinglistDto>(
+        `/user/notification/${action}`, data => this.shoppingLists.update(lists => apply(lists, data)), options);
+    const onItem = (action: string, apply: (lists: ShoppinglistDto[], data: AddEditShoppingItemDto) => ShoppinglistDto[]) =>
+      this.webSocketService.subscribe<AddEditShoppingItemDto>(
+        `/user/notification/${action}`, data => this.shoppingLists.update(lists => apply(lists, data)), options);
 
-    this.webSocketService.subscribe(
-      `/user/notification/add-list`,
-      (parsedData: any) => {
-        const shoppinglistDto: ShoppinglistDto = {
-          id: parsedData.id,
-          name: parsedData.name,
-          shoppingItems: []
-        } 
-        console.log(parsedData);
-        this.shoppingLists.update(lists => [...lists, shoppinglistDto])
-      },
-      { owner: 'shoppinglist', filterByActiveGroup: true }
-    )
+    onList('add-list', addList);
+    onList('update-list', updateList);
+    onList('delete-list', deleteList);
+    onItem('add-item', addItem);
+    onItem('update-item', updateItem);
+    onItem('delete-item', deleteItem);
+    this.webSocketService.subscribe<AddEditShoppingItemDto[]>(
+      `/user/notification/delete-all-items`, data => this.shoppingLists.update(lists => deleteAllItems(lists, data)), options);
+  }
 
-    this.webSocketService.subscribe(
-      `/user/notification/update-list`,
-      (parsedData: any) => {
-        console.log(parsedData);
-        this.shoppingLists.update(lists => lists.map(list => 
-          list.id === parsedData.id ? {...list, name: parsedData.name} : list
-        ))
-      },
-      { owner: 'shoppinglist', filterByActiveGroup: true }
-    )
+  trackByListId(_: number, list: ShoppinglistDto): number {
+    return list.id;
+  }
 
-    this.webSocketService.subscribe(
-      `/user/notification/delete-list`,
-      (parsedData: any) => {
-        console.log(parsedData);
-        this.shoppingLists.update(lists => lists.filter(list =>
-          list.id !== parsedData.id
-        ))
-      },
-      { owner: 'shoppinglist', filterByActiveGroup: true }
-    )
-
-    this.webSocketService.subscribe(
-      `/user/notification/add-item`,
-      (parsedData: any) => {
-        console.log(parsedData);
-        const newItem: ShoppingitemDto = {
-          id: parsedData.id!,
-          name: parsedData.name,
-          completed: parsedData.completed
-        }
-
-        this.shoppingLists.update(lists => 
-          lists.map(list => 
-            list.id === parsedData.shoppingListId 
-              ? { 
-                  ...list, 
-                  shoppingItems: [...list.shoppingItems, newItem] 
-                } 
-              : list
-          )
-        );
-      },
-      { owner: 'shoppinglist', filterByActiveGroup: true }
-    )
-
-    this.webSocketService.subscribe(
-      `/user/notification/update-item`,
-      (parsedData: any) => {
-        console.log(parsedData);
-        const updatedItem: ShoppingitemDto = {
-          id: parsedData.id!,
-          name: parsedData.name,
-          completed: parsedData.completed
-        }
-
-        this.shoppingLists.update(lists => 
-          lists.map(list => 
-            list.shoppingItems.some(item => item.id === updatedItem.id)
-              ? {
-                  ...list,
-                  shoppingItems: list.shoppingItems.map(item =>
-                    item.id === updatedItem.id ? updatedItem : item
-                  )
-                }
-              : list
-          )
-        )
-      },
-      { owner: 'shoppinglist', filterByActiveGroup: true }
-    )
-
-    this.webSocketService.subscribe(
-      `/user/notification/delete-item`,
-      (parsedData: any) => {
-        console.log(parsedData);
-        this.shoppingLists.update(lists => 
-          lists.map(list => 
-            list.id === parsedData.shoppingListId
-              ? {
-                ...list,
-                shoppingItems: list.shoppingItems.filter(item => item.id !== parsedData.id)
-                }
-              : list
-          )
-        )
-      },
-      { owner: 'shoppinglist', filterByActiveGroup: true }
-    )
-    
-    this.webSocketService.subscribe(
-      `/user/notification/delete-all-items`,
-      (parsedData: any) => {
-        console.log(parsedData);
-        this.shoppingLists.update(lists => 
-          lists.map(list =>
-            list.id === parsedData[0].shoppingListId
-            ? {
-                ...list,
-                shoppingItems: list.shoppingItems.filter(items =>
-                  !parsedData.some((deletedItem: { id: number }) => deletedItem.id === items.id)
-                )
-              } 
-            : list
-          )
-        )
-      },
-      { owner: 'shoppinglist', filterByActiveGroup: true }
-    )
+  trackByItemId(_: number, item: ShoppingitemDto): number {
+    return item.id;
   }
 }

@@ -111,7 +111,29 @@ describe('WebSocketService', () => {
       expect(client.connectHeaders).toEqual({});
     }));
 
-    it('deaktiviert den Client bei einem STOMP-Fehler (z. B. abgelehnte Anmeldung), ohne neu zu verbinden', fakeAsync(() => {
+    it('bleibt aktiv, wenn der Server eine bestehende Sitzung mit einem STOMP-Fehler beendet (Heartbeat-Timeout)', fakeAsync(() => {
+      // Regression: Spring schickt nach 30 s ohne Client-Heartbeat (z. B. gedrosselter Hintergrund-Tab) ERROR
+      // "Session closed." – der Client muss danach selbst neu verbinden, statt sich dauerhaft zu deaktivieren.
+      spyOn(console, 'warn');
+      const handler = jasmine.createSpy('handler');
+      service.subscribe(topic, handler, { owner: 'shoppinglist' });
+      const client = connected();
+
+      client.simulateStompError('Session closed.');
+      client.simulateClose();
+      http.expectOne(healthUrl).flush({ status: 'UP' });
+      client.runBeforeConnect();
+      flushMicrotasks();
+      client.simulateConnect();
+      client.deliver(topic, JSON.stringify({ id: 7 }));
+
+      expect(client.deactivate).not.toHaveBeenCalled();
+      expect(client.active).toBeTrue();
+      expect(service.isConnected()).toBeTrue();
+      expect(handler).toHaveBeenCalledOnceWith({ id: 7 });
+    }));
+
+    it('deaktiviert den Client bei einem STOMP-Fehler beim Verbindungsaufbau (abgelehnte Anmeldung), ohne neu zu verbinden', fakeAsync(() => {
       spyOn(console, 'warn');
       const client = connect();
 

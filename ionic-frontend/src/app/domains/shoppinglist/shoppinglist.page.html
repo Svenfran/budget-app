@@ -28,12 +28,12 @@
     </ion-row>
     <ion-row>
       <ion-col size-md="6" offset-md="3">
-        <ion-list *ngFor="let list of shoppingLists(), let i = index">
+        <ion-list *ngFor="let list of shoppingLists(); trackBy: trackByListId">
           <ion-item-sliding class="list-header" #slidingItem>
-            <ion-item lines="none" (click)="toggleLists['group'+ i + '_' + 'j'] = !toggleLists['group' + i + '_' + 'j']">
+            <ion-item lines="none" (click)="toggleLists[list.id] = !toggleLists[list.id]">
               <ion-label [class.bold]="list.shoppingItems.length > 0">{{ list.name }} ({{ list.shoppingItems.length }})</ion-label>
-              <ion-icon *ngIf="!toggleLists['group' + i + '_' + 'j']" name="chevron-up-outline" slot="end" size="small"></ion-icon>
-              <ion-icon *ngIf="toggleLists['group' + i + '_' + 'j']" name="chevron-down-outline" slot="end" size="small"></ion-icon>
+              <ion-icon *ngIf="!toggleLists[list.id]" name="chevron-up-outline" slot="end" size="small"></ion-icon>
+              <ion-icon *ngIf="toggleLists[list.id]" name="chevron-down-outline" slot="end" size="small"></ion-icon>
             </ion-item>
             <ion-item-options>
               <ion-item-option color="dark" (click)="onUpdateList(list, slidingItem)">
@@ -46,8 +46,8 @@
           </ion-item-sliding>
 
           <div *ngIf="list.shoppingItems.length > 0">
-            <ion-item *ngFor="let item of list.shoppingItems, let j = index"
-              [hidden]="!toggleLists['group' + i + '_' + 'j']">
+            <ion-item *ngFor="let item of list.shoppingItems; let j = index; trackBy: trackByItemId"
+              [hidden]="!toggleLists[list.id]">
               <ion-text slot="start">{{ j + 1 }}</ion-text>
               <ion-label [class.done]="item.completed" (click)="markAsDone(list, item)">
                 <ion-text>{{ item.name }}</ion-text>
@@ -66,7 +66,7 @@
           </div>
 
           <!-- Inputfeld für Liste -->
-          <ion-item lines="none" [hidden]="!toggleLists['group' + i + '_' + 'j']">
+          <ion-item lines="none" [hidden]="!toggleLists[list.id]">
             <ion-text color="medium" slot="start">{{ list.shoppingItems.length + 1}}</ion-text>
             <ion-input 
                 #inputField
@@ -86,7 +86,7 @@
           </ion-item>
 
           <!-- Erledigte Löschen -->
-          <ion-row [hidden]="!toggleLists['group' + i + '_' + 'j']">
+          <ion-row [hidden]="!toggleLists[list.id]">
             <ion-col size-md="6" offset-md="3">
               <div class="chip">
                 <ion-chip *ngIf="list.shoppingItems.length > 0" (click)="deleteListOfItems(list)" color="primary">

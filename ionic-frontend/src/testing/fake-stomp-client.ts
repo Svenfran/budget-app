@@ -50,8 +50,8 @@ export class FakeStompClient {
     this.config.onWebSocketClose?.({} as CloseEvent);
   }
 
-  simulateStompError() {
-    this.config.onStompError?.({ headers: { message: 'Unauthorized' } } as unknown as IFrame);
+  simulateStompError(message = 'Unauthorized') {
+    this.config.onStompError?.({ headers: { message } } as unknown as IFrame);
   }
 
   /** Stellt eine Nachricht an alle lebenden Subscriptions des Topics zu. */
