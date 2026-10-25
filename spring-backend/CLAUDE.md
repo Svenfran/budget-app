@@ -57,7 +57,7 @@ Standard layered Spring MVC: **Controller → Service → Repository (Spring Dat
 
 ### Cross-cutting concerns
 
-- **Auth**: stateless JWT. `JwtAuthenticationFilter` (registered in `SecurityConfiguration`) validates the `Authorization` bearer token per request and populates the `SecurityContext`; `JwtService` issues/parses tokens; `Token` entities are persisted (used for logout/revocation). Public paths: `/api/auth/**`, `/api/userprofile/password-reset`, `/ws/**`, `/wss/**`. CORS allowed origins come from the `app.cors.allowed-origins` property (comma-separated; dev: LAN IPs + localhost:8100 for the Ionic dev server; prod: only `http://localhost` and `https://localhost`, the WebView origins of the Capacitor Android app), injected into `CorsConfig`, `SecurityConfiguration` and `WebSocketConfig` — add new origins there, not in code. `helper/OriginLoggingFilter` logs the `Origin` header of incoming requests.
+- **Auth**: stateless JWT. `JwtAuthenticationFilter` (registered in `SecurityConfiguration`) validates the `Authorization` bearer token per request and populates the `SecurityContext`; `JwtService` issues/parses tokens; `Token` entities are persisted (used for logout/revocation). Public paths: `/api/auth/**`, `/api/userprofile/password-reset`, `/ws/**`, `/wss/**`. CORS allowed origins come from the `app.cors.allowed-origins` property (comma-separated; dev: LAN IPs + localhost:8100 for the Ionic dev server; prod: only `http://localhost` and `https://localhost`, the WebView origins of the Capacitor Android app), injected into `SecurityConfiguration` (`corsConfigurationSource`, applies to all paths via the security filter chain) and `WebSocketConfig` — add new origins there, not in code. `helper/OriginLoggingFilter` logs the `Origin` header of incoming requests.
 - **WebSocket / notifications**: STOMP over SockJS (`WebSocketConfig`), endpoint from `websocket.url` — `/ws` in all profiles (`/wss` is still permitted in `SecurityConfiguration` but unused). `NotificationService` pushes live updates to clients; the broker prefixes are `/notification` and `/user`, app prefix `/app`.
 - **Scheduling** (`@EnableScheduling` in `config/SchedulingConfig`, switched off with `app.scheduling.enabled=false` — only the `test` profile does that): cron expressions come from properties so dev runs them aggressively and prod sparingly.
   - `CartService` recurring-cart job (`task.recurringCart.schedule`) — materializes new `Cart`s from active `CartTemplate`s. Recurrence is modeled as a `CartTemplate` (with `RecurrenceType`, `nextExecutionDate`, `active`); a one-off cart has no template (`RecurrenceType.NONE`). See `../docs/sketches` in the repo root.
@@ -128,7 +128,7 @@ Layout: the package mirrors `main` (`controller/`, `service/`, `service/mapper/`
 
 ### Mocks
 
-- Unit specs: repositories and `DataLoaderService` as `Mock`/`Stub`; `VerificationService`, mappers and `DateUtils` real. Field-injected dependencies can be set directly (`service.gmhService = Mock(...)`).
+- Unit specs: repositories and `DataLoaderService` as `Mock`/`Stub`; `VerificationService`, mappers and `DateUtils` real. Dependencies are passed via the constructor (`new XyzService(Mock(...), …)`); `src/main` uses constructor injection only (no `@Autowired` fields).
 - Integration/API specs: everything real except the two `@SpringBean` mocks above.
 
 ### Spock pitfalls
