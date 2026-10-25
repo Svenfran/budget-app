@@ -154,7 +154,7 @@ public class UserProfileService {
         var userAuth = dataLoaderService.getAuthenticatedUser();
         var userChange = dataLoaderService.loadUser(userDto.getId());
         verificationService.verifyIsAuthenticatedUser(userChange, userAuth);
-        verificationService.verifyEmailIsValid(bindingResult);
+        verificationService.verifyEmailIsValid(bindingResult, "userEmail");
         // Same address as before after normalization (e.g. only case differs): nothing to change
         if (EmailUtils.normalize(userDto.getUserEmail()).equals(userChange.getEmail())) {
             return new UserDto(userChange, userChange.getEmail());
@@ -174,7 +174,7 @@ public class UserProfileService {
     }
 
     public void passwordReset(String email, BindingResult bindingResult) throws Exception {
-        verificationService.verifyEmailIsValid(bindingResult);
+        verificationService.verifyEmailIsValid(bindingResult, "email");
         var user = dataLoaderService.loadUserByEmail(email);
         var generatedPassword = RandomStringUtils.randomNumeric(6);
         var subject = translator.translate("email.reset.password.subject");

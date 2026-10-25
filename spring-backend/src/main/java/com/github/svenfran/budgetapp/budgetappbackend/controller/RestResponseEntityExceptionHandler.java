@@ -40,6 +40,7 @@ public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionH
             UpdateCartCategoryNotFoundException.class,
             UserAlreadyExistException.class,
             InvalidEmailException.class,
+            MissingDeviceIdException.class,
             UserNameAlreadyExistsException.class,
             UserIsNotAuthenticatedUser.class,
             WrongPasswordException.class,
