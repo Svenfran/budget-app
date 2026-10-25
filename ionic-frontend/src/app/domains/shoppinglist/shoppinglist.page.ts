@@ -6,9 +6,7 @@ import { AlertController, IonInput, IonItemSliding, LoadingController } from '@i
 import { ShoppinglistDto } from './model/shoppinglist-dto';
 import { AddEditShoppingItemDto } from './model/add-edit-shopping-item-dto';
 import { ShoppingitemDto } from './model/shoppingitem-dto';
-import { Subscription } from 'rxjs';
 import { WebSocketService } from 'src/app/service/websocket.service';
-import { AuthService } from 'src/app/auth/auth.service';
 import { GroupService } from 'src/app/service/group.service';
 import { INIT_NUMBERS, INIT_VALUES } from 'src/app/constants/default-values';
 import { TranslateService } from '@ngx-translate/core';
@@ -25,7 +23,6 @@ export class ShoppinglistPage implements OnInit {
   public isLoading: boolean = true;
   public toggleLists: any = {};
   public newItemInputs: { [listId: number]: string } = {};
-  private subscriptions: Subscription[] = [];
   public activeGroup = this.groupService.activeGroup();
 
 
@@ -35,7 +32,6 @@ export class ShoppinglistPage implements OnInit {
     private alertCtrl: AlertController,
     private loadingCtrl: LoadingController,
     private webSocketService: WebSocketService,
-    private authService: AuthService,
     private groupService: GroupService,
     private translate: TranslateService
   ) {
@@ -54,19 +50,13 @@ export class ShoppinglistPage implements OnInit {
   }
 
   ngOnInit() {
-    this.subscriptions.push(
-      this.webSocketService.getConnectionState().subscribe((isConnected) => {
-        if (isConnected) {
-          this.authService.user.subscribe(user => {
-            if (user) this.subscribeToTopics(user.id);
-          });
-        }
-      })
-    );
+    // einmal registrieren; der WebSocketService abonniert nach jedem (Re-)Connect selbst neu
+    this.subscribeToTopics();
   }
   
   ngOnDestroy() {
-    this.webSocketService.unsubscribeAll();
+    // nur die eigenen Topics, die globalen von AppComponent bleiben bestehen
+    this.webSocketService.unsubscribeOwner('shoppinglist');
   }
 
   refreshShoppingList(event: CustomEvent) {
@@ -283,12 +273,11 @@ export class ShoppinglistPage implements OnInit {
     this.shoppinglistService.deleteAllCompletedShoppingItems(items);
   }
 
-  private subscribeToTopics(userId: number) {
+  private subscribeToTopics() {
 
     this.webSocketService.subscribe(
-      `/user/${userId}/notification/add-list`,
-      (message: any) => {
-        const parsedData = JSON.parse(message.body);
+      `/user/notification/add-list`,
+      (parsedData: any) => {
         const shoppinglistDto: ShoppinglistDto = {
           id: parsedData.id,
           name: parsedData.name,
@@ -296,35 +285,35 @@ export class ShoppinglistPage implements OnInit {
         } 
         console.log(parsedData);
         this.shoppingLists.update(lists => [...lists, shoppinglistDto])
-      }
+      },
+      { owner: 'shoppinglist', filterByActiveGroup: true }
     )
 
     this.webSocketService.subscribe(
-      `/user/${userId}/notification/update-list`,
-      (message: any) => {
-        const parsedData = JSON.parse(message.body);
+      `/user/notification/update-list`,
+      (parsedData: any) => {
         console.log(parsedData);
         this.shoppingLists.update(lists => lists.map(list => 
           list.id === parsedData.id ? {...list, name: parsedData.name} : list
         ))
-      }
+      },
+      { owner: 'shoppinglist', filterByActiveGroup: true }
     )
 
     this.webSocketService.subscribe(
-      `/user/${userId}/notification/delete-list`,
-      (message: any) => {
-        const parsedData = JSON.parse(message.body);
+      `/user/notification/delete-list`,
+      (parsedData: any) => {
         console.log(parsedData);
         this.shoppingLists.update(lists => lists.filter(list =>
           list.id !== parsedData.id
         ))
-      }
+      },
+      { owner: 'shoppinglist', filterByActiveGroup: true }
     )
 
     this.webSocketService.subscribe(
-      `/user/${userId}/notification/add-item`,
-      (message: any) => {
-        const parsedData = JSON.parse(message.body);
+      `/user/notification/add-item`,
+      (parsedData: any) => {
         console.log(parsedData);
         const newItem: ShoppingitemDto = {
           id: parsedData.id!,
@@ -342,13 +331,13 @@ export class ShoppinglistPage implements OnInit {
               : list
           )
         );
-      }
+      },
+      { owner: 'shoppinglist', filterByActiveGroup: true }
     )
 
     this.webSocketService.subscribe(
-      `/user/${userId}/notification/update-item`,
-      (message: any) => {
-        const parsedData = JSON.parse(message.body);
+      `/user/notification/update-item`,
+      (parsedData: any) => {
         console.log(parsedData);
         const updatedItem: ShoppingitemDto = {
           id: parsedData.id!,
@@ -368,13 +357,13 @@ export class ShoppinglistPage implements OnInit {
               : list
           )
         )
-      }
+      },
+      { owner: 'shoppinglist', filterByActiveGroup: true }
     )
 
     this.webSocketService.subscribe(
-      `/user/${userId}/notification/delete-item`,
-      (message: any) => {
-        const parsedData = JSON.parse(message.body);
+      `/user/notification/delete-item`,
+      (parsedData: any) => {
         console.log(parsedData);
         this.shoppingLists.update(lists => 
           lists.map(list => 
@@ -386,13 +375,13 @@ export class ShoppinglistPage implements OnInit {
               : list
           )
         )
-      }
+      },
+      { owner: 'shoppinglist', filterByActiveGroup: true }
     )
     
     this.webSocketService.subscribe(
-      `/user/${userId}/notification/delete-all-items`,
-      (message: any) => {
-        const parsedData = JSON.parse(message.body);
+      `/user/notification/delete-all-items`,
+      (parsedData: any) => {
         console.log(parsedData);
         this.shoppingLists.update(lists => 
           lists.map(list =>
@@ -406,7 +395,8 @@ export class ShoppinglistPage implements OnInit {
             : list
           )
         )
-      }
+      },
+      { owner: 'shoppinglist', filterByActiveGroup: true }
     )
   }
 }

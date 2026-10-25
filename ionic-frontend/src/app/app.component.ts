@@ -38,7 +38,7 @@ export class AppComponent {
   public isOpen: boolean = false;
   public activeGroup = this.groupService.activeGroup();
   public darkMode: boolean = true;
-  private subscriptions: Subscription[] = [];
+  private connectedUserId: number | null = null;
   private backButtonSubscription: any;
   public backendStatus = this.healthService.backendStatus;
 
@@ -53,7 +53,6 @@ export class AppComponent {
     private navCtrl: NavController,
     private renderer: Renderer2,
     private storageService: StorageService,
-    private websocketService: WebSocketService,
     private categoryService: CategoryService,
     private healthService: HealthCheckService,
     private translate: TranslateService,
@@ -204,21 +203,28 @@ export class AppComponent {
     }
 
     this.userSub = this.authService.user.subscribe(user => {
-      if (user) {
-        this.user = user;
-        this.webSocketService.connect(user.token!);
-        this.groupService.getGroupsForSideNav();
-        this.groupService.getGroupsForOverview();
-        this.healthService.getHealthStatus();
-
-        this.subscriptions.push(
-          this.webSocketService.getConnectionState().subscribe(isConnected => {
-            if (isConnected) {
-              this.subscribeToTopics(user.id);
-            }
-          })
-        );
+      if (!user) {
+        // Logout (manuell, Auto-Logout, Konto löschen …): Verbindung trennen
+        if (this.connectedUserId !== null) {
+          this.connectedUserId = null;
+          this.webSocketService.disconnect();
+        }
+        return;
       }
+
+      this.user = user;
+      if (user.id !== this.connectedUserId) {
+        if (this.connectedUserId !== null) {
+          this.webSocketService.disconnect();
+        }
+        this.connectedUserId = user.id;
+        this.subscribeToTopics();
+        // Token wird vor jedem (Re-)Connect frisch gelesen; User.token enthält bereits "Bearer "
+        this.webSocketService.connect(() => this.user?.token);
+      }
+      this.groupService.getGroupsForSideNav();
+      this.groupService.getGroupsForOverview();
+      this.healthService.getHealthStatus();
     });
   }
 
@@ -278,11 +284,10 @@ export class AppComponent {
     this.userSub.unsubscribe();
   }
 
-  subscribeToTopics(userId: number) {
-    this.websocketService.subscribe(
-      `/user/${userId}/notification/update-group`,
-      (message: any) => {
-        const parsedData = JSON.parse(message.body);
+  subscribeToTopics() {
+    this.webSocketService.subscribe(
+      `/user/notification/update-group`,
+      (parsedData: any) => {
         const foundGroup = this.sideNavGroups().find(group => group.id === parsedData.id);
         const group = { id: parsedData.id, name: parsedData.name, dateCreated: foundGroup!.dateCreated };
         console.log(group);
@@ -298,13 +303,13 @@ export class AppComponent {
         if (this.activeGroup.id === parsedData.id) {
           this.groupService.setActiveGroup(group);
         }
-      }
+      },
+      { owner: 'app' }
     );
 
-    this.websocketService.subscribe(
-      `/user/${userId}/notification/delete-group`,
-      (message: any) => {
-        const parsedData = JSON.parse(message.body);
+    this.webSocketService.subscribe(
+      `/user/notification/delete-group`,
+      (parsedData: any) => {
         const foundGroup = this.sideNavGroups().find(group => group.id === parsedData.id);
         const group = { id: parsedData.id, name: parsedData.name, dateCreated: foundGroup!.dateCreated };
         console.log(group);
@@ -326,13 +331,13 @@ export class AppComponent {
           this.groupService.hasNoGroups.set(true);
           this.router.navigateByUrl("/no-group", { replaceUrl: true });
         }
-      }
+      },
+      { owner: 'app' }
     );
 
     this.webSocketService.subscribe(
-      `/user/${userId}/notification/remove-group-member`,
-      (message: any) => {
-        const parsedData = JSON.parse(message.body);
+      `/user/notification/remove-group-member`,
+      (parsedData: any) => {
         console.log(parsedData);
       
         if (parsedData.updatedMember.id === this.user?.id) {
@@ -358,13 +363,13 @@ export class AppComponent {
           this.router.navigateByUrl("/no-group", { replaceUrl: true });
         }
       
-      }
+      },
+      { owner: 'app' }
     );
     
     this.webSocketService.subscribe(
-      `/user/${userId}/notification/add-group-member`,
-      (message: any) => {
-        const parsedData = JSON.parse(message.body);
+      `/user/notification/add-group-member`,
+      (parsedData: any) => {
         console.log(parsedData);
         const group: Group = { id: parsedData.id, name: parsedData.name, dateCreated: parsedData.dateCreated };
         const groupOverview: GroupOverview = { 
@@ -393,13 +398,13 @@ export class AppComponent {
           this.router.navigateByUrl("/domains/tabs/overview", { replaceUrl: true });
         }
       
-      }
+      },
+      { owner: 'app' }
     );
 
     this.webSocketService.subscribe(
-      `/user/${userId}/notification/change-group-owner`,
-      (message: any) => {
-        const parsedData = JSON.parse(message.body);
+      `/user/notification/change-group-owner`,
+      (parsedData: any) => {
         const previousOwner: UserDto = { id: this.groupMembers().id, userName: this.groupMembers().ownerName };
         console.log(parsedData);
 
@@ -423,13 +428,13 @@ export class AppComponent {
         );
       });
 
-      }
+      },
+      { owner: 'app' }
     );
 
     this.webSocketService.subscribe(
       `/notification/health`,
-      (message: any) => {
-        const parsedData = JSON.parse(message.body);
+      (parsedData: any) => {
         this.backendStatus.set(parsedData.status);
         // this.backendStatus.set(INIT_VALUES.HEALTH_DOWN);
 
@@ -440,7 +445,8 @@ export class AppComponent {
         }
 
         console.log(parsedData);
-      }
+      },
+      { owner: 'app' }
     );
 
   }
