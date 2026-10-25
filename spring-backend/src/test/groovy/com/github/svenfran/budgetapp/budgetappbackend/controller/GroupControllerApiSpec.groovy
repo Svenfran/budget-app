@@ -10,9 +10,13 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.mock.web.MockHttpServletResponse
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 
-/** Fehlermeldungs-Vertrag beim Hinzufügen von Mitgliedern (Liste der Meldungen: {@link CartControllerApiSpec}). */
+/**
+ * Fehlermeldungs-Vertrag beim Hinzufügen von Mitgliedern (Liste der Meldungen: {@link CartControllerApiSpec}) und
+ * Rechte-Mapping (NotOwnerOfGroupException -> 403) für remove/change-owner/delete.
+ */
 class GroupControllerApiSpec extends IntegrationSpec implements ApiRequests {
 
     private static final Logger LOG = LoggerFactory.getLogger(GroupControllerApiSpec)
@@ -64,6 +68,35 @@ class GroupControllerApiSpec extends IntegrationSpec implements ApiRequests {
         response.status == 403
         response.contentAsString.contains('Member already exists')
         0 * notificationService._
+    }
+
+    def "Mitglied ohne Owner-Rechte bei #aktion: 403"() {
+        given: "Ben und Cleo sind Mitglieder; Ben versucht eine Owner-Aktion"
+        def ben = fixtures.user()
+        def cleo = fixtures.user()
+        def wg = fixtures.group(members: [ben, cleo])
+        def groupId = wg.group.id
+        def request = aktion == 'Cleo entfernen' ? post('/api/groups/remove-member-from-group')
+                : aktion == 'Owner an Cleo übergeben' ? post('/api/groups/change-groupowner')
+                : delete('/api/groups/delete/{id}', groupId)
+        // Map-Literale nach '?' in Klammern: sonst liest der Parser '? [' als Safe-Index-Operator '?['
+        def body = aktion == 'Cleo entfernen' ? ([id: groupId, member: [id: cleo.id]])
+                : aktion == 'Owner an Cleo übergeben' ? ([groupId: groupId, newOwner: [id: cleo.id]])
+                : null
+        def options = [user: ben] + (body != null ? ([body: body]) : [:])
+        LOG.info('Szenario: Gruppe {}, Owner {}, Mitglied Ben {} (angemeldet), Mitglied Cleo {}; Aktion: {}', groupId,
+                wg.owner.id, ben.id, cleo.id, aktion)
+
+        when:
+        def response = send(options, request)
+        LOG.info('Antwort: {}', response.contentAsString)
+
+        then:
+        response.status == 403
+        0 * notificationService._
+
+        where:
+        aktion << ['Cleo entfernen', 'Owner an Cleo übergeben', 'Gruppe löschen']
     }
 
     private MockHttpServletResponse addNewMember(GroupScenario wg, User angemeldet, String newMemberEmail) {
