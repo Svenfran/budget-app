@@ -1,4 +1,4 @@
-import { Component, effect, Renderer2 } from '@angular/core';
+import { Component, effect, NgZone, Renderer2 } from '@angular/core';
 import { firstValueFrom, Subscription } from 'rxjs';
 import { AuthService } from './auth/auth.service';
 import { Router } from '@angular/router';
@@ -8,6 +8,7 @@ import { GroupService } from './service/group.service';
 import { Group } from './model/group';
 import { AlertController, isPlatform, LoadingController, NavController, Platform } from '@ionic/angular';
 import { App } from '@capacitor/app';
+import { PluginListenerHandle } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { NavigationBar } from '@hugotomazi/capacitor-navigation-bar';
 import { StorageService } from './service/storage.service';
@@ -20,6 +21,8 @@ import { INIT_NUMBERS, INIT_VALUES } from './constants/default-values';
 import { HealthCheckService } from './service/healthcheck.service';
 import { TranslateService } from '@ngx-translate/core';
 import { LanguageService } from './service/language.service';
+import { ShoppinglistService } from './domains/shoppinglist/service/shoppinglist.service';
+import { isLongBackground, ResyncThrottle } from './service/resync-throttle';
 
 @Component({
   selector: 'app-root',
@@ -40,6 +43,15 @@ export class AppComponent {
   public activeGroup = this.groupService.activeGroup();
   public darkMode: boolean = true;
   private connectedUserId: number | null = null;
+  // Stiller Resync der live-gesyncten Daten nach Reconnect / längerem Hintergrund (DIV-36)
+  private resyncThrottle = new ResyncThrottle(
+    () => this.resyncLiveData(),
+    () => this.webSocketService.isConnected(),
+    INIT_NUMBERS.RESYNC_MIN_INTERVAL_MS,
+  );
+  private reconnectedSub?: Subscription;
+  private appStateListeners: Promise<PluginListenerHandle>[] = [];
+  private pausedAt: number | null = null;
   private backButtonSubscription: any;
   public backendStatus = this.healthService.backendStatus;
 
@@ -57,7 +69,9 @@ export class AppComponent {
     private categoryService: CategoryService,
     private healthService: HealthCheckService,
     private translate: TranslateService,
-    private langService: LanguageService
+    private langService: LanguageService,
+    private shoppinglistService: ShoppinglistService,
+    private ngZone: NgZone
   ) {
     this.initializeApp();
 
@@ -188,6 +202,7 @@ export class AppComponent {
     });
     this.initBackButton();
     this.initUser();
+    this.initResync();
   }
 
   switchLanguage(lang: string) {
@@ -208,6 +223,7 @@ export class AppComponent {
         // Logout (manuell, Auto-Logout, Konto löschen …): Verbindung trennen
         if (this.connectedUserId !== null) {
           this.connectedUserId = null;
+          this.resyncThrottle.reset();
           this.webSocketService.disconnect();
         }
         return;
@@ -216,6 +232,7 @@ export class AppComponent {
       this.user = user;
       if (user.id !== this.connectedUserId) {
         if (this.connectedUserId !== null) {
+          this.resyncThrottle.reset();
           this.webSocketService.disconnect();
         }
         this.connectedUserId = user.id;
@@ -227,6 +244,54 @@ export class AppComponent {
       this.groupService.getGroupsForOverview();
       this.healthService.getHealthStatus();
     });
+  }
+
+  /** Auslöser für den stillen Resync: jedes Wiederverbinden und ein Resume nach längerem Hintergrund. */
+  private initResync() {
+    this.reconnectedSub = this.webSocketService.reconnected$.subscribe(() => this.resyncThrottle.request());
+    this.appStateListeners = [
+      App.addListener('pause', () => this.pausedAt = Date.now()),
+      App.addListener('resume', () => this.ngZone.run(() => this.onResume())),
+    ];
+  }
+
+  private onResume() {
+    const longBackground = isLongBackground(this.pausedAt, Date.now(), INIT_NUMBERS.RESYNC_AFTER_BACKGROUND_MS);
+    this.pausedAt = null;
+    if (this.connectedUserId === null) return;
+    // einzelne unsichtbare Abfrage, unabhängig von Verbindung und Drossel; aktualisiert nur backendStatus
+    this.healthService.getHealthStatus();
+    if (longBackground) {
+      this.resyncThrottle.request();
+    }
+  }
+
+  /**
+   * Lädt die live-gesyncten Daten still neu (kein Leeren, kein Spinner, Fehler behalten den alten Stand): Gruppen,
+   * Übersicht, Einkaufslisten der aktiven Gruppe und – falls geöffnet – die Mitglieder. Carts, Kategorien und
+   * Statistiken nicht (nicht live-gesynct). Antworten für einen inzwischen anderen Nutzer bzw. eine andere aktive
+   * Gruppe werden verworfen.
+   */
+  private resyncLiveData() {
+    const userId = this.connectedUserId;
+    if (userId === null) return;
+    const sameUser = () => this.connectedUserId === userId;
+
+    this.groupService.getGroupsForSideNav({ silent: true, isCurrent: sameUser });
+    this.groupService.getGroupsForOverview({ silent: true, isCurrent: sameUser });
+
+    const group = this.groupService.activeGroup();
+    if (!group.flag?.includes(INIT_VALUES.DEFAULT)) {
+      this.shoppinglistService.getShoppingListsWithItems(group, undefined, {
+        silent: true,
+        isCurrent: () => sameUser() && this.groupService.activeGroup().id === group.id,
+      });
+    }
+
+    const members = this.groupMembers();
+    if (!members.flag?.includes(INIT_VALUES.DEFAULT)) {
+      this.groupService.getGroupMembers(members.id, { silent: true, isCurrent: sameUser });
+    }
   }
 
   initBackButton() {
@@ -283,6 +348,9 @@ export class AppComponent {
   ngOnDestroy() {
     this.authSub.unsubscribe();
     this.userSub.unsubscribe();
+    this.reconnectedSub?.unsubscribe();
+    this.resyncThrottle.reset();
+    this.appStateListeners.forEach(listener => listener.then(handle => handle.remove()));
   }
 
   subscribeToTopics() {

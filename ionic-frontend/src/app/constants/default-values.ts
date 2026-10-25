@@ -16,7 +16,11 @@ export class Init {
 
 export enum INIT_NUMBERS {
     MAX_LENGTH = 200,
-    MAX_LENGTH_50 = 50
+    MAX_LENGTH_50 = 50,
+    /** Resync nach App-Resume nur, wenn die App länger als diese Zeit im Hintergrund war (DIV-36, D-001). */
+    RESYNC_AFTER_BACKGROUND_MS = 30000,
+    /** Höchstens ein Resync pro Intervall (DIV-36). */
+    RESYNC_MIN_INTERVAL_MS = 60000
 }
 
 export const SETTLEMENTPAYMENT_CATEGORIES = ['Ausgleichszahlung', 'Settlement payment', 'Pago de ajuste'];
