@@ -66,7 +66,7 @@ Standard layered Spring MVC: **Controller → Service → Repository (Spring Dat
 - **i18n**: `messages.properties` (German, default), `messages_en.properties`, `messages_es.properties`. Locale is resolved from the `Accept-Language` header (`AppLanguageConfig` → `AcceptHeaderLocaleResolver`, supported locales `de`/`en`/`es`, default `Locale.GERMAN`, no system-locale fallback): regional variants map to their language (`en-US` → `en`), unsupported languages fall back to `de`, so `LocaleContextHolder.getLocale()` only ever returns one of the three. A new language needs an entry there plus a `messages_<lang>.properties`. Use the `Translator` component (`translate(key, args...)`) for any user-facing string — services pass message *keys* (e.g. `"categories.default.settlement"`) rather than literals. Excel export (`ExcelWriter`) is also localized.
 - **Email**: Brevo (SendinBlue) via `BrevoMailSenderService` for verification / password reset, configured by `brevo.*` properties.
 - **Excel export**: `helper/ExcelWriter` uses Apache POI to stream `.xlsx` spending overviews directly to the `HttpServletResponse`.
-- **Dates**: use `helper/DateUtils` (`toLocalDate`/`toDate`, `NO_END_DATE` = 2999-12-31 as the "open-ended" sentinel) instead of ad-hoc `Date`↔`LocalDate` conversions. Time-dependent logic takes "now" from the injected `Clock` bean (`config/ApplicationConfig`, used by `CartService`) rather than `LocalDate.now()`, so tests can control it.
+- **Dates**: use `helper/DateUtils` (`toLocalDate`/`toDate`, `NO_END_DATE` = 2999-12-31 as the "open-ended" sentinel) instead of ad-hoc `Date`↔`LocalDate` conversions. Time-dependent logic takes "now" from the injected `Clock` bean (`config/ApplicationConfig`, used by all time-dependent services, incl. `JwtService` for token issuing and the parser's expiry check) rather than `LocalDate.now()`/`new Date()`, so tests can control it.
 - **Validation**: custom `@ValidEmail` constraint (`validator/`) on auth/user DTOs. Enums such as `RecurrenceType` and `TokenType` live in `constants/`.
 - **Health**: Spring Actuator exposes only `/actuator/health`.
 
@@ -124,7 +124,7 @@ Layout: the package mirrors `main` (`controller/`, `service/`, `service/mapper/`
 ### Time
 
 - Integration/API specs use `testClock` (replaces the production `Clock`; default `TestData.REFERENCE_DATE`, change it with `testClock.today = LocalDate.of(2025, 1, 31)`, reset after every feature). Unit specs use `Clock.fixed(...)`. Never `LocalDate.now()`/`new Date()` in tests.
-- Limit: `GroupMembershipHistoryService` still uses `new Date()`, so groups created through `GroupService` have memberships starting at the real time. Build such scenarios with `Fixtures`.
+- Limit: Hibernate `@CreationTimestamp`/`@UpdateTimestamp` (`dateCreated`, `lastUpdate` on `Cart`, `Group`, `ShoppingList`, `ShoppingItem`) still use the system clock — don't assert on them.
 
 ### Mocks
 
