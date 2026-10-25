@@ -8,6 +8,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOfGroupException
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository
+import com.github.svenfran.budgetapp.budgetappbackend.repository.CartTemplateRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupMembershipHistoryRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
@@ -29,6 +30,7 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
     @Autowired GroupRepository groupRepository
     @Autowired CartRepository cartRepository
     @Autowired GroupMembershipHistoryRepository membershipRepository
+    @Autowired CartTemplateRepository templateRepository
 
     def "Neuberechnung setzt den Durchschnitt pro Mitglied auf 0, wenn zum Kaufdatum niemand Mitglied ist"() {
         given: "Owner und Ben sind seit REFERENCE_DATE - 1 Jahr Mitglied"
@@ -281,6 +283,172 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
         historie(groupId, cleoId).isEmpty()
 
         where:
+        rolle << ['Mitglied', 'Außenstehender']
+    }
+
+    // ----- removeMemberFromGroup (DIV-13): Rechte, Historie, isDeleted, Templates, Neuberechnung -----
+
+    def "#wer entfernt Ben: Bens Historie endet heute, er ist nicht mehr Mitglied"() {
+        given: "Owner, Ben und Cleo seit 2024-06-15"
+        def ben = fixtures.user()
+        def cleo = fixtures.user()
+        def wg = fixtures.group(members: [ben, cleo])
+        def angemeldet = wer == 'Owner' ? wg.owner : ben
+        def groupId = wg.group.id
+        def ownerId = wg.owner.id
+        def benId = ben.id
+        def cleoId = cleo.id
+        testClock.today = LocalDate.of(2025, 6, 15)
+        flushAndClear()
+        loginAs(angemeldet)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Ben {}, Cleo {} (alle seit {}); angemeldet User {} ({}); heute {}', groupId,
+                ownerId, benId, cleoId, REFERENCE_DATE.minusYears(1), angemeldet.id, wer, testClock.today)
+
+        when:
+        def result = groupService.removeMemberFromGroup(new RemoveGroupMemberDto(id: groupId, member: new UserDto(id: benId)))
+        flushAndClear()
+        def mitglieder = memberIds(groupId)
+        def benHistorie = historie(groupId, benId)
+        def ownerHistorie = historie(groupId, ownerId)
+        def cleoHistorie = historie(groupId, cleoId)
+        LOG.info('groupService.removeMemberFromGroup(Gruppe {}, Ben {}) -> members {}; Historie Ben {}, Owner {}, Cleo {}',
+                groupId, benId, mitglieder, benHistorie, ownerHistorie, cleoHistorie)
+
+        then:
+        result.updatedMember.id == benId
+        result.members*.id == [cleoId]
+        mitglieder == [cleoId]
+        benHistorie == [[MEMBER, REFERENCE_DATE.minusYears(1), LocalDate.of(2025, 6, 15)]]
+        ownerHistorie == [[OWNER, REFERENCE_DATE.minusYears(1), null]]
+        cleoHistorie == [[MEMBER, REFERENCE_DATE.minusYears(1), null]]
+
+        where: "der Owner entfernt ein Mitglied bzw. Ben verlässt die Gruppe selbst"
+        wer << ['Owner', 'Ben selbst']
+    }
+
+    def "Entfernen markiert nur Bens Einkäufe in dieser Gruppe als gelöscht"() {
+        given: "Ben ist auch Mitglied einer zweiten Gruppe und hat dort einen Einkauf"
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def andereWg = fixtures.group(members: [ben])
+        def groupId = wg.group.id
+        def benId = ben.id
+        def benCart = fixtures.cart(wg, user: ben)
+        def benCartAndereWg = fixtures.cart(andereWg, user: ben)
+        def ownerCart = fixtures.cart(wg)
+        testClock.today = LocalDate.of(2025, 6, 15)
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: Gruppe {} (Owner {}) und Gruppe {}, Ben {} in beiden; Einkäufe Ben {} (Gruppe {}), Ben {} (Gruppe {}), Owner {}',
+                groupId, wg.owner.id, andereWg.group.id, benId, benCart.id, groupId, benCartAndereWg.id, andereWg.group.id, ownerCart.id)
+
+        when:
+        groupService.removeMemberFromGroup(new RemoveGroupMemberDto(id: groupId, member: new UserDto(id: benId)))
+        flushAndClear()
+        def benCartDeleted = cartRepository.findById(benCart.id).get().deleted
+        def benCartAndereWgDeleted = cartRepository.findById(benCartAndereWg.id).get().deleted
+        def ownerCartDeleted = cartRepository.findById(ownerCart.id).get().deleted
+        LOG.info('groupService.removeMemberFromGroup(Gruppe {}, Ben {}) -> isDeleted Ben {}, Ben andere Gruppe {}, Owner {}',
+                groupId, benId, benCartDeleted, benCartAndereWgDeleted, ownerCartDeleted)
+
+        then:
+        benCartDeleted
+        !benCartAndereWgDeleted
+        !ownerCartDeleted
+    }
+
+    def "Entfernen deaktiviert nur Bens aktive Templates dieser Gruppe mit Enddatum heute"() {
+        given: "Bens aktives und bereits beendetes Template in der Gruppe, Bens Template in einer zweiten Gruppe, Owner-Template"
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def andereWg = fixtures.group(members: [ben])
+        def groupId = wg.group.id
+        def benId = ben.id
+        def benAktiv = fixtures.template(fixtures.cart(wg, user: ben))
+        def benBeendet = fixtures.template(fixtures.cart(wg, user: ben), active: false, endDate: LocalDate.of(2025, 1, 31))
+        def benAndereWg = fixtures.template(fixtures.cart(andereWg, user: ben))
+        def ownerAktiv = fixtures.template(fixtures.cart(wg))
+        testClock.today = LocalDate.of(2025, 6, 15)
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: Gruppe {} (Owner {}), Ben {}; Templates Ben aktiv {}, Ben beendet {} (Ende 2025-01-31), Ben andere Gruppe {}, Owner {}; heute {}',
+                groupId, wg.owner.id, benId, benAktiv.id, benBeendet.id, benAndereWg.id, ownerAktiv.id, testClock.today)
+
+        when:
+        groupService.removeMemberFromGroup(new RemoveGroupMemberDto(id: groupId, member: new UserDto(id: benId)))
+        flushAndClear()
+        def zustand = [benAktiv, benBeendet, benAndereWg, ownerAktiv].collect {
+            def template = templateRepository.findById(it.id).get()
+            [template.active, template.endDate]
+        }
+        LOG.info('groupService.removeMemberFromGroup(Gruppe {}, Ben {}) -> [active, endDate] Ben aktiv {}, Ben beendet {}, Ben andere Gruppe {}, Owner {}',
+                groupId, benId, *zustand)
+
+        then:
+        zustand == [[false, LocalDate.of(2025, 6, 15)],
+                    [false, LocalDate.of(2025, 1, 31)],
+                    [true, null],
+                    [true, null]]
+    }
+
+    def "Entfernen rechnet den Durchschnitt neu: der Austrittstag zählt noch mit"() {
+        given: "Owner und Ben seit 2024-06-15; Einkäufe mit falschem Durchschnitt 99, damit die Neuberechnung sichtbar ist"
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def groupId = wg.group.id
+        def benId = ben.id
+        // Ein Kaufdatum nach heute ist zulässig, solange die Mitgliedschaft des Käufers offen ist.
+        def amAustritt = fixtures.cart(wg, amount: 60d, averagePerMember: 99d, datePurchased: DateUtils.toDate(LocalDate.of(2025, 6, 15)))
+        def nachAustritt = fixtures.cart(wg, amount: 60d, averagePerMember: 99d, datePurchased: DateUtils.toDate(LocalDate.of(2025, 6, 16)))
+        testClock.today = LocalDate.of(2025, 6, 15)
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), Ben {} wird am {} entfernt; Einkauf {} 60.00 am 2025-06-15, Einkauf {} 60.00 am 2025-06-16',
+                groupId, wg.owner.id, benId, testClock.today, amAustritt.id, nachAustritt.id)
+
+        when:
+        groupService.removeMemberFromGroup(new RemoveGroupMemberDto(id: groupId, member: new UserDto(id: benId)))
+        flushAndClear()
+        def averageAmAustritt = cartRepository.findById(amAustritt.id).get().averagePerMember
+        def averageNachAustritt = cartRepository.findById(nachAustritt.id).get().averagePerMember
+        LOG.info('groupService.removeMemberFromGroup(Gruppe {}, Ben {}) -> averagePerMember Einkauf {}: {}, Einkauf {}: {}',
+                groupId, benId, amAustritt.id, averageAmAustritt, nachAustritt.id, averageNachAustritt)
+
+        then: "am Austrittstag (inklusiv) 2 Mitglieder, am Tag danach nur noch der Owner"
+        averageAmAustritt == 30d
+        averageNachAustritt == 60d
+    }
+
+    def "#rolle kann Ben nicht entfernen"() {
+        given: "Ben hat einen Einkauf mit aktivem Template"
+        def ben = fixtures.user()
+        def cleo = fixtures.user()
+        def wg = fixtures.group(members: [ben, cleo])
+        def angemeldet = rolle == 'Mitglied' ? cleo : fixtures.user()
+        def groupId = wg.group.id
+        def benId = ben.id
+        def cleoId = cleo.id
+        def benCart = fixtures.cart(wg, user: ben)
+        def benTemplate = fixtures.template(benCart)
+        flushAndClear()
+        loginAs(angemeldet)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Ben {} (Einkauf {}, Template {}), Cleo {}; angemeldet User {} ({})', groupId,
+                wg.owner.id, benId, benCart.id, benTemplate.id, cleoId, angemeldet.id, rolle)
+
+        when:
+        LOG.info('groupService.removeMemberFromGroup(Gruppe {}, Ben {}) als User {}, erwartet NotOwnerOfGroupException',
+                groupId, benId, angemeldet.id)
+        groupService.removeMemberFromGroup(new RemoveGroupMemberDto(id: groupId, member: new UserDto(id: benId)))
+
+        then:
+        thrown(NotOwnerOfGroupException)
+        0 * notificationService._
+        memberIds(groupId) == [benId, cleoId].sort()
+        historie(groupId, benId) == [[MEMBER, REFERENCE_DATE.minusYears(1), null]]
+        !cartRepository.findById(benCart.id).get().deleted
+        templateRepository.findById(benTemplate.id).get().active
+
+        where: "Cleo ist Mitglied, darf aber nur sich selbst entfernen"
         rolle << ['Mitglied', 'Außenstehender']
     }
 
