@@ -29,15 +29,11 @@ class JwtAuthenticationFilterSpec extends Specification {
     def userDetailsService = Stub(UserDetailsService)
     def tokenRepository = Stub(TokenRepository)
     def chain = Mock(FilterChain)
-    def filter = new JwtAuthenticationFilter()
+    def filter = new JwtAuthenticationFilter(jwtService, userDetailsService, tokenRepository)
     def request = new MockHttpServletRequest()
     def response = new MockHttpServletResponse()
 
     def setup() {
-        filter.jwtService = jwtService
-        filter.userDetailsService = userDetailsService
-        filter.tokenRepository = tokenRepository
-
         def alfred = TestData.user(email: EMAIL)
         userDetailsService.loadUserByUsername(EMAIL) >> alfred
         tokenRepository.findByToken(JWT) >> Optional.of(TestData.token(user: alfred, token: JWT, deviceId: DEVICE))

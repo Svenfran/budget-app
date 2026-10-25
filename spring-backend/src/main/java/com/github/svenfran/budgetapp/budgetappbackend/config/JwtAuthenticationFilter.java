@@ -5,7 +5,6 @@ import com.github.svenfran.budgetapp.budgetappbackend.service.JwtService;
 import io.jsonwebtoken.JwtException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -28,14 +27,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     // not named "logger": that would hide GenericFilterBean.logger
     private final Logger LOG = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
 
-    @Autowired
-    private JwtService jwtService;
+    private final JwtService jwtService;
 
-    @Autowired
-    private UserDetailsService userDetailsService;
+    private final UserDetailsService userDetailsService;
 
-    @Autowired
-    private TokenRepository tokenRepository;
+    private final TokenRepository tokenRepository;
+
+    public JwtAuthenticationFilter(JwtService jwtService, UserDetailsService userDetailsService,
+                                   TokenRepository tokenRepository) {
+        this.jwtService = jwtService;
+        this.userDetailsService = userDetailsService;
+        this.tokenRepository = tokenRepository;
+    }
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull FilterChain filterChain) throws ServletException, IOException {

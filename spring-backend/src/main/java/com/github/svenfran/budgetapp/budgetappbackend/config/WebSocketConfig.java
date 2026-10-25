@@ -24,11 +24,15 @@ import static org.springframework.http.MediaType.APPLICATION_JSON;
 @Order(Ordered.HIGHEST_PRECEDENCE + 99)
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
-    @Value("${websocket.url}")
-    private String websocketEndpoint;
+    private final String websocketEndpoint;
 
-    @Value("${app.cors.allowed-origins}")
-    private List<String> allowedOrigins;
+    private final List<String> allowedOrigins;
+
+    public WebSocketConfig(@Value("${websocket.url}") String websocketEndpoint,
+                           @Value("${app.cors.allowed-origins}") List<String> allowedOrigins) {
+        this.websocketEndpoint = websocketEndpoint;
+        this.allowedOrigins = allowedOrigins;
+    }
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
