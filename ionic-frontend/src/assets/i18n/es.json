@@ -302,7 +302,8 @@
                 "header_register": "Error de registro",
                 "message": "Contraseña o dirección de email incorrectos.",
                 "message_email_exists": "La dirección de email ya está ocupada.",
-                "message_username_exists": "El nombre de usuario ya está ocupado."
+                "message_username_exists": "El nombre de usuario ya está ocupado.",
+                "message_device_id_missing": "No se pudo identificar tu dispositivo. Por favor inténtalo de nuevo."
             }
         },
         "server_unavailable": {

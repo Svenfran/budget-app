@@ -12,6 +12,7 @@ import { INIT_NUMBERS } from '../constants/default-values';
 import { TranslateService } from '@ngx-translate/core';
 import { LanguageService } from '../service/language.service';
 import { StorageService } from '../service/storage.service';
+import { authErrorMessageKey } from './auth-error-message';
 
 @Component({
   selector: 'app-auth',
@@ -161,16 +162,13 @@ export class AuthPage implements OnInit {
         let header = !this.isLogin 
           ? this.translate.instant('alerts.authenticate.error_messages.header_register') 
           : this.translate.instant('alerts.authenticate.error_messages.header_login');
-        // for Authentication
         let message = this.translate.instant('alerts.authenticate.error_messages.message');
-        // for Registration
         if (errRes.status === 0) {
           loadingEl.dismiss();
           this.alertService.showAlertSeverUnavailable();
-        } else if (errRes.status !== 403 && errRes.error.includes(USER_EMAIL)) {
-          message = this.translate.instant('alerts.authenticate.error_messages.message_email_exists');
-        } else if (errRes.status !== 403 && errRes.error.includes(USER_NAME)) {
-          message = this.translate.instant('alerts.authenticate.error_messages.message_username_exists');
+        } else {
+          message = this.translate.instant(
+            authErrorMessageKey(errRes.error, errRes.status, !this.isLogin, USER_EMAIL, USER_NAME));
         }
         loadingEl.dismiss();
         this.alertService.showErrorAlert(header, message);

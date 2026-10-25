@@ -302,7 +302,8 @@
                 "header_register": "Registrierung fehlgeschlagen",
                 "message": "Passwort oder E-Mail falsch.",
                 "message_email_exists": "Die E-Mail Adresse ist bereits vergeben.",
-                "message_username_exists": "Der Benutzername ist bereits vergeben."
+                "message_username_exists": "Der Benutzername ist bereits vergeben.",
+                "message_device_id_missing": "Dein Gerät konnte nicht erkannt werden. Bitte versuche es erneut."
             }
         },
         "server_unavailable": {
