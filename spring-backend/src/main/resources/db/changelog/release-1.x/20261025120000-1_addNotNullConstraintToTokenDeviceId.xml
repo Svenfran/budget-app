@@ -1,0 +1,14 @@
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!-- DIV-46: tokens are only issued with a deviceId. Removes stored tokens without one (unusable since DIV-18)
+         and makes token.device_id NOT NULL. The SQL file is also executed by TokenDeviceIdNotNullIntegrationSpec. -->
+    <changeSet author="sven" id="20261025120000-1">
+        <sqlFile path="db/changelog/release-1.x/sql/20261025120000-1_deleteTokensWithoutDeviceIdAndSetNotNull.sql"
+                 relativeToChangelogFile="false" splitStatements="true"/>
+    </changeSet>
+
+</databaseChangeLog>

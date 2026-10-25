@@ -59,4 +59,6 @@
 
     <include context="dev,test,prod" file="db/changelog/release-1.x/20261020120000-1_addColumnAnchorDayToCartTemplateTable.xml" relativeToChangelogFile="false"/>
 
+    <include context="dev,test,prod" file="db/changelog/release-1.x/20261025120000-1_addNotNullConstraintToTokenDeviceId.xml" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>
