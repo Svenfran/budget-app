@@ -4,7 +4,6 @@ import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.*;
 import com.github.svenfran.budgetapp.budgetappbackend.service.GroupMembershipHistoryService;
 import com.github.svenfran.budgetapp.budgetappbackend.service.GroupService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -15,11 +14,14 @@ import java.util.List;
 @RequestMapping("/api")
 public class GroupController {
 
-    @Autowired
-    private GroupService groupService;
+    private final GroupService groupService;
 
-    @Autowired
-    private GroupMembershipHistoryService gmhService;
+    private final GroupMembershipHistoryService gmhService;
+
+    public GroupController(GroupService groupService, GroupMembershipHistoryService gmhService) {
+        this.groupService = groupService;
+        this.gmhService = gmhService;
+    }
 
     @GetMapping("/groups/sidenav")
     public ResponseEntity<List<GroupSideNavDto>> getGroupsForSideNav() throws UserNotFoundException {

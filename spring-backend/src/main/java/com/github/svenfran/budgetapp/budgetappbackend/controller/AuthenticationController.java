@@ -9,7 +9,6 @@ import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserAlreadyExis
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNameAlreadyExistsException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.service.AuthenticationService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,8 +22,11 @@ import javax.validation.Valid;
 @RequestMapping("/api/auth")
 public class AuthenticationController {
 
-    @Autowired
-    private AuthenticationService authenticationService;
+    private final AuthenticationService authenticationService;
+
+    public AuthenticationController(AuthenticationService authenticationService) {
+        this.authenticationService = authenticationService;
+    }
 
 
     @PostMapping("/register")
