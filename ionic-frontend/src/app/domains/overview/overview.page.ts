@@ -1,4 +1,4 @@
-import { Component, effect, OnInit } from '@angular/core';
+import { Component, effect, OnInit, untracked } from '@angular/core';
 import { GroupService } from 'src/app/service/group.service';
 import { OverviewService } from './service/overview.service';
 import { CartService } from '../cartlist/service/cart.service';
@@ -45,18 +45,24 @@ export class OverviewPage implements OnInit {
     private authService: AuthService,
     private translate: TranslateService
   ) { 
+    // Anzeige: hält den Gruppennamen aktuell (auch bei Umbenennung), ohne neu zu laden
     effect(() => {
       this.activeGroup = this.groupService.activeGroup();
+    });
+    // Laden: nur bei echtem Gruppenwechsel (activeGroupId) und den übrigen Triggern, nicht bei Umbenennung
+    effect(() => {
+      this.groupService.activeGroupId();
       this.cartService.cartUpdated();
       this.groupService.memberUpdated();
+      const activeGroup = untracked(() => this.groupService.activeGroup());
       this.isLoading = true;
-      if (!this.activeGroup.flag?.includes(INIT_VALUES.DEFAULT)) {
+      if (!activeGroup.flag?.includes(INIT_VALUES.DEFAULT)) {
         this.spendingsOverviewMonthly.set(null);
         this.spendingsOverviewYearly.set(null);
-        this.overviewService.getSpendingsOverviewYearly(this.activeGroup, false, () => {
+        this.overviewService.getSpendingsOverviewYearly(activeGroup, false, () => {
           this.isLoading = false;
         });
-        this.overviewService.getSpendingsOverview(this.currentYear, this.activeGroup);
+        this.overviewService.getSpendingsOverview(this.currentYear, activeGroup);
       } else {
         this.isLoading = false;
       }

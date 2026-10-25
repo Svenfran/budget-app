@@ -1,4 +1,4 @@
-import { Component, effect, OnInit, QueryList, ViewChildren } from '@angular/core';
+import { Component, effect, OnInit, QueryList, untracked, ViewChildren } from '@angular/core';
 import { ShoppinglistService } from './service/shoppinglist.service';
 import { AddEditShoppinglistDto } from './model/add-edit-shoppinglist-dto';
 import { AlertService } from 'src/app/service/alert.service';
@@ -37,12 +37,18 @@ export class ShoppinglistPage implements OnInit {
     private groupService: GroupService,
     private translate: TranslateService
   ) {
+    // Anzeige: hält den Gruppennamen aktuell (auch bei Umbenennung), ohne neu zu laden
     effect(() => {
       this.activeGroup = this.groupService.activeGroup();
+    });
+    // Laden: nur bei echtem Gruppenwechsel (activeGroupId) und den übrigen Triggern, nicht bei Umbenennung
+    effect(() => {
+      this.groupService.activeGroupId();
+      const activeGroup = untracked(() => this.groupService.activeGroup());
       this.isLoading = true;
-      if (!this.activeGroup.flag?.includes(INIT_VALUES.DEFAULT)) {
+      if (!activeGroup.flag?.includes(INIT_VALUES.DEFAULT)) {
         this.shoppingLists.set([]);
-        this.shoppinglistService.getShoppingListsWithItems(this.activeGroup, () => {
+        this.shoppinglistService.getShoppingListsWithItems(activeGroup, () => {
           this.isLoading = false;
         });
       } else {
