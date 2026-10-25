@@ -11,6 +11,7 @@ import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
@@ -57,6 +58,9 @@ public class GroupService {
 
     @Autowired
     private Translator translator;
+
+    @Autowired
+    private Clock clock;
 
 
     public Stream<Group> getGroupsByMemberOrOwner() throws UserNotFoundException {
@@ -254,7 +258,7 @@ public class GroupService {
         var activeTemplates = cartTemplateRepository.findByUserIdAndGroupIdAndActiveTrue(userId, groupId);
         for (CartTemplate template : activeTemplates) {
             template.setActive(false);
-            template.setEndDate(LocalDate.now());
+            template.setEndDate(LocalDate.now(clock));
         }
         cartTemplateRepository.saveAll(activeTemplates);
     }

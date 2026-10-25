@@ -12,6 +12,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupMembership
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
 import java.util.Date;
 import java.util.List;
 
@@ -26,6 +27,9 @@ public class GroupMembershipHistoryService {
 
     @Autowired
     private VerificationService verificationService;
+
+    @Autowired
+    private Clock clock;
 
     // Eine neue Gruppe wird erstellt
     public void startGroupMembershipForOwner(User user, Group group) {
@@ -64,7 +68,7 @@ public class GroupMembershipHistoryService {
     // Benutzer wird aus Gruppe entfernt
     public void finishGroupMembership(User user, Group group) {
         var groupMembership = getGroupMembershipByUserIdAndGroupIdAndMembershipEndIsNull(user, group);
-        groupMembership.setMembershipEnd(new Date());
+        groupMembership.setMembershipEnd(Date.from(clock.instant()));
         groupMembershipHistoryRepository.save(groupMembership);
     }
 
@@ -74,7 +78,7 @@ public class GroupMembershipHistoryService {
 
     private GroupMembershipHistory createGroupMembership(User user, Group group) {
         var groupMembership = new GroupMembershipHistory();
-        groupMembership.setMembershipStart(new Date());
+        groupMembership.setMembershipStart(Date.from(clock.instant()));
         groupMembership.setMembershipEnd(null);
         groupMembership.setUserId(user.getId());
         groupMembership.setGroupId(group.getId());

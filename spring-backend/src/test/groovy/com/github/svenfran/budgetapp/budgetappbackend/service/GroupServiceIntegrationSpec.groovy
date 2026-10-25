@@ -5,14 +5,20 @@ import com.github.svenfran.budgetapp.budgetappbackend.dto.ChangeGroupOwnerDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.GroupDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.RemoveGroupMemberDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOfGroupException
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository
+import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupMembershipHistoryRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 
+import java.time.LocalDate
+
+import static com.github.svenfran.budgetapp.budgetappbackend.constants.TypeEnum.MEMBER
+import static com.github.svenfran.budgetapp.budgetappbackend.constants.TypeEnum.OWNER
 import static com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData.REFERENCE_DATE
 
 class GroupServiceIntegrationSpec extends IntegrationSpec {
@@ -22,6 +28,7 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
     @Autowired GroupService groupService
     @Autowired GroupRepository groupRepository
     @Autowired CartRepository cartRepository
+    @Autowired GroupMembershipHistoryRepository membershipRepository
 
     def "Neuberechnung setzt den Durchschnitt pro Mitglied auf 0, wenn zum Kaufdatum niemand Mitglied ist"() {
         given: "Owner und Ben sind seit REFERENCE_DATE - 1 Jahr Mitglied"
@@ -147,5 +154,146 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
         then:
         1 * notificationService.sendGroupOwnerChangedNotification(groupId, { it.id == benId })
         0 * notificationService._
+    }
+
+    // ----- addMemberToGroup (DIV-13): Rechte, Historie, Neuberechnung, isDeleted -----
+    // Fixtures liefern die Gruppe mit leeren carts/categories/shoppingLists; flushAndClear() vor dem Aufruf, damit der
+    // Service die Gruppe neu lädt. Historie mit testClock (GroupMembershipHistoryService nutzt die Clock).
+
+    def "Owner fügt ein Mitglied hinzu: Mitglied der Gruppe mit offener MEMBER-Historie ab heute"() {
+        given:
+        def wg = fixtures.group()
+        def cleo = fixtures.user()
+        def groupId = wg.group.id
+        def ownerId = wg.owner.id
+        def cleoId = cleo.id
+        def cleoEmail = cleo.email
+        testClock.today = LocalDate.of(2025, 6, 15)
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet, seit {}), neues Mitglied Cleo {}; heute {}', groupId, ownerId,
+                REFERENCE_DATE.minusYears(1), cleoId, testClock.today)
+
+        when:
+        def result = groupService.addMemberToGroup(new AddGroupMemberDto(id: groupId, newMemberEmail: cleoEmail))
+        flushAndClear()
+        def mitglieder = memberIds(groupId)
+        def cleoHistorie = historie(groupId, cleoId)
+        def ownerHistorie = historie(groupId, ownerId)
+        LOG.info('groupService.addMemberToGroup(Gruppe {}, Cleo {}) -> members {}; Historie Cleo {}, Owner {}', groupId,
+                cleoId, mitglieder, cleoHistorie, ownerHistorie)
+
+        then:
+        result.members*.id == [cleoId]
+        result.updatedMember.id == cleoId
+        mitglieder == [cleoId]
+        cleoHistorie == [[MEMBER, LocalDate.of(2025, 6, 15), null]]
+        ownerHistorie == [[OWNER, REFERENCE_DATE.minusYears(1), null]]
+    }
+
+    def "Hinzufügen rechnet den Durchschnitt aller Einkäufe der Gruppe ab dem Eintrittstag neu"() {
+        given: "Owner und Ben seit 2024-06-15; beide Einkäufe mit falschem Durchschnitt 99, damit die Neuberechnung sichtbar ist"
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def cleo = fixtures.user()
+        def groupId = wg.group.id
+        def cleoEmail = cleo.email
+        def vorEintritt = fixtures.cart(wg, amount: 60d, averagePerMember: 99d, datePurchased: DateUtils.toDate(LocalDate.of(2025, 6, 14)))
+        def amEintritt = fixtures.cart(wg, amount: 60d, averagePerMember: 99d, datePurchased: DateUtils.toDate(LocalDate.of(2025, 6, 15)))
+        testClock.today = LocalDate.of(2025, 6, 15)
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), Ben {}, neues Mitglied Cleo {} ab {}; Einkauf {} 60.00 am 2025-06-14, Einkauf {} 60.00 am 2025-06-15',
+                groupId, wg.owner.id, ben.id, cleo.id, testClock.today, vorEintritt.id, amEintritt.id)
+
+        when:
+        groupService.addMemberToGroup(new AddGroupMemberDto(id: groupId, newMemberEmail: cleoEmail))
+        flushAndClear()
+        def averageVorEintritt = cartRepository.findById(vorEintritt.id).get().averagePerMember
+        def averageAmEintritt = cartRepository.findById(amEintritt.id).get().averagePerMember
+        LOG.info('groupService.addMemberToGroup(Gruppe {}, Cleo) -> averagePerMember Einkauf {}: {}, Einkauf {}: {}',
+                groupId, vorEintritt.id, averageVorEintritt, amEintritt.id, averageAmEintritt)
+
+        then: "am Tag vor dem Eintritt 2 Mitglieder, am Eintrittstag (inklusiv) 3"
+        averageVorEintritt == 30d
+        averageAmEintritt == 20d
+    }
+
+    def "Wiedereintritt: neuer MEMBER-Eintrag, der alte bleibt beendet, Bens Einkäufe sind wieder sichtbar"() {
+        given: "Ben war bis 2025-03-01 Mitglied und steht nicht mehr in group.members; sein Einkauf ist als gelöscht markiert"
+        def wg = fixtures.group()
+        def ben = fixtures.user()
+        def groupId = wg.group.id
+        def benId = ben.id
+        def benEmail = ben.email
+        fixtures.membership(wg, ben, membershipStart: DateUtils.toDate(LocalDate.of(2024, 6, 15)),
+                membershipEnd: DateUtils.toDate(LocalDate.of(2025, 3, 1)))
+        def benCart = fixtures.cart(wg, user: ben, deleted: true, datePurchased: DateUtils.toDate(LocalDate.of(2025, 2, 1)))
+        def ownerCart = fixtures.cart(wg, deleted: true, datePurchased: DateUtils.toDate(LocalDate.of(2025, 2, 1)))
+        testClock.today = LocalDate.of(2025, 6, 15)
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), Ben {} (Mitglied 2024-06-15 bis 2025-03-01); gelöschte Einkäufe Ben {}, Owner {}; heute {}',
+                groupId, wg.owner.id, benId, benCart.id, ownerCart.id, testClock.today)
+
+        when:
+        groupService.addMemberToGroup(new AddGroupMemberDto(id: groupId, newMemberEmail: benEmail))
+        flushAndClear()
+        def mitglieder = memberIds(groupId)
+        def benHistorie = historie(groupId, benId)
+        def benCartDeleted = cartRepository.findById(benCart.id).get().deleted
+        def ownerCartDeleted = cartRepository.findById(ownerCart.id).get().deleted
+        LOG.info('groupService.addMemberToGroup(Gruppe {}, Ben {}) -> members {}; Historie Ben {}; isDeleted Ben-Einkauf {}, Owner-Einkauf {}',
+                groupId, benId, mitglieder, benHistorie, benCartDeleted, ownerCartDeleted)
+
+        then:
+        mitglieder == [benId]
+        benHistorie == [[MEMBER, LocalDate.of(2024, 6, 15), LocalDate.of(2025, 3, 1)],
+                        [MEMBER, LocalDate.of(2025, 6, 15), null]]
+        !benCartDeleted
+        ownerCartDeleted
+    }
+
+    def "#rolle kann kein Mitglied hinzufügen"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def cleo = fixtures.user()
+        def angemeldet = rolle == 'Mitglied' ? ben : fixtures.user()
+        def groupId = wg.group.id
+        def benId = ben.id
+        def cleoId = cleo.id
+        def cleoEmail = cleo.email
+        flushAndClear()
+        loginAs(angemeldet)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Mitglied Ben {}; angemeldet User {} ({}) fügt Cleo {} hinzu', groupId,
+                wg.owner.id, benId, angemeldet.id, rolle, cleoId)
+
+        when:
+        LOG.info('groupService.addMemberToGroup(Gruppe {}, Cleo {}) als User {}, erwartet NotOwnerOfGroupException',
+                groupId, cleoId, angemeldet.id)
+        groupService.addMemberToGroup(new AddGroupMemberDto(id: groupId, newMemberEmail: cleoEmail))
+
+        then:
+        thrown(NotOwnerOfGroupException)
+        0 * notificationService._
+        memberIds(groupId) == [benId]
+        historie(groupId, cleoId).isEmpty()
+
+        where:
+        rolle << ['Mitglied', 'Außenstehender']
+    }
+
+    /** Mitglieder-IDs der Gruppe (ohne Owner), aus der Datenbank geladen. */
+    private List<Long> memberIds(Long groupId) {
+        groupRepository.findById(groupId).get().members*.id.sort()
+    }
+
+    /** Historie eines Nutzers in der Gruppe als [Typ, Start, Ende], sortiert nach Start und ID. */
+    private List<List> historie(Long groupId, Long userId) {
+        membershipRepository.findByGroupIdAndUserId(groupId, userId)
+                .sort { a, b -> a.membershipStart <=> b.membershipStart ?: a.id <=> b.id }
+                .collect { [it.type, DateUtils.toLocalDate(it.membershipStart),
+                            it.membershipEnd ? DateUtils.toLocalDate(it.membershipEnd) : null] }
     }
 }
