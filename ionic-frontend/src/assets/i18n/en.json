@@ -302,7 +302,8 @@
                 "header_register": "Registration failed",
                 "message": "Password or e-mail incorrect.",
                 "message_email_exists": "The e-mail address is already taken.",
-                "message_username_exists": "The username is already taken."
+                "message_username_exists": "The username is already taken.",
+                "message_device_id_missing": "Your device could not be identified. Please try again."
             }
         },
         "server_unavailable": {

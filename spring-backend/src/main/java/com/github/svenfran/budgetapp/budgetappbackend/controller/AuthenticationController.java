@@ -4,6 +4,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.dto.AuthenticationRequest;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AuthenticationResponse;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.RegisterRequest;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.InvalidEmailException;
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.MissingDeviceIdException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserAlreadyExistException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNameAlreadyExistsException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException;
@@ -27,12 +28,12 @@ public class AuthenticationController {
 
 
     @PostMapping("/register")
-    public ResponseEntity<AuthenticationResponse> register(@Valid @RequestBody RegisterRequest request, BindingResult bindingResult) throws UserAlreadyExistException, InvalidEmailException, UserNotFoundException, UserNameAlreadyExistsException {
+    public ResponseEntity<AuthenticationResponse> register(@Valid @RequestBody RegisterRequest request, BindingResult bindingResult) throws UserAlreadyExistException, InvalidEmailException, UserNotFoundException, UserNameAlreadyExistsException, MissingDeviceIdException {
         return ResponseEntity.ok(authenticationService.register(request, bindingResult));
     }
 
     @PostMapping("/authenticate")
-    public ResponseEntity<AuthenticationResponse> authenticate(@Valid @RequestBody AuthenticationRequest request, BindingResult bindingResult) throws UserNotFoundException, InvalidEmailException {
+    public ResponseEntity<AuthenticationResponse> authenticate(@Valid @RequestBody AuthenticationRequest request, BindingResult bindingResult) throws UserNotFoundException, InvalidEmailException, MissingDeviceIdException {
         return ResponseEntity.ok(authenticationService.authenticate(request, bindingResult));
     }
 

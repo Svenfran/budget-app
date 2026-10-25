@@ -7,6 +7,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.dto.RegisterRequest;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Token;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.InvalidEmailException;
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.MissingDeviceIdException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserAlreadyExistException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNameAlreadyExistsException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException;
@@ -49,8 +50,9 @@ public class AuthenticationService {
     private GroupService groupService;
 
     @Transactional
-    public AuthenticationResponse register(RegisterRequest request, BindingResult bindingResult) throws UserAlreadyExistException, InvalidEmailException, UserNotFoundException, UserNameAlreadyExistsException {
-        verificationService.verifyEmailIsValid(bindingResult);
+    public AuthenticationResponse register(RegisterRequest request, BindingResult bindingResult) throws UserAlreadyExistException, InvalidEmailException, UserNotFoundException, UserNameAlreadyExistsException, MissingDeviceIdException {
+        verificationService.verifyEmailIsValid(bindingResult, "email");
+        verificationService.verifyDeviceIdIsPresent(bindingResult);
         verificationService.verifyEmailNotExists(request.getEmail());
         verificationService.verifyUserNameNotExists(request.getName());
         var user = new User();
@@ -66,8 +68,9 @@ public class AuthenticationService {
     }
 
     @Transactional
-    public AuthenticationResponse authenticate(AuthenticationRequest request, BindingResult bindingResult) throws UserNotFoundException, InvalidEmailException {
-        verificationService.verifyEmailIsValid(bindingResult);
+    public AuthenticationResponse authenticate(AuthenticationRequest request, BindingResult bindingResult) throws UserNotFoundException, InvalidEmailException, MissingDeviceIdException {
+        verificationService.verifyEmailIsValid(bindingResult, "email");
+        verificationService.verifyDeviceIdIsPresent(bindingResult);
         authManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
                         request.getEmail(),

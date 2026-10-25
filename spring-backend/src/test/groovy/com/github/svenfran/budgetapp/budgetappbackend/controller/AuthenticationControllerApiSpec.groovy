@@ -2,6 +2,7 @@ package com.github.svenfran.budgetapp.budgetappbackend.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
+import com.github.svenfran.budgetapp.budgetappbackend.repository.TokenRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository
 import com.github.svenfran.budgetapp.budgetappbackend.service.JwtService
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.ApiRequests
@@ -23,6 +24,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * DIV-22: E-Mail-Adressen sind unabhängig von Groß-/Kleinschreibung und umgebenden Leerzeichen.
  * DIV-18: JWT-Filter Ende-zu-Ende – widerrufene/abgelaufene Tokens (DB-Flags und JWT-exp), falsche DeviceId,
  * Logout, nicht verwertbare JWTs (403 statt Serverfehler) und öffentliche Endpunkte mit ungültigem Bearer-Header.
+ * DIV-46: DeviceId ist Pflichtfeld bei Login und Registrierung (400, es wird kein Token gespeichert).
  * Enthält auch Fälle des Fehlermeldungs-Vertrags (Liste der Meldungen: {@link CartControllerApiSpec}).
  */
 class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequests {
@@ -30,12 +32,15 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
     private static final Logger LOG = LoggerFactory.getLogger(AuthenticationControllerApiSpec)
 
     static final String DEVICE = 'device-1'
+    /** Platzhalter für die Request-Helfer: deviceId wird im Body weggelassen (null sendet explizites JSON-null). */
+    static final Object FEHLT = new Object()
     /** Dummy-Secret (Base64, 45 Byte), das nicht dem Test-Secret entspricht. */
     static final String FREMDER_SECRET = 'ZGl2dnktZnJlbWRlci1kdW1teS1zY2hsdWVzc2VsLW51ci1mdWVyLXRlc3Rz'
     static final Date ABGELAUFEN_AM = DateUtils.toDate(LocalDate.of(2025, 1, 1))
     static final Date AUSGESTELLT_AM = DateUtils.toDate(LocalDate.of(2024, 12, 11))
 
     @Autowired UserRepository userRepository
+    @Autowired TokenRepository tokenRepository
     @Autowired ObjectMapper objectMapper
     @Autowired JwtService jwtService
     @Value('${secret_key}') String secretKey
@@ -238,39 +243,96 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
         geschuetzt == 200
     }
 
-    def "Token aus einer Registrierung ohne DeviceId wird mit 403 abgelehnt (DeviceId-Header #fall)"() {
+    def "Registrierung ohne DeviceId (#fall) wird mit 400 abgelehnt, es entstehen weder Nutzer noch Token"() {
         given:
-        def registrierung = register('max', 'max@example.de', null)
-        def body = json(registrierung)
-        LOG.info('Szenario: registriert max ohne DeviceId -> {}, Token für Nutzer {}, DeviceId-Header {}',
-                registrierung.status, body.id, headerDevice)
+        LOG.info('Szenario: neuer Nutzer max mit max@example.de, DeviceId {}', fall)
 
-        expect:
-        registrierung.status == 200
-        callProtectedEndpoint(body.token, headerDevice).status == 403
+        when:
+        def response = register('max', 'max@example.de', deviceId)
+        def meldung = response.contentAsString
+        def nutzerAngelegt = userRepository.findByEmail('max@example.de').isPresent()
+        LOG.info('Antwort: {}, Nutzer angelegt {}', meldung, nutzerAngelegt)
+
+        then:
+        response.status == 400
+        // Frontend erkennt den Fall am exakten Text (Fehlermeldungs-Vertrag X3)
+        meldung == 'DeviceId is required'
+        !nutzerAngelegt
 
         where:
-        fall      | headerDevice
-        'gesetzt' | DEVICE
-        'fehlt'   | null
+        fall              | deviceId
+        'fehlt'           | FEHLT
+        'null'            | null
+        'leer'            | ''
+        'nur Leerzeichen' | '   '
     }
 
-    /** deviceId null: Body ohne deviceId (wie ein Client, der keine sendet). */
-    private MockHttpServletResponse register(String name, String email, String deviceId = DEVICE) {
+    def "Login ohne DeviceId (#fall) wird mit 400 abgelehnt, bestehende Tokens bleiben unverändert"() {
+        given:
+        def max = json(register('max', 'max@example.de'))
+        def maxId = max.id as Long
+        def tokenIdsVorher = tokenRepository.findAllByUserId(maxId)*.id
+        LOG.info('Szenario: registriert max (Nutzer {}) auf {} mit Token {}, Login mit DeviceId {}',
+                maxId, DEVICE, tokenIdsVorher, fall)
+
+        when:
+        def response = authenticate('max@example.de', null, deviceId)
+        def meldung = response.contentAsString
+        flushAndClear()
+        def tokens = tokenRepository.findAllByUserId(maxId)
+        def ungueltig = tokens.findAll { it.expired || it.revoked }*.id
+        def geschuetzt = callProtectedEndpoint(max.token).status
+        LOG.info('Antwort: {}, Tokens danach {}, davon expired/revoked {}, geschützter Request mit altem Token {}',
+                meldung, tokens*.id, ungueltig, geschuetzt)
+
+        then:
+        response.status == 400
+        meldung == 'DeviceId is required'
+        tokens*.id == tokenIdsVorher
+        ungueltig == []
+        geschuetzt == 200
+
+        where:
+        fall              | deviceId
+        'fehlt'           | FEHLT
+        'null'            | null
+        'leer'            | ''
+        'nur Leerzeichen' | '   '
+    }
+
+    def "Ungültige E-Mail hat Vorrang vor fehlender DeviceId"() {
+        given:
+        LOG.info('Szenario: Registrierung max mit \'keine-email\' ohne DeviceId')
+
+        when:
+        def response = register('max', 'keine-email', FEHLT)
+        LOG.info('Antwort: {}', response.contentAsString)
+
+        then:
+        response.status == 400
+        response.contentAsString == 'Invalid Email'
+    }
+
+    /** deviceId FEHLT: Body ohne deviceId (wie ein Client, der keine sendet); null: explizites JSON-null. */
+    private MockHttpServletResponse register(String name, String email, Object deviceId = DEVICE) {
         def body = [name: name, email: email, password: 'geheim123']
-        if (deviceId != null) {
+        if (!deviceId.is(FEHLT)) {
             body.deviceId = deviceId
         }
         send(post('/api/auth/register'), body: body)
     }
 
-    /** bearer: optional mitgeschickter (z. B. alter) Bearer-Token. */
-    private MockHttpServletResponse authenticate(String email, String bearer = null) {
+    /** bearer: optional mitgeschickter (z. B. alter) Bearer-Token; deviceId wie bei register. */
+    private MockHttpServletResponse authenticate(String email, String bearer = null, Object deviceId = DEVICE) {
         def request = post('/api/auth/authenticate')
         if (bearer != null) {
             request.header('Authorization', JwtService.BEARER_PREFIX + bearer).header('deviceId', DEVICE)
         }
-        send(request, body: [email: email, password: 'geheim123', deviceId: DEVICE])
+        def body = [email: email, password: 'geheim123']
+        if (!deviceId.is(FEHLT)) {
+            body.deviceId = deviceId
+        }
+        send(request, body: body)
     }
 
     /** deviceId null: Header wird weggelassen. */

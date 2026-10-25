@@ -49,9 +49,16 @@ public class VerificationService {
         }
     }
 
-    public void verifyEmailIsValid(BindingResult bindingResult) throws InvalidEmailException {
-        if (bindingResult.hasErrors()) {
+    // only errors of the given e-mail field count: other constraints of the DTO (e.g. deviceId) have their own checks
+    public void verifyEmailIsValid(BindingResult bindingResult, String emailField) throws InvalidEmailException {
+        if (bindingResult.hasFieldErrors(emailField)) {
             throw new InvalidEmailException("Invalid Email");
+        }
+    }
+
+    public void verifyDeviceIdIsPresent(BindingResult bindingResult) throws MissingDeviceIdException {
+        if (bindingResult.hasFieldErrors("deviceId")) {
+            throw new MissingDeviceIdException("DeviceId is required");
         }
     }
 

@@ -2,6 +2,7 @@ package com.github.svenfran.budgetapp.budgetappbackend.dto;
 
 import com.github.svenfran.budgetapp.budgetappbackend.validator.ValidEmail;
 
+import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.NotNull;
 
@@ -13,6 +14,7 @@ public class RegisterRequest {
     @NotEmpty
     private String email;
     private String password;
+    @NotBlank
     private String deviceId;
 
     public RegisterRequest(String name, String email, String password, String deviceId) {

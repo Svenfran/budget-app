@@ -1,12 +1,16 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto
+import com.github.svenfran.budgetapp.budgetappbackend.dto.AuthenticationRequest
+import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto
 import com.github.svenfran.budgetapp.budgetappbackend.entity.*
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
 import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
 import org.springframework.security.crypto.password.PasswordEncoder
+import org.springframework.validation.BeanPropertyBindingResult
+import org.springframework.validation.BindingResult
 import spock.lang.Specification
 
 class VerificationServiceSpec extends Specification {
@@ -79,6 +83,55 @@ class VerificationServiceSpec extends Specification {
 
         when:
         service.verifyEmailNotExists("test@mail.com")
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "Validierungsfehler am E-Mail-Feld #feld wird als ungültige E-Mail abgelehnt"() {
+        given:
+        def bindingResult = bindingResultMitFehlerAn(dto, feld)
+
+        when:
+        service.verifyEmailIsValid(bindingResult, feld)
+
+        then:
+        thrown(InvalidEmailException)
+
+        where:
+        feld        | dto
+        "email"     | new AuthenticationRequest()
+        "userEmail" | new UserDto()
+    }
+
+    def "Validierungsfehler nur an der DeviceId gilt nicht als ungültige E-Mail"() {
+        given:
+        def bindingResult = bindingResultMitFehlerAn(new AuthenticationRequest(), "deviceId")
+
+        when:
+        service.verifyEmailIsValid(bindingResult, "email")
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "Fehlende DeviceId wird abgelehnt"() {
+        given:
+        def bindingResult = bindingResultMitFehlerAn(new AuthenticationRequest(), "deviceId")
+
+        when:
+        service.verifyDeviceIdIsPresent(bindingResult)
+
+        then:
+        thrown(MissingDeviceIdException)
+    }
+
+    def "Validierungsfehler nur an der E-Mail gilt nicht als fehlende DeviceId"() {
+        given:
+        def bindingResult = bindingResultMitFehlerAn(new AuthenticationRequest(), "email")
+
+        when:
+        service.verifyDeviceIdIsPresent(bindingResult)
 
         then:
         noExceptionThrown()
@@ -313,5 +366,12 @@ class VerificationServiceSpec extends Specification {
 
         then:
         noExceptionThrown()
+    }
+
+    /** BindingResult wie nach @Valid, mit genau einem Feldfehler (Fehlercode beliebig). */
+    private static BindingResult bindingResultMitFehlerAn(Object dto, String feld) {
+        def bindingResult = new BeanPropertyBindingResult(dto, "request")
+        bindingResult.rejectValue(feld, "invalid")
+        bindingResult
     }
 }

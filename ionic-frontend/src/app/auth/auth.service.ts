@@ -1,11 +1,11 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable, OnDestroy, signal } from '@angular/core';
+import { Inject, Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject, Observable, from } from 'rxjs';
-import { map, tap } from 'rxjs/operators';
+import { map, switchMap, tap } from 'rxjs/operators';
 import { environment } from 'src/environments/environment';
 import { StorageService } from '../service/storage.service';
 import { User } from './user';
-import { Device } from '@capacitor/device';
+import { DEVICE_ID } from './device-id';
 
 export interface AuthResponseData {
   id: number,
@@ -25,8 +25,7 @@ export class AuthService implements OnDestroy {
   private authUrl = `${this.apiBaseUrl}/api/auth/authenticate`;
   private registerUrl = `${this.apiBaseUrl}/api/auth/register`;
   private logoutUrl = `${this.apiBaseUrl}/api/auth/logout`;
-  public deviceId = signal<string>("");
-  
+
   private activeLogoutTimer: any;
   
   get userIsAuthenticated() {
@@ -43,20 +42,27 @@ export class AuthService implements OnDestroy {
 
   constructor(
     private http: HttpClient,
-    private storageService: StorageService
-    ) {
-    Device.getId().then(device => this.deviceId.set(device.identifier));
-    }
+    private storageService: StorageService,
+    @Inject(DEVICE_ID) private deviceIdReady: Promise<string>
+    ) { }
 
+  // Wartet, bis Device.getId() geantwortet hat – nie eine noch leere DeviceId senden (DIV-46)
+  getDeviceId(): Observable<string> {
+    return from(this.deviceIdReady);
+  }
 
   login(userEmail: string, password: string) {
-    return this.http.post<AuthResponseData>(this.authUrl,
-      { email: userEmail, password: password, deviceId: this.deviceId() } ).pipe(tap(this.setUserData.bind(this)));
+    return this.getDeviceId().pipe(
+      switchMap(deviceId => this.http.post<AuthResponseData>(this.authUrl,
+        { email: userEmail, password: password, deviceId: deviceId })),
+      tap(this.setUserData.bind(this)));
   }
 
   register(userName: string, userEmail: string, password: string) {
-    return this.http.post<AuthResponseData>(this.registerUrl, 
-      { name: userName, email: userEmail, password: password, deviceId: this.deviceId() } ).pipe(tap(this.setUserData.bind(this)));
+    return this.getDeviceId().pipe(
+      switchMap(deviceId => this.http.post<AuthResponseData>(this.registerUrl,
+        { name: userName, email: userEmail, password: password, deviceId: deviceId })),
+      tap(this.setUserData.bind(this)));
   }
 
   userLogout(): Observable<any>{

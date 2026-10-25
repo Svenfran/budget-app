@@ -30,14 +30,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * M2  group.service.ts addMemberToGroup              404 enthält gesendete E-Mail                 GroupControllerApiSpec
  * M3  group.service.ts addMemberToGroup              403 'New member equals group owner'          GroupControllerApiSpec
  * M4  group.service.ts addMemberToGroup              403 'Member already exists'                  GroupControllerApiSpec
- * M5  auth.page.ts Registrierung (status != 403)     400 enthält gesendete E-Mail                 AuthenticationControllerApiSpec
- * M6  auth.page.ts Registrierung (status != 403)     400 enthält gesendeten Namen                 AuthenticationControllerApiSpec
+ * M5  auth-error-message.ts Registrierung (!= 403)   400 enthält gesendete E-Mail                 AuthenticationControllerApiSpec
+ * M6  auth-error-message.ts Registrierung (!= 403)   400 enthält gesendeten Namen                 AuthenticationControllerApiSpec
  * M7  userprofile.service.ts changeUserName          400 enthält gesendeten Namen                 UserProfileControllerApiSpec
  * M8  userprofile.service.ts changeUserName          400 'User name is not allowed'               UserProfileControllerApiSpec
  * M9  userprofile.service.ts changeUserEmail         400 enthält gesendete E-Mail                 UserProfileControllerApiSpec
  * M10 userprofile.service.ts resetPassword           404 enthält gesendete E-Mail                 UserProfileControllerApiSpec
  * X1  userprofile.service.ts (=== exakt)             400 'Invalid Email'                          UserProfileControllerApiSpec
  * X2  userprofile.service.ts changePassword (===)    400 'Incorrect password'                     UserProfileControllerApiSpec
+ * X3  auth-error-message.ts Login/Registr. (===)     400 'DeviceId is required'                   AuthenticationControllerApiSpec
  * </pre>
  * Nicht abgedeckt: Bei parallelen Registrierungen/E-Mail-Änderungen liefert der Unique-Constraint-Handler
  * 'User with email already exists' ohne Adresse; das Frontend erkennt diesen Fall nicht (bekannt seit DIV-22).
