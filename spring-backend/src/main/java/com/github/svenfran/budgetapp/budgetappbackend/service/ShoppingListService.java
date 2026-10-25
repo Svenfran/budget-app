@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
@@ -35,11 +36,13 @@ public class ShoppingListService {
 
     private final NotificationService notificationService;
 
+    private final Clock clock;
+
     public ShoppingListService(ShoppingListRepository shoppingListRepository,
                                ShoppingListDtoMapper shoppingListDtoMapper,
                                ShoppingItemRepository shoppingItemRepository, GroupRepository groupRepository,
                                DataLoaderService dataLoaderService, VerificationService verificationService,
-                               NotificationService notificationService) {
+                               NotificationService notificationService, Clock clock) {
         this.shoppingListRepository = shoppingListRepository;
         this.shoppingListDtoMapper = shoppingListDtoMapper;
         this.shoppingItemRepository = shoppingItemRepository;
@@ -47,6 +50,7 @@ public class ShoppingListService {
         this.dataLoaderService = dataLoaderService;
         this.verificationService = verificationService;
         this.notificationService = notificationService;
+        this.clock = clock;
     }
 
     public Optional<List<ShoppingListDto>> getShoppingListsForGroup(Long groupId, Long requestTimeStamp) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
@@ -102,7 +106,7 @@ public class ShoppingListService {
         var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(addEditShoppingListDto.getGroupId());
         verificationService.verifyIsPartOfGroup(user, group);
-        group.setLastUpdateShoppingList(new Date());
+        group.setLastUpdateShoppingList(Date.from(clock.instant()));
         groupRepository.save(group);
 
         var newList = shoppingListDtoMapper.addEditShoppingListDtoToEntity(addEditShoppingListDto, group);
@@ -126,7 +130,7 @@ public class ShoppingListService {
         verificationService.verifyIsPartOfGroup(user, group);
         var shoppingList = dataLoaderService.loadShoppingList(addEditShoppingListDto.getId());
         verificationService.verifyShoppingListIsPartOfGroup(shoppingList, group);
-        group.setLastUpdateShoppingList(new Date());
+        group.setLastUpdateShoppingList(Date.from(clock.instant()));
         groupRepository.save(group);
 
         var updatedList = new AddEditShoppingListDto(shoppingListRepository.save(shoppingListDtoMapper.addEditShoppingListDtoToEntity(addEditShoppingListDto, group)));
@@ -149,7 +153,7 @@ public class ShoppingListService {
         verificationService.verifyShoppingListIsPartOfGroup(shoppingList, group);
         shoppingItemRepository.deleteAll(shoppingList.getShoppingItems());
         shoppingListRepository.deleteById(shoppingList.getId());
-        group.setLastUpdateShoppingList(new Date());
+        group.setLastUpdateShoppingList(Date.from(clock.instant()));
         groupRepository.save(group);
         notificationService.sendShoppingListNotification(
                 group.getId(),

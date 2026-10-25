@@ -8,6 +8,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.service.mapper.ShoppingIte
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -27,16 +28,19 @@ public class ShoppingItemService {
 
     private final NotificationService notificationService;
 
+    private final Clock clock;
+
     public ShoppingItemService(ShoppingItemDtoMapper shoppingItemDtoMapper,
                                ShoppingItemRepository shoppingItemRepository, DataLoaderService dataLoaderService,
                                GroupRepository groupRepository, VerificationService verificationService,
-                               NotificationService notificationService) {
+                               NotificationService notificationService, Clock clock) {
         this.shoppingItemDtoMapper = shoppingItemDtoMapper;
         this.shoppingItemRepository = shoppingItemRepository;
         this.dataLoaderService = dataLoaderService;
         this.groupRepository = groupRepository;
         this.verificationService = verificationService;
         this.notificationService = notificationService;
+        this.clock = clock;
     }
 
     @Transactional
@@ -46,7 +50,7 @@ public class ShoppingItemService {
         verificationService.verifyIsPartOfGroup(user, group);
         var shoppingList = dataLoaderService.loadShoppingList(dto.getShoppingListId());
         verificationService.verifyShoppingListIsPartOfGroup(shoppingList, group);
-        group.setLastUpdateShoppingList(new Date());
+        group.setLastUpdateShoppingList(Date.from(clock.instant()));
         groupRepository.save(group);
         var newItem = shoppingItemDtoMapper.addEditShoppingItemDtoToEntity(dto, shoppingList);
         // Anlegen legt immer neu an: eine mitgesendete ID würde per merge einen bestehenden (auch fremden) Eintrag überschreiben
@@ -71,7 +75,7 @@ public class ShoppingItemService {
         verificationService.verifyShoppingListIsPartOfGroup(shoppingList, group);
         var shoppingItem = dataLoaderService.loadShoppingItem(dto.getId());
         verificationService.verifyShoppingItemIsPartOfShoppingList(shoppingList, shoppingItem);
-        group.setLastUpdateShoppingList(new Date());
+        group.setLastUpdateShoppingList(Date.from(clock.instant()));
         groupRepository.save(group);
         var updatedItem = new AddEditShoppingItemDto(shoppingItemRepository.save(shoppingItemDtoMapper.addEditShoppingItemDtoToEntity(dto, shoppingList)));
 
@@ -93,7 +97,7 @@ public class ShoppingItemService {
         verificationService.verifyShoppingListIsPartOfGroup(shoppingList, group);
         var shoppingItem = dataLoaderService.loadShoppingItem(dto.getId());
         verificationService.verifyShoppingItemIsPartOfShoppingList(shoppingList, shoppingItem);
-        group.setLastUpdateShoppingList(new Date());
+        group.setLastUpdateShoppingList(Date.from(clock.instant()));
         groupRepository.save(group);
         shoppingItemRepository.deleteById(shoppingItem.getId());
         notificationService.sendShoppingItemNotification(
@@ -125,7 +129,7 @@ public class ShoppingItemService {
         var itemIds = new ArrayList<>(completedDtos.stream()
                 .map(AddEditShoppingItemDto::getId)
                 .toList());
-        group.setLastUpdateShoppingList(new Date());
+        group.setLastUpdateShoppingList(Date.from(clock.instant()));
         groupRepository.save(group);
         shoppingItemRepository.deleteAllById(itemIds);
         notificationService.sendShoppingItemDeleteAllNotification(

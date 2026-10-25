@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.BindingResult;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.HashSet;
 
@@ -57,6 +58,8 @@ public class UserProfileService {
 
     private final Translator translator;
 
+    private final Clock clock;
+
     public UserProfileService(UserRepository userRepository, DataLoaderService dataLoaderService,
                               GroupService groupService, CartRepository cartRepository, GroupRepository groupRepository,
                               CategoryRepository categoryRepository, ShoppingListRepository shoppingListRepository,
@@ -64,7 +67,8 @@ public class UserProfileService {
                               PasswordEncoder passwordEncoder, TokenRepository tokenRepository,
                               EmailSenderService senderService, VerificationService verificationService,
                               CartTemplateRepository cartTemplateRepository, NotificationService notificationService,
-                              GroupMembershipHistoryRepository gmhRepository, Translator translator) {
+                              GroupMembershipHistoryRepository gmhRepository, Translator translator,
+                              Clock clock) {
         this.userRepository = userRepository;
         this.dataLoaderService = dataLoaderService;
         this.groupService = groupService;
@@ -82,6 +86,7 @@ public class UserProfileService {
         this.notificationService = notificationService;
         this.gmhRepository = gmhRepository;
         this.translator = translator;
+        this.clock = clock;
     }
 
     @Transactional
@@ -136,7 +141,7 @@ public class UserProfileService {
         groupService.calculateAveragePerMember(group);
         var templates = cartTemplateRepository.findByUserIdAndGroupIdAndActiveTrue(user.getId(), group.getId());
         for (CartTemplate cartTemplate : templates) {
-            cartTemplate.setEndDate(LocalDate.now());
+            cartTemplate.setEndDate(LocalDate.now(clock));
             cartTemplate.setActive(false);
             cartTemplateRepository.save(cartTemplate);
         }

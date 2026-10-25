@@ -22,14 +22,14 @@ import static com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestDat
  * Einkaufslisten: Zustand vorher/nachher, Rechte (VerificationService) und Auslösung der Benachrichtigungen
  * (Konzept 3.8, Ebene 1). Topic, Empfänger und Payload prüft NotificationServiceSpec.
  *
- * lastUpdateShoppingList setzt der Service mit new Date() (nicht über den Clock). Die Gruppen starten deshalb mit
- * einem festen alten Wert (START); geprüft wird „erhöht“ bzw. „unverändert“.
+ * lastUpdateShoppingList setzt der Service aus dem Clock (testClock, Standard REFERENCE_DATE). Die Gruppen starten
+ * mit einem Wert einen Tag davor (START); geprüft wird „auf testClock gesetzt“ bzw. „unverändert“.
  */
 class ShoppingListServiceIntegrationSpec extends IntegrationSpec {
 
     private static final Logger LOG = LoggerFactory.getLogger(ShoppingListServiceIntegrationSpec)
 
-    private static final Date START = DateUtils.toDate(REFERENCE_DATE)
+    private static final Date START = DateUtils.toDate(REFERENCE_DATE.minusDays(1))
 
     /** ID, die es in keiner Tabelle gibt. */
     private static final Long UNBEKANNT = -1L
@@ -101,7 +101,7 @@ class ShoppingListServiceIntegrationSpec extends IntegrationSpec {
         0 * notificationService._
     }
 
-    def "Liste anlegen speichert sie in der Gruppe und erhöht lastUpdateShoppingList"() {
+    def "Liste anlegen speichert sie in der Gruppe und setzt lastUpdateShoppingList auf jetzt"() {
         given:
         def ben = fixtures.user()
         def wg = fixtures.group(members: [ben])
@@ -109,8 +109,8 @@ class ShoppingListServiceIntegrationSpec extends IntegrationSpec {
         def groupId = wg.group.id
         flushAndClear()
         loginAs(ben)
-        LOG.info('Szenario: Gruppe {} ohne Listen, lastUpdateShoppingList {}, Mitglied {} (angemeldet) legt "Wocheneinkauf" an',
-                groupId, START, ben.id)
+        LOG.info('Szenario: heute {}, Gruppe {} ohne Listen, lastUpdateShoppingList {}, Mitglied {} (angemeldet) legt "Wocheneinkauf" an',
+                testClock.today, groupId, START, ben.id)
 
         when:
         def result = shoppingListService.addShoppingList(new AddEditShoppingListDto(name: 'Wocheneinkauf', groupId: groupId))
@@ -125,7 +125,7 @@ class ShoppingListServiceIntegrationSpec extends IntegrationSpec {
         listen*.id == [result.id]
         listen*.name == ['Wocheneinkauf']
         result.groupId == groupId
-        lastUpdate.time > START.time
+        lastUpdate.time == testClock.instant().toEpochMilli()
     }
 
     def "Owner darf eine Liste anlegen"() {
@@ -177,7 +177,7 @@ class ShoppingListServiceIntegrationSpec extends IntegrationSpec {
         gespeichertName == 'Neu'
         gespeichertGroupId == groupId
         milchListId == listId
-        lastUpdate.time > START.time
+        lastUpdate.time == testClock.instant().toEpochMilli()
     }
 
     def "Liste löschen entfernt sie samt Einträgen, andere Listen der Gruppe bleiben"() {
@@ -213,7 +213,7 @@ class ShoppingListServiceIntegrationSpec extends IntegrationSpec {
         1 * notificationService.sendShoppingListNotification(groupId, _, 'delete')
         listen*.id == [andereId]
         verbliebeneEintraege == [kaffeeId]
-        lastUpdate.time > START.time
+        lastUpdate.time == testClock.instant().toEpochMilli()
     }
 
     def "Nicht-Mitglied wird bei #aktion abgewiesen, nichts ändert sich"() {
