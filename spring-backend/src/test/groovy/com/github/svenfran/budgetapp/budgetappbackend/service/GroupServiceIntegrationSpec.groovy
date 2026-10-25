@@ -9,8 +9,12 @@ import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOfGroup
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartTemplateRepository
+import com.github.svenfran.budgetapp.budgetappbackend.repository.CategoryRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupMembershipHistoryRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository
+import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingItemRepository
+import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingListRepository
+import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -31,6 +35,10 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
     @Autowired CartRepository cartRepository
     @Autowired GroupMembershipHistoryRepository membershipRepository
     @Autowired CartTemplateRepository templateRepository
+    @Autowired CategoryRepository categoryRepository
+    @Autowired ShoppingListRepository shoppingListRepository
+    @Autowired ShoppingItemRepository shoppingItemRepository
+    @Autowired UserRepository userRepository
 
     def "Neuberechnung setzt den Durchschnitt pro Mitglied auf 0, wenn zum Kaufdatum niemand Mitglied ist"() {
         given: "Owner und Ben sind seit REFERENCE_DATE - 1 Jahr Mitglied"
@@ -449,6 +457,157 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
         templateRepository.findById(benTemplate.id).get().active
 
         where: "Cleo ist Mitglied, darf aber nur sich selbst entfernen"
+        rolle << ['Mitglied', 'Außenstehender']
+    }
+
+    // ----- changeGroupOwner (DIV-13): Rechte, Rollentausch in Gruppe und Historie -----
+
+    def "Ownerwechsel tauscht die Rollen in Gruppe und Historie"() {
+        given: "Anna ist Owner, Ben Mitglied, beide seit 2024-06-15"
+        def anna = fixtures.user()
+        def ben = fixtures.user()
+        def wg = fixtures.group(owner: anna, members: [ben])
+        def groupId = wg.group.id
+        def annaId = anna.id
+        def benId = ben.id
+        testClock.today = LocalDate.of(2025, 6, 15)
+        flushAndClear()
+        loginAs(anna)
+        LOG.info('Szenario: Gruppe {}, Owner Anna {} (angemeldet), Mitglied Ben {} (beide seit {}); heute {}', groupId, annaId,
+                benId, REFERENCE_DATE.minusYears(1), testClock.today)
+
+        when:
+        groupService.changeGroupOwner(new ChangeGroupOwnerDto(new UserDto(id: benId), groupId))
+        flushAndClear()
+        def ownerId = groupRepository.findById(groupId).get().owner.id
+        def mitglieder = memberIds(groupId)
+        def annaHistorie = historie(groupId, annaId)
+        def benHistorie = historie(groupId, benId)
+        def offen = membershipRepository.findByGroupIdAndMembershipEndIsNull(groupId)*.userId.sort()
+        LOG.info('groupService.changeGroupOwner(Gruppe {}, neuer Owner Ben {}) -> owner {}, members {}; Historie Anna {}, Ben {}',
+                groupId, benId, ownerId, mitglieder, annaHistorie, benHistorie)
+
+        then:
+        ownerId == benId
+        mitglieder == [annaId]
+        annaHistorie == [[OWNER, REFERENCE_DATE.minusYears(1), LocalDate.of(2025, 6, 15)],
+                         [MEMBER, LocalDate.of(2025, 6, 15), null]]
+        benHistorie == [[MEMBER, REFERENCE_DATE.minusYears(1), LocalDate.of(2025, 6, 15)],
+                        [OWNER, LocalDate.of(2025, 6, 15), null]]
+        offen == [annaId, benId].sort()
+    }
+
+    def "#rolle kann den Owner nicht wechseln"() {
+        given:
+        def ben = fixtures.user()
+        def cleo = fixtures.user()
+        def wg = fixtures.group(members: [ben, cleo])
+        def angemeldet = rolle == 'Mitglied' ? ben : fixtures.user()
+        def groupId = wg.group.id
+        def ownerId = wg.owner.id
+        def benId = ben.id
+        def cleoId = cleo.id
+        flushAndClear()
+        loginAs(angemeldet)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Ben {}, Cleo {}; angemeldet User {} ({}) übergibt an Cleo', groupId, ownerId,
+                benId, cleoId, angemeldet.id, rolle)
+
+        when:
+        LOG.info('groupService.changeGroupOwner(Gruppe {}, neuer Owner Cleo {}) als User {}, erwartet NotOwnerOfGroupException',
+                groupId, cleoId, angemeldet.id)
+        groupService.changeGroupOwner(new ChangeGroupOwnerDto(new UserDto(id: cleoId), groupId))
+
+        then:
+        thrown(NotOwnerOfGroupException)
+        0 * notificationService._
+        groupRepository.findById(groupId).get().owner.id == ownerId
+        memberIds(groupId) == [benId, cleoId].sort()
+        historie(groupId, ownerId) == [[OWNER, REFERENCE_DATE.minusYears(1), null]]
+        historie(groupId, cleoId) == [[MEMBER, REFERENCE_DATE.minusYears(1), null]]
+
+        where: "Ben ist Mitglied der Gruppe, der Außenstehende nicht"
+        rolle << ['Mitglied', 'Außenstehender']
+    }
+
+    // ----- deleteGroup (DIV-13): Rechte, vollständige Löschung -----
+
+    def "Owner löscht die Gruppe mit allen abhängigen Daten, andere Gruppen bleiben unverändert"() {
+        given: "Gruppe mit Ben, Kategorie, Einkauf mit Template, Einkaufsliste mit Eintrag und beendeter Mitgliedschaft; Ben ist auch in einer zweiten Gruppe"
+        def ben = fixtures.user()
+        def dora = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def andereWg = fixtures.group(members: [ben])
+        def groupId = wg.group.id
+        def andereGroupId = andereWg.group.id
+        def ownerId = wg.owner.id
+        def benId = ben.id
+        fixtures.membership(wg, dora, membershipStart: DateUtils.toDate(LocalDate.of(2024, 6, 15)),
+                membershipEnd: DateUtils.toDate(LocalDate.of(2025, 3, 1)))
+        def benCart = fixtures.cart(wg, user: ben)
+        def template = fixtures.template(benCart)
+        def liste = fixtures.shoppingList(wg)
+        def eintrag = fixtures.shoppingItem(liste)
+        def andererCart = fixtures.cart(andereWg, user: ben)
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: Gruppe {} (Owner {} angemeldet, Ben {}, Ex-Mitglied Dora {}; Kategorie {}, Einkauf {} mit Template {}, Liste {} mit Eintrag {}); Gruppe {} mit Ben und Einkauf {}',
+                groupId, ownerId, benId, dora.id, wg.category.id, benCart.id, template.id, liste.id, eintrag.id, andereGroupId, andererCart.id)
+
+        when:
+        groupService.deleteGroup(groupId)
+        flushAndClear()
+        def gruppeVorhanden = groupRepository.findById(groupId).present
+        def historieDerGruppe = membershipRepository.findByGroupId(groupId)
+        def carts = cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(groupId)
+        def kategorien = categoryRepository.findAllByGroup_IdOrderByName(groupId)
+        def templates = templateRepository.findByGroupId(groupId)
+        def listen = shoppingListRepository.findAllByGroup_IdOrderById(groupId)
+        def eintragVorhanden = shoppingItemRepository.findById(eintrag.id).present
+        LOG.info('groupService.deleteGroup(Gruppe {}) -> Gruppe vorhanden {}; Historie {}, Einkäufe {}, Kategorien {}, Templates {}, Listen {}, Eintrag vorhanden {}',
+                groupId, gruppeVorhanden, historieDerGruppe.size(), carts.size(), kategorien.size(), templates.size(), listen.size(), eintragVorhanden)
+
+        then:
+        !gruppeVorhanden
+        historieDerGruppe.isEmpty()
+        carts.isEmpty()
+        kategorien.isEmpty()
+        templates.isEmpty()
+        listen.isEmpty()
+        !eintragVorhanden
+
+        and: "Nutzer und die zweite Gruppe bleiben unverändert"
+        userRepository.findById(ownerId).present
+        userRepository.findById(benId).present
+        memberIds(andereGroupId) == [benId]
+        historie(andereGroupId, benId) == [[MEMBER, REFERENCE_DATE.minusYears(1), null]]
+        cartRepository.findById(andererCart.id).present
+    }
+
+    def "#rolle kann die Gruppe nicht löschen"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def angemeldet = rolle == 'Mitglied' ? ben : fixtures.user()
+        def groupId = wg.group.id
+        def benId = ben.id
+        def cart = fixtures.cart(wg, user: ben)
+        flushAndClear()
+        loginAs(angemeldet)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Ben {} (Einkauf {}); angemeldet User {} ({})', groupId, wg.owner.id, benId,
+                cart.id, angemeldet.id, rolle)
+
+        when:
+        LOG.info('groupService.deleteGroup(Gruppe {}) als User {}, erwartet NotOwnerOfGroupException', groupId, angemeldet.id)
+        groupService.deleteGroup(groupId)
+
+        then:
+        thrown(NotOwnerOfGroupException)
+        0 * notificationService._
+        memberIds(groupId) == [benId]
+        membershipRepository.findByGroupId(groupId).size() == 2
+        cartRepository.findById(cart.id).present
+
+        where:
         rolle << ['Mitglied', 'Außenstehender']
     }
 
