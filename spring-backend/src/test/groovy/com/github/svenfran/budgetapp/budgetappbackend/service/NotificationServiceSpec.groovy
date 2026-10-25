@@ -197,10 +197,10 @@ class NotificationServiceSpec extends Specification {
         0 * messagingTemplate._
     }
 
-    def "Health-Status wird als Broadcast auf /notification/health gesendet"() {
+    def "Health-Status wird als Broadcast auf /notification/health gesendet, nur mit dem Status"() {
         given:
         def healthEndpoint = Mock(HealthEndpoint)
-        def health = Health.up().build()
+        def health = Health.up().withDetail('db', 'PostgreSQL').build()
 
         when:
         service.sendHealthStatus()
@@ -208,7 +208,7 @@ class NotificationServiceSpec extends Specification {
         then:
         1 * applicationContext.getBean(HealthEndpoint) >> healthEndpoint
         1 * healthEndpoint.health() >> health
-        1 * messagingTemplate.convertAndSend('/notification/health', health)
+        1 * messagingTemplate.convertAndSend('/notification/health', [status: 'UP'])
         0 * messagingTemplate._
     }
 

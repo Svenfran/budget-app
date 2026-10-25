@@ -15,6 +15,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Sends live updates via WebSocket to the members of a group.
@@ -143,12 +144,10 @@ public class NotificationService {
         var healthEndpoint = applicationContext.getBean(HealthEndpoint.class);
         var health = healthEndpoint.health();
 
-        logger.info("Health Status: {}", health.getStatus());
+        logger.debug("Health Status: {}", health.getStatus());
 
-        messagingTemplate.convertAndSend(
-                destination,
-                health
-        );
+        // status only: the full Health object may contain component details
+        messagingTemplate.convertAndSend(destination, Map.of("status", health.getStatus().getCode()));
     }
 
 }
