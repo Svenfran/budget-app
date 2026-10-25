@@ -17,11 +17,11 @@
     <ion-row class="h-full ion-align-items-center ion-justify-content-center">
       <ion-col>
         <h1>🚨</h1>
-        <h2>{{ 'error_pages.server_unavailable.title' | translate }}</h2>
-        <p>{{ 'error_pages.server_unavailable.message' | translate }}</p>
+        <h2>{{ 'error_pages.server_unreachable.title' | translate }}</h2>
+        <p>{{ 'error_pages.server_unreachable.message' | translate }}</p>
         <ion-button shape="round" (click)="reloadApp()">
           <ion-icon slot="start" name="refresh-circle"></ion-icon>
-          {{ 'error_pages.server_unavailable.btn_text' | translate }}
+          {{ 'error_pages.server_unreachable.btn_text' | translate }}
         </ion-button>
       </ion-col>
     </ion-row>
@@ -30,6 +30,6 @@
 
 <ion-footer class="ion-no-border">
   <ion-toolbar class="ion-padding-horizontal">
-    <ion-text slot="end" (click)="exitApp()">{{ 'error_pages.server_unavailable.footer.exit_app' | translate }}</ion-text>
+    <ion-text slot="end" (click)="exitApp()">{{ 'error_pages.server_unreachable.footer.exit_app' | translate }}</ion-text>
   </ion-toolbar>
 </ion-footer>
