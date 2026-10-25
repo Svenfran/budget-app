@@ -32,9 +32,6 @@ build/
 ### VS Code ###
 .vscode/
 
-### Config Package ###
-**/CorsConfig.java
-
 ### Sonar
 .sonar
 
