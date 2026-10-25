@@ -17,7 +17,6 @@ import com.github.svenfran.budgetapp.budgetappbackend.repository.CategoryReposit
 import com.github.svenfran.budgetapp.budgetappbackend.service.mapper.CartDtoMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,31 +36,37 @@ public class CartService {
 
     private final Logger logger = LoggerFactory.getLogger(CartService.class);
 
-    @Autowired
-    private CartRepository cartRepository;
+    private final CartRepository cartRepository;
 
-    @Autowired
-    private CategoryRepository categoryRepository;
+    private final CategoryRepository categoryRepository;
 
-    @Autowired
-    private CartDtoMapper cartDtoMapper;
+    private final CartDtoMapper cartDtoMapper;
     
-    @Autowired
-    private DataLoaderService dataLoaderService;
+    private final DataLoaderService dataLoaderService;
 
-    @Autowired
-    private VerificationService verificationService;
+    private final VerificationService verificationService;
 
-    @Autowired
-    private CartTemplateRepository templateRepository;
+    private final CartTemplateRepository templateRepository;
 
-    @Autowired
-    private Translator translator;
+    private final Translator translator;
 
-    @Autowired
-    private Clock clock;
+    private final Clock clock;
 
     private static final String SETTLEMENT_CATEGORY_NAME = "categories.default.settlement";
+
+    public CartService(CartRepository cartRepository, CategoryRepository categoryRepository,
+                       CartDtoMapper cartDtoMapper, DataLoaderService dataLoaderService,
+                       VerificationService verificationService, CartTemplateRepository templateRepository,
+                       Translator translator, Clock clock) {
+        this.cartRepository = cartRepository;
+        this.categoryRepository = categoryRepository;
+        this.cartDtoMapper = cartDtoMapper;
+        this.dataLoaderService = dataLoaderService;
+        this.verificationService = verificationService;
+        this.templateRepository = templateRepository;
+        this.translator = translator;
+        this.clock = clock;
+    }
 
     public List<CartDto> getCartsByGroupId(Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
         var user = dataLoaderService.getAuthenticatedUser();

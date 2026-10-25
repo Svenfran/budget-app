@@ -13,7 +13,6 @@ import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNameAlready
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.TokenRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -25,29 +24,35 @@ import org.springframework.validation.BindingResult;
 @Service
 public class AuthenticationService {
 
-    @Autowired
-    private UserRepository userRepository;
+    private final UserRepository userRepository;
 
-    @Autowired
-    private DataLoaderService dataLoaderService;
+    private final DataLoaderService dataLoaderService;
 
-    @Autowired
-    private PasswordEncoder passwordEncoder;
+    private final PasswordEncoder passwordEncoder;
 
-    @Autowired
-    private JwtService jwtService;
+    private final JwtService jwtService;
 
-    @Autowired
-    private AuthenticationManager authManager;
+    private final AuthenticationManager authManager;
 
-    @Autowired
-    private TokenRepository tokenRepository;
+    private final TokenRepository tokenRepository;
 
-    @Autowired
-    private VerificationService verificationService;
+    private final VerificationService verificationService;
 
-    @Autowired
-    private GroupService groupService;
+    private final GroupService groupService;
+
+    public AuthenticationService(UserRepository userRepository, DataLoaderService dataLoaderService,
+                                 PasswordEncoder passwordEncoder, JwtService jwtService,
+                                 AuthenticationManager authManager, TokenRepository tokenRepository,
+                                 VerificationService verificationService, GroupService groupService) {
+        this.userRepository = userRepository;
+        this.dataLoaderService = dataLoaderService;
+        this.passwordEncoder = passwordEncoder;
+        this.jwtService = jwtService;
+        this.authManager = authManager;
+        this.tokenRepository = tokenRepository;
+        this.verificationService = verificationService;
+        this.groupService = groupService;
+    }
 
     @Transactional
     public AuthenticationResponse register(RegisterRequest request, BindingResult bindingResult) throws UserAlreadyExistException, InvalidEmailException, UserNotFoundException, UserNameAlreadyExistsException, MissingDeviceIdException {

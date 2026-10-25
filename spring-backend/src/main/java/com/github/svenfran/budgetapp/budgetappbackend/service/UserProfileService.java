@@ -12,7 +12,6 @@ import com.github.svenfran.budgetapp.budgetappbackend.helper.EmailUtils;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.Translator;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.*;
 import liquibase.repackaged.org.apache.commons.lang3.RandomStringUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,56 +23,66 @@ import java.util.HashSet;
 @Service
 public class UserProfileService {
 
-    @Autowired
-    private UserRepository userRepository;
+    private final UserRepository userRepository;
 
-    @Autowired
-    private DataLoaderService dataLoaderService;
+    private final DataLoaderService dataLoaderService;
 
-    @Autowired
-    private GroupService groupService;
+    private final GroupService groupService;
 
-    @Autowired
-    private CartRepository cartRepository;
+    private final CartRepository cartRepository;
 
-    @Autowired
-    private GroupRepository groupRepository;
+    private final GroupRepository groupRepository;
 
-    @Autowired
-    private CategoryRepository categoryRepository;
+    private final CategoryRepository categoryRepository;
 
-    @Autowired
-    private ShoppingListRepository shoppingListRepository;
+    private final ShoppingListRepository shoppingListRepository;
 
-    @Autowired
-    private ShoppingItemRepository shoppingItemRepository;
+    private final ShoppingItemRepository shoppingItemRepository;
 
-    @Autowired
-    private GroupMembershipHistoryService gmhService;
+    private final GroupMembershipHistoryService gmhService;
 
-    @Autowired
-    private PasswordEncoder passwordEncoder;
+    private final PasswordEncoder passwordEncoder;
 
-    @Autowired
-    private TokenRepository tokenRepository;
+    private final TokenRepository tokenRepository;
 
-    @Autowired
-    private EmailSenderService senderService;
+    private final EmailSenderService senderService;
 
-    @Autowired
-    private VerificationService verificationService;
+    private final VerificationService verificationService;
 
-    @Autowired
-    private CartTemplateRepository cartTemplateRepository;
+    private final CartTemplateRepository cartTemplateRepository;
 
-    @Autowired
-    private NotificationService notificationService;
+    private final NotificationService notificationService;
 
-    @Autowired
-    private GroupMembershipHistoryRepository gmhRepository;
+    private final GroupMembershipHistoryRepository gmhRepository;
 
-    @Autowired
-    private Translator translator;
+    private final Translator translator;
+
+    public UserProfileService(UserRepository userRepository, DataLoaderService dataLoaderService,
+                              GroupService groupService, CartRepository cartRepository, GroupRepository groupRepository,
+                              CategoryRepository categoryRepository, ShoppingListRepository shoppingListRepository,
+                              ShoppingItemRepository shoppingItemRepository, GroupMembershipHistoryService gmhService,
+                              PasswordEncoder passwordEncoder, TokenRepository tokenRepository,
+                              EmailSenderService senderService, VerificationService verificationService,
+                              CartTemplateRepository cartTemplateRepository, NotificationService notificationService,
+                              GroupMembershipHistoryRepository gmhRepository, Translator translator) {
+        this.userRepository = userRepository;
+        this.dataLoaderService = dataLoaderService;
+        this.groupService = groupService;
+        this.cartRepository = cartRepository;
+        this.groupRepository = groupRepository;
+        this.categoryRepository = categoryRepository;
+        this.shoppingListRepository = shoppingListRepository;
+        this.shoppingItemRepository = shoppingItemRepository;
+        this.gmhService = gmhService;
+        this.passwordEncoder = passwordEncoder;
+        this.tokenRepository = tokenRepository;
+        this.senderService = senderService;
+        this.verificationService = verificationService;
+        this.cartTemplateRepository = cartTemplateRepository;
+        this.notificationService = notificationService;
+        this.gmhRepository = gmhRepository;
+        this.translator = translator;
+    }
 
     @Transactional
     public void deleteUserProfile(Long userId) throws UserNotFoundException, UserIsNotAuthenticatedUser {

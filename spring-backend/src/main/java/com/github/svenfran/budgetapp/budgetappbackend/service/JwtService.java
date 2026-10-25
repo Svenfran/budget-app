@@ -34,8 +34,11 @@ public class JwtService {
 
     // Env var in prod, .env (loaded into system properties by BudgetAppApplication.main) in dev,
     // fixed dummy value in application-test.properties for tests.
-    @Value("${secret_key}")
-    private String secretKey;
+    private final String secretKey;
+
+    public JwtService(@Value("${secret_key}") String secretKey) {
+        this.secretKey = secretKey;
+    }
 
 
     public String extractUsername(String token) {
