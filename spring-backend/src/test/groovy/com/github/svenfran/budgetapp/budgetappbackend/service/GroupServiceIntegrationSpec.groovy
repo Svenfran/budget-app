@@ -287,6 +287,7 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
         then:
         thrown(NotOwnerOfGroupException)
         0 * notificationService._
+        flushAndClear()
         memberIds(groupId) == [benId]
         historie(groupId, cleoId).isEmpty()
 
@@ -453,6 +454,7 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
         then:
         thrown(NotOwnerOfGroupException)
         0 * notificationService._
+        flushAndClear()
         memberIds(groupId) == [benId, cleoId].sort()
         historie(groupId, benId) == [[MEMBER, REFERENCE_DATE.minusYears(1), null]]
         !cartRepository.findById(benCart.id).get().deleted
@@ -524,6 +526,7 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
         then:
         thrown(NotOwnerOfGroupException)
         0 * notificationService._
+        flushAndClear()
         groupRepository.findById(groupId).get().owner.id == ownerId
         memberIds(groupId) == [benId, cleoId].sort()
         historie(groupId, ownerId) == [[OWNER, REFERENCE_DATE.minusYears(1), null]]
@@ -607,6 +610,7 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
         then:
         thrown(NotOwnerOfGroupException)
         0 * notificationService._
+        flushAndClear()
         memberIds(groupId) == [benId]
         membershipRepository.findByGroupId(groupId).size() == 2
         cartRepository.findById(cart.id).present
