@@ -6,7 +6,6 @@ import com.github.svenfran.budgetapp.budgetappbackend.exceptions.GroupNotFoundEx
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOrMemberOfGroupException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.service.ShoppingListService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -18,8 +17,11 @@ import java.util.Optional;
 @RequestMapping("/api")
 public class ShoppingListController {
 
-    @Autowired
-    private ShoppingListService shoppingListService;
+    private final ShoppingListService shoppingListService;
+
+    public ShoppingListController(ShoppingListService shoppingListService) {
+        this.shoppingListService = shoppingListService;
+    }
 
     @GetMapping("/groups/shopping-lists-with-items/{groupId}")
     public ResponseEntity<List<ShoppingListDto>> getShoppingListsForGroup(

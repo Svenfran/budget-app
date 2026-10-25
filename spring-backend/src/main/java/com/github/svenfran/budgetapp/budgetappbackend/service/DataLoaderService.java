@@ -4,7 +4,6 @@ import com.github.svenfran.budgetapp.budgetappbackend.entity.*;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.EmailUtils;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.*;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
@@ -15,44 +14,33 @@ import java.util.List;
 @Service
 public class DataLoaderService {
 
-    @Autowired
-    private GroupRepository groupRepository;
+    private final GroupRepository groupRepository;
 
-    @Autowired
-    private CartRepository cartRepository;
+    private final CartRepository cartRepository;
 
-    @Autowired
-    private CategoryRepository categoryRepository;
+    private final CategoryRepository categoryRepository;
 
-    @Autowired
-    private UserRepository userRepository;
+    private final UserRepository userRepository;
 
-    @Autowired
-    private ShoppingListRepository shoppingListRepository;
+    private final ShoppingListRepository shoppingListRepository;
 
-    @Autowired
-    private ShoppingItemRepository shoppingItemRepository;
+    private final ShoppingItemRepository shoppingItemRepository;
 
-    @Autowired
-    private GroupMembershipHistoryRepository groupMembershipHistoryRepository;
+    private final GroupMembershipHistoryRepository groupMembershipHistoryRepository;
 
-
-    public DataLoaderService(
-            CategoryRepository categoryRepository,
-            CartRepository cartRepository,
-            UserRepository userRepository,
-            GroupRepository groupRepository,
-            ShoppingListRepository shoppingListRepository,
-            ShoppingItemRepository shoppingItemRepository){
-        this.categoryRepository = categoryRepository;
-        this.cartRepository = cartRepository;
-        this.userRepository = userRepository;
+    public DataLoaderService(GroupRepository groupRepository, CartRepository cartRepository,
+                             CategoryRepository categoryRepository, UserRepository userRepository,
+                             ShoppingListRepository shoppingListRepository,
+                             ShoppingItemRepository shoppingItemRepository,
+                             GroupMembershipHistoryRepository groupMembershipHistoryRepository) {
         this.groupRepository = groupRepository;
+        this.cartRepository = cartRepository;
+        this.categoryRepository = categoryRepository;
+        this.userRepository = userRepository;
         this.shoppingListRepository = shoppingListRepository;
         this.shoppingItemRepository = shoppingItemRepository;
+        this.groupMembershipHistoryRepository = groupMembershipHistoryRepository;
     }
-
-    public DataLoaderService() {}
 
     public Group loadGroup(Long groupId) throws GroupNotFoundException {
         return groupRepository.findById(groupId)

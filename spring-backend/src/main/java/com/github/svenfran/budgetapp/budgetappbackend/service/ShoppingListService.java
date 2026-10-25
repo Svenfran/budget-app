@@ -9,7 +9,6 @@ import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingListRep
 import com.github.svenfran.budgetapp.budgetappbackend.service.mapper.ShoppingListDtoMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,26 +21,33 @@ public class ShoppingListService {
 
     final Logger logger = LoggerFactory.getLogger(this.getClass());
 
-    @Autowired
-    private ShoppingListRepository shoppingListRepository;
+    private final ShoppingListRepository shoppingListRepository;
 
-    @Autowired
-    private ShoppingListDtoMapper shoppingListDtoMapper;
+    private final ShoppingListDtoMapper shoppingListDtoMapper;
 
-    @Autowired
-    private ShoppingItemRepository shoppingItemRepository;
+    private final ShoppingItemRepository shoppingItemRepository;
 
-    @Autowired
-    private GroupRepository groupRepository;
+    private final GroupRepository groupRepository;
 
-    @Autowired
-    private DataLoaderService dataLoaderService;
+    private final DataLoaderService dataLoaderService;
 
-    @Autowired
-    private VerificationService verificationService;
+    private final VerificationService verificationService;
 
-    @Autowired
-    private NotificationService notificationService;
+    private final NotificationService notificationService;
+
+    public ShoppingListService(ShoppingListRepository shoppingListRepository,
+                               ShoppingListDtoMapper shoppingListDtoMapper,
+                               ShoppingItemRepository shoppingItemRepository, GroupRepository groupRepository,
+                               DataLoaderService dataLoaderService, VerificationService verificationService,
+                               NotificationService notificationService) {
+        this.shoppingListRepository = shoppingListRepository;
+        this.shoppingListDtoMapper = shoppingListDtoMapper;
+        this.shoppingItemRepository = shoppingItemRepository;
+        this.groupRepository = groupRepository;
+        this.dataLoaderService = dataLoaderService;
+        this.verificationService = verificationService;
+        this.notificationService = notificationService;
+    }
 
     public Optional<List<ShoppingListDto>> getShoppingListsForGroup(Long groupId, Long requestTimeStamp) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
         var user = dataLoaderService.getAuthenticatedUser();

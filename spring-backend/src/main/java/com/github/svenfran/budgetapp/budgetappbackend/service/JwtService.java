@@ -6,16 +6,11 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
-import javax.crypto.KeyGenerator;
 import java.security.Key;
-import java.security.NoSuchAlgorithmException;
-import java.util.Base64;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -30,12 +25,13 @@ public class JwtService {
     /** Token validity: 21 days in milliseconds. */
     private static final long TOKEN_VALIDITY_MS = 1000L * 60 * 60 * 24 * 21;
 
-    private final Logger logger = LoggerFactory.getLogger(JwtService.class);
-
     // Env var in prod, .env (loaded into system properties by BudgetAppApplication.main) in dev,
     // fixed dummy value in application-test.properties for tests.
-    @Value("${secret_key}")
-    private String secretKey;
+    private final String secretKey;
+
+    public JwtService(@Value("${secret_key}") String secretKey) {
+        this.secretKey = secretKey;
+    }
 
 
     public String extractUsername(String token) {
@@ -95,27 +91,6 @@ public class JwtService {
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
-    }
-
-    private Key generateKey(int n) throws NoSuchAlgorithmException {
-        KeyGenerator keyGenerator = KeyGenerator.getInstance("AES");
-        keyGenerator.init(n);
-        return keyGenerator.generateKey();
-    }
-
-    private String convertSecretKeyToString(Key secretKey) {
-        byte[] rawData = secretKey.getEncoded();
-        return Base64.getEncoder().encodeToString(rawData);
-    }
-
-    private String getSecretKey() {
-        String secretKey = "";
-        try {
-            secretKey = convertSecretKeyToString(generateKey(256));
-        } catch (NoSuchAlgorithmException e) {
-            logger.error("Failed to generate secret key", e);
-        }
-        return secretKey;
     }
 
     private Key getSignInKey() {

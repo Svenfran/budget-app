@@ -30,13 +30,8 @@ class SpendingsOverviewServiceSpec extends Specification {
 
     def dataLoaderService = Mock(DataLoaderService)
     def cartRepository = Mock(CartRepository)
-    def service = new SpendingsOverviewService()
-
-    def setup() {
-        service.dataLoaderService = dataLoaderService
-        service.cartRepository = cartRepository
-        service.verificationService = new VerificationService(Mock(PasswordEncoder), Mock(UserRepository))
-    }
+    def service = new SpendingsOverviewService(cartRepository, dataLoaderService,
+            new VerificationService(Mock(PasswordEncoder), Mock(UserRepository)))
 
     def "#endpoint lädt Carts und Mitgliedschaftshistorie genau einmal und jeden Nutzer höchstens einmal"() {
         given: "Anna (Owner) und Ben seit 2024; Einkäufe 2024 und in zwei Monaten 2025, also mehrere Perioden"

@@ -7,8 +7,9 @@ import spock.lang.Specification
 class DataLoaderServiceSpec extends Specification {
 
     // Stubs liefern für Optional-Rückgaben Optional.empty(), d. h. jedes Objekt fehlt.
-    def service = new DataLoaderService(Stub(CategoryRepository), Stub(CartRepository), Stub(UserRepository),
-            Stub(GroupRepository), Stub(ShoppingListRepository), Stub(ShoppingItemRepository))
+    def service = new DataLoaderService(Stub(GroupRepository), Stub(CartRepository), Stub(CategoryRepository),
+            Stub(UserRepository), Stub(ShoppingListRepository), Stub(ShoppingItemRepository),
+            Stub(GroupMembershipHistoryRepository))
 
     def "Fehlendes Objekt (#methode) wirft #exception.simpleName mit Meldung"() {
         when:

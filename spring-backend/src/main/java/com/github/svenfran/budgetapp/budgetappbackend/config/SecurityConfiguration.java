@@ -1,6 +1,5 @@
 package com.github.svenfran.budgetapp.budgetappbackend.config;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,17 +24,22 @@ import java.util.List;
 @EnableWebSecurity
 public class SecurityConfiguration {
 
-    @Value("${app.cors.allowed-origins}")
-    private List<String> allowedOrigins;
+    private final List<String> allowedOrigins;
 
-    @Autowired
-    private JwtAuthenticationFilter jwtAuthFilter;
+    private final JwtAuthenticationFilter jwtAuthFilter;
 
-    @Autowired
-    private AuthenticationProvider authenticationProvider;
+    private final AuthenticationProvider authenticationProvider;
 
-    @Autowired
-    private LogoutHandler logoutHandler;
+    private final LogoutHandler logoutHandler;
+
+    public SecurityConfiguration(@Value("${app.cors.allowed-origins}") List<String> allowedOrigins,
+                                 JwtAuthenticationFilter jwtAuthFilter, AuthenticationProvider authenticationProvider,
+                                 LogoutHandler logoutHandler) {
+        this.allowedOrigins = allowedOrigins;
+        this.jwtAuthFilter = jwtAuthFilter;
+        this.authenticationProvider = authenticationProvider;
+        this.logoutHandler = logoutHandler;
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {

@@ -5,7 +5,6 @@ import com.github.svenfran.budgetapp.budgetappbackend.exceptions.GroupNotFoundEx
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOrMemberOfGroupException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.service.SpendingsOverviewService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,8 +16,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api")
 public class SpendingsOverviewController {
 
-    @Autowired
-    private SpendingsOverviewService spendingsOverviewService;
+    private final SpendingsOverviewService spendingsOverviewService;
+
+    public SpendingsOverviewController(SpendingsOverviewService spendingsOverviewService) {
+        this.spendingsOverviewService = spendingsOverviewService;
+    }
 
     @GetMapping("/spendings/{groupId}/{year}")
     public ResponseEntity<SpendingsOverviewDto> getSpendingsForGroupAndYear(@PathVariable("groupId") Long groupId, @PathVariable("year") int year) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {

@@ -9,7 +9,6 @@ import com.github.svenfran.budgetapp.budgetappbackend.exceptions.GroupNotFoundEx
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOrMemberOfGroupException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.stereotype.Service;
 
@@ -32,14 +31,18 @@ import static com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils.to
 @Service
 public class SpendingsOverviewService {
 
-    @Autowired
-    private CartRepository cartRepository;
+    private final CartRepository cartRepository;
 
-    @Autowired
-    private DataLoaderService dataLoaderService;
+    private final DataLoaderService dataLoaderService;
 
-    @Autowired
-    private VerificationService verificationService;
+    private final VerificationService verificationService;
+
+    public SpendingsOverviewService(CartRepository cartRepository, DataLoaderService dataLoaderService,
+                                    VerificationService verificationService) {
+        this.cartRepository = cartRepository;
+        this.dataLoaderService = dataLoaderService;
+        this.verificationService = verificationService;
+    }
 
 
     // Overview for all Years

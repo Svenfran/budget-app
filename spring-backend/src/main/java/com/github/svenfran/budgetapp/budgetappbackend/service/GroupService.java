@@ -6,7 +6,6 @@ import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.Translator;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.*;
 import com.github.svenfran.budgetapp.budgetappbackend.service.mapper.GroupDtoMapper;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,47 +19,56 @@ import java.util.stream.Stream;
 @Service
 public class GroupService {
 
-    @Autowired
-    private GroupRepository groupRepository;
+    private final GroupRepository groupRepository;
 
-    @Autowired
-    private GroupDtoMapper groupDtoMapper;
+    private final GroupDtoMapper groupDtoMapper;
 
-    @Autowired
-    private CartRepository cartRepository;
+    private final CartRepository cartRepository;
 
-    @Autowired
-    private CategoryRepository categoryRepository;
+    private final CategoryRepository categoryRepository;
 
-    @Autowired
-    private ShoppingListRepository shoppingListRepository;
+    private final ShoppingListRepository shoppingListRepository;
 
-    @Autowired
-    private ShoppingItemRepository shoppingItemRepository;
+    private final ShoppingItemRepository shoppingItemRepository;
 
-    @Autowired
-    private GroupMembershipHistoryService groupMembershipHistoryService;
+    private final GroupMembershipHistoryService groupMembershipHistoryService;
 
-    @Autowired
-    private GroupMembershipHistoryRepository gmhRepository;
+    private final GroupMembershipHistoryRepository gmhRepository;
 
-    @Autowired
-    private DataLoaderService dataLoaderService;
+    private final DataLoaderService dataLoaderService;
 
-    @Autowired
-    private VerificationService verificationService;
+    private final VerificationService verificationService;
 
-    @Autowired
-    private NotificationService notificationService;
+    private final NotificationService notificationService;
 
-    @Autowired
-    private CartTemplateRepository cartTemplateRepository;
+    private final CartTemplateRepository cartTemplateRepository;
 
-    @Autowired
-    private Translator translator;
+    private final Translator translator;
 
-    @Autowired
-    private Clock clock;
+    private final Clock clock;
+
+    public GroupService(GroupRepository groupRepository, GroupDtoMapper groupDtoMapper, CartRepository cartRepository,
+                        CategoryRepository categoryRepository, ShoppingListRepository shoppingListRepository,
+                        ShoppingItemRepository shoppingItemRepository,
+                        GroupMembershipHistoryService groupMembershipHistoryService,
+                        GroupMembershipHistoryRepository gmhRepository, DataLoaderService dataLoaderService,
+                        VerificationService verificationService, NotificationService notificationService,
+                        CartTemplateRepository cartTemplateRepository, Translator translator, Clock clock) {
+        this.groupRepository = groupRepository;
+        this.groupDtoMapper = groupDtoMapper;
+        this.cartRepository = cartRepository;
+        this.categoryRepository = categoryRepository;
+        this.shoppingListRepository = shoppingListRepository;
+        this.shoppingItemRepository = shoppingItemRepository;
+        this.groupMembershipHistoryService = groupMembershipHistoryService;
+        this.gmhRepository = gmhRepository;
+        this.dataLoaderService = dataLoaderService;
+        this.verificationService = verificationService;
+        this.notificationService = notificationService;
+        this.cartTemplateRepository = cartTemplateRepository;
+        this.translator = translator;
+        this.clock = clock;
+    }
 
 
     public Stream<Group> getGroupsByMemberOrOwner() throws UserNotFoundException {

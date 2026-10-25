@@ -2,7 +2,6 @@ package com.github.svenfran.budgetapp.budgetappbackend.config;
 
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.service.DataLoaderService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -19,8 +18,11 @@ import java.time.Clock;
 @Configuration
 public class ApplicationConfig {
 
-    @Autowired
-    private DataLoaderService dataLoaderService;
+    private final DataLoaderService dataLoaderService;
+
+    public ApplicationConfig(DataLoaderService dataLoaderService) {
+        this.dataLoaderService = dataLoaderService;
+    }
 
 
     @Bean

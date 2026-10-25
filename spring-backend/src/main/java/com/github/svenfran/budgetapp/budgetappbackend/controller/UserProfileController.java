@@ -5,7 +5,6 @@ import com.github.svenfran.budgetapp.budgetappbackend.dto.PasswordResetDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.service.UserProfileService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
@@ -17,8 +16,11 @@ import javax.validation.Valid;
 @RequestMapping("/api")
 public class UserProfileController {
 
-    @Autowired
-    private UserProfileService userProfileService;
+    private final UserProfileService userProfileService;
+
+    public UserProfileController(UserProfileService userProfileService) {
+        this.userProfileService = userProfileService;
+    }
 
     @DeleteMapping("/userprofile/delete/{userId}")
     public ResponseEntity<Void> deleteUserProfile(@PathVariable("userId") Long userId) throws UserNotFoundException, UserIsNotAuthenticatedUser {

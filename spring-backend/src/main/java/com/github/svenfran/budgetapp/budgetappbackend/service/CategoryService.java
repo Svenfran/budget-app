@@ -4,7 +4,6 @@ import com.github.svenfran.budgetapp.budgetappbackend.dto.CategoryDto;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CategoryRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.service.mapper.CategoryDtoMapper;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
@@ -13,17 +12,21 @@ import java.util.List;
 @Service
 public class CategoryService {
 
-    @Autowired
-    private CategoryRepository categoryRepository;
+    private final CategoryRepository categoryRepository;
 
-    @Autowired
-    private CategoryDtoMapper categoryDtoMapper;
+    private final CategoryDtoMapper categoryDtoMapper;
 
-    @Autowired
-    private DataLoaderService dataLoaderService;
+    private final DataLoaderService dataLoaderService;
 
-    @Autowired
-    private VerificationService verificationService;
+    private final VerificationService verificationService;
+
+    public CategoryService(CategoryRepository categoryRepository, CategoryDtoMapper categoryDtoMapper,
+                           DataLoaderService dataLoaderService, VerificationService verificationService) {
+        this.categoryRepository = categoryRepository;
+        this.categoryDtoMapper = categoryDtoMapper;
+        this.dataLoaderService = dataLoaderService;
+        this.verificationService = verificationService;
+    }
 
 
     public List<CategoryDto> getAllCategoriesByGroup(Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {

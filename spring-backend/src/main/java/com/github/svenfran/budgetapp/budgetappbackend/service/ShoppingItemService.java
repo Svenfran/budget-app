@@ -5,7 +5,6 @@ import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingItemRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.service.mapper.ShoppingItemDtoMapper;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,23 +15,29 @@ import java.util.List;
 @Service
 public class ShoppingItemService {
 
-    @Autowired
-    private ShoppingItemDtoMapper shoppingItemDtoMapper;
+    private final ShoppingItemDtoMapper shoppingItemDtoMapper;
 
-    @Autowired
-    private ShoppingItemRepository shoppingItemRepository;
+    private final ShoppingItemRepository shoppingItemRepository;
 
-    @Autowired
-    private DataLoaderService dataLoaderService;
+    private final DataLoaderService dataLoaderService;
 
-    @Autowired
-    private GroupRepository groupRepository;
+    private final GroupRepository groupRepository;
 
-    @Autowired
-    private VerificationService verificationService;
+    private final VerificationService verificationService;
 
-    @Autowired
-    private NotificationService notificationService;
+    private final NotificationService notificationService;
+
+    public ShoppingItemService(ShoppingItemDtoMapper shoppingItemDtoMapper,
+                               ShoppingItemRepository shoppingItemRepository, DataLoaderService dataLoaderService,
+                               GroupRepository groupRepository, VerificationService verificationService,
+                               NotificationService notificationService) {
+        this.shoppingItemDtoMapper = shoppingItemDtoMapper;
+        this.shoppingItemRepository = shoppingItemRepository;
+        this.dataLoaderService = dataLoaderService;
+        this.groupRepository = groupRepository;
+        this.verificationService = verificationService;
+        this.notificationService = notificationService;
+    }
 
     @Transactional
     public AddEditShoppingItemDto addShoppingItem(AddEditShoppingItemDto dto) throws UserNotFoundException, GroupNotFoundException, ShoppingListNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingListDoesNotBelongToGroupException {

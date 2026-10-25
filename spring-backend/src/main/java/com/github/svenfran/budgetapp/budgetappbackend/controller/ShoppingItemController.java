@@ -3,7 +3,6 @@ package com.github.svenfran.budgetapp.budgetappbackend.controller;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.service.ShoppingItemService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -14,8 +13,11 @@ import java.util.List;
 @RequestMapping("/api")
 public class ShoppingItemController {
 
-    @Autowired
-    private ShoppingItemService shoppingItemService;
+    private final ShoppingItemService shoppingItemService;
+
+    public ShoppingItemController(ShoppingItemService shoppingItemService) {
+        this.shoppingItemService = shoppingItemService;
+    }
 
 
     @PostMapping("/groups/shopping-list/add-item")

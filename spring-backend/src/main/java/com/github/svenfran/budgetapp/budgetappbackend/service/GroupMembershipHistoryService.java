@@ -9,7 +9,6 @@ import com.github.svenfran.budgetapp.budgetappbackend.exceptions.GroupNotFoundEx
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOrMemberOfGroupException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupMembershipHistoryRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -19,17 +18,22 @@ import java.util.List;
 @Service
 public class GroupMembershipHistoryService {
 
-    @Autowired
-    private GroupMembershipHistoryRepository groupMembershipHistoryRepository;
+    private final GroupMembershipHistoryRepository groupMembershipHistoryRepository;
 
-    @Autowired
-    private DataLoaderService dataLoaderService;
+    private final DataLoaderService dataLoaderService;
 
-    @Autowired
-    private VerificationService verificationService;
+    private final VerificationService verificationService;
 
-    @Autowired
-    private Clock clock;
+    private final Clock clock;
+
+    public GroupMembershipHistoryService(GroupMembershipHistoryRepository groupMembershipHistoryRepository,
+                                         DataLoaderService dataLoaderService, VerificationService verificationService,
+                                         Clock clock) {
+        this.groupMembershipHistoryRepository = groupMembershipHistoryRepository;
+        this.dataLoaderService = dataLoaderService;
+        this.verificationService = verificationService;
+        this.clock = clock;
+    }
 
     // Eine neue Gruppe wird erstellt
     public void startGroupMembershipForOwner(User user, Group group) {
