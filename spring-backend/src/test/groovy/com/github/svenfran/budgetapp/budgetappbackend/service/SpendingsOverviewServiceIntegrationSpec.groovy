@@ -605,7 +605,7 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
                 .spendingsTotalYear.spendingsTotalUser.collectEntries { [it.userId, it.diff] }
     }
 
-    /** Zeitpunkt mit Uhrzeit, wie ihn GroupMembershipHistoryService beim Ein- und Austritt mit new Date() schreibt. */
+    /** Zeitpunkt mit Uhrzeit, wie ihn GroupMembershipHistoryService in Produktion (Clock) beim Ein- und Austritt schreibt. */
     private static Date at(LocalDate day, int hour) {
         Date.from(DateUtils.toDate(day).toInstant().plus(Duration.ofHours(hour)))
     }
