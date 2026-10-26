@@ -60,13 +60,15 @@ Cross-component "something changed, refetch" signaling uses an incrementing coun
 
 **Auth.** `AuthService` holds the user in a `BehaviorSubject`, with a JWT-style token. Token + auth data persist via `StorageService` (`authData`) and `localStorage` (`token`). `autoLogin()` restores on launch and `autoLogout()` schedules a `setTimeout` to log out at `expirationDate`. `AuthHttpInterceptorService` (registered as a multi `HTTP_INTERCEPTORS` in `app.module.ts`) attaches `Authorization`, `DeviceId`, and `Accept-Language` headers to every request.
 
-**Real-time updates.** `WebSocketService` connects via STOMP over SockJS to `${baseUrl}/ws`. Subscriptions to per-user topics (`/user/{userId}/notification/...`) are split by feature:
+**Real-time updates.** `WebSocketService` connects via STOMP over SockJS to `${baseUrl}/ws` (one client per logged-in user; `Authorization` and `DeviceId` are set before every (re)connect, `AppComponent.initUser()` disconnects on logout/user change). Topics are `/user/notification/<action>` (no userId) and are registered once in the service's registry via `subscribe(topic, handler, { owner, filterByActiveGroup })`; the service re-subscribes them after every reconnect and keeps them across `disconnect()`, `unsubscribeOwner(owner)` removes them. Registrations are split by feature:
 - `AppComponent.subscribeToTopics()` — group update/delete, member add/remove, owner change, and the global `/notification/health` topic.
 - `domains/shoppinglist/shoppinglist.page.ts` — shopping list add/update/delete and shopping item add/update/delete/delete-all.
 
-Incoming messages mutate the same service signals, keeping all open views in sync. `WebSocketService.subscribe()` drops messages whose `groupId` ≠ the active group for list/item topics.
+Incoming messages are parsed centrally (handler errors are logged, never thrown) and mutate the same service signals via pure functions (`service/group-events.ts`, `domains/shoppinglist/shoppinglist-events.ts`), keeping all open views in sync. With `filterByActiveGroup`, messages whose `groupId` ≠ the active group are dropped (list/item topics).
 
-**Health / offline handling.** `HealthCheckService` polls `/actuator/health`; the `/notification/health` WebSocket topic pushes `UP`/`DOWN`. On `DOWN` the app routes to `/server-unavailable`; on recovery it returns to the overview. When a user has no groups, the app routes to `/no-group`.
+**Resync.** After a reconnect (`WebSocketService.reconnected$`) or a resume after > 30 s in the background, `AppComponent.resyncLiveData()` silently re-fetches groups, overview, members and the shopping lists of the active group (`LoadOptions { silent, isCurrent }`: no clearing, errors keep the old state, stale answers from an ended login session or another group are dropped), throttled by `service/resync-throttle.ts` (max. once per 60 s, only while connected). The tab load effects track `GroupService.activeGroupId()` and `session()` (not `activeGroup()`), so a rename doesn't reload a tab, but a group change or a new login session does.
+
+**Health / offline handling.** `HealthCheckService` queries `/actuator/health` on demand (login, resume, WebSocket close, reload button; 10 s timeout); the `/notification/health` WebSocket topic pushes `UP`/`DOWN`. On `DOWN` the app routes to `/server-unavailable`; on recovery it returns to the overview. When a user has no groups, the app routes to `/no-group`.
 
 **Persistence.** `StorageService` wraps Capacitor `Preferences`. Two API styles coexist: `setData/getData` (wraps value in `{data}`, used for auth) and `setItem/getItem<T>` (used for `ACTIVE_GROUP`, `darkMode`). Some tokens also live in `localStorage`.
 
@@ -97,7 +99,7 @@ Karma + Jasmine. `npm run test:ci` (needs a local Chrome/Chromium and `src/confi
 - **Error-message contract:** when a service checks `err.error` (`includes(...)`/`===`), use the exact backend message as the error body in the test. The backend pins the same text in an API spec; the list is in the Groovydoc of `spring-backend/.../controller/CartControllerApiSpec.groovy` (stopgap until error codes are decided).
 
 **WebSocket and shopping lists**
-- Handlers that change state (`AppComponent.subscribeToTopics`, `shoppinglist.page.ts`) are tested through the service methods they call, not through the component.
+- Handlers that change state (`AppComponent.subscribeToTopics`, `shoppinglist.page.ts`) are tested through the pure functions they call (`*-events.spec.ts`), not through the component. `WebSocketService` is tested with `src/testing/fake-stomp-client.ts` via the `STOMP_CLIENT_FACTORY` token.
 - Shopping-list tests check state and HTTP, not the navigation to `server-unavailable` — keeps them valid once lists become offline-capable.
 
 **Reference test:** [`src/app/domains/cartlist/service/cart.service.spec.ts`](src/app/domains/cartlist/service/cart.service.spec.ts).
