@@ -816,4 +816,61 @@ describe('GroupService – Antwort nach Sitzungswechsel (DIV-58)', () => {
       expect(service.activeGroup().id).toBe(2);
     }));
   });
+
+  describe('getGroupsForOverview', () => {
+    const overviewUrl = `${environment.apiBaseUrl}/api/groups/overview`;
+    const anOverview = (id: number): GroupOverview =>
+      ({ id, name: `Gruppe ${id}`, dateCreated: REFERENCE_DATE, ownerName: 'Anna', memberCount: 1 });
+
+    it('verwirft eine Antwort, die nach dem Logout eintrifft', () => {
+      login(7);
+      service.getGroupsForOverview();
+      const request = http.expectOne(overviewUrl);
+
+      logout();
+      request.flush([anOverview(1)]);
+
+      expect(service.groupOverviewList()).toEqual([]);
+    });
+
+    it('lässt die Übersicht des neuen Nutzers stehen, wenn die alte Antwort danach eintrifft', () => {
+      login(7);
+      service.getGroupsForOverview();
+      const oldRequest = http.expectOne(overviewUrl);
+      logout();
+      login(8);
+      service.getGroupsForOverview();
+      const newRequest = http.expectOne(overviewUrl);
+
+      newRequest.flush([anOverview(3)]);
+      oldRequest.flush([anOverview(1), anOverview(2)]);
+
+      expect(ids(service.groupOverviewList())).toEqual([3]);
+    });
+
+    it('leert die Übersicht der neuen Sitzung nicht, wenn eine alte Anfrage danach fehlschlägt', () => {
+      login(7);
+      service.getGroupsForOverview();
+      const oldRequest = http.expectOne(overviewUrl);
+      logout();
+      login(8);
+      const overviewOfNew = [anOverview(3)];
+      service.groupOverviewList.set(overviewOfNew);
+
+      oldRequest.flush('Server error', serverError);
+
+      expect(service.groupOverviewList()).toBe(overviewOfNew);
+    });
+
+    it('übernimmt die Antwort bei erneuter Emission desselben Nutzers (gleiche Sitzung)', () => {
+      login(7);
+      service.getGroupsForOverview();
+      const request = http.expectOne(overviewUrl);
+
+      login(7);
+      request.flush([anOverview(1), anOverview(2)]);
+
+      expect(ids(service.groupOverviewList())).toEqual([1, 2]);
+    });
+  });
 });

@@ -7,7 +7,7 @@ export interface LoadOptions {
   silent?: boolean;
   /**
    * Wird beim Eintreffen der Antwort geprüft; `false` = überholt (Nutzer oder Gruppe gewechselt), Antwort verwerfen.
-   * Ohne Angabe prüft `getGroupsForSideNav` die Anmelde-Sitzung beim Start des Requests (DIV-58).
+   * Ohne Angabe prüfen `getGroupsForSideNav`/`getGroupsForOverview` die Anmelde-Sitzung beim Start des Requests (DIV-58).
    */
   isCurrent?: () => boolean;
 }

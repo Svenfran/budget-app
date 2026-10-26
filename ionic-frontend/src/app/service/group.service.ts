@@ -84,8 +84,9 @@ export class GroupService {
 
   /**
    * Prüfung „noch dieselbe Anmelde-Sitzung wie jetzt?“ – für `LoadOptions.isCurrent` beim stillen Resync (DIV-36) und
-   * Standard von `getGroupsForSideNav` (DIV-58). Setzt voraus, dass `session` vor dem Start des Requests hochgezählt
-   * wurde: Der Konstruktor abonniert `authService.user` vor `AppComponent.initUser()`, das bei einer Emission lädt.
+   * Standard von `getGroupsForSideNav`/`getGroupsForOverview` (DIV-58). Setzt voraus, dass `session` vor dem Start des
+   * Requests hochgezählt wurde: Der Konstruktor abonniert `authService.user` vor `AppComponent.initUser()`, das bei
+   * einer Emission lädt.
    */
   sessionGuard(): () => boolean {
     const session = this.session();
@@ -195,11 +196,13 @@ export class GroupService {
 
 
   getGroupsForOverview(options: LoadOptions = {}): void {
+    // Antworten aus einer inzwischen beendeten Anmelde-Sitzung verwerfen (DIV-58)
+    const isCurrent = options.isCurrent ?? this.sessionGuard();
     this.http
       .get<GroupOverview[]>(this.groupsOverviewUrl)
       .subscribe({
         next: async (result) => {
-          if (options.isCurrent?.() === false) return;
+          if (!isCurrent()) return;
           this.groupOverviewList.set(result || []);
         },
         error: (err) => {
@@ -207,6 +210,7 @@ export class GroupService {
             console.warn("Silent resync of group overview failed:", err);
             return;
           }
+          if (!isCurrent()) return;
           console.error("Error fetching groups:", err);
           this.groupOverviewList.set([]);
         }
