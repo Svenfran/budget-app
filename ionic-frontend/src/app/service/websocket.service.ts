@@ -44,6 +44,9 @@ interface Registration {
  *   bei mehreren Aufrufen in dieser Zeit gilt nur der letzte (`connect` oder `disconnect`).
  * - Registrierte Topics werden bei jedem `onConnect` neu abonniert (auch nach Reconnect); danach meldet
  *   `reconnected$` jedes Wiederverbinden (nicht den ersten Connect).
+ * - Die Registry überdauert `disconnect()`: Topics enthalten keine userId, Handler sind nutzerunabhängig, und eine von
+ *   Ionic gecachte Seite (kein erneutes `ngOnInit`) behält so ihre Topics über Logout/Login. Dass ein neuer Nutzer keine
+ *   Events des vorherigen erhält, sichert die neue Verbindung mit seinem Token (Principal = userId).
  * - Nachrichten werden zentral geparst, optional nach aktiver Gruppe gefiltert; Fehler im Handler werden geloggt
  *   und brechen die weitere Verarbeitung nicht ab.
  * - Verspätete Callbacks eines alten, noch deaktivierenden Clients werden ignoriert.
@@ -111,11 +114,13 @@ export class WebSocketService {
     client.activate();
   }
 
-  /** Beendet Subscriptions und Verbindung und leert die Registry (Logout, Nutzerwechsel). */
+  /**
+   * Beendet Subscriptions und Verbindung (Logout, Nutzerwechsel). Die registrierten Topics bleiben erhalten und werden
+   * beim nächsten `connect()` neu abonniert; entfernt werden sie nur über `unsubscribeOwner()`.
+   */
   disconnect(): Promise<void> {
     this.latestRequest++;
     this.registrations.forEach(registration => this.unsubscribeStomp(registration));
-    this.registrations.clear();
     if (this.client) {
       this.deactivate(this.client);
     }

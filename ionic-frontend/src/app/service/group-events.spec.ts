@@ -47,6 +47,29 @@ describe('group-events', () => {
       expect(result.members).toContain({ id: PREVIOUS_OWNER_ID, userName: 'Anna' });
     });
 
+    it('lässt eine bereits aktuelle Liste unverändert, wenn das Event nach einem Resync eintrifft (Regression Review F-002)', () => {
+      const resynced: GroupMembers = {
+        ...givenMembers(),
+        ownerId: NEW_OWNER_ID,
+        ownerName: 'Ben',
+        members: [aUser({ id: PREVIOUS_OWNER_ID, userName: 'Anna' }), aUser({ id: 40, userName: 'Cleo' })],
+      };
+
+      const result = applyOwnerChange(resynced, { groupId: GROUP_ID, newOwner: { id: NEW_OWNER_ID, userName: 'Ben' } });
+
+      expect(result).toBe(resynced);
+    });
+
+    it('ist idempotent: dasselbe Event zweimal angewendet ergibt dieselbe Liste wie einmal', () => {
+      const event = { groupId: GROUP_ID, newOwner: { id: NEW_OWNER_ID, userName: 'Ben' } };
+      const once = applyOwnerChange(givenMembers(), event);
+
+      const twice = applyOwnerChange(once, event);
+
+      expect(twice.members.map(member => member.id)).toEqual([40, PREVIOUS_OWNER_ID]);
+      expect(twice.ownerId).toBe(NEW_OWNER_ID);
+    });
+
     it('lässt die Mitgliederliste einer anderen Gruppe unverändert', () => {
       const members = givenMembers();
 

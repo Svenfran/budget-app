@@ -18,7 +18,7 @@ import java.security.Principal;
 /**
  * Authentication and authorization of inbound STOMP frames (clientInboundChannel):
  * <ul>
- *     <li>CONNECT needs the native headers {@code Authorization: Bearer <jwt>} and {@code DeviceId}, validated with the
+ *     <li>CONNECT (and its STOMP 1.2 alias STOMP, which Spring treats the same) needs the native headers {@code Authorization: Bearer <jwt>} and {@code DeviceId}, validated with the
  *     same rules as REST ({@link TokenValidator}). The session principal's name is the <b>userId</b>, because
  *     {@code NotificationService} addresses users by id ({@code convertAndSendToUser(userId, …)}).</li>
  *     <li>SUBSCRIBE is only allowed for an authenticated session and only to the own user destinations
@@ -50,7 +50,7 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
             return message;
         }
         switch (accessor.getCommand()) {
-            case CONNECT -> accessor.setUser(authenticate(accessor));
+            case CONNECT, STOMP -> accessor.setUser(authenticate(accessor));
             case SUBSCRIBE -> verifySubscription(accessor);
             case SEND -> {
                 LOG.warn("STOMP SEND rejected (session {})", accessor.getSessionId());

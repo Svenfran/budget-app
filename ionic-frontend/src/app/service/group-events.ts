@@ -14,10 +14,11 @@ export function renameGroup<T extends { id: number; name: string }>(groups: T[],
 
 /**
  * Owner-Wechsel in der geladenen Mitgliederliste – nur, wenn sie zur betroffenen Gruppe gehört. Der neue Owner verlässt
- * die Mitglieder, der bisherige wird mit seiner User-ID (`ownerId`) Mitglied.
+ * die Mitglieder, der bisherige wird mit seiner User-ID (`ownerId`) Mitglied. Ist der neue Owner bereits Owner (Resync
+ * lieferte schon den neuen Stand oder das Event kommt doppelt), bleibt die Liste unverändert.
  */
 export function applyOwnerChange(groupMembers: GroupMembers, data: ChangeGroupOwnerDto): GroupMembers {
-  if (groupMembers.id !== data.groupId) return groupMembers;
+  if (groupMembers.id !== data.groupId || groupMembers.ownerId === data.newOwner.id) return groupMembers;
   const previousOwner: UserDto = { id: groupMembers.ownerId, userName: groupMembers.ownerName };
   return {
     ...groupMembers,

@@ -171,9 +171,11 @@ describe('WebSocketService', () => {
   });
 
   describe('Trennen und Nutzerwechsel', () => {
-    it('disconnect leert die Registry, deaktiviert den Client und meldet keine Verbindung mehr', fakeAsync(() => {
+    it('disconnect beendet Subscriptions und Client, meldet keine Verbindung mehr und behält die Registry für den nächsten Connect', fakeAsync(() => {
+      // Regression: Eine von Ionic gecachte Shopping-Page registriert nach Logout/Login nicht erneut (kein ngOnInit);
+      // ihre Topics müssen deshalb disconnect() überdauern.
       const handler = jasmine.createSpy('handler');
-      service.subscribe(topic, handler, { owner: 'app' });
+      service.subscribe(topic, handler, { owner: 'shoppinglist' });
       const client = connected();
 
       service.disconnect();
@@ -183,8 +185,11 @@ describe('WebSocketService', () => {
       expect(client.aliveSubscriptions(topic)).toEqual([]);
       expect(service.isConnected()).toBeFalse();
 
-      const next = connected();
-      expect(next.subscribe).not.toHaveBeenCalled();
+      const next = connected(() => 'Bearer anderer-nutzer');
+      next.deliver(topic, JSON.stringify({ id: 7 }));
+
+      expect(next.aliveSubscriptions(topic).length).toBe(1);
+      expect(handler).toHaveBeenCalledOnceWith({ id: 7 });
     }));
 
     it('verspätete Callbacks des alten Clients nach einem Nutzerwechsel bleiben ohne Wirkung', fakeAsync(() => {

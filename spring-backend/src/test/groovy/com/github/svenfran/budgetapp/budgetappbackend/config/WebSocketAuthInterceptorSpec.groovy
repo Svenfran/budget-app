@@ -31,20 +31,23 @@ class WebSocketAuthInterceptorSpec extends Specification {
     def channel = Stub(MessageChannel)
     Principal angemeldet = new UsernamePasswordAuthenticationToken('42', null, [])
 
-    def "CONNECT mit gültigem Token und DeviceId setzt die userId als Principal-Namen"() {
+    def "#command mit gültigem Token und DeviceId setzt die userId als Principal-Namen"() {
         given:
-        def message = frame(StompCommand.CONNECT, [Authorization: 'Bearer ' + JWT, DeviceId: DEVICE])
+        def message = frame(command, [Authorization: 'Bearer ' + JWT, DeviceId: DEVICE])
 
         when:
         def result = interceptor.preSend(message, channel)
 
         then: "nicht die E-Mail: NotificationService adressiert Nutzer per userId"
         MessageHeaderAccessor.getAccessor(result, StompHeaderAccessor).user.name == '42'
+
+        where: "STOMP ist der gleichwertige Verbindungsbefehl aus STOMP 1.2 (Spring behandelt ihn wie CONNECT)"
+        command << [StompCommand.CONNECT, StompCommand.STOMP]
     }
 
-    def "CONNECT wird abgelehnt: #fall"() {
+    def "#command wird abgelehnt: #fall"() {
         given:
-        def message = frame(StompCommand.CONNECT, headers)
+        def message = frame(command, headers)
 
         when:
         interceptor.preSend(message, channel)
@@ -52,13 +55,18 @@ class WebSocketAuthInterceptorSpec extends Specification {
         then:
         thrown(MessagingException)
 
-        where:
-        fall                            | headers
-        'ohne Header'                   | [:]
-        'ohne Bearer-Präfix'            | [Authorization: JWT, DeviceId: DEVICE]
-        'Token vom Validator abgelehnt' | [Authorization: 'Bearer jwt-ungueltig', DeviceId: DEVICE]
-        'ohne DeviceId'                 | [Authorization: 'Bearer ' + JWT]
-        'mit fremder DeviceId'          | [Authorization: 'Bearer ' + JWT, DeviceId: 'device-2']
+        where: "Regression Review F-001: STOMP durfte ohne Anmeldung verbinden"
+        command              | fall                            | headers
+        StompCommand.CONNECT | 'ohne Header'                   | [:]
+        StompCommand.CONNECT | 'ohne Bearer-Präfix'            | [Authorization: JWT, DeviceId: DEVICE]
+        StompCommand.CONNECT | 'Token vom Validator abgelehnt' | [Authorization: 'Bearer jwt-ungueltig', DeviceId: DEVICE]
+        StompCommand.CONNECT | 'ohne DeviceId'                 | [Authorization: 'Bearer ' + JWT]
+        StompCommand.CONNECT | 'mit fremder DeviceId'          | [Authorization: 'Bearer ' + JWT, DeviceId: 'device-2']
+        StompCommand.STOMP   | 'ohne Header'                   | [:]
+        StompCommand.STOMP   | 'ohne Bearer-Präfix'            | [Authorization: JWT, DeviceId: DEVICE]
+        StompCommand.STOMP   | 'Token vom Validator abgelehnt' | [Authorization: 'Bearer jwt-ungueltig', DeviceId: DEVICE]
+        StompCommand.STOMP   | 'ohne DeviceId'                 | [Authorization: 'Bearer ' + JWT]
+        StompCommand.STOMP   | 'mit fremder DeviceId'          | [Authorization: 'Bearer ' + JWT, DeviceId: 'device-2']
     }
 
     def "SUBSCRIBE auf #destination ist mit angemeldeter Session erlaubt"() {
