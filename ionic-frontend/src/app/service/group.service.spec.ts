@@ -642,3 +642,178 @@ describe('GroupService – Anmelde-Sitzung (DIV-36)', () => {
     expect(service.activeGroup()).toEqual(Init.DEFAULT_GROUP);
   });
 });
+
+describe('GroupService – Antwort nach Sitzungswechsel (DIV-58)', () => {
+  let service: GroupService;
+  let http: HttpTestingController;
+  let storage: StorageService;
+  let navigate: jasmine.Spy;
+  let session: BehaviorSubject<User | null>;
+  const sideNavUrl = `${environment.apiBaseUrl}/api/groups/sidenav`;
+  const serverError = { status: 500, statusText: 'Server Error' };
+  const ids = (groups: { id: number }[]) => groups.map(g => g.id);
+
+  const login = (id: number) => session.next(aLoggedInUser({ id }));
+  const logout = () => session.next(null);
+
+  function storedActiveGroup(): Group | null {
+    let stored: Group | null = null;
+    storage.getItem<Group>('ACTIVE_GROUP').then(group => stored = group);
+    flushMicrotasks();
+    return stored;
+  }
+
+  /**
+   * Die ersten `count` Storage-Lesezugriffe bleiben offen, bis der Test sie auflöst; danach liest der Fake normal.
+   * Das Array füllt sich erst mit den Zugriffen – per Index aufrufen, nicht vorab destrukturieren.
+   */
+  function holdStorageReads(count: number): ((group: Group | null) => void)[] {
+    const read = storage.getItem.bind(storage);
+    const pending: ((group: Group | null) => void)[] = [];
+    spyOn(storage, 'getItem').and.callFake(<T>(key: string): Promise<T | null> => pending.length < count
+      ? new Promise<T | null>(resolve => pending.push(resolve as (group: Group | null) => void))
+      : read<T>(key));
+    return pending;
+  }
+
+  beforeEach(() => {
+    session = new BehaviorSubject<User | null>(null);
+    const auth = authServiceStub(null);
+    (Object.getOwnPropertyDescriptor(auth, 'user')!.get as jasmine.Spy).and.returnValue(session);
+    storage = storageServiceFake();
+    TestBed.configureTestingModule({
+      providers: [
+        ...provideServiceTesting(),
+        { provide: AlertService, useValue: alertServiceSpy() },
+        { provide: StorageService, useValue: storage },
+        { provide: AuthService, useValue: auth },
+      ],
+    });
+    service = TestBed.inject(GroupService);
+    http = TestBed.inject(HttpTestingController);
+    navigate = spyOn(TestBed.inject(Router), 'navigateByUrl').and.resolveTo(true);
+  });
+
+  afterEach(() => http.verify());
+
+  describe('getGroupsForSideNav', () => {
+    it('verwirft eine Antwort, die nach dem Logout eintrifft (Zustand, Storage, Navigation unverändert)', fakeAsync(() => {
+      login(7);
+      const stored = spyOn(storage, 'setItem').and.callThrough();
+      service.getGroupsForSideNav();
+      const request = http.expectOne(sideNavUrl);
+
+      logout();
+      request.flush([aGroup({ id: 1 }), aGroup({ id: 2 })]);
+      flushMicrotasks();
+
+      expect(service.groupsSideNav()).toEqual([]);
+      expect(service.activeGroup()).toEqual(Init.DEFAULT_GROUP);
+      expect(service.hasNoGroups()).toBeFalse();
+      expect(stored).not.toHaveBeenCalled();
+      expect(storedActiveGroup()).toBeNull();
+      expect(navigate).not.toHaveBeenCalled();
+    }));
+
+    it('leitet bei einer leeren Antwort nach dem Logout nicht zu no-group', fakeAsync(() => {
+      login(7);
+      service.getGroupsForSideNav();
+      const request = http.expectOne(sideNavUrl);
+
+      logout();
+      request.flush([]);
+      flushMicrotasks();
+
+      expect(service.hasNoGroups()).toBeFalse();
+      expect(service.activeGroup()).toEqual(Init.DEFAULT_GROUP);
+      expect(navigate).not.toHaveBeenCalled();
+    }));
+
+    it('lässt Seitenleiste und aktive Gruppe des neuen Nutzers stehen, wenn die alte Antwort danach eintrifft', fakeAsync(() => {
+      const groupsOfOld = [aGroup({ id: 1 }), aGroup({ id: 2 })];
+      const groupsOfNew = [aGroup({ id: 3 }), aGroup({ id: 4 })];
+      login(7);
+      service.getGroupsForSideNav();
+      const oldRequest = http.expectOne(sideNavUrl);
+      logout();
+      login(8);
+      service.getGroupsForSideNav();
+      const newRequest = http.expectOne(sideNavUrl);
+
+      newRequest.flush(groupsOfNew);
+      flushMicrotasks();
+      oldRequest.flush(groupsOfOld);
+      flushMicrotasks();
+
+      expect(ids(service.groupsSideNav())).toEqual([3, 4]);
+      expect(service.activeGroup().id).toBe(3);
+      expect(storedActiveGroup()?.id).toBe(3);
+    }));
+
+    it('ändert aktive Gruppe, Storage und Navigation nicht, wenn der Logout während des Storage-Lesens erfolgt', fakeAsync(() => {
+      login(7);
+      const storageReads = holdStorageReads(1);
+      const stored = spyOn(storage, 'setItem').and.callThrough();
+      service.getGroupsForSideNav();
+      http.expectOne(sideNavUrl).flush([]);
+      flushMicrotasks();
+
+      logout();
+      storageReads[0](null);
+      flushMicrotasks();
+
+      expect(service.activeGroup()).toEqual(Init.DEFAULT_GROUP);
+      expect(service.hasNoGroups()).toBeFalse();
+      expect(stored).not.toHaveBeenCalled();
+      expect(storedActiveGroup()).toBeNull();
+      expect(navigate).not.toHaveBeenCalled();
+    }));
+
+    it('leert die Seitenleiste der neuen Sitzung nicht, wenn eine alte Anfrage danach fehlschlägt', fakeAsync(() => {
+      login(7);
+      service.getGroupsForSideNav();
+      const oldRequest = http.expectOne(sideNavUrl);
+      logout();
+      login(8);
+      const groupsOfNew = [aGroup({ id: 3 })];
+      service.groupsSideNav.set(groupsOfNew);
+
+      oldRequest.flush('Server error', serverError);
+      flushMicrotasks();
+
+      expect(service.groupsSideNav()).toBe(groupsOfNew);
+    }));
+
+    it('übernimmt die Antwort bei erneuter Emission desselben Nutzers (gleiche Sitzung)', fakeAsync(() => {
+      login(7);
+      service.getGroupsForSideNav();
+      const request = http.expectOne(sideNavUrl);
+
+      login(7);
+      request.flush([aGroup({ id: 1 }), aGroup({ id: 2 })]);
+      flushMicrotasks();
+
+      expect(ids(service.groupsSideNav())).toEqual([1, 2]);
+      expect(service.activeGroup().id).toBe(1);
+      expect(storedActiveGroup()?.id).toBe(1);
+    }));
+
+    it('innerhalb einer Sitzung gilt die zuletzt eingetroffene Antwort, auch wenn ihr Storage-Lesen zuerst fertig ist', fakeAsync(() => {
+      login(7);
+      const storageReads = holdStorageReads(2);
+      service.getGroupsForSideNav();
+      service.getGroupsForSideNav();
+      const [first, second] = http.match(sideNavUrl);
+
+      first.flush([aGroup({ id: 1 })]);
+      second.flush([aGroup({ id: 2 }), aGroup({ id: 3 })]);
+      storageReads[1](null);
+      flushMicrotasks();
+      storageReads[0](null);
+      flushMicrotasks();
+
+      expect(ids(service.groupsSideNav())).toEqual([2, 3]);
+      expect(service.activeGroup().id).toBe(2);
+    }));
+  });
+});

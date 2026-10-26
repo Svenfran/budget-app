@@ -82,7 +82,11 @@ export class GroupService {
     this.memberUpdated.set(this.memberUpdated() + 1);
   }
 
-  /** Prüfung „noch dieselbe Anmelde-Sitzung wie jetzt?“ – für `LoadOptions.isCurrent` beim stillen Resync (DIV-36). */
+  /**
+   * Prüfung „noch dieselbe Anmelde-Sitzung wie jetzt?“ – für `LoadOptions.isCurrent` beim stillen Resync (DIV-36) und
+   * Standard von `getGroupsForSideNav` (DIV-58). Setzt voraus, dass `session` vor dem Start des Requests hochgezählt
+   * wurde: Der Konstruktor abonniert `authService.user` vor `AppComponent.initUser()`, das bei einer Emission lädt.
+   */
   sessionGuard(): () => boolean {
     const session = this.session();
     return () => this.session() === session;
@@ -121,17 +125,22 @@ export class GroupService {
   }
 
   getGroupsForSideNav(options: LoadOptions = {}): void {
+    // Antworten aus einer inzwischen beendeten Anmelde-Sitzung verwerfen (DIV-58)
+    const isCurrent = options.isCurrent ?? this.sessionGuard();
     this.http
       .get<Group[]>(this.groupsSideNavUrl)
       .subscribe({
         next: async (result) => {
           if (options.silent) {
-            if (options.isCurrent?.() !== false) this.applyGroupsSilently(result || []);
+            if (isCurrent()) this.applyGroupsSilently(result || []);
             return;
           }
+          if (!isCurrent()) return;
           this.groupsSideNav.set(result || []);
 
           const activeGroup: Group = await this.storageService.getItem('ACTIVE_GROUP') as {id: number, name: string, dateCreated: Date, flag?: string};
+          // erneut prüfen: Logout während des Storage-Lesens darf aktive Gruppe, Storage und Navigation nicht mehr ändern
+          if (!isCurrent()) return;
           const groups = this.groupsSideNav();
 
           this.updateActiveGroup(groups, activeGroup);
@@ -146,6 +155,7 @@ export class GroupService {
             console.warn("Silent resync of groups failed:", err);
             return;
           }
+          if (!isCurrent()) return;
           console.error("Error fetching groups:", err);
           this.groupsSideNav.set([]);
         }
