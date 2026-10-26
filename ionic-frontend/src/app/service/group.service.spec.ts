@@ -613,6 +613,26 @@ describe('GroupService – Anmelde-Sitzung (DIV-36)', () => {
     expect(service.session()).withContext('Nutzerwechsel').toBe(start + 4);
   });
 
+  it('sessionGuard (Resync-isCurrent) bleibt bei erneuter Emission desselben Nutzers gültig', () => {
+    session.next(aLoggedInUser({ id: 7 }));
+    const isCurrent = service.sessionGuard();
+
+    session.next(aLoggedInUser({ id: 7 }));
+
+    expect(isCurrent()).toBeTrue();
+  });
+
+  it('sessionGuard verwirft nach Logout und bleibt ungültig, auch wenn sich derselbe Nutzer wieder anmeldet', () => {
+    session.next(aLoggedInUser({ id: 7 }));
+    const isCurrent = service.sessionGuard();
+
+    session.next(null);
+    expect(isCurrent()).withContext('nach Logout').toBeFalse();
+    session.next(aLoggedInUser({ id: 7 }));
+
+    expect(isCurrent()).withContext('nach erneutem Login desselben Nutzers').toBeFalse();
+  });
+
   it('setzt beim Logout die aktive Gruppe auf den Platzhalter', () => {
     session.next(aLoggedInUser({ id: 7 }));
     service.activeGroup.set(aGroup({ id: 5 }));

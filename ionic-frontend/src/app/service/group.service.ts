@@ -82,6 +82,12 @@ export class GroupService {
     this.memberUpdated.set(this.memberUpdated() + 1);
   }
 
+  /** Prüfung „noch dieselbe Anmelde-Sitzung wie jetzt?“ – für `LoadOptions.isCurrent` beim stillen Resync (DIV-36). */
+  sessionGuard(): () => boolean {
+    const session = this.session();
+    return () => this.session() === session;
+  }
+
   public setActiveGroup(group: Group) {
     const activeGroup: Group = {
       id: group.id,

@@ -274,8 +274,7 @@ export class AppComponent {
    */
   private resyncLiveData() {
     if (this.connectedUserId === null) return;
-    const session = this.groupService.session();
-    const sameSession = () => this.groupService.session() === session;
+    const sameSession = this.groupService.sessionGuard();
 
     this.groupService.getGroupsForSideNav({ silent: true, isCurrent: sameSession });
     this.groupService.getGroupsForOverview({ silent: true, isCurrent: sameSession });
