@@ -4,24 +4,18 @@
   </ion-toolbar>
 </ion-header>
 
-<ion-content *ngIf="isLoading" class="ion-padding">
-  <ion-row>
-    <ion-col class="ion-text-center" size-md="6" offset-md="3">
-      <ion-spinner color="primary"></ion-spinner>
-    </ion-col>
-  </ion-row>
-</ion-content>
-
-<ion-content *ngIf="!isLoading" class="ion-padding">
+<ion-content class="ion-padding">
   <ion-grid class="h-full ion-text-center">
     <ion-row class="h-full ion-align-items-center ion-justify-content-center">
       <ion-col>
         <h1>🚨</h1>
-        <h2>{{ 'error_pages.server_unavailable.title' | translate }}</h2>
-        <p>{{ 'error_pages.server_unavailable.message' | translate }}</p>
-        <ion-button shape="round" (click)="reloadApp()">
-          <ion-icon slot="start" name="refresh-circle"></ion-icon>
-          {{ 'error_pages.server_unavailable.btn_text' | translate }}
+        <h2>{{ 'error_pages.server_unreachable.title' | translate }}</h2>
+        <p>{{ 'error_pages.server_unreachable.message' | translate }}</p>
+        <!-- während der Abfrage bleibt der Inhalt stehen; Button gesperrt mit Spinner (kein Doppelklick) -->
+        <ion-button shape="round" (click)="reloadApp()" [disabled]="isLoading">
+          <ion-spinner *ngIf="isLoading" slot="start" name="crescent"></ion-spinner>
+          <ion-icon *ngIf="!isLoading" slot="start" name="refresh-circle"></ion-icon>
+          {{ 'error_pages.server_unreachable.btn_text' | translate }}
         </ion-button>
       </ion-col>
     </ion-row>
@@ -30,6 +24,6 @@
 
 <ion-footer class="ion-no-border">
   <ion-toolbar class="ion-padding-horizontal">
-    <ion-text slot="end" (click)="exitApp()">{{ 'error_pages.server_unavailable.footer.exit_app' | translate }}</ion-text>
+    <ion-text slot="end" (click)="exitApp()">{{ 'error_pages.server_unreachable.footer.exit_app' | translate }}</ion-text>
   </ion-toolbar>
 </ion-footer>

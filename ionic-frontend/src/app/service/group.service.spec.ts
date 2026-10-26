@@ -1,7 +1,10 @@
 import { HttpTestingController } from '@angular/common/http/testing';
+import { effect } from '@angular/core';
 import { fakeAsync, flushMicrotasks, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
+import { BehaviorSubject } from 'rxjs';
 import { AuthService } from 'src/app/auth/auth.service';
+import { User } from 'src/app/auth/user';
 import { Init } from 'src/app/constants/default-values';
 import { GroupMembers } from 'src/app/groupmembers/model/groupmembers-dto';
 import { GroupOverview } from 'src/app/groupoverview/model/group-overview';
@@ -117,6 +120,168 @@ describe('GroupService', () => {
       expect(service.groupsSideNav()).toEqual([]);
       expect(navigate).not.toHaveBeenCalled();
     }));
+  });
+
+  describe('stilles Laden (Resync, DIV-36)', () => {
+    const serverError = { status: 500, statusText: 'Server Error' };
+    let stored: jasmine.Spy;
+
+    /** Aktive Gruppe direkt setzen (ohne Storage), danach Storage-Schreibzugriffe beobachten. */
+    function givenActive(group: Group) {
+      service.activeGroup.set(group);
+      stored = spyOn(storage, 'setItem').and.callThrough();
+    }
+
+    function resyncSideNav(groups: Group[], isCurrent?: () => boolean) {
+      service.getGroupsForSideNav({ silent: true, isCurrent });
+      http.expectOne(`${api}/sidenav`).flush(groups);
+      flushMicrotasks();
+    }
+
+    it('lässt die aktive Gruppe unverändert (dieselbe Referenz, kein Storage-Write), wenn sie unverändert existiert', fakeAsync(() => {
+      const wg = aGroup({ id: 1, name: 'WG' });
+      givenActive(wg);
+      const loaded = [aGroup({ id: 1, name: 'WG' }), aGroup({ id: 2 })];
+
+      resyncSideNav(loaded);
+
+      expect(service.groupsSideNav()).toEqual(loaded);
+      expect(service.activeGroup()).toBe(wg);
+      expect(stored).not.toHaveBeenCalled();
+      expect(navigate).not.toHaveBeenCalled();
+    }));
+
+    it('übernimmt einen geänderten Namen der aktiven Gruppe, ohne die Gruppen-ID zu ändern', fakeAsync(() => {
+      givenActive(aGroup({ id: 1, name: 'WG' }));
+
+      resyncSideNav([aGroup({ id: 1, name: 'Neue WG' })]);
+
+      expect(service.activeGroup().name).toBe('Neue WG');
+      expect(service.activeGroupId()).toBe(1);
+    }));
+
+    it('macht die erste Gruppe aktiv, wenn die aktive Gruppe nicht mehr existiert', fakeAsync(() => {
+      givenActive(aGroup({ id: 99 }));
+
+      resyncSideNav([aGroup({ id: 1 }), aGroup({ id: 2 })]);
+
+      expect(service.activeGroupId()).toBe(1);
+      expect(navigate).not.toHaveBeenCalled();
+    }));
+
+    it('setzt ohne Gruppen die Platzhalter-Gruppe und leitet zu no-group', fakeAsync(() => {
+      givenActive(aGroup({ id: 1 }));
+
+      resyncSideNav([]);
+
+      expect(service.activeGroup()).toEqual(Init.DEFAULT_GROUP);
+      expect(service.hasNoGroups()).toBeTrue();
+      expect(navigate).toHaveBeenCalledWith('/no-group', { replaceUrl: true });
+    }));
+
+    it('verlässt no-group, wenn nach einer Zeit ohne Gruppen wieder eine Gruppe existiert (z. B. Einladung offline erhalten)', fakeAsync(() => {
+      givenActive(Init.DEFAULT_GROUP);
+      service.hasNoGroups.set(true);
+      const wg = aGroup({ id: 5, name: 'WG' });
+
+      resyncSideNav([wg]);
+
+      expect(service.activeGroup()).toEqual(jasmine.objectContaining({ id: 5, name: 'WG' }));
+      expect(service.hasNoGroups()).toBeFalse();
+      expect(navigate).toHaveBeenCalledWith('/domains/tabs/overview', { replaceUrl: true });
+    }));
+
+    it('lässt Seitenleiste und aktive Gruppe bei einem Fehler unverändert', fakeAsync(() => {
+      spyOn(console, 'warn');
+      const { sideNav, wg } = givenGroups();
+      givenActive(wg);
+
+      service.getGroupsForSideNav({ silent: true });
+      http.expectOne(`${api}/sidenav`).flush('Server error', serverError);
+      flushMicrotasks();
+
+      expect(service.groupsSideNav()).toBe(sideNav);
+      expect(service.activeGroup()).toBe(wg);
+      expect(navigate).not.toHaveBeenCalled();
+    }));
+
+    it('verwirft eine überholte Seitenleisten-Antwort (isCurrent beim Eintreffen false)', fakeAsync(() => {
+      const { sideNav, wg } = givenGroups();
+      givenActive(wg);
+
+      resyncSideNav([aGroup({ id: 9 })], () => false);
+
+      expect(service.groupsSideNav()).toBe(sideNav);
+      expect(service.activeGroup()).toBe(wg);
+    }));
+
+    it('Übersicht: ersetzt bei Erfolg, bleibt bei Fehler oder überholter Antwort unverändert', () => {
+      spyOn(console, 'warn');
+      const { overview } = givenGroups();
+      const loaded = [anOverview(aGroup({ id: 7 }))];
+
+      service.getGroupsForOverview({ silent: true });
+      http.expectOne(`${api}/overview`).flush('Server error', serverError);
+      expect(service.groupOverviewList()).toBe(overview);
+
+      service.getGroupsForOverview({ silent: true, isCurrent: () => false });
+      http.expectOne(`${api}/overview`).flush(loaded);
+      expect(service.groupOverviewList()).toBe(overview);
+
+      service.getGroupsForOverview({ silent: true, isCurrent: () => true });
+      http.expectOne(`${api}/overview`).flush(loaded);
+      expect(service.groupOverviewList()).toEqual(loaded);
+    });
+
+    it('Mitglieder: ersetzt bei Erfolg, bleibt bei Fehler unverändert (kein Platzhalter)', () => {
+      spyOn(console, 'warn');
+      const current = someMembers({ id: 1 });
+      service.groupMembers.set(current);
+
+      service.getGroupMembers(1, { silent: true });
+      http.expectOne(`${api}/members/1`).flush(notOwnerOfGroup, forbidden);
+      expect(service.groupMembers()).toBe(current);
+
+      const loaded = someMembers({ id: 1, ownerName: 'Ben' });
+      service.getGroupMembers(1, { silent: true });
+      http.expectOne(`${api}/members/1`).flush(loaded);
+      expect(service.groupMembers()).toEqual(loaded);
+    });
+
+    it('Mitglieder: verwirft die Antwort für Gruppe 1, wenn inzwischen die Mitglieder von Gruppe 2 geöffnet sind', () => {
+      service.groupMembers.set(someMembers({ id: 1 }));
+
+      service.getGroupMembers(1, { silent: true });
+      const opened = someMembers({ id: 2 });
+      service.groupMembers.set(opened);
+      http.expectOne(`${api}/members/1`).flush(someMembers({ id: 1, ownerName: 'Ben' }));
+
+      expect(service.groupMembers()).toBe(opened);
+    });
+
+    it('Mitglieder: verwirft eine überholte Antwort (isCurrent false, z. B. Nutzerwechsel)', () => {
+      const current = someMembers({ id: 1 });
+      service.groupMembers.set(current);
+
+      service.getGroupMembers(1, { silent: true, isCurrent: () => false });
+      http.expectOne(`${api}/members/1`).flush(someMembers({ id: 1, ownerName: 'Ben' }));
+
+      expect(service.groupMembers()).toBe(current);
+    });
+
+    it('activeGroupId löst einen Effect nur bei Gruppenwechsel aus, nicht bei Umbenennung', () => {
+      const runs: number[] = [];
+      TestBed.runInInjectionContext(() => effect(() => { runs.push(service.activeGroupId()); }));
+      service.setActiveGroup(aGroup({ id: 1, name: 'WG' }));
+      TestBed.flushEffects();
+
+      service.setActiveGroup(aGroup({ id: 1, name: 'Neue WG' }));
+      TestBed.flushEffects();
+      service.setActiveGroup(aGroup({ id: 2, name: 'Urlaub' }));
+      TestBed.flushEffects();
+
+      expect(runs).toEqual([1, 2]);
+    });
   });
 
   describe('Laden', () => {
@@ -411,5 +576,69 @@ describe('GroupService', () => {
       expect(alerts.showToast).not.toHaveBeenCalled();
       expect(alerts.showErrorAlert).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('GroupService – Anmelde-Sitzung (DIV-36)', () => {
+  let service: GroupService;
+  let session: BehaviorSubject<User | null>;
+
+  beforeEach(() => {
+    session = new BehaviorSubject<User | null>(null);
+    const auth = authServiceStub(null);
+    (Object.getOwnPropertyDescriptor(auth, 'user')!.get as jasmine.Spy).and.returnValue(session);
+    TestBed.configureTestingModule({
+      providers: [
+        ...provideServiceTesting(),
+        { provide: AlertService, useValue: alertServiceSpy() },
+        { provide: StorageService, useValue: storageServiceFake() },
+        { provide: AuthService, useValue: auth },
+      ],
+    });
+    service = TestBed.inject(GroupService);
+  });
+
+  it('zählt Login, Logout und Nutzerwechsel als neue Sitzung, nicht die erneute Emission desselben Nutzers', () => {
+    const start = service.session();
+
+    session.next(aLoggedInUser({ id: 7 }));
+    expect(service.session()).withContext('Login').toBe(start + 1);
+    session.next(aLoggedInUser({ id: 7 }));
+    expect(service.session()).withContext('derselbe Nutzer erneut (z. B. setUserData)').toBe(start + 1);
+    session.next(null);
+    expect(service.session()).withContext('Logout').toBe(start + 2);
+    session.next(aLoggedInUser({ id: 7 }));
+    expect(service.session()).withContext('derselbe Nutzer wieder angemeldet').toBe(start + 3);
+    session.next(aLoggedInUser({ id: 8 }));
+    expect(service.session()).withContext('Nutzerwechsel').toBe(start + 4);
+  });
+
+  it('sessionGuard (Resync-isCurrent) bleibt bei erneuter Emission desselben Nutzers gültig', () => {
+    session.next(aLoggedInUser({ id: 7 }));
+    const isCurrent = service.sessionGuard();
+
+    session.next(aLoggedInUser({ id: 7 }));
+
+    expect(isCurrent()).toBeTrue();
+  });
+
+  it('sessionGuard verwirft nach Logout und bleibt ungültig, auch wenn sich derselbe Nutzer wieder anmeldet', () => {
+    session.next(aLoggedInUser({ id: 7 }));
+    const isCurrent = service.sessionGuard();
+
+    session.next(null);
+    expect(isCurrent()).withContext('nach Logout').toBeFalse();
+    session.next(aLoggedInUser({ id: 7 }));
+
+    expect(isCurrent()).withContext('nach erneutem Login desselben Nutzers').toBeFalse();
+  });
+
+  it('setzt beim Logout die aktive Gruppe auf den Platzhalter', () => {
+    session.next(aLoggedInUser({ id: 7 }));
+    service.activeGroup.set(aGroup({ id: 5 }));
+
+    session.next(null);
+
+    expect(service.activeGroup()).toEqual(Init.DEFAULT_GROUP);
   });
 });

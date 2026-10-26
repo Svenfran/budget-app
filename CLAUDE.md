@@ -21,10 +21,11 @@ Project-specific details live in the sub-project files — read the relevant one
 - **REST**: all endpoints under `/api` (`/api/auth` public). The frontend's `AuthHttpInterceptorService` sends `Authorization` (JWT), `DeviceId` and `Accept-Language` on every request; the backend uses `Accept-Language` for i18n and `DeviceId` for token handling.
 - **Backend URL**: frontend `src/config/config.ts` (dev, LAN IP on port 9090 = backend `dev` profile) / `config.prod.ts` (Railway) — both git-ignored, created from `src/config/config.example.ts`. New client origins must be added to the backend's `app.cors.allowed-origins`, not in code.
 - **DTO contract**: backend `dto/` classes ↔ frontend `model/*Dto` interfaces. There is no shared schema or code generation — a field change must be made on both sides by hand.
-- **WebSocket** (`/ws`, STOMP over SockJS): backend `NotificationService` pushes to `/user/{userId}/notification/<action>` for every group member **except the user who triggered the change** (that client updates its own state from the REST response). Plus a global `/notification/health` heartbeat every 10 s.
+- **WebSocket** (`/ws`, STOMP over SockJS): CONNECT needs the same credentials as REST (`Authorization: Bearer <jwt>` + `DeviceId`), the session principal is the userId. Backend `NotificationService` sends via `convertAndSendToUser(userId, "/notification/<action>")` to every group member **except the user who triggered the change** (that client updates its own state from the REST response); clients subscribe to `/user/notification/<action>` (no userId in the topic). Plus a global `/notification/health` broadcast (`{status}`) every 10 s. Clients may only subscribe to these destinations and never SEND.
   - Currently synced live: groups, members, owner change, shopping lists and items (where each is subscribed: see `ionic-frontend/CLAUDE.md`).
   - **Not** synced live: carts, categories, settlements — other members only see them on refetch.
-  - Notifications are sent from inside the `@Transactional` service method, i.e. **before commit**. Entities have no `@Version` / optimistic locking, so concurrent edits are last-write-wins.
+  - Notifications are sent **after commit** (`TransactionSynchronization.afterCommit` in `NotificationService`; immediately if no transaction is active). Recipients and payload are determined inside the transaction; a rollback sends nothing. Entities have no `@Version` / optimistic locking, so concurrent edits are last-write-wins.
+  - After a reconnect or a resume from background (> 30 s), the app silently re-fetches the live-synced data (groups, members, shopping lists), throttled to once per 60 s; carts, categories and statistics are not re-fetched.
 - **i18n**: both sides support `de` (default) / `en` / `es`. User-facing strings need keys in all three files on the respective side (frontend `src/assets/i18n/*.json`, backend `messages*.properties`).
 - **Language**: comments, notes and many identifiers are German on both sides; documentation files are English.
 
@@ -52,7 +53,7 @@ Also check explicitly:
 - **Permissions** — who may perform the change (member, owner, removed member); no endpoint without a `VerificationService` check.
 - **Transactions** — the change and its dependent writes (e.g. `Group.lastUpdate*`, templates, history) belong in one `@Transactional` method.
 - **Concurrent changes** — several members may edit the same data at once (last-write-wins today); consider what happens to a stale client state and to the state update/rollback.
-- **Notification timing** — notifications currently go out before commit, so a failing commit or a fast refetch can let clients see state that isn't persisted (yet). Keep this in mind for new notifications; changing the mechanism (e.g. after-commit events) is a separate proposal.
+- **Notification timing** — notifications go out after commit (see above), so call the `NotificationService.send*` methods inside the `@Transactional` service method as before; they are deferred automatically. A send failure after commit is only logged and does not fail the request.
 
 If a data type is currently not synced live (e.g. carts), don't add sync as a side effect — mention it as a proposal.
 

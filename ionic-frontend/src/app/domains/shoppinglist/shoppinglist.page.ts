@@ -1,4 +1,4 @@
-import { Component, effect, OnInit, QueryList, ViewChildren } from '@angular/core';
+import { Component, effect, OnInit, QueryList, untracked, ViewChildren } from '@angular/core';
 import { ShoppinglistService } from './service/shoppinglist.service';
 import { AddEditShoppinglistDto } from './model/add-edit-shoppinglist-dto';
 import { AlertService } from 'src/app/service/alert.service';
@@ -6,12 +6,11 @@ import { AlertController, IonInput, IonItemSliding, LoadingController } from '@i
 import { ShoppinglistDto } from './model/shoppinglist-dto';
 import { AddEditShoppingItemDto } from './model/add-edit-shopping-item-dto';
 import { ShoppingitemDto } from './model/shoppingitem-dto';
-import { Subscription } from 'rxjs';
 import { WebSocketService } from 'src/app/service/websocket.service';
-import { AuthService } from 'src/app/auth/auth.service';
 import { GroupService } from 'src/app/service/group.service';
 import { INIT_NUMBERS, INIT_VALUES } from 'src/app/constants/default-values';
 import { TranslateService } from '@ngx-translate/core';
+import { addItem, addList, deleteAllItems, deleteItem, deleteList, updateItem, updateList } from './shoppinglist-events';
 
 @Component({
   selector: 'app-shoppinglist',
@@ -23,9 +22,9 @@ export class ShoppinglistPage implements OnInit {
   @ViewChildren(IonInput) inputFields!: QueryList<IonInput>; 
   public shoppingLists = this.shoppinglistService.getShoppingLists();
   public isLoading: boolean = true;
-  public toggleLists: any = {};
+  /** Aufklappzustand je Listen-ID (nicht Index), damit hinzukommende/entfernte Listen ihn nicht verschieben. */
+  public toggleLists: { [listId: number]: boolean } = {};
   public newItemInputs: { [listId: number]: string } = {};
-  private subscriptions: Subscription[] = [];
   public activeGroup = this.groupService.activeGroup();
 
 
@@ -35,16 +34,23 @@ export class ShoppinglistPage implements OnInit {
     private alertCtrl: AlertController,
     private loadingCtrl: LoadingController,
     private webSocketService: WebSocketService,
-    private authService: AuthService,
     private groupService: GroupService,
     private translate: TranslateService
   ) {
+    // Anzeige: hält den Gruppennamen aktuell (auch bei Umbenennung), ohne neu zu laden
     effect(() => {
       this.activeGroup = this.groupService.activeGroup();
+    });
+    // Laden: nur bei echtem Gruppenwechsel (activeGroupId), neuer Anmelde-Sitzung (session, auch bei gleicher Gruppe
+    // nach Logout/Login) und den übrigen Triggern, nicht bei Umbenennung
+    effect(() => {
+      this.groupService.activeGroupId();
+      this.groupService.session();
+      const activeGroup = untracked(() => this.groupService.activeGroup());
       this.isLoading = true;
-      if (!this.activeGroup.flag?.includes(INIT_VALUES.DEFAULT)) {
+      if (!activeGroup.flag?.includes(INIT_VALUES.DEFAULT)) {
         this.shoppingLists.set([]);
-        this.shoppinglistService.getShoppingListsWithItems(this.activeGroup, () => {
+        this.shoppinglistService.getShoppingListsWithItems(activeGroup, () => {
           this.isLoading = false;
         });
       } else {
@@ -54,19 +60,13 @@ export class ShoppinglistPage implements OnInit {
   }
 
   ngOnInit() {
-    this.subscriptions.push(
-      this.webSocketService.getConnectionState().subscribe((isConnected) => {
-        if (isConnected) {
-          this.authService.user.subscribe(user => {
-            if (user) this.subscribeToTopics(user.id);
-          });
-        }
-      })
-    );
+    // einmal registrieren; der WebSocketService abonniert nach jedem (Re-)Connect selbst neu
+    this.subscribeToTopics();
   }
   
   ngOnDestroy() {
-    this.webSocketService.unsubscribeAll();
+    // nur die eigenen Topics, die globalen von AppComponent bleiben bestehen
+    this.webSocketService.unsubscribeOwner('shoppinglist');
   }
 
   refreshShoppingList(event: CustomEvent) {
@@ -283,130 +283,30 @@ export class ShoppinglistPage implements OnInit {
     this.shoppinglistService.deleteAllCompletedShoppingItems(items);
   }
 
-  private subscribeToTopics(userId: number) {
+  private subscribeToTopics() {
+    const options = { owner: 'shoppinglist', filterByActiveGroup: true };
+    const onList = (action: string, apply: (lists: ShoppinglistDto[], data: AddEditShoppinglistDto) => ShoppinglistDto[]) =>
+      this.webSocketService.subscribe<AddEditShoppinglistDto>(
+        `/user/notification/${action}`, data => this.shoppingLists.update(lists => apply(lists, data)), options);
+    const onItem = (action: string, apply: (lists: ShoppinglistDto[], data: AddEditShoppingItemDto) => ShoppinglistDto[]) =>
+      this.webSocketService.subscribe<AddEditShoppingItemDto>(
+        `/user/notification/${action}`, data => this.shoppingLists.update(lists => apply(lists, data)), options);
 
-    this.webSocketService.subscribe(
-      `/user/${userId}/notification/add-list`,
-      (message: any) => {
-        const parsedData = JSON.parse(message.body);
-        const shoppinglistDto: ShoppinglistDto = {
-          id: parsedData.id,
-          name: parsedData.name,
-          shoppingItems: []
-        } 
-        console.log(parsedData);
-        this.shoppingLists.update(lists => [...lists, shoppinglistDto])
-      }
-    )
+    onList('add-list', addList);
+    onList('update-list', updateList);
+    onList('delete-list', deleteList);
+    onItem('add-item', addItem);
+    onItem('update-item', updateItem);
+    onItem('delete-item', deleteItem);
+    this.webSocketService.subscribe<AddEditShoppingItemDto[]>(
+      `/user/notification/delete-all-items`, data => this.shoppingLists.update(lists => deleteAllItems(lists, data)), options);
+  }
 
-    this.webSocketService.subscribe(
-      `/user/${userId}/notification/update-list`,
-      (message: any) => {
-        const parsedData = JSON.parse(message.body);
-        console.log(parsedData);
-        this.shoppingLists.update(lists => lists.map(list => 
-          list.id === parsedData.id ? {...list, name: parsedData.name} : list
-        ))
-      }
-    )
+  trackByListId(_: number, list: ShoppinglistDto): number {
+    return list.id;
+  }
 
-    this.webSocketService.subscribe(
-      `/user/${userId}/notification/delete-list`,
-      (message: any) => {
-        const parsedData = JSON.parse(message.body);
-        console.log(parsedData);
-        this.shoppingLists.update(lists => lists.filter(list =>
-          list.id !== parsedData.id
-        ))
-      }
-    )
-
-    this.webSocketService.subscribe(
-      `/user/${userId}/notification/add-item`,
-      (message: any) => {
-        const parsedData = JSON.parse(message.body);
-        console.log(parsedData);
-        const newItem: ShoppingitemDto = {
-          id: parsedData.id!,
-          name: parsedData.name,
-          completed: parsedData.completed
-        }
-
-        this.shoppingLists.update(lists => 
-          lists.map(list => 
-            list.id === parsedData.shoppingListId 
-              ? { 
-                  ...list, 
-                  shoppingItems: [...list.shoppingItems, newItem] 
-                } 
-              : list
-          )
-        );
-      }
-    )
-
-    this.webSocketService.subscribe(
-      `/user/${userId}/notification/update-item`,
-      (message: any) => {
-        const parsedData = JSON.parse(message.body);
-        console.log(parsedData);
-        const updatedItem: ShoppingitemDto = {
-          id: parsedData.id!,
-          name: parsedData.name,
-          completed: parsedData.completed
-        }
-
-        this.shoppingLists.update(lists => 
-          lists.map(list => 
-            list.shoppingItems.some(item => item.id === updatedItem.id)
-              ? {
-                  ...list,
-                  shoppingItems: list.shoppingItems.map(item =>
-                    item.id === updatedItem.id ? updatedItem : item
-                  )
-                }
-              : list
-          )
-        )
-      }
-    )
-
-    this.webSocketService.subscribe(
-      `/user/${userId}/notification/delete-item`,
-      (message: any) => {
-        const parsedData = JSON.parse(message.body);
-        console.log(parsedData);
-        this.shoppingLists.update(lists => 
-          lists.map(list => 
-            list.id === parsedData.shoppingListId
-              ? {
-                ...list,
-                shoppingItems: list.shoppingItems.filter(item => item.id !== parsedData.id)
-                }
-              : list
-          )
-        )
-      }
-    )
-    
-    this.webSocketService.subscribe(
-      `/user/${userId}/notification/delete-all-items`,
-      (message: any) => {
-        const parsedData = JSON.parse(message.body);
-        console.log(parsedData);
-        this.shoppingLists.update(lists => 
-          lists.map(list =>
-            list.id === parsedData[0].shoppingListId
-            ? {
-                ...list,
-                shoppingItems: list.shoppingItems.filter(items =>
-                  !parsedData.some((deletedItem: { id: number }) => deletedItem.id === items.id)
-                )
-              } 
-            : list
-          )
-        )
-      }
-    )
+  trackByItemId(_: number, item: ShoppingitemDto): number {
+    return item.id;
   }
 }

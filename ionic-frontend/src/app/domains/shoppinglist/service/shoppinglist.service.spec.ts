@@ -66,6 +66,39 @@ describe('ShoppinglistService', () => {
       expect(onComplete).toHaveBeenCalledTimes(1);
     });
 
+    it('still: lässt die Listen bei einem Ladefehler unverändert', () => {
+      spyOn(console, 'warn');
+      const onComplete = jasmine.createSpy('onComplete');
+
+      service.getShoppingListsWithItems(aGroup({ id: 7 }), onComplete, { silent: true });
+      http.expectOne(url).flush('Server error', { status: 500, statusText: 'Server Error' });
+
+      expect(service.getShoppingLists()()).toBe(existing);
+      expect(onComplete).toHaveBeenCalledTimes(1);
+    });
+
+    it('still: ersetzt die Listen bei Erfolg, solange die Gruppe noch aktuell ist', () => {
+      const loaded = [aShoppingList()];
+
+      service.getShoppingListsWithItems(aGroup({ id: 7 }), undefined, { silent: true, isCurrent: () => true });
+      http.expectOne(url).flush(loaded);
+
+      expect(service.getShoppingLists()()).toEqual(loaded);
+    });
+
+    it('still: verwirft eine verspätete Antwort für Gruppe A, wenn inzwischen die Listen von Gruppe B geladen sind', () => {
+      let activeGroupId = 7;
+      const listenVonB = [aShoppingList({ name: 'Listen von B' })];
+
+      service.getShoppingListsWithItems(aGroup({ id: 7 }), undefined, { silent: true, isCurrent: () => activeGroupId === 7 });
+      activeGroupId = 8;
+      service.getShoppingListsWithItems(aGroup({ id: 8 }));
+      http.expectOne(`${api}/shopping-lists-with-items/8?requestTimeStamp=${new Date('1900-01-01').getTime()}`).flush(listenVonB);
+      http.expectOne(url).flush([aShoppingList({ name: 'Listen von A' })]);
+
+      expect(service.getShoppingLists()()).toEqual(listenVonB);
+    });
+
     it('leert die Listen für die Platzhalter-Gruppe ohne Request', () => {
       const onComplete = jasmine.createSpy('onComplete');
 

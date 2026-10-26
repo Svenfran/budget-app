@@ -1,4 +1,4 @@
-import { Component, effect, Renderer2 } from '@angular/core';
+import { Component, effect, NgZone, Renderer2 } from '@angular/core';
 import { firstValueFrom, Subscription } from 'rxjs';
 import { AuthService } from './auth/auth.service';
 import { Router } from '@angular/router';
@@ -8,17 +8,21 @@ import { GroupService } from './service/group.service';
 import { Group } from './model/group';
 import { AlertController, isPlatform, LoadingController, NavController, Platform } from '@ionic/angular';
 import { App } from '@capacitor/app';
+import { PluginListenerHandle } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { NavigationBar } from '@hugotomazi/capacitor-navigation-bar';
 import { StorageService } from './service/storage.service';
 import { GroupOverview } from './groupoverview/model/group-overview';
-import { UserDto } from './model/user-dto';
+import { ChangeGroupOwnerDto } from './groupmembers/model/change-group-owner-dto';
+import { applyOwnerChange, renameGroup } from './service/group-events';
 import { CategoryDto } from './model/category-dto';
 import { CategoryService } from './service/category.service';
 import { INIT_NUMBERS, INIT_VALUES } from './constants/default-values';
 import { HealthCheckService } from './service/healthcheck.service';
 import { TranslateService } from '@ngx-translate/core';
 import { LanguageService } from './service/language.service';
+import { ShoppinglistService } from './domains/shoppinglist/service/shoppinglist.service';
+import { isLongBackground, ResyncThrottle } from './service/resync-throttle';
 
 @Component({
   selector: 'app-root',
@@ -38,7 +42,16 @@ export class AppComponent {
   public isOpen: boolean = false;
   public activeGroup = this.groupService.activeGroup();
   public darkMode: boolean = true;
-  private subscriptions: Subscription[] = [];
+  private connectedUserId: number | null = null;
+  // Stiller Resync der live-gesyncten Daten nach Reconnect / längerem Hintergrund (DIV-36)
+  private resyncThrottle = new ResyncThrottle(
+    () => this.resyncLiveData(),
+    () => this.webSocketService.isConnected(),
+    INIT_NUMBERS.RESYNC_MIN_INTERVAL_MS,
+  );
+  private reconnectedSub?: Subscription;
+  private appStateListeners: Promise<PluginListenerHandle>[] = [];
+  private pausedAt: number | null = null;
   private backButtonSubscription: any;
   public backendStatus = this.healthService.backendStatus;
 
@@ -53,11 +66,12 @@ export class AppComponent {
     private navCtrl: NavController,
     private renderer: Renderer2,
     private storageService: StorageService,
-    private websocketService: WebSocketService,
     private categoryService: CategoryService,
     private healthService: HealthCheckService,
     private translate: TranslateService,
-    private langService: LanguageService
+    private langService: LanguageService,
+    private shoppinglistService: ShoppinglistService,
+    private ngZone: NgZone
   ) {
     this.initializeApp();
 
@@ -188,6 +202,7 @@ export class AppComponent {
     });
     this.initBackButton();
     this.initUser();
+    this.initResync();
   }
 
   switchLanguage(lang: string) {
@@ -204,22 +219,78 @@ export class AppComponent {
     }
 
     this.userSub = this.authService.user.subscribe(user => {
-      if (user) {
-        this.user = user;
-        this.webSocketService.connect(user.token!);
-        this.groupService.getGroupsForSideNav();
-        this.groupService.getGroupsForOverview();
-        this.healthService.getHealthStatus();
-
-        this.subscriptions.push(
-          this.webSocketService.getConnectionState().subscribe(isConnected => {
-            if (isConnected) {
-              this.subscribeToTopics(user.id);
-            }
-          })
-        );
+      if (!user) {
+        // Logout (manuell, Auto-Logout, Konto löschen …): Verbindung trennen
+        if (this.connectedUserId !== null) {
+          this.connectedUserId = null;
+          this.resyncThrottle.reset();
+          this.webSocketService.disconnect();
+        }
+        return;
       }
+
+      this.user = user;
+      if (user.id !== this.connectedUserId) {
+        if (this.connectedUserId !== null) {
+          this.resyncThrottle.reset();
+          this.webSocketService.disconnect();
+        }
+        this.connectedUserId = user.id;
+        this.subscribeToTopics();
+        // Token wird vor jedem (Re-)Connect frisch gelesen; User.token enthält bereits "Bearer "
+        this.webSocketService.connect(() => this.user?.token);
+      }
+      this.groupService.getGroupsForSideNav();
+      this.groupService.getGroupsForOverview();
+      this.healthService.getHealthStatus();
     });
+  }
+
+  /** Auslöser für den stillen Resync: jedes Wiederverbinden und ein Resume nach längerem Hintergrund. */
+  private initResync() {
+    this.reconnectedSub = this.webSocketService.reconnected$.subscribe(() => this.resyncThrottle.request());
+    this.appStateListeners = [
+      App.addListener('pause', () => this.pausedAt = Date.now()),
+      App.addListener('resume', () => this.ngZone.run(() => this.onResume())),
+    ];
+  }
+
+  private onResume() {
+    const longBackground = isLongBackground(this.pausedAt, Date.now(), INIT_NUMBERS.RESYNC_AFTER_BACKGROUND_MS);
+    this.pausedAt = null;
+    if (this.connectedUserId === null) return;
+    // einzelne unsichtbare Abfrage, unabhängig von Verbindung und Drossel; aktualisiert nur backendStatus
+    this.healthService.getHealthStatus();
+    if (longBackground) {
+      this.resyncThrottle.request();
+    }
+  }
+
+  /**
+   * Lädt die live-gesyncten Daten still neu (kein Leeren, kein Spinner, Fehler behalten den alten Stand): Gruppen,
+   * Übersicht, Einkaufslisten der aktiven Gruppe und – falls geöffnet – die Mitglieder. Carts, Kategorien und
+   * Statistiken nicht (nicht live-gesynct). Antworten aus einer inzwischen beendeten Anmelde-Sitzung (Logout/Login,
+   * auch desselben Nutzers) bzw. für eine andere aktive Gruppe werden verworfen.
+   */
+  private resyncLiveData() {
+    if (this.connectedUserId === null) return;
+    const sameSession = this.groupService.sessionGuard();
+
+    this.groupService.getGroupsForSideNav({ silent: true, isCurrent: sameSession });
+    this.groupService.getGroupsForOverview({ silent: true, isCurrent: sameSession });
+
+    const group = this.groupService.activeGroup();
+    if (!group.flag?.includes(INIT_VALUES.DEFAULT)) {
+      this.shoppinglistService.getShoppingListsWithItems(group, undefined, {
+        silent: true,
+        isCurrent: () => sameSession() && this.groupService.activeGroup().id === group.id,
+      });
+    }
+
+    const members = this.groupMembers();
+    if (!members.flag?.includes(INIT_VALUES.DEFAULT)) {
+      this.groupService.getGroupMembers(members.id, { silent: true, isCurrent: sameSession });
+    }
   }
 
   initBackButton() {
@@ -276,49 +347,37 @@ export class AppComponent {
   ngOnDestroy() {
     this.authSub.unsubscribe();
     this.userSub.unsubscribe();
+    this.reconnectedSub?.unsubscribe();
+    this.resyncThrottle.reset();
+    this.appStateListeners.forEach(listener => listener.then(handle => handle.remove()));
   }
 
-  subscribeToTopics(userId: number) {
-    this.websocketService.subscribe(
-      `/user/${userId}/notification/update-group`,
-      (message: any) => {
-        const parsedData = JSON.parse(message.body);
-        const foundGroup = this.sideNavGroups().find(group => group.id === parsedData.id);
-        const group = { id: parsedData.id, name: parsedData.name, dateCreated: foundGroup!.dateCreated };
-        console.log(group);
+  subscribeToTopics() {
+    this.webSocketService.subscribe<Group>(
+      `/user/notification/update-group`,
+      data => {
+        this.sideNavGroups.update(groups => renameGroup(groups, data));
+        this.groupOverviewList.update(groups => renameGroup(groups, data));
 
-        this.sideNavGroups.update(groups => groups.map(group => 
-          group.id === parsedData.id ? { ...group, name: parsedData.name } : group
-        ));
-
-        this.groupOverviewList.update(groups => groups.map(group => 
-          group.id === parsedData.id ? { ...group, name: parsedData.name } : group
-        ));
-        
-        if (this.activeGroup.id === parsedData.id) {
-          this.groupService.setActiveGroup(group);
+        if (this.activeGroup.id === data.id) {
+          this.groupService.setActiveGroup({ ...this.activeGroup, name: data.name });
         }
-      }
+      },
+      { owner: 'app' }
     );
 
-    this.websocketService.subscribe(
-      `/user/${userId}/notification/delete-group`,
-      (message: any) => {
-        const parsedData = JSON.parse(message.body);
-        const foundGroup = this.sideNavGroups().find(group => group.id === parsedData.id);
-        const group = { id: parsedData.id, name: parsedData.name, dateCreated: foundGroup!.dateCreated };
-        console.log(group);
-        console.log(this.activeGroup);
-
+    this.webSocketService.subscribe<Group>(
+      `/user/notification/delete-group`,
+      data => {
         this.sideNavGroups.update(groups => 
-          groups.filter(group => group.id !== parsedData.id)
+          groups.filter(group => group.id !== data.id)
         );
 
         this.groupOverviewList.update(groups => 
-          groups.filter(group => group.id !== parsedData.id)
+          groups.filter(group => group.id !== data.id)
         );
         
-        if (this.activeGroup.id === group.id) {
+        if (this.activeGroup.id === data.id) {
           this.groupService.updateActiveGroup(this.sideNavGroups(), this.activeGroup);
         }
 
@@ -326,13 +385,13 @@ export class AppComponent {
           this.groupService.hasNoGroups.set(true);
           this.router.navigateByUrl("/no-group", { replaceUrl: true });
         }
-      }
+      },
+      { owner: 'app' }
     );
 
     this.webSocketService.subscribe(
-      `/user/${userId}/notification/remove-group-member`,
-      (message: any) => {
-        const parsedData = JSON.parse(message.body);
+      `/user/notification/remove-group-member`,
+      (parsedData: any) => {
         console.log(parsedData);
       
         if (parsedData.updatedMember.id === this.user?.id) {
@@ -358,13 +417,13 @@ export class AppComponent {
           this.router.navigateByUrl("/no-group", { replaceUrl: true });
         }
       
-      }
+      },
+      { owner: 'app' }
     );
     
     this.webSocketService.subscribe(
-      `/user/${userId}/notification/add-group-member`,
-      (message: any) => {
-        const parsedData = JSON.parse(message.body);
+      `/user/notification/add-group-member`,
+      (parsedData: any) => {
         console.log(parsedData);
         const group: Group = { id: parsedData.id, name: parsedData.name, dateCreated: parsedData.dateCreated };
         const groupOverview: GroupOverview = { 
@@ -393,43 +452,24 @@ export class AppComponent {
           this.router.navigateByUrl("/domains/tabs/overview", { replaceUrl: true });
         }
       
-      }
+      },
+      { owner: 'app' }
     );
 
-    this.webSocketService.subscribe(
-      `/user/${userId}/notification/change-group-owner`,
-      (message: any) => {
-        const parsedData = JSON.parse(message.body);
-        const previousOwner: UserDto = { id: this.groupMembers().id, userName: this.groupMembers().ownerName };
-        console.log(parsedData);
-
-        this.groupMembers.update(group => {
-        return {
-          ...group,
-          ownerName: parsedData.newOwner.userName,
-          ownerId: parsedData.newOwner.id,
-          members: [
-            ...group.members.filter(member => member.id !== parsedData.newOwner.id),
-            previousOwner
-          ]
-        };
-      });
-      
-      this.groupOverviewList.update(groups => {
-        return groups.map(group =>
-          group.id === parsedData.groupId 
-            ? { ...group, ownerName: parsedData.newOwner.userName }
-            : group
-        );
-      });
-
-      }
+    this.webSocketService.subscribe<ChangeGroupOwnerDto>(
+      `/user/notification/change-group-owner`,
+      data => {
+        this.groupMembers.update(groupMembers => applyOwnerChange(groupMembers, data));
+        this.groupOverviewList.update(groups => groups.map(group =>
+          group.id === data.groupId ? { ...group, ownerName: data.newOwner.userName } : group
+        ));
+      },
+      { owner: 'app' }
     );
 
     this.webSocketService.subscribe(
       `/notification/health`,
-      (message: any) => {
-        const parsedData = JSON.parse(message.body);
+      (parsedData: any) => {
         this.backendStatus.set(parsedData.status);
         // this.backendStatus.set(INIT_VALUES.HEALTH_DOWN);
 
@@ -440,7 +480,8 @@ export class AppComponent {
         }
 
         console.log(parsedData);
-      }
+      },
+      { owner: 'app' }
     );
 
   }

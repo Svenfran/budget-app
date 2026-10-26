@@ -1,4 +1,4 @@
-import { Component, effect, OnInit, signal, ViewChild } from '@angular/core';
+import { Component, effect, OnInit, signal, untracked, ViewChild } from '@angular/core';
 import { CartService } from './service/cart.service';
 import { GroupService } from 'src/app/service/group.service';
 import { User } from 'src/app/auth/user';
@@ -53,15 +53,23 @@ export class CartlistPage implements OnInit {
     private modalCtrl: ModalController,
     private translate: TranslateService
   ) { 
+    // Anzeige: hält den Gruppennamen aktuell (auch bei Umbenennung), ohne neu zu laden
     effect(() => {
       this.activeGroup = this.groupService.activeGroup();
+    });
+    // Laden: nur bei echtem Gruppenwechsel (activeGroupId), neuer Anmelde-Sitzung (session, auch bei gleicher Gruppe
+    // nach Logout/Login) und den übrigen Triggern, nicht bei Umbenennung
+    effect(() => {
+      this.groupService.activeGroupId();
+      this.groupService.session();
       this.overviewService.overviewRefresh();
       this.categoryService.categoryUpdate();
       this.groupService.memberUpdated();
+      const activeGroup = untracked(() => this.groupService.activeGroup());
       this.isLoading = true;
-      if (!this.activeGroup.flag?.includes(INIT_VALUES.DEFAULT)) {
+      if (!activeGroup.flag?.includes(INIT_VALUES.DEFAULT)) {
         this.cartList.set([]);
-        this.cartService.getCartListByGroupId(this.activeGroup, false, () => {
+        this.cartService.getCartListByGroupId(activeGroup, false, () => {
           this.isLoading = false;
           this.resetFilterParams();
         });

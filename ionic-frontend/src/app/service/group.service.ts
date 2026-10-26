@@ -3,7 +3,7 @@ import { environment } from 'src/environments/environment';
 import { HttpClient } from '@angular/common/http';
 import { Group } from '../model/group';
 import { StorageService } from './storage.service';
-import { Init } from '../constants/default-values';
+import { Init, INIT_VALUES } from '../constants/default-values';
 import { Zeitraum } from '../domains/cartlist/new-edit-cart/model/gmh-zeitraum';
 import { GroupOverview } from '../groupoverview/model/group-overview';
 import { User } from '../auth/user';
@@ -15,6 +15,7 @@ import { RemoveMemberDto } from '../groupoverview/model/remove-member';
 import { ChangeGroupOwnerDto } from '../groupmembers/model/change-group-owner-dto';
 import { Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
+import { LoadOptions } from '../model/load-options';
 
 @Injectable({
   providedIn: 'root'
@@ -35,13 +36,23 @@ export class GroupService {
   public groupsSideNav: WritableSignal<Group[]> = signal<Group[]>([]);
   public groupOverviewList: WritableSignal<GroupOverview[]> = signal<GroupOverview[]>([]);
   public activeGroup: WritableSignal<Group> = signal<Group>(Init.DEFAULT_GROUP)
+  /** Meldet nur einen echten Gruppenwechsel, keine Umbenennung (setActiveGroup setzt immer ein neues Objekt). */
+  public activeGroupId = computed(() => this.activeGroup().id);
   public groupMembershipHistory: WritableSignal<Zeitraum[]> = signal<Zeitraum[]>([]);
   public groupMembers: WritableSignal<GroupMembers> = signal<GroupMembers>(Init.DEFAULT_GROUP_MEMBERS);
   public groupMembersWithOwner = computed(() => [{id: this.groupMembers().ownerId, userName: this.groupMembers().ownerName }, ...this.groupMembers().members]);
   public memberUpdated = signal(0);
   public hasNoGroups = signal<boolean>(false);
+  /**
+   * Anmelde-Sitzung: steigt bei jedem Wechsel der angemeldeten Identität (Login, Logout, Nutzerwechsel), nicht bei
+   * erneuter Emission desselben Nutzers. Monoton, daher sieht auch eine von Ionic abgehängte Tab-View beim
+   * Wiedereinhängen die Änderung – anders als `activeGroupId`, das nach Logout/Login mit derselben Gruppe wieder
+   * denselben Wert hat (DIV-36).
+   */
+  public session = signal(0);
 
   private user: User | undefined;
+  private sessionUserId: number | null = null;
 
   constructor(
     private http: HttpClient,
@@ -52,12 +63,29 @@ export class GroupService {
     private translate: TranslateService
   ) {
     this.authService.user.pipe().subscribe(user => {
-      if (user) this.user = user;
+      if (user) {
+        this.user = user;
+      } else {
+        // Logout: aktive Gruppe zurücksetzen (den Storage-Eintrag löscht AuthService.logout()), damit während der
+        // Abmeldung keine Tab-Page für die alte Gruppe lädt (DIV-36).
+        this.activeGroup.set(Init.DEFAULT_GROUP);
+      }
+      const userId = user?.id ?? null;
+      if (userId !== this.sessionUserId) {
+        this.sessionUserId = userId;
+        this.session.update(session => session + 1);
+      }
     })
   }
 
   triggerUpdate() {
     this.memberUpdated.set(this.memberUpdated() + 1);
+  }
+
+  /** Prüfung „noch dieselbe Anmelde-Sitzung wie jetzt?“ – für `LoadOptions.isCurrent` beim stillen Resync (DIV-36). */
+  sessionGuard(): () => boolean {
+    const session = this.session();
+    return () => this.session() === session;
   }
 
   public setActiveGroup(group: Group) {
@@ -92,11 +120,15 @@ export class GroupService {
     }
   }
 
-  getGroupsForSideNav(): void {
+  getGroupsForSideNav(options: LoadOptions = {}): void {
     this.http
       .get<Group[]>(this.groupsSideNavUrl)
       .subscribe({
         next: async (result) => {
+          if (options.silent) {
+            if (options.isCurrent?.() !== false) this.applyGroupsSilently(result || []);
+            return;
+          }
           this.groupsSideNav.set(result || []);
 
           const activeGroup: Group = await this.storageService.getItem('ACTIVE_GROUP') as {id: number, name: string, dateCreated: Date, flag?: string};
@@ -110,21 +142,61 @@ export class GroupService {
           }
         },
         error: (err) => {
+          if (options.silent) {
+            console.warn("Silent resync of groups failed:", err);
+            return;
+          }
           console.error("Error fetching groups:", err);
           this.groupsSideNav.set([]);
         }
       });
   }
 
+  /**
+   * Stiller Resync der Seitenleiste: die aktive Gruppe wird nur neu gesetzt, wenn sich ihr Name geändert hat oder sie
+   * nicht mehr existiert; gibt es nach einer Zeit ohne Gruppen wieder welche, wird `/no-group` verlassen.
+   */
+  private applyGroupsSilently(groups: Group[]): void {
+    this.groupsSideNav.set(groups);
+    const activeGroup = this.activeGroup();
+    const wasPlaceholder = !!activeGroup.flag?.includes(INIT_VALUES.DEFAULT);
 
-  getGroupsForOverview(): void {
+    if (groups.length === 0) {
+      if (!wasPlaceholder) this.setActiveGroup(Init.DEFAULT_GROUP);
+      this.hasNoGroups.set(true);
+      if (!this.router.url.includes(INIT_VALUES.NO_GROUP)) {
+        this.router.navigateByUrl('/no-group', { replaceUrl: true });
+      }
+      return;
+    }
+
+    const foundGroup = wasPlaceholder ? undefined : groups.find(group => group.id === activeGroup.id);
+    if (foundGroup) {
+      if (foundGroup.name !== activeGroup.name) this.setActiveGroup({ ...activeGroup, name: foundGroup.name });
+    } else {
+      this.updateActiveGroup(groups, activeGroup);
+    }
+
+    if (this.hasNoGroups() || this.router.url.includes(INIT_VALUES.NO_GROUP)) {
+      this.hasNoGroups.set(false);
+      this.router.navigateByUrl('/domains/tabs/overview', { replaceUrl: true });
+    }
+  }
+
+
+  getGroupsForOverview(options: LoadOptions = {}): void {
     this.http
       .get<GroupOverview[]>(this.groupsOverviewUrl)
       .subscribe({
         next: async (result) => {
+          if (options.isCurrent?.() === false) return;
           this.groupOverviewList.set(result || []);
         },
         error: (err) => {
+          if (options.silent) {
+            console.warn("Silent resync of group overview failed:", err);
+            return;
+          }
           console.error("Error fetching groups:", err);
           this.groupOverviewList.set([]);
         }
@@ -276,14 +348,21 @@ export class GroupService {
       })
   }
 
-  getGroupMembers(groupId: number): void {
+  getGroupMembers(groupId: number, options: LoadOptions = {}): void {
     this.http
       .get<GroupMembers>(`${this.groupMembersUrl}/${groupId}`)
       .subscribe({
         next: (result) => {
+          // still: nur übernehmen, wenn inzwischen keine andere Mitgliederliste geöffnet wurde
+          if (options.silent && this.groupMembers().id !== groupId) return;
+          if (options.isCurrent?.() === false) return;
           this.groupMembers.set(result);
         },
         error: (err) => {
+          if (options.silent) {
+            console.warn("Silent resync of group members failed:", err);
+            return;
+          }
           console.error("Error fetching group members:", err);
           this.groupMembers.set(Init.DEFAULT_GROUP_MEMBERS);
         }

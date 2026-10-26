@@ -1,7 +1,9 @@
 package com.github.svenfran.budgetapp.budgetappbackend.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -9,7 +11,9 @@ import org.springframework.messaging.converter.DefaultContentTypeResolver;
 import org.springframework.messaging.converter.MappingJackson2MessageConverter;
 import org.springframework.messaging.converter.MessageConverter;
 import org.springframework.messaging.handler.invocation.HandlerMethodArgumentResolver;
+import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.security.messaging.context.AuthenticationPrincipalArgumentResolver;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
@@ -28,17 +32,35 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final List<String> allowedOrigins;
 
+    private final WebSocketAuthInterceptor webSocketAuthInterceptor;
+
+    private final TaskScheduler messageBrokerTaskScheduler;
+
+    // @Lazy: the broker's own scheduler is created by this configuration (Spring reference, "Heartbeats")
     public WebSocketConfig(@Value("${websocket.url}") String websocketEndpoint,
-                           @Value("${app.cors.allowed-origins}") List<String> allowedOrigins) {
+                           @Value("${app.cors.allowed-origins}") List<String> allowedOrigins,
+                           WebSocketAuthInterceptor webSocketAuthInterceptor,
+                           @Lazy @Qualifier("messageBrokerTaskScheduler") TaskScheduler messageBrokerTaskScheduler) {
         this.websocketEndpoint = websocketEndpoint;
         this.allowedOrigins = allowedOrigins;
+        this.webSocketAuthInterceptor = webSocketAuthInterceptor;
+        this.messageBrokerTaskScheduler = messageBrokerTaskScheduler;
     }
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        registry.enableSimpleBroker("/notification", "/user");
+        // "/user" is only the user destination prefix, not a broker prefix: clients subscribe to
+        // /user/notification/<action> and receive only messages sent to their own principal (userId)
+        registry.enableSimpleBroker("/notification")
+                .setHeartbeatValue(new long[]{10000, 10000})
+                .setTaskScheduler(messageBrokerTaskScheduler);
         registry.setApplicationDestinationPrefixes("/app");
         registry.setUserDestinationPrefix("/user");
+    }
+
+    @Override
+    public void configureClientInboundChannel(ChannelRegistration registration) {
+        registration.interceptors(webSocketAuthInterceptor);
     }
 
     @Override

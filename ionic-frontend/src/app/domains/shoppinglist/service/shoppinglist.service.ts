@@ -7,6 +7,7 @@ import { AddEditShoppingItemDto } from '../model/add-edit-shopping-item-dto';
 import { ShoppingitemDto } from '../model/shoppingitem-dto';
 import { INIT_VALUES } from 'src/app/constants/default-values';
 import { Group } from 'src/app/model/group';
+import { LoadOptions } from 'src/app/model/load-options';
 
 @Injectable({
   providedIn: 'root'
@@ -32,7 +33,7 @@ export class ShoppinglistService {
     return this.shoppingLists;
   }
 
-  getShoppingListsWithItems(group: Group, onComplete?: () => void): void{
+  getShoppingListsWithItems(group: Group, onComplete?: () => void, options: LoadOptions = {}): void{
     if (group.flag?.includes(INIT_VALUES.DEFAULT)) {
       this.shoppingLists.set([]);
       onComplete?.();
@@ -44,10 +45,16 @@ export class ShoppinglistService {
       .get<ShoppinglistDto[]>(`${this.shoppingListsWithItemsUrl}/${group.id}${requestParam}`)
       .subscribe({
         next: (result) => {
-          this.shoppingLists.set(result || []);
+          // überholt (z. B. inzwischen andere Gruppe aktiv): die Listen der aktuellen Gruppe nicht überschreiben
+          if (options.isCurrent?.() !== false) this.shoppingLists.set(result || []);
           onComplete?.();
         },
         error: (err) => {
+          if (options.silent) {
+            console.warn('Silent resync of shoppinglists failed:', err);
+            onComplete?.();
+            return;
+          }
           console.error('Error fetching shoppinglists:', err);
           this.shoppingLists.set([]);
           onComplete?.();

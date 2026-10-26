@@ -29,7 +29,7 @@ class JwtAuthenticationFilterSpec extends Specification {
     def userDetailsService = Stub(UserDetailsService)
     def tokenRepository = Stub(TokenRepository)
     def chain = Mock(FilterChain)
-    def filter = new JwtAuthenticationFilter(jwtService, userDetailsService, tokenRepository)
+    def filter = new JwtAuthenticationFilter(new TokenValidator(jwtService, userDetailsService, tokenRepository))
     def request = new MockHttpServletRequest()
     def response = new MockHttpServletResponse()
 

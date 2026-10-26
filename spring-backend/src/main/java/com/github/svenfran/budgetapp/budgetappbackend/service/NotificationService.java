@@ -11,9 +11,22 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.List;
+import java.util.Map;
 
+/**
+ * Sends live updates via WebSocket to the members of a group.
+ * <p>
+ * Delivery happens only after the triggering transaction has committed: when a transaction synchronization is
+ * active, recipients and payload are determined immediately (inside the transaction), but the messages are sent
+ * in {@code afterCommit}. On rollback nothing is sent. Without an active synchronization (e.g. a caller that is
+ * not {@code @Transactional} and whose repository {@code save} has already committed) the messages are sent
+ * immediately. Send failures are logged per recipient and never propagated, so they cannot turn an already
+ * committed REST request into an error.
+ */
 @Service
 public class NotificationService {
 
@@ -85,21 +98,43 @@ public class NotificationService {
     }
 
     /**
-     * Sends {@code payload} to every group member except the currently authenticated user.
-     * The {@code detail} message (with its {@code detailArgs}) is appended to the common
-     * "Notify User with id {} | " log prefix, where the leading id is the recipient.
+     * Sends {@code payload} to every group member except the currently authenticated user, after the current
+     * transaction has committed (see class comment). The {@code detail} message (with its {@code detailArgs}) is
+     * appended to the common "Notify User with id {} | " log prefix, where the leading id is the recipient.
      */
     private void notifyMembers(List<GroupMembershipHistory> history, String destination,
                                Object payload, String detail, Object... detailArgs) throws UserNotFoundException {
         var user = dataLoaderService.getAuthenticatedUser();
-        for (var gmh : history) {
-            if (!gmh.getUserId().equals(user.getId())) {
+        var recipientIds = history.stream()
+                .map(GroupMembershipHistory::getUserId)
+                .filter(userId -> !userId.equals(user.getId()))
+                .toList();
+        sendAfterCommit(() -> {
+            for (var recipientId : recipientIds) {
                 Object[] logArgs = new Object[detailArgs.length + 1];
-                logArgs[0] = gmh.getUserId();
+                logArgs[0] = recipientId;
                 System.arraycopy(detailArgs, 0, logArgs, 1, detailArgs.length);
                 logger.info("Notify User with id {} | " + detail, logArgs);
-                messagingTemplate.convertAndSendToUser(gmh.getUserId().toString(), destination, payload);
+                try {
+                    messagingTemplate.convertAndSendToUser(recipientId.toString(), destination, payload);
+                } catch (RuntimeException e) {
+                    logger.warn("Notify User with id {} failed | {}: {}", recipientId, destination, e.toString());
+                }
             }
+        });
+    }
+
+    /** Runs {@code send} after the commit of the active transaction, or immediately if there is none. */
+    private void sendAfterCommit(Runnable send) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    send.run();
+                }
+            });
+        } else {
+            send.run();
         }
     }
 
@@ -109,12 +144,10 @@ public class NotificationService {
         var healthEndpoint = applicationContext.getBean(HealthEndpoint.class);
         var health = healthEndpoint.health();
 
-        logger.info("Health Status: {}", health.getStatus());
+        logger.debug("Health Status: {}", health.getStatus());
 
-        messagingTemplate.convertAndSend(
-                destination,
-                health
-        );
+        // status only: the full Health object may contain component details
+        messagingTemplate.convertAndSend(destination, Map.of("status", health.getStatus().getCode()));
     }
 
 }

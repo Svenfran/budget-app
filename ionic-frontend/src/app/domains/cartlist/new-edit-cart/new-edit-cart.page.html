@@ -116,7 +116,7 @@
           <ion-item lines="none" *ngIf="datePurchased?.invalid && (datePurchased?.dirty || datePurchased?.touched)">
             <ion-label color="danger">
               <small *ngIf="datePurchased?.errors?.['required']">{{ 'global.errors.required' | translate }}</small>
-              <small *ngIf="datePurchased?.errors?.['pattern']">{{ 'global.error.invalid_date' | translate }}</small>
+              <small *ngIf="datePurchased?.errors?.['pattern']">{{ 'global.errors.invalid_date' | translate }}</small>
             </ion-label>
           </ion-item>
         </ion-col>

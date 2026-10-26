@@ -1,5 +1,6 @@
 import { HttpClient } from "@angular/common/http";
 import { Injectable, signal } from "@angular/core";
+import { timeout } from "rxjs";
 import { environment } from "src/environments/environment";
 import { INIT_NUMBERS, INIT_VALUES } from "../constants/default-values";
 
@@ -19,6 +20,8 @@ export class HealthCheckService {
     getHealthStatus(onComplete?: () => void): void {
         this.http
             .get<any>(this.healthUrl)
+            // ohne Antwort (Server/Netz hängt) nicht auf den Browser-Timeout warten
+            .pipe(timeout(INIT_NUMBERS.HEALTH_CHECK_TIMEOUT_MS))
             .subscribe({
                 next: (result) => {
                     this.backendStatus.set(result.status);
