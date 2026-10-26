@@ -1,5 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Inject, Injectable, OnDestroy } from '@angular/core';
+import { Router } from '@angular/router';
 import { BehaviorSubject, Observable, from } from 'rxjs';
 import { map, switchMap, tap } from 'rxjs/operators';
 import { environment } from 'src/environments/environment';
@@ -43,6 +44,7 @@ export class AuthService implements OnDestroy {
   constructor(
     private http: HttpClient,
     private storageService: StorageService,
+    private router: Router,
     @Inject(DEVICE_ID) private deviceIdReady: Promise<string>
     ) { }
 
@@ -169,6 +171,8 @@ export class AuthService implements OnDestroy {
     this.activeLogoutTimer = setTimeout(() => {
       console.log("logging out...");
       this.logout();
+      // Nur hier navigieren, nicht in logout(): manuelle Logout-Pfade navigieren selbst (DIV-57)
+      this.router.navigateByUrl('/auth', { replaceUrl: true });
     }, duration);
   }
 

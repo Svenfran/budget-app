@@ -31,9 +31,7 @@ import { isLongBackground, ResyncThrottle } from './service/resync-throttle';
   standalone: false,
 })
 export class AppComponent {
-  private authSub!: Subscription;
   private userSub!: Subscription;
-  private previousAuthState: boolean = false;
   public shoppingLists: Group[] = [];
   public sideNavGroups = this.groupService.groupsSideNav;
   public groupOverviewList = this.groupService.groupOverviewList;
@@ -81,15 +79,6 @@ export class AppComponent {
         this.router.navigateByUrl('/domains/tabs/overview', { replaceUrl: true });
       }
     });
-  }
-
-  ngOnInit() {
-    this.authSub = this.authService.userIsAuthenticated.subscribe(isAuth => {
-      if (!isAuth && this.previousAuthState !== isAuth) {
-        this.router.navigateByUrl('/auth', { replaceUrl: true });
-      }
-    });
-
   }
 
   setActiveGroup(group: Group) {
@@ -345,7 +334,6 @@ export class AppComponent {
   }
 
   ngOnDestroy() {
-    this.authSub.unsubscribe();
     this.userSub.unsubscribe();
     this.reconnectedSub?.unsubscribe();
     this.resyncThrottle.reset();
