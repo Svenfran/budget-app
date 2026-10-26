@@ -55,7 +55,14 @@ export class GroupService {
     private translate: TranslateService
   ) {
     this.authService.user.pipe().subscribe(user => {
-      if (user) this.user = user;
+      if (user) {
+        this.user = user;
+      } else {
+        // Logout: aktive Gruppe zurücksetzen (den Storage-Eintrag löscht AuthService.logout()). Der nächste Login ist
+        // damit immer ein echter Gruppenwechsel (activeGroupId), auch bei derselben ersten Gruppe, und gecachte
+        // Tab-Pages laden ihre Daten neu (DIV-36).
+        this.activeGroup.set(Init.DEFAULT_GROUP);
+      }
     })
   }
 

@@ -3,12 +3,14 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormsModule } from '@angular/forms';
 import { IonicModule } from '@ionic/angular';
 import { TranslateModule } from '@ngx-translate/core';
+import { BehaviorSubject } from 'rxjs';
 import { AuthService } from 'src/app/auth/auth.service';
+import { User } from 'src/app/auth/user';
 import { AlertService } from 'src/app/service/alert.service';
 import { GroupService } from 'src/app/service/group.service';
 import { StorageService } from 'src/app/service/storage.service';
 import { WebSocketService } from 'src/app/service/websocket.service';
-import { aGroup, aShoppingList } from 'src/testing/test-data';
+import { aGroup, aLoggedInUser, aShoppingList } from 'src/testing/test-data';
 import { alertServiceSpy, authServiceStub, provideServiceTesting, storageServiceFake } from 'src/testing/test-providers';
 import { ShoppinglistDto } from './model/shoppinglist-dto';
 import { ShoppinglistService } from './service/shoppinglist.service';
@@ -21,10 +23,15 @@ describe('ShoppinglistPage – Gruppenwechsel und Umbenennung', () => {
   let page: ShoppinglistPage;
   let groupService: GroupService;
   let load: jasmine.Spy;
+  let session: BehaviorSubject<User | null>;
   const lists = signal<ShoppinglistDto[]>([]);
 
   beforeEach(() => {
     lists.set([]);
+    // steuerbarer Anmeldestatus (Logout/Login), den GroupService beobachtet
+    session = new BehaviorSubject<User | null>(null);
+    const auth = authServiceStub(null);
+    (Object.getOwnPropertyDescriptor(auth, 'user')!.get as jasmine.Spy).and.returnValue(session);
     load = jasmine.createSpy('getShoppingListsWithItems')
       .and.callFake((_group: unknown, onComplete?: () => void) => onComplete?.());
     TestBed.configureTestingModule({
@@ -35,7 +42,7 @@ describe('ShoppinglistPage – Gruppenwechsel und Umbenennung', () => {
         { provide: ShoppinglistService, useValue: { getShoppingLists: () => lists, getShoppingListsWithItems: load } },
         { provide: WebSocketService, useValue: jasmine.createSpyObj('WebSocketService', ['subscribe', 'unsubscribeOwner']) },
         { provide: StorageService, useValue: storageServiceFake() },
-        { provide: AuthService, useValue: authServiceStub(null) },
+        { provide: AuthService, useValue: auth },
         { provide: AlertService, useValue: alertServiceSpy() },
       ],
     });
@@ -75,5 +82,21 @@ describe('ShoppinglistPage – Gruppenwechsel und Umbenennung', () => {
     expect(lists()).toEqual([]);
     expect(page.activeGroup.name).toBe('Urlaub');
     expect(headerText()).toContain('Urlaub');
+  });
+
+  it('Logout und erneuter Login mit derselben Gruppe: die gecachte Seite lädt die Listen genau einmal neu (Regression Review F-003)', () => {
+    session.next(aLoggedInUser({ id: 7 }));
+    lists.set([aShoppingList({ name: 'Stand vor dem Logout' })]);
+
+    session.next(null);
+    fixture.detectChanges();
+    expect(load).withContext('nach dem Logout kein Request').not.toHaveBeenCalled();
+
+    session.next(aLoggedInUser({ id: 7 }));
+    // Login: die Seitenleiste macht wieder Gruppe 1 aktiv (gespeicherte aktive Gruppe wurde beim Logout gelöscht)
+    groupService.setActiveGroup(aGroup({ id: 1, name: 'WG' }));
+    fixture.detectChanges();
+
+    expect(load).toHaveBeenCalledOnceWith(jasmine.objectContaining({ id: 1 }), jasmine.any(Function));
   });
 });
