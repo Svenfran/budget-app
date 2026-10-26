@@ -49,14 +49,16 @@ export function storageServiceFake(): StorageService {
 }
 
 /**
- * AuthService mit festem Nutzer (`null` = nicht angemeldet); `logout`, `setUserData`, `getDeviceId`, `login` und
- * `register` sind Spies. `token` wird beim Anlegen gelesen – bei `aLoggedInUser()` also vorher die Uhr stellen.
- * `getDeviceId` liefert standardmäßig sofort 'device-1'.
+ * AuthService mit festem Nutzer (`null` = nicht angemeldet); `logout`, `setUserData`, `getDeviceId`, `login`,
+ * `register` und `autoLogin` sind Spies. `token` und `userIsAuthenticated` werden beim Anlegen gelesen – bei
+ * `aLoggedInUser()` also vorher die Uhr stellen. `getDeviceId` liefert standardmäßig sofort 'device-1',
+ * `autoLogin` standardmäßig `false` (keine gespeicherte Anmeldung).
  */
 export function authServiceStub(user: User | null): jasmine.SpyObj<AuthService> {
   const stub = jasmine.createSpyObj<AuthService>('AuthService',
-    ['logout', 'setUserData', 'getDeviceId', 'login', 'register'],
-    { user: of(user), token: of(user?.token ?? null) });
+    ['logout', 'setUserData', 'getDeviceId', 'login', 'register', 'autoLogin'],
+    { user: of(user), token: of(user?.token ?? null), userIsAuthenticated: of(!!user?.token) });
   stub.getDeviceId.and.returnValue(of('device-1'));
+  stub.autoLogin.and.returnValue(of(false));
   return stub;
 }
