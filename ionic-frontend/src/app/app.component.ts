@@ -269,28 +269,28 @@ export class AppComponent {
   /**
    * Lädt die live-gesyncten Daten still neu (kein Leeren, kein Spinner, Fehler behalten den alten Stand): Gruppen,
    * Übersicht, Einkaufslisten der aktiven Gruppe und – falls geöffnet – die Mitglieder. Carts, Kategorien und
-   * Statistiken nicht (nicht live-gesynct). Antworten für einen inzwischen anderen Nutzer bzw. eine andere aktive
-   * Gruppe werden verworfen.
+   * Statistiken nicht (nicht live-gesynct). Antworten aus einer inzwischen beendeten Anmelde-Sitzung (Logout/Login,
+   * auch desselben Nutzers) bzw. für eine andere aktive Gruppe werden verworfen.
    */
   private resyncLiveData() {
-    const userId = this.connectedUserId;
-    if (userId === null) return;
-    const sameUser = () => this.connectedUserId === userId;
+    if (this.connectedUserId === null) return;
+    const session = this.groupService.session();
+    const sameSession = () => this.groupService.session() === session;
 
-    this.groupService.getGroupsForSideNav({ silent: true, isCurrent: sameUser });
-    this.groupService.getGroupsForOverview({ silent: true, isCurrent: sameUser });
+    this.groupService.getGroupsForSideNav({ silent: true, isCurrent: sameSession });
+    this.groupService.getGroupsForOverview({ silent: true, isCurrent: sameSession });
 
     const group = this.groupService.activeGroup();
     if (!group.flag?.includes(INIT_VALUES.DEFAULT)) {
       this.shoppinglistService.getShoppingListsWithItems(group, undefined, {
         silent: true,
-        isCurrent: () => sameUser() && this.groupService.activeGroup().id === group.id,
+        isCurrent: () => sameSession() && this.groupService.activeGroup().id === group.id,
       });
     }
 
     const members = this.groupMembers();
     if (!members.flag?.includes(INIT_VALUES.DEFAULT)) {
-      this.groupService.getGroupMembers(members.id, { silent: true, isCurrent: sameUser });
+      this.groupService.getGroupMembers(members.id, { silent: true, isCurrent: sameSession });
     }
   }
 

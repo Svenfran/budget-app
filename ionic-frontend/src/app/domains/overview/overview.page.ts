@@ -49,9 +49,11 @@ export class OverviewPage implements OnInit {
     effect(() => {
       this.activeGroup = this.groupService.activeGroup();
     });
-    // Laden: nur bei echtem Gruppenwechsel (activeGroupId) und den übrigen Triggern, nicht bei Umbenennung
+    // Laden: nur bei echtem Gruppenwechsel (activeGroupId), neuer Anmelde-Sitzung (session, auch bei gleicher Gruppe
+    // nach Logout/Login) und den übrigen Triggern, nicht bei Umbenennung
     effect(() => {
       this.groupService.activeGroupId();
+      this.groupService.session();
       this.cartService.cartUpdated();
       this.groupService.memberUpdated();
       const activeGroup = untracked(() => this.groupService.activeGroup());

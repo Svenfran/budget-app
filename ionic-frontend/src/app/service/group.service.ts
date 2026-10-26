@@ -43,8 +43,16 @@ export class GroupService {
   public groupMembersWithOwner = computed(() => [{id: this.groupMembers().ownerId, userName: this.groupMembers().ownerName }, ...this.groupMembers().members]);
   public memberUpdated = signal(0);
   public hasNoGroups = signal<boolean>(false);
+  /**
+   * Anmelde-Sitzung: steigt bei jedem Wechsel der angemeldeten Identität (Login, Logout, Nutzerwechsel), nicht bei
+   * erneuter Emission desselben Nutzers. Monoton, daher sieht auch eine von Ionic abgehängte Tab-View beim
+   * Wiedereinhängen die Änderung – anders als `activeGroupId`, das nach Logout/Login mit derselben Gruppe wieder
+   * denselben Wert hat (DIV-36).
+   */
+  public session = signal(0);
 
   private user: User | undefined;
+  private sessionUserId: number | null = null;
 
   constructor(
     private http: HttpClient,
@@ -58,10 +66,14 @@ export class GroupService {
       if (user) {
         this.user = user;
       } else {
-        // Logout: aktive Gruppe zurücksetzen (den Storage-Eintrag löscht AuthService.logout()). Der nächste Login ist
-        // damit immer ein echter Gruppenwechsel (activeGroupId), auch bei derselben ersten Gruppe, und gecachte
-        // Tab-Pages laden ihre Daten neu (DIV-36).
+        // Logout: aktive Gruppe zurücksetzen (den Storage-Eintrag löscht AuthService.logout()), damit während der
+        // Abmeldung keine Tab-Page für die alte Gruppe lädt (DIV-36).
         this.activeGroup.set(Init.DEFAULT_GROUP);
+      }
+      const userId = user?.id ?? null;
+      if (userId !== this.sessionUserId) {
+        this.sessionUserId = userId;
+        this.session.update(session => session + 1);
       }
     })
   }

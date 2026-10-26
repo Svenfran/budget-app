@@ -99,4 +99,18 @@ describe('ShoppinglistPage – Gruppenwechsel und Umbenennung', () => {
 
     expect(load).toHaveBeenCalledOnceWith(jasmine.objectContaining({ id: 1 }), jasmine.any(Function));
   });
+
+  it('Logout und Login mit derselben Gruppe ohne Change Detection dazwischen (abgehängte, gecachte View): genau ein Neuladen danach (Regression Review 3 F-001)', () => {
+    session.next(aLoggedInUser({ id: 7 }));
+    fixture.detectChanges();
+    load.calls.reset();
+
+    // Ionic hängt die verlassene View ab: zwischen Logout und Login läuft keine Change Detection für sie
+    session.next(null);
+    session.next(aLoggedInUser({ id: 7 }));
+    groupService.setActiveGroup(aGroup({ id: 1, name: 'WG' }));
+    fixture.detectChanges();
+
+    expect(load).toHaveBeenCalledOnceWith(jasmine.objectContaining({ id: 1 }), jasmine.any(Function));
+  });
 });

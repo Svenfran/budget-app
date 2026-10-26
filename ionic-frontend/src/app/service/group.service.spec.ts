@@ -2,7 +2,9 @@ import { HttpTestingController } from '@angular/common/http/testing';
 import { effect } from '@angular/core';
 import { fakeAsync, flushMicrotasks, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
+import { BehaviorSubject } from 'rxjs';
 import { AuthService } from 'src/app/auth/auth.service';
+import { User } from 'src/app/auth/user';
 import { Init } from 'src/app/constants/default-values';
 import { GroupMembers } from 'src/app/groupmembers/model/groupmembers-dto';
 import { GroupOverview } from 'src/app/groupoverview/model/group-overview';
@@ -574,5 +576,49 @@ describe('GroupService', () => {
       expect(alerts.showToast).not.toHaveBeenCalled();
       expect(alerts.showErrorAlert).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('GroupService – Anmelde-Sitzung (DIV-36)', () => {
+  let service: GroupService;
+  let session: BehaviorSubject<User | null>;
+
+  beforeEach(() => {
+    session = new BehaviorSubject<User | null>(null);
+    const auth = authServiceStub(null);
+    (Object.getOwnPropertyDescriptor(auth, 'user')!.get as jasmine.Spy).and.returnValue(session);
+    TestBed.configureTestingModule({
+      providers: [
+        ...provideServiceTesting(),
+        { provide: AlertService, useValue: alertServiceSpy() },
+        { provide: StorageService, useValue: storageServiceFake() },
+        { provide: AuthService, useValue: auth },
+      ],
+    });
+    service = TestBed.inject(GroupService);
+  });
+
+  it('zählt Login, Logout und Nutzerwechsel als neue Sitzung, nicht die erneute Emission desselben Nutzers', () => {
+    const start = service.session();
+
+    session.next(aLoggedInUser({ id: 7 }));
+    expect(service.session()).withContext('Login').toBe(start + 1);
+    session.next(aLoggedInUser({ id: 7 }));
+    expect(service.session()).withContext('derselbe Nutzer erneut (z. B. setUserData)').toBe(start + 1);
+    session.next(null);
+    expect(service.session()).withContext('Logout').toBe(start + 2);
+    session.next(aLoggedInUser({ id: 7 }));
+    expect(service.session()).withContext('derselbe Nutzer wieder angemeldet').toBe(start + 3);
+    session.next(aLoggedInUser({ id: 8 }));
+    expect(service.session()).withContext('Nutzerwechsel').toBe(start + 4);
+  });
+
+  it('setzt beim Logout die aktive Gruppe auf den Platzhalter', () => {
+    session.next(aLoggedInUser({ id: 7 }));
+    service.activeGroup.set(aGroup({ id: 5 }));
+
+    session.next(null);
+
+    expect(service.activeGroup()).toEqual(Init.DEFAULT_GROUP);
   });
 });

@@ -57,9 +57,11 @@ export class CartlistPage implements OnInit {
     effect(() => {
       this.activeGroup = this.groupService.activeGroup();
     });
-    // Laden: nur bei echtem Gruppenwechsel (activeGroupId) und den übrigen Triggern, nicht bei Umbenennung
+    // Laden: nur bei echtem Gruppenwechsel (activeGroupId), neuer Anmelde-Sitzung (session, auch bei gleicher Gruppe
+    // nach Logout/Login) und den übrigen Triggern, nicht bei Umbenennung
     effect(() => {
       this.groupService.activeGroupId();
+      this.groupService.session();
       this.overviewService.overviewRefresh();
       this.categoryService.categoryUpdate();
       this.groupService.memberUpdated();
