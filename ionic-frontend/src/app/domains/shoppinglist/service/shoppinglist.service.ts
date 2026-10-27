@@ -13,7 +13,7 @@ import { Group } from 'src/app/model/group';
 import { LoadOptions } from 'src/app/model/load-options';
 import { AlertService } from 'src/app/service/alert.service';
 import { GroupService } from 'src/app/service/group.service';
-import { addItem, addList, reorderItems, reorderLists } from '../shoppinglist-events';
+import { addItem, addList, deleteAllItems, deleteItem, reorderItems, reorderLists } from '../shoppinglist-events';
 import {
   accept, acceptFromLoad, begin, confirmAdded, emptyScope, finish, OrderScope, UNKNOWN_REVISION
 } from '../shoppinglist-order';
@@ -253,25 +253,7 @@ export class ShoppinglistService {
       .subscribe({
         next: (result) => {
           if (!inContext()) return;
-          const newItem: ShoppingitemDto = {
-            id: result.id!,
-            name: result.name,
-            completed: result.completed
-          }
-
-          this.applyOrDefer(() => {
-            this.shoppingLists.update(lists =>
-              lists.map(list =>
-                list.id === result.shoppingListId
-                  ? {
-                      ...list,
-                      shoppingItems: [...list.shoppingItems, newItem]
-                    }
-                  : list
-              )
-            );
-            this.confirmItemAdded(result.shoppingListId, newItem.id);
-          });
+          this.applyOrDefer(() => this.appendItem(result));
         },
         error: (err) => {
           console.error("Error adding shopping item:", err);
@@ -320,16 +302,7 @@ export class ShoppinglistService {
         .post<void>(this.deleteItemFromShoppingListUrl, deleteShoppingItem)
         .subscribe({
           next: () => {
-            this.applyOrDefer(() => this.shoppingLists.update(lists =>
-              lists.map(list =>
-                list.id === deleteShoppingItem.shoppingListId
-                  ? {
-                    ...list,
-                    shoppingItems: list.shoppingItems.filter(item => item.id !== deleteShoppingItem.id)
-                    }
-                  : list
-              )
-            ));
+            this.applyOrDefer(() => this.shoppingLists.update(lists => deleteItem(lists, deleteShoppingItem)));
           },
           error: (err) => {
             console.error("Error deleting shopping item:", err);
@@ -343,18 +316,7 @@ export class ShoppinglistService {
         .post<void>(this.deleteAllItemsFromShoppingListUrl, deleteShoppingItems)
         .subscribe({
           next: () => {
-            this.applyOrDefer(() => this.shoppingLists.update(lists =>
-              lists.map(list =>
-                list.id === deleteShoppingItems[0].shoppingListId
-                ? {
-                    ...list,
-                    shoppingItems: list.shoppingItems.filter(items =>
-                      !deleteShoppingItems.some(deletedItem => deletedItem.id === items.id)
-                    )
-                  }
-                : list
-              )
-            ));
+            this.applyOrDefer(() => this.shoppingLists.update(lists => deleteAllItems(lists, deleteShoppingItems)));
           },
           error: (err) => {
             console.error("Error deleting completed items:", err);
@@ -410,8 +372,7 @@ export class ShoppinglistService {
   /** WebSocket `add-item`: Eintrag anhängen (idempotent) und in die bestätigte Reihenfolge aufnehmen. */
   onItemAdded(data: AddEditShoppingItemDto): void {
     this.syncContext();
-    this.shoppingLists.update(lists => addItem(lists, data));
-    this.confirmItemAdded(data.shoppingListId, data.id!);
+    this.appendItem(data);
   }
 
   // Reihenfolge: Hilfsmethoden
@@ -476,6 +437,19 @@ export class ShoppinglistService {
     // neue Listen haben serverseitig itemOrderRevision 0; ein vorher eingetroffenes reorder-items bleibt erhalten
     if (!this.itemScopes.has(listId)) this.itemScopes.set(listId, emptyScope(0));
     this.reconcileLists();
+  }
+
+  /**
+   * Neuer Eintrag (REST-Antwort oder `add-item`): anhängen, wenn er in keiner Liste steht, und nur dann in die
+   * bestätigte Reihenfolge seiner Liste aufnehmen. Steht er schon in einer anderen Liste (z. B. inzwischen verschoben,
+   * DIV-2), bleibt deren bestätigte Reihenfolge unberührt.
+   */
+  private appendItem(data: AddEditShoppingItemDto): void {
+    const lists = this.shoppingLists();
+    const updated = addItem(lists, data);
+    if (updated === lists) return;
+    this.shoppingLists.set(updated);
+    this.confirmItemAdded(data.shoppingListId, data.id!);
   }
 
   private confirmItemAdded(listId: number, itemId: number): void {

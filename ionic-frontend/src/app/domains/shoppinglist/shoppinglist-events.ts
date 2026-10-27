@@ -6,7 +6,8 @@ import { ShoppinglistDto } from './model/shoppinglist-dto';
 /*
  * Zustandsänderungen der Einkaufslisten durch WebSocket-Events (DIV-36), als pure Funktionen (lists, data) => lists.
  * Unbekannte Listen/Einträge ändern nichts; `add*` sind idempotent, damit sich ein Event und ein gleichzeitiger
- * Refetch nicht zu Duplikaten addieren.
+ * Refetch nicht zu Duplikaten addieren. Einträge können die Liste wechseln (DIV-2): `addItem` prüft daher über alle
+ * Listen, `deleteItem`/`deleteAllItems` entfernen per ID aus allen Listen (die `shoppingListId` kann veraltet sein).
  */
 
 export function addList(lists: ShoppinglistDto[], data: AddEditShoppinglistDto): ShoppinglistDto[] {
@@ -24,7 +25,7 @@ export function deleteList(lists: ShoppinglistDto[], data: AddEditShoppinglistDt
 
 export function addItem(lists: ShoppinglistDto[], data: AddEditShoppingItemDto): ShoppinglistDto[] {
   const target = lists.find(list => list.id === data.shoppingListId);
-  if (!target || target.shoppingItems.some(item => item.id === data.id)) return lists;
+  if (!target || locateItem(lists, data.id!) !== undefined) return lists;
   const newItem = toItem(data);
   return lists.map(list => list === target ? { ...list, shoppingItems: [...list.shoppingItems, newItem] } : list);
 }
@@ -39,20 +40,39 @@ export function updateItem(lists: ShoppinglistDto[], data: AddEditShoppingItemDt
 }
 
 export function deleteItem(lists: ShoppinglistDto[], data: AddEditShoppingItemDto): ShoppinglistDto[] {
-  return lists.map(list =>
-    list.id === data.shoppingListId
-      ? { ...list, shoppingItems: list.shoppingItems.filter(item => item.id !== data.id) }
-      : list
-  );
+  return removeItems(lists, new Set([data.id!]));
 }
 
 export function deleteAllItems(lists: ShoppinglistDto[], data: AddEditShoppingItemDto[]): ShoppinglistDto[] {
   if (data.length === 0) return lists;
-  const listId = data[0].shoppingListId;
-  const deletedIds = new Set(data.map(item => item.id));
+  return removeItems(lists, new Set(data.map(item => item.id!)));
+}
+
+/** Liste, in der der Eintrag steht, oder `undefined`. */
+export function locateItem(lists: ShoppinglistDto[], itemId: number): number | undefined {
+  return lists.find(list => list.shoppingItems.some(item => item.id === itemId))?.id;
+}
+
+/**
+ * Verschiebt den Eintrag (das lokale Objekt, inkl. Name und Erledigt-Status) ans Ende der Zielliste – nur wenn er in
+ * `sourceListId` steht und die Zielliste existiert; sonst dasselbe Array. Die Position setzt danach `reorderItems`.
+ */
+export function moveItem(lists: ShoppinglistDto[], itemId: number, sourceListId: number, targetListId: number): ShoppinglistDto[] {
+  const source = lists.find(list => list.id === sourceListId);
+  const target = lists.find(list => list.id === targetListId);
+  const item = source?.shoppingItems.find(entry => entry.id === itemId);
+  if (!source || !target || !item || source === target) return lists;
+  return lists.map(list => {
+    if (list === source) return { ...list, shoppingItems: list.shoppingItems.filter(entry => entry !== item) };
+    if (list === target) return { ...list, shoppingItems: [...list.shoppingItems, item] };
+    return list;
+  });
+}
+
+function removeItems(lists: ShoppinglistDto[], ids: Set<number>): ShoppinglistDto[] {
   return lists.map(list =>
-    list.id === listId
-      ? { ...list, shoppingItems: list.shoppingItems.filter(item => !deletedIds.has(item.id)) }
+    list.shoppingItems.some(item => ids.has(item.id))
+      ? { ...list, shoppingItems: list.shoppingItems.filter(item => !ids.has(item.id)) }
       : list
   );
 }

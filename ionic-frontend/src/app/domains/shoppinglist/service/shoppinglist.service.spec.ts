@@ -299,6 +299,48 @@ describe('ShoppinglistService', () => {
       expect(service.getShoppingLists()()).toEqual(existing);
       expect(alerts.showToast).toHaveBeenCalledOnceWith('alerts.shoppinglist.save.error');
     });
+
+    // Einträge können die Liste wechseln (DIV-2): Antworten und Events mit veralteter shoppingListId
+    describe('nach einem Listenwechsel', () => {
+      it('Anlegen: steht der Eintrag bei der POST-Antwort schon in einer anderen Liste, entsteht kein Duplikat', () => {
+        const verschoben = aShoppingItem({ id: 22, name: 'Milch' });
+        const lists = [{ ...existing[0], shoppingItems: [...existing[0].shoppingItems, verschoben] }, existing[1]];
+        service.getShoppingLists().set(lists);
+
+        service.addItemToShoppingList(itemDto({ shoppingListId: 20 }));
+        http.expectOne(`${api}/shopping-list/add-item`).flush(itemDto({ id: 22, shoppingListId: 20 }));
+
+        expect(service.getShoppingLists()()).toBe(lists);
+      });
+
+      it('add-item-Event für einen Eintrag, der schon in einer anderen Liste steht: keine Änderung', () => {
+        const lists = service.getShoppingLists()();
+
+        service.onItemAdded(itemDto({ id: 11, shoppingListId: 20 }));
+
+        expect(service.getShoppingLists()()).toBe(lists);
+      });
+
+      it('Löschen mit veralteter shoppingListId entfernt den Eintrag aus der Liste, in der er steht', () => {
+        service.deleteItemFromShoppingList(itemDto({ id: 21, shoppingListId: 10 }));
+        http.expectOne(`${api}/shopping-list/delete-item`).flush(null);
+
+        expect(service.getShoppingLists()()).toEqual([existing[0], { ...existing[1], shoppingItems: [] }]);
+      });
+
+      it('Erledigte löschen mit veralteter shoppingListId entfernt auch den Eintrag in der anderen Liste', () => {
+        service.deleteAllCompletedShoppingItems([
+          itemDto({ id: 12, completed: true, shoppingListId: 10 }),
+          itemDto({ id: 21, completed: true, shoppingListId: 10 }),
+        ]);
+        http.expectOne(`${api}/shopping-list/delete-all-items`).flush(null);
+
+        expect(service.getShoppingLists()()).toEqual([
+          { ...existing[0], shoppingItems: [existing[0].shoppingItems[0], existing[0].shoppingItems[2]] },
+          { ...existing[1], shoppingItems: [] },
+        ]);
+      });
+    });
   });
 
   // Reihenfolge (DIV-1): Fälle entlang der Übergangstabelle im Plan (Abschnitt 7). Die reinen Übergänge prüft
