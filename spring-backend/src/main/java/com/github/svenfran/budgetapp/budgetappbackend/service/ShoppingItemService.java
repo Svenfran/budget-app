@@ -1,9 +1,12 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto;
+import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingItemOrderDto;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
+import com.github.svenfran.budgetapp.budgetappbackend.helper.SortOrderMerger;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingItemRepository;
+import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingListRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.service.mapper.ShoppingItemDtoMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +23,8 @@ public class ShoppingItemService {
 
     private final ShoppingItemRepository shoppingItemRepository;
 
+    private final ShoppingListRepository shoppingListRepository;
+
     private final DataLoaderService dataLoaderService;
 
     private final GroupRepository groupRepository;
@@ -31,11 +36,13 @@ public class ShoppingItemService {
     private final Clock clock;
 
     public ShoppingItemService(ShoppingItemDtoMapper shoppingItemDtoMapper,
-                               ShoppingItemRepository shoppingItemRepository, DataLoaderService dataLoaderService,
+                               ShoppingItemRepository shoppingItemRepository,
+                               ShoppingListRepository shoppingListRepository, DataLoaderService dataLoaderService,
                                GroupRepository groupRepository, VerificationService verificationService,
                                NotificationService notificationService, Clock clock) {
         this.shoppingItemDtoMapper = shoppingItemDtoMapper;
         this.shoppingItemRepository = shoppingItemRepository;
+        this.shoppingListRepository = shoppingListRepository;
         this.dataLoaderService = dataLoaderService;
         this.groupRepository = groupRepository;
         this.verificationService = verificationService;
@@ -137,6 +144,33 @@ public class ShoppingItemService {
                 group.getId(),
                 completedDtos
         );
+    }
+
+    /**
+     * Speichert die Reihenfolge der Einträge einer Liste (tolerant, siehe SortOrderMerger; Einträge anderer Listen
+     * bleiben unverändert) und erhöht die Revision der Liste. Sperrreihenfolge Gruppe → Liste → Einträge wie beim
+     * Reorder der Listen, damit sich beide Reorders nicht gegenseitig blockieren.
+     */
+    @Transactional
+    public ShoppingItemOrderDto reorderShoppingItems(ShoppingItemOrderDto dto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingListNotFoundException, ShoppingListDoesNotBelongToGroupException {
+        var user = dataLoaderService.getAuthenticatedUser();
+        var group = dataLoaderService.loadGroup(dto.getGroupId());
+        verificationService.verifyIsPartOfGroup(user, group);
+        var shoppingList = dataLoaderService.loadShoppingList(dto.getShoppingListId());
+        verificationService.verifyShoppingListIsPartOfGroup(shoppingList, group);
+        groupRepository.touchShoppingLists(group.getId(), Date.from(clock.instant()));
+        shoppingListRepository.incrementItemOrderRevision(shoppingList.getId());
+
+        var revision = shoppingListRepository.findItemOrderRevision(shoppingList.getId());
+        var ids = SortOrderMerger.merge(dto.getShoppingItemIds(), shoppingItemRepository.findIdsInOrder(shoppingList.getId()));
+        for (int position = 0; position < ids.size(); position++) {
+            shoppingItemRepository.updateSortOrder(ids.get(position), shoppingList.getId(), position);
+        }
+        var order = new ShoppingItemOrderDto(group.getId(), shoppingList.getId(), revision, ids);
+
+        notificationService.sendShoppingItemOrderNotification(group.getId(), order);
+
+        return order;
     }
 
 }

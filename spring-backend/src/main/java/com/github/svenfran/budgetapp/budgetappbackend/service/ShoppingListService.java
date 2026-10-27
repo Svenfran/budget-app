@@ -2,7 +2,9 @@ package com.github.svenfran.budgetapp.budgetappbackend.service;
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingListDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingListDto;
+import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingListOrderDto;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
+import com.github.svenfran.budgetapp.budgetappbackend.helper.SortOrderMerger;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingItemRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingListRepository;
@@ -165,6 +167,31 @@ public class ShoppingListService {
                 dto,
                 "delete"
         );
+    }
+
+    /**
+     * Speichert die Reihenfolge der Listen einer Gruppe (tolerant, siehe SortOrderMerger) und erhöht ihre Revision.
+     * Sperrreihenfolge wie bei allen Änderungen der Einkaufslisten: zuerst die Gruppenzeile (erstes schreibendes
+     * Statement), danach die Listen. Gleichzeitige Reorders und Anlagen einer Gruppe laufen dadurch nacheinander;
+     * Revision und IDs werden erst nach der Sperre gelesen und sind damit der zuletzt committete Stand.
+     */
+    @Transactional
+    public ShoppingListOrderDto reorderShoppingLists(ShoppingListOrderDto dto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
+        var user = dataLoaderService.getAuthenticatedUser();
+        var group = dataLoaderService.loadGroup(dto.getGroupId());
+        verificationService.verifyIsPartOfGroup(user, group);
+        groupRepository.lockForListReorder(group.getId(), Date.from(clock.instant()));
+
+        var revision = groupRepository.findListOrderRevision(group.getId());
+        var ids = SortOrderMerger.merge(dto.getShoppingListIds(), shoppingListRepository.findIdsInOrder(group.getId()));
+        for (int position = 0; position < ids.size(); position++) {
+            shoppingListRepository.updateSortOrder(ids.get(position), group.getId(), position);
+        }
+        var order = new ShoppingListOrderDto(group.getId(), revision, ids);
+
+        notificationService.sendShoppingListOrderNotification(group.getId(), order);
+
+        return order;
     }
 
 }

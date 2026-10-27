@@ -1,6 +1,7 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto
+import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingItemOrderDto
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOrMemberOfGroupException
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.ShoppingItemDoesNotBelongToShoppingListException
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.ShoppingItemNotFoundException
@@ -702,6 +703,122 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
         aktion       | name         | completed
         'abhaken'    | 'Milch'      | true
         'umbenennen' | 'Hafermilch' | false
+    }
+
+    def "Einträge umsortieren speichert die Reihenfolge, erhöht die Revision der Liste und meldet sie mit reorder-items"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        wg.group.lastUpdateShoppingList = START
+        def liste = fixtures.shoppingList(wg, itemOrderRevision: 4L)
+        def x = fixtures.shoppingItem(liste, sortOrder: 0)
+        def y = fixtures.shoppingItem(liste, sortOrder: 1)
+        def z = fixtures.shoppingItem(liste, sortOrder: 2)
+        def groupId = wg.group.id
+        def listId = liste.id
+        def (xId, yId, zId) = [x.id, y.id, z.id]
+        def gesendet = null
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {} (lastUpdateShoppingList {}), Mitglied {} (angemeldet), Liste {} (itemOrderRevision 4) mit Einträgen {} -> gewünscht {}',
+                groupId, START, ben.id, listId, [xId, yId, zId], [zId, xId, yId])
+
+        when:
+        def result = shoppingItemService.reorderShoppingItems(
+                new ShoppingItemOrderDto(groupId: groupId, shoppingListId: listId, shoppingItemIds: [zId, xId, yId]))
+        flushAndClear()
+        def positionen = [xId, yId, zId].collectEntries { [it, shoppingItemRepository.findById(it).get().sortOrder] }
+        def revision = shoppingListRepository.findById(listId).get().itemOrderRevision
+        def gruppe = groupRepository.findById(groupId).get()
+        LOG.info('shoppingItemService.reorderShoppingItems(Liste {}) -> revision {}, IDs {}; Positionen {}, itemOrderRevision {}, listOrderRevision {}, lastUpdateShoppingList {}',
+                listId, result.revision, result.shoppingItemIds, positionen, revision, gruppe.listOrderRevision, gruppe.lastUpdateShoppingList)
+
+        then:
+        1 * notificationService.sendShoppingItemOrderNotification(groupId, _) >> { gesendet = it[1] }
+        0 * notificationService._
+        result.groupId == groupId
+        result.shoppingListId == listId
+        result.revision == 5L
+        result.shoppingItemIds == [zId, xId, yId]
+        gesendet.is(result)
+        positionen == [(zId): 0, (xId): 1, (yId): 2]
+        revision == 5L
+        gruppe.listOrderRevision == 0L
+        gruppe.lastUpdateShoppingList.time == testClock.instant().toEpochMilli()
+    }
+
+    def "Einträge umsortieren übernimmt tolerant: Einträge anderer Listen, unbekannte und doppelte IDs ignoriert, fehlende hinten"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg)
+        def x = fixtures.shoppingItem(liste, sortOrder: 0)
+        def y = fixtures.shoppingItem(liste, sortOrder: 1)
+        def z = fixtures.shoppingItem(liste, sortOrder: 2)
+        def andereListe = fixtures.shoppingList(wg)
+        def w = fixtures.shoppingItem(andereListe, sortOrder: 7)
+        def groupId = wg.group.id
+        def listId = liste.id
+        def andereListId = andereListe.id
+        def (xId, yId, zId, wId) = [x.id, y.id, z.id, w.id]
+        def gewuenscht = [wId, zId, UNBEKANNT, zId, xId]
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Mitglied {} (angemeldet), Liste {} mit Einträgen {}; Liste {} mit Eintrag {} (Position 7); gewünscht {}',
+                groupId, ben.id, listId, [xId, yId, zId], andereListId, wId, gewuenscht)
+
+        when:
+        def result = shoppingItemService.reorderShoppingItems(
+                new ShoppingItemOrderDto(groupId: groupId, shoppingListId: listId, shoppingItemIds: gewuenscht))
+        flushAndClear()
+        def wPosition = shoppingItemRepository.findById(wId).get().sortOrder
+        def andereRevision = shoppingListRepository.findById(andereListId).get().itemOrderRevision
+        LOG.info('shoppingItemService.reorderShoppingItems(Liste {}) -> IDs {}; Eintrag {} Position {}, Revision der Liste {}: {}',
+                listId, result.shoppingItemIds, wId, wPosition, andereListId, andereRevision)
+
+        then:
+        1 * notificationService.sendShoppingItemOrderNotification(groupId, _)
+        result.shoppingItemIds == [zId, xId, yId]
+        wPosition == 7
+        andereRevision == 0L
+    }
+
+    def "Einträge umsortieren mit #fall wird abgewiesen, Reihenfolge und Revision bleiben"() {
+        given:
+        def ben = fixtures.user()
+        def fremder = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        wg.group.lastUpdateShoppingList = START
+        def andereGruppe = fixtures.group()
+        def liste = fallFremdeListe ? fixtures.shoppingList(andereGruppe) : fixtures.shoppingList(wg)
+        def x = fixtures.shoppingItem(liste, sortOrder: 0)
+        def y = fixtures.shoppingItem(liste, sortOrder: 1)
+        def groupId = wg.group.id
+        def listId = liste.id
+        def (xId, yId) = [x.id, y.id]
+        def angemeldet = fallFremdeListe ? ben : fremder
+        flushAndClear()
+        loginAs(angemeldet)
+        LOG.info('Szenario: Gruppe {} (Mitglied {}), Liste {} mit Einträgen {} in Gruppe {}; angemeldet {} ({})',
+                groupId, ben.id, listId, [xId, yId], fallFremdeListe ? andereGruppe.group.id : groupId, angemeldet.id, fall)
+
+        when:
+        LOG.info('shoppingItemService.reorderShoppingItems(Gruppe {}, Liste {}), erwartet {}', groupId, listId, erwartet.simpleName)
+        shoppingItemService.reorderShoppingItems(
+                new ShoppingItemOrderDto(groupId: groupId, shoppingListId: listId, shoppingItemIds: [yId, xId]))
+
+        then:
+        thrown(erwartet)
+        0 * notificationService._
+        flushAndClear()
+        shoppingListRepository.findById(listId).get().itemOrderRevision == 0L
+        [xId, yId].collect { shoppingItemRepository.findById(it).get().sortOrder } == [0, 1]
+        lastUpdateShoppingList(groupId).time == START.time
+
+        where:
+        fall                          | fallFremdeListe || erwartet
+        'Liste einer fremden Gruppe'  | true            || ShoppingListDoesNotBelongToGroupException
+        'Nicht-Mitglied'              | false           || NotOwnerOrMemberOfGroupException
     }
 
     /** IDs der Einträge einer Liste, aufsteigend (lädt die Liste neu; vorher flushAndClear()). */

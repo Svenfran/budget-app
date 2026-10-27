@@ -219,6 +219,69 @@ class ShoppingItemControllerApiSpec extends IntegrationSpec implements ApiReques
         0 * notificationService._
     }
 
+    def "Einträge umsortieren: 200 mit groupId, shoppingListId, revision und normalisierter Reihenfolge, GET danach liefert sie"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg)
+        def x = fixtures.shoppingItem(liste, sortOrder: 0)
+        def y = fixtures.shoppingItem(liste, sortOrder: 1)
+        def z = fixtures.shoppingItem(liste, sortOrder: 2)
+        def (groupId, listId, xId, yId, zId) = [wg.group.id, liste.id, x.id, y.id, z.id]
+        flushAndClear()
+        LOG.info('Szenario: Gruppe {}, Mitglied {}, Liste {} mit Einträgen {}; gewünscht {} (Y fehlt)',
+                groupId, ben.id, listId, [xId, yId, zId], [zId, xId])
+
+        when:
+        def response = send(put('/api/groups/shopping-list/reorder-items'), user: ben,
+                body: [groupId: groupId, shoppingListId: listId, shoppingItemIds: [zId, xId]])
+        def body = json(response)
+        flushAndClear()
+        def liste0 = json(send(get('/api/groups/shopping-lists-with-items/{groupId}', groupId), user: ben))[0]
+        LOG.info('Antwort: {}; GET danach: Einträge {}, itemOrderRevision {}', body, liste0.shoppingItems*.id, liste0.itemOrderRevision)
+
+        then:
+        response.status == 200
+        body.keySet() == ['groupId', 'shoppingListId', 'revision', 'shoppingItemIds'] as Set
+        body.groupId == groupId
+        body.shoppingListId == listId
+        body.revision == 1
+        body.shoppingItemIds == [zId, xId, yId]
+        liste0.shoppingItems*.id == [zId, xId, yId]
+        liste0.itemOrderRevision == 1
+        1 * notificationService.sendShoppingItemOrderNotification(groupId, _)
+    }
+
+    def "Einträge umsortieren #fall: #status"() {
+        given:
+        def ben = fixtures.user()
+        def fremder = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def andereGruppe = fixtures.group()
+        def liste = listeDerAnderenGruppe ? fixtures.shoppingList(andereGruppe) : fixtures.shoppingList(wg)
+        def eintrag = fixtures.shoppingItem(liste)
+        def groupId = wg.group.id
+        def angemeldet = [mitglied: ben, fremder: fremder][wer]
+        LOG.info('Szenario: Gruppe {} (Mitglied {}, Nicht-Mitglied {}); Liste {} mit Eintrag {} gehört Gruppe {}; Request {}',
+                groupId, ben.id, fremder.id, liste.id, eintrag.id, listeDerAnderenGruppe ? andereGruppe.group.id : groupId, fall)
+
+        when:
+        def request = put('/api/groups/shopping-list/reorder-items')
+        def requestBody = [groupId: groupId, shoppingListId: liste.id, shoppingItemIds: [eintrag.id]]
+        def response = angemeldet ? send(request, user: angemeldet, body: requestBody) : send(request, body: requestBody)
+        LOG.info('Antwort: {}', response.contentAsString)
+
+        then:
+        response.status == status
+        0 * notificationService._
+
+        where:
+        fall                         | wer        | listeDerAnderenGruppe || status
+        'ohne Anmeldung'             | null       | false                 || 403
+        'als Nicht-Mitglied'         | 'fremder'  | false                 || 403
+        'mit Liste fremder Gruppe'   | 'mitglied' | true                  || 404
+    }
+
     private MockHttpServletResponse deleteAllItems(User angemeldet, List<Map> items) {
         send(post('/api/groups/shopping-list/delete-all-items'), user: angemeldet, body: items)
     }

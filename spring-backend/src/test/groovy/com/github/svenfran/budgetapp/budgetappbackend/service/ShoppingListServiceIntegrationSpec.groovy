@@ -1,6 +1,7 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingListDto
+import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingListOrderDto
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.GroupNotFoundException
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOrMemberOfGroupException
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.ShoppingListDoesNotBelongToGroupException
@@ -524,9 +525,7 @@ class ShoppingListServiceIntegrationSpec extends IntegrationSpec {
         def groupId = wg.group.id
         def ids = [erste: erste.id, zweite: zweite.id, dritte: dritte.id, x: x.id, y: y.id, z: z.id]
         flushAndClear()
-        // listOrderRevision ist updatable = false und lässt sich nur per Update-Query setzen
-        entityManager.createQuery('update Group g set g.listOrderRevision = 5 where g.id = :groupId')
-                .setParameter('groupId', groupId).executeUpdate()
+        setListOrderRevision(groupId, 5L)
         loginAs(ben)
         LOG.info('Szenario: Gruppe {} (listOrderRevision 5), Mitglied {} (angemeldet); Listen {} (Position 1, itemOrderRevision 2), {} (0), {} (1); Einträge von {}: {} (2), {} (0), {} (0)',
                 groupId, ben.id, ids.erste, ids.zweite, ids.dritte, ids.erste, ids.x, ids.y, ids.z)
@@ -541,6 +540,105 @@ class ShoppingListServiceIntegrationSpec extends IntegrationSpec {
         listen[1].shoppingItems*.id == [ids.y, ids.z, ids.x]
         listen*.listOrderRevision == [5L, 5L, 5L]
         listen*.itemOrderRevision == [0L, 2L, 0L]
+    }
+
+    def "Listen umsortieren speichert die Reihenfolge, erhöht die Revision und meldet sie mit reorder-lists"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        wg.group.lastUpdateShoppingList = START
+        def a = fixtures.shoppingList(wg, sortOrder: 0)
+        def b = fixtures.shoppingList(wg, sortOrder: 1)
+        def c = fixtures.shoppingList(wg, sortOrder: 2)
+        def groupId = wg.group.id
+        def (aId, bId, cId) = [a.id, b.id, c.id]
+        def gesendet = null
+        flushAndClear()
+        setListOrderRevision(groupId, 2L)
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {} (listOrderRevision 2, lastUpdateShoppingList {}), Mitglied {} (angemeldet), Listen {} -> gewünscht {}',
+                groupId, START, ben.id, [aId, bId, cId], [cId, aId, bId])
+
+        when:
+        def result = shoppingListService.reorderShoppingLists(new ShoppingListOrderDto(groupId: groupId, shoppingListIds: [cId, aId, bId]))
+        flushAndClear()
+        def listen = shoppingListRepository.findAllByGroup_IdOrderBySortOrderAscIdAsc(groupId)
+        def gruppe = groupRepository.findById(groupId).get()
+        LOG.info('shoppingListService.reorderShoppingLists(Gruppe {}) -> revision {}, IDs {}; gespeichert {} mit Positionen {}, listOrderRevision {}, lastUpdateShoppingList {}',
+                groupId, result.revision, result.shoppingListIds, listen*.id, listen*.sortOrder, gruppe.listOrderRevision, gruppe.lastUpdateShoppingList)
+
+        then:
+        1 * notificationService.sendShoppingListOrderNotification(groupId, _) >> { gesendet = it[1] }
+        0 * notificationService._
+        result.groupId == groupId
+        result.revision == 3L
+        result.shoppingListIds == [cId, aId, bId]
+        gesendet.is(result)
+        listen*.id == [cId, aId, bId]
+        listen*.sortOrder == [0, 1, 2]
+        gruppe.listOrderRevision == 3L
+        gruppe.lastUpdateShoppingList.time == testClock.instant().toEpochMilli()
+    }
+
+    def "Listen umsortieren übernimmt tolerant: fremde, unbekannte und doppelte IDs ignoriert, fehlende hinten, andere Gruppen unverändert"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def a = fixtures.shoppingList(wg, sortOrder: 0)
+        def b = fixtures.shoppingList(wg, sortOrder: 1)
+        def c = fixtures.shoppingList(wg, sortOrder: 2)
+        def andereGruppe = fixtures.group()
+        def fremd = fixtures.shoppingList(andereGruppe, sortOrder: 7)
+        def groupId = wg.group.id
+        def andereGroupId = andereGruppe.group.id
+        def (aId, bId, cId, fremdId) = [a.id, b.id, c.id, fremd.id]
+        def gewuenscht = [fremdId, cId, UNBEKANNT, cId, aId]
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Mitglied {} (angemeldet), Listen {}; Liste {} (Position 7) gehört Gruppe {}; gewünscht {}',
+                groupId, ben.id, [aId, bId, cId], fremdId, andereGroupId, gewuenscht)
+
+        when:
+        def result = shoppingListService.reorderShoppingLists(new ShoppingListOrderDto(groupId: groupId, shoppingListIds: gewuenscht))
+        flushAndClear()
+        def listen = shoppingListRepository.findAllByGroup_IdOrderBySortOrderAscIdAsc(groupId)*.id
+        def fremdPosition = shoppingListRepository.findById(fremdId).get().sortOrder
+        def andereRevision = groupRepository.findById(andereGroupId).get().listOrderRevision
+        LOG.info('shoppingListService.reorderShoppingLists(Gruppe {}) -> IDs {}; gespeichert {}; fremde Liste Position {}, Revision der Gruppe {}: {}',
+                groupId, result.shoppingListIds, listen, fremdPosition, andereGroupId, andereRevision)
+
+        then:
+        1 * notificationService.sendShoppingListOrderNotification(groupId, _)
+        result.shoppingListIds == [cId, aId, bId]
+        listen == [cId, aId, bId]
+        fremdPosition == 7
+        andereRevision == 0L
+    }
+
+    def "Nicht-Mitglied darf die Listen nicht umsortieren, Reihenfolge und Revision bleiben"() {
+        given:
+        def fremder = fixtures.user()
+        def wg = fixtures.group()
+        wg.group.lastUpdateShoppingList = START
+        def a = fixtures.shoppingList(wg, sortOrder: 0)
+        def b = fixtures.shoppingList(wg, sortOrder: 1)
+        def groupId = wg.group.id
+        def (aId, bId) = [a.id, b.id]
+        flushAndClear()
+        loginAs(fremder)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Listen {}; Nicht-Mitglied {} (angemeldet)', groupId, wg.owner.id, [aId, bId], fremder.id)
+
+        when:
+        LOG.info('shoppingListService.reorderShoppingLists(Gruppe {}, {}), erwartet NotOwnerOrMemberOfGroupException', groupId, [bId, aId])
+        shoppingListService.reorderShoppingLists(new ShoppingListOrderDto(groupId: groupId, shoppingListIds: [bId, aId]))
+
+        then:
+        thrown(NotOwnerOrMemberOfGroupException)
+        0 * notificationService._
+        flushAndClear()
+        shoppingListRepository.findAllByGroup_IdOrderBySortOrderAscIdAsc(groupId)*.id == [aId, bId]
+        groupRepository.findById(groupId).get().listOrderRevision == 0L
+        lastUpdateShoppingList(groupId).time == START.time
     }
 
     private void ausfuehren(String aktion, Long groupId, Long listId) {
@@ -561,5 +659,11 @@ class ShoppingListServiceIntegrationSpec extends IntegrationSpec {
 
     private Date lastUpdateShoppingList(Long groupId) {
         groupRepository.findById(groupId).get().lastUpdateShoppingList
+    }
+
+    /** listOrderRevision ist updatable = false und lässt sich nur per Update-Query setzen (nach flushAndClear()). */
+    private void setListOrderRevision(Long groupId, long revision) {
+        entityManager.createQuery('update Group g set g.listOrderRevision = :revision where g.id = :groupId')
+                .setParameter('revision', revision).setParameter('groupId', groupId).executeUpdate()
     }
 }

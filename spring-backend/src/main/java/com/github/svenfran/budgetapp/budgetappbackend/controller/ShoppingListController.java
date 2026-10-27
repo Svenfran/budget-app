@@ -2,6 +2,7 @@ package com.github.svenfran.budgetapp.budgetappbackend.controller;
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingListDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingListDto;
+import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingListOrderDto;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.GroupNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOrMemberOfGroupException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException;
@@ -43,6 +44,12 @@ public class ShoppingListController {
     public ResponseEntity<AddEditShoppingListDto> updateShoppingList(@RequestBody AddEditShoppingListDto addEditShoppingListDto) throws Exception {
         AddEditShoppingListDto updatedShoppingList = shoppingListService.updateShoppingList(addEditShoppingListDto);
         return new ResponseEntity<>(updatedShoppingList, HttpStatus.CREATED);
+    }
+
+    @PutMapping("/groups/shopping-list/reorder")
+    public ResponseEntity<ShoppingListOrderDto> reorderShoppingLists(@RequestBody ShoppingListOrderDto shoppingListOrderDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
+        ShoppingListOrderDto order = shoppingListService.reorderShoppingLists(shoppingListOrderDto);
+        return new ResponseEntity<>(order, HttpStatus.OK);
     }
 
     @PostMapping("/groups/shopping-list/delete")

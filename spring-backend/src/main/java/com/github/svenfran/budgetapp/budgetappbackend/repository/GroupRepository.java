@@ -29,6 +29,14 @@ public interface GroupRepository extends CrudRepository<Group, Long> {
     @Query("update Group g set g.lastUpdateShoppingList = :now where g.id = :groupId")
     void touchShoppingLists(@Param("groupId") Long groupId, @Param("now") Date now);
 
+    // Erstes schreibendes Statement des Listen-Reorders: sperrt die Gruppenzeile wie touchShoppingLists
+    @Modifying
+    @Query("""
+            update Group g set g.listOrderRevision = g.listOrderRevision + 1, g.lastUpdateShoppingList = :now
+            where g.id = :groupId
+            """)
+    void lockForListReorder(@Param("groupId") Long groupId, @Param("now") Date now);
+
     @Query("select g.listOrderRevision from Group g where g.id = :groupId")
     long findListOrderRevision(@Param("groupId") Long groupId);
 }
