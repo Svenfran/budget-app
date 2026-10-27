@@ -286,7 +286,7 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
       groupId: this.activeGroup.id,
       shoppingListId: list.id
     };
-    this.shoppinglistService.updateItemOfShoppingList(updateShoppingItem);
+    this.shoppinglistService.updateItemOfShoppingList(updateShoppingItem, false);
   }
 
   deleteListOfItems(list: ShoppinglistDto) {

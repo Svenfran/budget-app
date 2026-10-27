@@ -239,6 +239,9 @@
             },
             "reorder": {
                 "error": "No se pudo guardar el orden."
+            },
+            "save": {
+                "error": "No se pudo guardar el cambio."
             }
         },
         "user_profile": {

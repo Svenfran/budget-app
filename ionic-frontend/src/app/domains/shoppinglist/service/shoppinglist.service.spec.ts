@@ -65,7 +65,7 @@ describe('ShoppinglistService', () => {
   afterEach(() => http.verify());
 
   describe('Laden', () => {
-    const url = `${api}/shopping-lists-with-items/7?requestTimeStamp=${new Date('1900-01-01').getTime()}`;
+    const url = `${api}/shopping-lists-with-items/7`;
 
     it('lädt die Listen der Gruppe mit allen Einträgen', () => {
       const loaded = [aShoppingList({ shoppingItems: [aShoppingItem()] })];
@@ -115,7 +115,7 @@ describe('ShoppinglistService', () => {
       service.getShoppingListsWithItems(aGroup({ id: 7 }), undefined, { silent: true, isCurrent: () => activeGroupId === 7 });
       activeGroupId = 8;
       service.getShoppingListsWithItems(aGroup({ id: 8 }));
-      http.expectOne(`${api}/shopping-lists-with-items/8?requestTimeStamp=${new Date('1900-01-01').getTime()}`).flush(listenVonB);
+      http.expectOne(`${api}/shopping-lists-with-items/8`).flush(listenVonB);
       http.expectOne(url).flush([aShoppingList({ name: 'Listen von A' })]);
 
       expect(service.getShoppingLists()()).toEqual(listenVonB);
@@ -145,11 +145,12 @@ describe('ShoppinglistService', () => {
       expect(service.getShoppingLists()()).toEqual([...existing, { id: 30, name: 'Baumarkt', shoppingItems: [] }]);
     });
 
-    it('lässt die Listen unverändert, wenn das Anlegen fehlschlägt', () => {
+    it('lässt die Listen unverändert und zeigt einen Toast, wenn das Anlegen fehlschlägt', () => {
       service.addShoppingList(listDto());
       http.expectOne(`${api}/shopping-list/add`).flush(forbiddenBody, forbidden);
 
       expect(service.getShoppingLists()()).toEqual(existing);
+      expect(alerts.showToast).toHaveBeenCalledOnceWith('alerts.shoppinglist.save.error');
     });
 
     it('benennt die Liste nach dem Speichern um und behält ihre Einträge', () => {
@@ -164,11 +165,12 @@ describe('ShoppinglistService', () => {
       expect(service.getShoppingLists()()).toEqual([{ ...existing[0], name: 'Wochenmarkt' }, existing[1]]);
     });
 
-    it('lässt die Listen unverändert, wenn das Umbenennen fehlschlägt', () => {
+    it('lässt die Listen unverändert und zeigt einen Toast, wenn das Umbenennen fehlschlägt', () => {
       service.updateShoppingList(listDto({ id: 10, name: 'Wochenmarkt' }));
       http.expectOne(`${api}/shopping-list/update`).flush(forbiddenBody, forbidden);
 
       expect(service.getShoppingLists()()).toEqual(existing);
+      expect(alerts.showToast).toHaveBeenCalledOnceWith('alerts.shoppinglist.save.error');
     });
 
     it('entfernt die Liste nach dem Löschen', () => {
@@ -183,15 +185,23 @@ describe('ShoppinglistService', () => {
       expect(service.getShoppingLists()()).toEqual([existing[1]]);
     });
 
-    it('lässt die Listen unverändert, wenn das Löschen fehlschlägt', () => {
+    it('lässt die Listen unverändert und zeigt einen Toast, wenn das Löschen fehlschlägt', () => {
       service.deleteShoppingList(listDto({ id: 10, name: 'Supermarkt' }));
       http.expectOne(`${api}/shopping-list/delete`).flush(forbiddenBody, forbidden);
 
       expect(service.getShoppingLists()()).toEqual(existing);
+      expect(alerts.showToast).toHaveBeenCalledOnceWith('alerts.shoppinglist.save.error');
     });
   });
 
   describe('Einträge', () => {
+    it('Abhaken (notifyOnError = false) scheitert: kein Toast', () => {
+      service.updateItemOfShoppingList(itemDto({ id: 11, completed: true, shoppingListId: 10 }), false);
+      http.expectOne(`${api}/shopping-list/update-item`).flush(forbiddenBody, forbidden);
+
+      expect(alerts.showToast).not.toHaveBeenCalled();
+    });
+
     it('hängt einen neuen Eintrag nach dem Speichern nur an die Zielliste an', () => {
       const dto = itemDto({ shoppingListId: 20 });
 
@@ -207,11 +217,12 @@ describe('ShoppinglistService', () => {
       ]);
     });
 
-    it('lässt die Listen unverändert, wenn das Anlegen eines Eintrags fehlschlägt', () => {
+    it('lässt die Listen unverändert und zeigt einen Toast, wenn das Anlegen eines Eintrags fehlschlägt', () => {
       service.addItemToShoppingList(itemDto({ shoppingListId: 20 }));
       http.expectOne(`${api}/shopping-list/add-item`).flush(forbiddenBody, forbidden);
 
       expect(service.getShoppingLists()()).toEqual(existing);
+      expect(alerts.showToast).toHaveBeenCalledOnceWith('alerts.shoppinglist.save.error');
     });
 
     it('ersetzt den Eintrag nach dem Speichern in der Liste, die ihn enthält', () => {
@@ -231,11 +242,12 @@ describe('ShoppinglistService', () => {
       ]);
     });
 
-    it('lässt die Listen unverändert, wenn das Ändern eines Eintrags fehlschlägt', () => {
+    it('lässt die Listen unverändert und zeigt einen Toast, wenn das Ändern eines Eintrags fehlschlägt', () => {
       service.updateItemOfShoppingList(itemDto({ id: 11, name: 'Hafermilch', shoppingListId: 10 }));
       http.expectOne(`${api}/shopping-list/update-item`).flush(forbiddenBody, forbidden);
 
       expect(service.getShoppingLists()()).toEqual(existing);
+      expect(alerts.showToast).toHaveBeenCalledOnceWith('alerts.shoppinglist.save.error');
     });
 
     it('entfernt den Eintrag nach dem Löschen aus seiner Liste', () => {
@@ -253,11 +265,12 @@ describe('ShoppinglistService', () => {
       ]);
     });
 
-    it('lässt die Listen unverändert, wenn das Löschen eines Eintrags fehlschlägt', () => {
+    it('lässt die Listen unverändert und zeigt einen Toast, wenn das Löschen eines Eintrags fehlschlägt', () => {
       service.deleteItemFromShoppingList(itemDto({ id: 11, shoppingListId: 10 }));
       http.expectOne(`${api}/shopping-list/delete-item`).flush(forbiddenBody, forbidden);
 
       expect(service.getShoppingLists()()).toEqual(existing);
+      expect(alerts.showToast).toHaveBeenCalledOnceWith('alerts.shoppinglist.save.error');
     });
 
     it('entfernt nach dem Löschen der erledigten Einträge nur die gesendeten Einträge der Liste', () => {
@@ -279,11 +292,12 @@ describe('ShoppinglistService', () => {
       ]);
     });
 
-    it('lässt die Listen unverändert, wenn das Löschen der erledigten Einträge fehlschlägt', () => {
+    it('lässt die Listen unverändert und zeigt einen Toast, wenn das Löschen der erledigten Einträge fehlschlägt', () => {
       service.deleteAllCompletedShoppingItems([itemDto({ id: 12, completed: true, shoppingListId: 10 })]);
       http.expectOne(`${api}/shopping-list/delete-all-items`).flush(forbiddenBody, forbidden);
 
       expect(service.getShoppingLists()()).toEqual(existing);
+      expect(alerts.showToast).toHaveBeenCalledOnceWith('alerts.shoppinglist.save.error');
     });
   });
 
@@ -292,7 +306,7 @@ describe('ShoppinglistService', () => {
   describe('Reihenfolge', () => {
     const group = aGroup({ id: 7, name: 'WG' });
     const andereGruppe = aGroup({ id: 8, name: 'Urlaub' });
-    const loadUrl = `${api}/shopping-lists-with-items/7?requestTimeStamp=${new Date('1900-01-01').getTime()}`;
+    const loadUrl = `${api}/shopping-lists-with-items/7`;
     const listReorderUrl = `${api}/shopping-list/reorder`;
     const itemReorderUrl = `${api}/shopping-list/reorder-items`;
     const serverError = { status: 500, statusText: 'Server Error' };

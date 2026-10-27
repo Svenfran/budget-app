@@ -30,7 +30,6 @@ export class ShoppinglistService {
   private deleteShoppingListUrl = `${this.apiBaseUrl}/api/groups/shopping-list/delete`;
   private updateShoppingListUrl = `${this.apiBaseUrl}/api/groups/shopping-list/update`;
   private reorderShoppingListsUrl = `${this.apiBaseUrl}/api/groups/shopping-list/reorder`;
-  private INITIAL_REQUEST_TIMESTAMP: number = new Date('1900-01-01').getTime();
 
   private addItemToShoppingListUrl = `${this.apiBaseUrl}/api/groups/shopping-list/add-item`;
   private updateItemOfShoppingListUrl = `${this.apiBaseUrl}/api/groups/shopping-list/update-item`;
@@ -82,9 +81,8 @@ export class ShoppinglistService {
     };
 
     const inContext = this.captureContext();
-    const requestParam = `?requestTimeStamp=${this.INITIAL_REQUEST_TIMESTAMP}`;
     this.http
-      .get<ShoppinglistDto[]>(`${this.shoppingListsWithItemsUrl}/${group.id}${requestParam}`)
+      .get<ShoppinglistDto[]>(`${this.shoppingListsWithItemsUrl}/${group.id}`)
       .subscribe({
         next: (result) => {
           // überholt (z. B. inzwischen andere Gruppe aktiv): die Listen der aktuellen Gruppe nicht überschreiben
@@ -124,6 +122,7 @@ export class ShoppinglistService {
         },
         error: (err) => {
           console.error('Error adding shopping list:', err);
+          this.alertService.showToast(this.translate.instant('alerts.shoppinglist.save.error'));
         },
     });
   }
@@ -139,6 +138,7 @@ export class ShoppinglistService {
         },
         error: (err) => {
           console.error("Error updating shopping list:", err);
+          this.alertService.showToast(this.translate.instant('alerts.shoppinglist.save.error'));
         }
       })
   }
@@ -155,6 +155,7 @@ export class ShoppinglistService {
         },
         error: (err) => {
           console.error('Error deleting shopping list:', err);
+          this.alertService.showToast(this.translate.instant('alerts.shoppinglist.save.error'));
         }
       });
   }
@@ -238,11 +239,16 @@ export class ShoppinglistService {
         },
         error: (err) => {
           console.error("Error adding shopping item:", err);
+          this.alertService.showToast(this.translate.instant('alerts.shoppinglist.save.error'));
         }
       })
     }
 
-    updateItemOfShoppingList(updateShoppingItem: AddEditShoppingItemDto): void {
+    /**
+     * `notifyOnError = false` beim Abhaken: kein Toast, damit Abhaken ohne Netz (Offline-Story) nicht bei jedem
+     * Antippen einen Fehler meldet.
+     */
+    updateItemOfShoppingList(updateShoppingItem: AddEditShoppingItemDto, notifyOnError = true): void {
       this.http
         .put<AddEditShoppingItemDto>(this.updateItemOfShoppingListUrl, updateShoppingItem)
         .subscribe({
@@ -268,6 +274,7 @@ export class ShoppinglistService {
           },
           error: (err) => {
             console.error("Error updating shopping item:", err);
+            if (notifyOnError) this.alertService.showToast(this.translate.instant('alerts.shoppinglist.save.error'));
           }
         })
     }
@@ -290,6 +297,7 @@ export class ShoppinglistService {
           },
           error: (err) => {
             console.error("Error deleting shopping item:", err);
+            this.alertService.showToast(this.translate.instant('alerts.shoppinglist.save.error'));
           }
         })
     }
@@ -315,6 +323,7 @@ export class ShoppinglistService {
           },
           error: (err) => {
             console.error("Error deleting completed items:", err);
+            this.alertService.showToast(this.translate.instant('alerts.shoppinglist.save.error'));
           }
         })
     }

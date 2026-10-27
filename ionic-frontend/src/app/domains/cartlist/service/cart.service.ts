@@ -70,8 +70,6 @@ export class CartService {
   }
 
   addCart(cart: Cart): void {
-    const currentCartList = this.cartList();
-    const currentInitCartList = this.initCartList();
     this.http
       .post<Cart>(this.addCartUrl, cart)
       .subscribe({
@@ -105,8 +103,6 @@ export class CartService {
         },
         error: (err) => {
           console.error('Error adding cart:', err);
-          this.cartList.set(currentCartList);
-          this.initCartList.set(currentInitCartList);
 
           if (err.error.includes('not within membership period')) {
             const header = this.translate.instant("alerts.cart.invalid_membership.header");
@@ -118,8 +114,6 @@ export class CartService {
   }
 
   updateCart(cart: Cart): void {
-    const currentCartList = this.cartList();
-    const currentInitCartList = this.initCartList();
     this.http
       .put<Cart>(this.updateCartUrl, cart)
       .subscribe({
@@ -195,8 +189,6 @@ export class CartService {
         },
         error: (err) => {
           console.error('Error updating cart:', err);
-          this.cartList.set(currentCartList);
-          this.initCartList.set(currentInitCartList);
 
           if (err.error.includes('not within membership period')) {
             const header = this.translate.instant("alerts.cart.invalid_membership.header");
@@ -208,8 +200,6 @@ export class CartService {
   }
 
   deleteCart(cartId: number): void {
-    const currentCartList = this.cartList();
-    const currentInitCartList = this.initCartList();
     this.http
       .delete<void>(`${this.deleteCartUrl}/${cartId}`)
       .subscribe({
@@ -226,15 +216,11 @@ export class CartService {
         },
         error: (err) => {
           console.error('Error deleting cart:', err);
-          this.cartList.set(currentCartList);
-          this.initCartList.set(currentInitCartList);
         }
       })
   }
 
   addSettlementPayment(payment: SettlementPaymentDto): void {
-    const currentCartList = this.cartList();
-    const currentInitCartList = this.initCartList();
     this.http
       .post<Cart[]>(this.settlementPaymentUrl, payment)
       .subscribe({
@@ -253,8 +239,6 @@ export class CartService {
         },
         error: (err) => {
           console.error("Error adding settlement payment:", err);
-          this.cartList.set(currentCartList);
-          this.initCartList.set(currentInitCartList);
 
           if (err.error.includes('not within membership period')) {
             this.alertService.showErrorAlert(

@@ -422,6 +422,19 @@ describe('GroupService', () => {
       expect(service.groupOverviewList()).toEqual(overview);
       expect(service.activeGroup()).toBe(wg);
     });
+
+    it('ein Fehler verwirft keine zwischenzeitliche Änderung (z. B. Live-Event), Regression DIV-1', () => {
+      const { wg, urlaub } = givenGroups();
+
+      service.updateGroup({ ...wg, name: 'Wohngemeinschaft' });
+      // während der Request läuft, benennt ein anderes Mitglied „Urlaub“ um (update-group-Event)
+      service.groupsSideNav.update(groups => groups.map(g => g.id === urlaub.id ? { ...g, name: 'Sommerurlaub' } : g));
+      service.groupOverviewList.update(groups => groups.map(g => g.id === urlaub.id ? { ...g, name: 'Sommerurlaub' } : g));
+      http.expectOne(`${api}/update`).flush(notOwnerOfGroup, forbidden);
+
+      expect(service.groupsSideNav()[1].name).toBe('Sommerurlaub');
+      expect(service.groupOverviewList()[1].name).toBe('Sommerurlaub');
+    });
   });
 
   describe('deleteGroup', () => {

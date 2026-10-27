@@ -239,6 +239,9 @@
             },
             "reorder": {
                 "error": "Die Reihenfolge konnte nicht gespeichert werden."
+            },
+            "save": {
+                "error": "Die Änderung konnte nicht gespeichert werden."
             }
         },
         "user_profile": {

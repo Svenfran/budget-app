@@ -130,7 +130,7 @@ describe('ShoppinglistPage – Drag & Drop', () => {
   let handlers: Record<string, (data: unknown) => void>;
   const api = `${environment.apiBaseUrl}/api/groups`;
   const loadUrl = (groupId: number) =>
-    `${api}/shopping-lists-with-items/${groupId}?requestTimeStamp=${new Date('1900-01-01').getTime()}`;
+    `${api}/shopping-lists-with-items/${groupId}`;
   const wg = aGroup({ id: 1, name: 'WG' });
   const urlaub = aGroup({ id: 2, name: 'Urlaub' });
 
@@ -214,6 +214,17 @@ describe('ShoppinglistPage – Drag & Drop', () => {
 
       expect(moveList).not.toHaveBeenCalled();
       expect(moveItem).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Abhaken', () => {
+    it('ein fehlgeschlagenes Abhaken zeigt keinen Toast (Abhaken ohne Netz, eigene Offline-Story)', () => {
+      const alerts = TestBed.inject(AlertService) as jasmine.SpyObj<AlertService>;
+
+      page.markAsDone(listA(), listA().shoppingItems[0]);
+      http.expectOne(`${api}/shopping-list/update-item`).flush('Server error', { status: 500, statusText: 'Server Error' });
+
+      expect(alerts.showToast).not.toHaveBeenCalled();
     });
   });
 

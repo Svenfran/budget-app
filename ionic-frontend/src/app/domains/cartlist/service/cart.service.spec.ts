@@ -119,6 +119,22 @@ describe('CartService', () => {
       expect(alerts.showErrorAlert).toHaveBeenCalledWith(
         'alerts.cart.invalid_membership.header', 'alerts.cart.invalid_membership.message_new_edit');
     });
+
+    it('ein Fehler verwirft keinen zwischenzeitlich gespeicherten Einkauf, Regression DIV-1', () => {
+      service.cartList.set([]);
+      service.initCartList.set([]);
+      const pizza = aCart({ id: null, title: 'Pizza' });
+      const kino = aCart({ id: null, title: 'Kino' });
+
+      service.addCart(pizza);
+      service.addCart(kino);
+      const [pizzaReq, kinoReq] = http.match(`${api}/add`);
+      kinoReq.flush({ ...kino, id: 2 });
+      pizzaReq.flush('Server error', { status: 500, statusText: 'Server Error' });
+
+      expect(ids(service.cartList())).toEqual([2]);
+      expect(ids(service.initCartList())).toEqual([2]);
+    });
   });
 
   describe('updateCart', () => {
