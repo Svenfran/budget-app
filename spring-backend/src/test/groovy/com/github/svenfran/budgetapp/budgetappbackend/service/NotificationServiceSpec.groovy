@@ -4,6 +4,8 @@ import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingListDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.GroupDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.GroupMembersDto
+import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingItemOrderDto
+import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingListOrderDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
 import org.springframework.boot.actuate.health.Health
@@ -184,6 +186,41 @@ class NotificationServiceSpec extends Specification {
         1 * messagingTemplate.convertAndSendToUser('3', '/notification/delete-all-items', [milch, brot])
         0 * messagingTemplate.convertAndSendToUser('1', _, _)
         0 * messagingTemplate._
+    }
+
+    def "Reihenfolge der Listen geht auf /notification/reorder-lists an alle außer dem auslösenden Nutzer"() {
+        given:
+        def dto = new ShoppingListOrderDto(GRUPPE_ID, 8L, [42L, 40L, 41L])
+
+        when:
+        service.sendShoppingListOrderNotification(GRUPPE_ID, dto)
+
+        then:
+        1 * gmhService.getGroupMembersAndOwner(GRUPPE_ID) >> aktiveMitglieder
+        1 * messagingTemplate.convertAndSendToUser('2', '/notification/reorder-lists', dto)
+        1 * messagingTemplate.convertAndSendToUser('3', '/notification/reorder-lists', dto)
+        0 * messagingTemplate.convertAndSendToUser('1', _, _)
+        0 * messagingTemplate._
+        dto.revision == 8L
+        dto.shoppingListIds == [42L, 40L, 41L]
+    }
+
+    def "Reihenfolge der Einträge geht auf /notification/reorder-items an alle außer dem auslösenden Nutzer"() {
+        given:
+        def dto = new ShoppingItemOrderDto(GRUPPE_ID, 5L, 3L, [7L, 5L, 6L])
+
+        when:
+        service.sendShoppingItemOrderNotification(GRUPPE_ID, dto)
+
+        then:
+        1 * gmhService.getGroupMembersAndOwner(GRUPPE_ID) >> aktiveMitglieder
+        1 * messagingTemplate.convertAndSendToUser('2', '/notification/reorder-items', dto)
+        1 * messagingTemplate.convertAndSendToUser('3', '/notification/reorder-items', dto)
+        0 * messagingTemplate.convertAndSendToUser('1', _, _)
+        0 * messagingTemplate._
+        dto.shoppingListId == 5L
+        dto.revision == 3L
+        dto.shoppingItemIds == [7L, 5L, 6L]
     }
 
     def "Leere Liste bei delete-all-items sendet nichts und wirft nicht"() {

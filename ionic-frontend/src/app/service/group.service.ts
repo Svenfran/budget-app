@@ -218,8 +218,6 @@ export class GroupService {
   }
 
   addGroup(group: Group, callingPage?: string): void {
-    const currentGroupsSidenav = this.groupsSideNav();
-    const currentGroupsOverview = this.groupOverviewList();
     this.http
       .post<Group>(this.addGroupUrl, group)
       .subscribe({
@@ -251,16 +249,11 @@ export class GroupService {
         },
         error: (err) => {
           console.error("Error adding group:", err);
-          this.groupsSideNav.set(currentGroupsSidenav);
-          this.groupOverviewList.set(currentGroupsOverview);
         }
       })
   }
 
   updateGroup(group: Group): void {
-    const currentGroupsSidenav = this.groupsSideNav();
-    const currentGroupsOverview = this.groupOverviewList();
-
     this.http
       .put<Group>(this.updateGroupUrl, group)
       .subscribe({
@@ -277,16 +270,11 @@ export class GroupService {
         },
         error: (err) => {
           console.error("Error updating group:", err);
-          this.groupsSideNav.set(currentGroupsSidenav);
-          this.groupOverviewList.set(currentGroupsOverview);
         }
       })
   }
 
   deleteGroup(group: Group): void {
-    const currentGroupsSidenav = this.groupsSideNav();
-    const currentGroupsOverview = this.groupOverviewList();
-
     this.http
       .delete<void>(`${this.deleteGroupUrl}/${group.id}`)
       .subscribe({
@@ -308,8 +296,6 @@ export class GroupService {
         },
         error: (err) => {
           console.error("Error deleting group:", err);
-          this.groupsSideNav.set(currentGroupsSidenav);
-          this.groupOverviewList.set(currentGroupsOverview);
         }
       })
   }
@@ -329,8 +315,6 @@ export class GroupService {
   }
 
   addMemberToGroup(newMemberDto: NewMemberDto): void {
-    const currentGroupsOverview = this.groupOverviewList();
-
     this.http
       .post<any>(this.addNewMemberUrl, newMemberDto)
       .subscribe({
@@ -345,7 +329,6 @@ export class GroupService {
         },
         error: (err) => {
           console.error("Error adding member to group:", err);
-          this.groupOverviewList.set(currentGroupsOverview);
           let message = "";
 
           if (err.error.includes(newMemberDto.newMemberEmail)) {
@@ -384,8 +367,6 @@ export class GroupService {
   }
 
   removeMemberFromGroup(removeMemberDto: RemoveMemberDto): void {
-    const currentGroupMembers = this.groupMembers();
-
     this.http
       .post<any>(this.removeMemberUrl, removeMemberDto)
       .subscribe({
@@ -401,7 +382,6 @@ export class GroupService {
         },
         error: (err) => {
           console.error("Error removing member from group:", err);
-          this.groupMembers.set(currentGroupMembers);
         }
       })
   }

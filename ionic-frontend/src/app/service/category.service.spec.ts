@@ -72,6 +72,18 @@ describe('CategoryService', () => {
       expect(service.categories()).toEqual(existing);
       expect(alerts.showErrorAlert).not.toHaveBeenCalled();
     });
+
+    it('ein Fehler verwirft keine zwischenzeitlich gespeicherte Kategorie, Regression DIV-1', () => {
+      service.categories.set([]);
+
+      service.addCategory(aCategory({ id: undefined, name: 'Freizeit' }));
+      service.addCategory(aCategory({ id: undefined, name: 'Drogerie' }));
+      const [freizeitReq, drogerieReq] = http.match(`${api}/category/add`);
+      drogerieReq.flush(aCategory({ id: 2, name: 'Drogerie' }));
+      freizeitReq.flush('Server error', { status: 500, statusText: 'Server Error' });
+
+      expect(names(service.categories())).toEqual(['Drogerie']);
+    });
   });
 
   describe('updateCategory', () => {

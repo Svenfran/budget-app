@@ -1,4 +1,5 @@
-import { Component, effect, OnInit, QueryList, untracked, ViewChildren } from '@angular/core';
+import { Component, effect, OnDestroy, OnInit, QueryList, untracked, ViewChildren } from '@angular/core';
+import { CdkDragDrop } from '@angular/cdk/drag-drop';
 import { ShoppinglistService } from './service/shoppinglist.service';
 import { AddEditShoppinglistDto } from './model/add-edit-shoppinglist-dto';
 import { AlertService } from 'src/app/service/alert.service';
@@ -10,7 +11,9 @@ import { WebSocketService } from 'src/app/service/websocket.service';
 import { GroupService } from 'src/app/service/group.service';
 import { INIT_NUMBERS, INIT_VALUES } from 'src/app/constants/default-values';
 import { TranslateService } from '@ngx-translate/core';
-import { addItem, addList, deleteAllItems, deleteItem, deleteList, updateItem, updateList } from './shoppinglist-events';
+import { deleteAllItems, deleteItem, deleteList, updateItem, updateList } from './shoppinglist-events';
+import { ShoppinglistOrderDto } from './model/shoppinglist-order-dto';
+import { ShoppingitemOrderDto } from './model/shoppingitem-order-dto';
 
 @Component({
   selector: 'app-shoppinglist',
@@ -18,7 +21,7 @@ import { addItem, addList, deleteAllItems, deleteItem, deleteList, updateItem, u
   styleUrls: ['./shoppinglist.page.scss'],
   standalone: false
 })
-export class ShoppinglistPage implements OnInit {
+export class ShoppinglistPage implements OnInit, OnDestroy {
   @ViewChildren(IonInput) inputFields!: QueryList<IonInput>; 
   public shoppingLists = this.shoppinglistService.getShoppingLists();
   public isLoading: boolean = true;
@@ -26,6 +29,11 @@ export class ShoppinglistPage implements OnInit {
   public toggleLists: { [listId: number]: boolean } = {};
   public newItemInputs: { [listId: number]: string } = {};
   public activeGroup = this.groupService.activeGroup();
+  /** Drag & Drop startet nach Antippen und kurzem Halten (DIV-1, E1); Wert am Gerät abgestimmt (Phase 4a). */
+  public dragStartDelay = { touch: 300, mouse: 0 };
+  /** Ende des letzten Drags: ein direkt folgender Click gehört zur Geste und wird ignoriert. */
+  private dragEndedAt = 0;
+  private static readonly CLICK_AFTER_DRAG_MS = 400;
 
 
   constructor(
@@ -47,6 +55,8 @@ export class ShoppinglistPage implements OnInit {
       this.groupService.activeGroupId();
       this.groupService.session();
       const activeGroup = untracked(() => this.groupService.activeGroup());
+      // ein unterbrochener Drag gibt den Puffer frei; Updates der alten Gruppe bzw. Sitzung verwirft der Service
+      this.shoppinglistService.releaseUpdates();
       this.isLoading = true;
       if (!activeGroup.flag?.includes(INIT_VALUES.DEFAULT)) {
         this.shoppingLists.set([]);
@@ -67,6 +77,7 @@ export class ShoppinglistPage implements OnInit {
   ngOnDestroy() {
     // nur die eigenen Topics, die globalen von AppComponent bleiben bestehen
     this.webSocketService.unsubscribeOwner('shoppinglist');
+    this.shoppinglistService.releaseUpdates();
   }
 
   refreshShoppingList(event: CustomEvent) {
@@ -198,6 +209,7 @@ export class ShoppinglistPage implements OnInit {
   }
 
   onUpdateItem(list: ShoppinglistDto, item: ShoppingitemDto) {
+    if (this.isClickAfterDrag()) return;
     this.alertCtrl.create({
       header: this.translate.instant('alerts.shoppinglist.item.edit.header'),
       buttons: [{
@@ -244,6 +256,7 @@ export class ShoppinglistPage implements OnInit {
   }
 
   onDeleteItem(list: ShoppinglistDto, item: ShoppingitemDto) {
+    if (this.isClickAfterDrag()) return;
     const deletedItem: AddEditShoppingItemDto = {
       id: item.id,
       name: item.name,
@@ -254,7 +267,13 @@ export class ShoppinglistPage implements OnInit {
     this.shoppinglistService.deleteItemFromShoppingList(deletedItem);
   }
 
+  toggleList(list: ShoppinglistDto) {
+    if (this.isClickAfterDrag()) return;
+    this.toggleLists[list.id] = !this.toggleLists[list.id];
+  }
+
   markAsDone(list: ShoppinglistDto, item: ShoppingitemDto) {
+    if (this.isClickAfterDrag()) return;
     item.completed = !item.completed;
     let updateShoppingItem: AddEditShoppingItemDto = {
       id: item.id,
@@ -263,7 +282,7 @@ export class ShoppinglistPage implements OnInit {
       groupId: this.activeGroup.id,
       shoppingListId: list.id
     };
-    this.shoppinglistService.updateItemOfShoppingList(updateShoppingItem);
+    this.shoppinglistService.updateItemOfShoppingList(updateShoppingItem, false);
   }
 
   deleteListOfItems(list: ShoppinglistDto) {
@@ -283,23 +302,68 @@ export class ShoppinglistPage implements OnInit {
     this.shoppinglistService.deleteAllCompletedShoppingItems(items);
   }
 
+  // Drag & Drop (DIV-1). Das CDK löst synchron erst `ended`, dann `dropped` aus; der Move wird deshalb im Drop-Handler
+  // gegen den während der Geste unveränderten Zustand berechnet, erst danach gibt der Service zurückgestellte
+  // Änderungen (WebSocket, GET, REST, PUT-Antworten) frei.
+
+  onDragStarted(slidingItem?: IonItemSliding) {
+    this.shoppinglistService.holdUpdates();
+    slidingItem?.close();
+  }
+
+  onDragEnded() {
+    this.dragEndedAt = Date.now();
+    // Rückfall für einen Drag ohne Drop; nach einem Drop ist der Puffer schon leer
+    queueMicrotask(() => this.shoppinglistService.releaseUpdates());
+  }
+
+  /** Drop einer Liste: die gezogene ID wird im aktuellen Zustand neu aufgelöst, eine inzwischen gelöschte verworfen. */
+  onListDropped(event: CdkDragDrop<unknown, unknown, number>) {
+    const listId = event.item.data;
+    if (this.shoppingLists().some(list => list.id === listId)) {
+      this.shoppinglistService.moveShoppingList(this.activeGroup, listId, event.currentIndex);
+    }
+    this.shoppinglistService.releaseUpdates();
+  }
+
+  /** Drop eines Eintrags innerhalb seiner Liste (Liste und Eintrag werden im aktuellen Zustand neu aufgelöst). */
+  onItemDropped(list: ShoppinglistDto, event: CdkDragDrop<unknown, unknown, number>) {
+    const itemId = event.item.data;
+    const current = this.shoppingLists().find(l => l.id === list.id);
+    if (current?.shoppingItems.some(item => item.id === itemId)) {
+      this.shoppinglistService.moveShoppingItem(this.activeGroup, list.id, itemId, event.currentIndex);
+    }
+    this.shoppinglistService.releaseUpdates();
+  }
+
+  private isClickAfterDrag(): boolean {
+    return Date.now() - this.dragEndedAt < ShoppinglistPage.CLICK_AFTER_DRAG_MS;
+  }
+
   private subscribeToTopics() {
     const options = { owner: 'shoppinglist', filterByActiveGroup: true };
+    // alle Handler laufen über den Puffer des Service: während eines Drags werden sie zurückgestellt (DIV-1)
+    const on = <T>(action: string, handler: (data: T) => void) =>
+      this.webSocketService.subscribe<T>(`/user/notification/${action}`,
+        data => this.shoppinglistService.applyOrDefer(() => handler(data)), options);
     const onList = (action: string, apply: (lists: ShoppinglistDto[], data: AddEditShoppinglistDto) => ShoppinglistDto[]) =>
-      this.webSocketService.subscribe<AddEditShoppinglistDto>(
-        `/user/notification/${action}`, data => this.shoppingLists.update(lists => apply(lists, data)), options);
+      on<AddEditShoppinglistDto>(action, data => this.shoppingLists.update(lists => apply(lists, data)));
     const onItem = (action: string, apply: (lists: ShoppinglistDto[], data: AddEditShoppingItemDto) => ShoppinglistDto[]) =>
-      this.webSocketService.subscribe<AddEditShoppingItemDto>(
-        `/user/notification/${action}`, data => this.shoppingLists.update(lists => apply(lists, data)), options);
+      on<AddEditShoppingItemDto>(action, data => this.shoppingLists.update(lists => apply(lists, data)));
 
-    onList('add-list', addList);
+    on<AddEditShoppinglistDto>('add-list', data => this.shoppinglistService.onListAdded(data));
     onList('update-list', updateList);
-    onList('delete-list', deleteList);
-    onItem('add-item', addItem);
+    on<AddEditShoppinglistDto>('delete-list', data => {
+      this.shoppingLists.update(lists => deleteList(lists, data));
+      this.shoppinglistService.removeItemScope(data.id!);
+    });
+    on<AddEditShoppingItemDto>('add-item', data => this.shoppinglistService.onItemAdded(data));
     onItem('update-item', updateItem);
     onItem('delete-item', deleteItem);
-    this.webSocketService.subscribe<AddEditShoppingItemDto[]>(
-      `/user/notification/delete-all-items`, data => this.shoppingLists.update(lists => deleteAllItems(lists, data)), options);
+    on<AddEditShoppingItemDto[]>('delete-all-items', data => this.shoppingLists.update(lists => deleteAllItems(lists, data)));
+    // Reihenfolge (DIV-1): der Service übernimmt nur neuere Revisionen
+    on<ShoppinglistOrderDto>('reorder-lists', data => this.shoppinglistService.applyListOrder(data));
+    on<ShoppingitemOrderDto>('reorder-items', data => this.shoppinglistService.applyItemOrder(data));
   }
 
   trackByListId(_: number, list: ShoppinglistDto): number {

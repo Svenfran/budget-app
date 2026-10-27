@@ -28,34 +28,37 @@ class ShoppingListControllerApiSpec extends IntegrationSpec implements ApiReques
 
     private static final Logger LOG = LoggerFactory.getLogger(ShoppingListControllerApiSpec)
 
-    /** Zeitstempel, den das Frontend immer sendet (shoppinglist.service.ts, INITIAL_REQUEST_TIMESTAMP). */
-    private static final long FRONTEND_TIMESTAMP = DateUtils.toDate(LocalDate.of(1900, 1, 1)).time
-
     @Autowired ObjectMapper objectMapper
 
-    def "Mitglied erhält die Listen der Gruppe mit ihren Einträgen als JSON"() {
+    def "Mitglied erhält die Listen der Gruppe mit ihren Einträgen und den Reihenfolge-Revisionen als JSON"() {
         given:
         def ben = fixtures.user()
         def wg = fixtures.group(members: [ben])
-        def liste = fixtures.shoppingList(wg, name: 'Wocheneinkauf')
+        def liste = fixtures.shoppingList(wg, name: 'Wocheneinkauf', itemOrderRevision: 3L)
         def milch = fixtures.shoppingItem(liste, name: 'Milch', completed: false)
         def brot = fixtures.shoppingItem(liste, name: 'Brot', completed: true)
         def (groupId, listId, milchId, brotId) = [wg.group.id, liste.id, milch.id, brot.id]
         flushAndClear()
-        LOG.info('Szenario: Gruppe {}, Mitglied {}, Liste {} "Wocheneinkauf" mit Einträgen {} "Milch" offen, {} "Brot" erledigt',
+        // listOrderRevision ist updatable = false und lässt sich nur per Update-Query setzen
+        entityManager.createQuery('update Group g set g.listOrderRevision = 7 where g.id = :groupId')
+                .setParameter('groupId', groupId).executeUpdate()
+        LOG.info('Szenario: Gruppe {} (listOrderRevision 7), Mitglied {}, Liste {} "Wocheneinkauf" (itemOrderRevision 3) mit Einträgen {} "Milch" offen, {} "Brot" erledigt',
                 groupId, ben.id, listId, milchId, brotId)
 
         when:
         def response = getShoppingLists(groupId, ben)
         def body = json(response)
-        LOG.info('Antwort: Listen {}, Felder {}, Einträge {}, Eintrag-Felder {}',
-                body*.id, body[0].keySet(), body[0].shoppingItems*.id, body[0].shoppingItems[0].keySet())
+        LOG.info('Antwort: Listen {}, Felder {}, Revisionen {}/{}, Einträge {}, Eintrag-Felder {}',
+                body*.id, body[0].keySet(), body[0].listOrderRevision, body[0].itemOrderRevision,
+                body[0].shoppingItems*.id, body[0].shoppingItems[0].keySet())
 
         then:
         response.status == 200
         body*.id == [listId]
-        body[0].keySet() == ['id', 'name', 'shoppingItems'] as Set
+        body[0].keySet() == ['id', 'name', 'shoppingItems', 'listOrderRevision', 'itemOrderRevision'] as Set
         body[0].name == 'Wocheneinkauf'
+        body[0].listOrderRevision == 7
+        body[0].itemOrderRevision == 3
         body[0].shoppingItems*.id == [milchId, brotId]
         body[0].shoppingItems[0].keySet() == ['id', 'name', 'completed'] as Set
         body[0].shoppingItems*.name == ['Milch', 'Brot']
@@ -160,8 +163,7 @@ class ShoppingListControllerApiSpec extends IntegrationSpec implements ApiReques
         LOG.info('Szenario: Gruppe {}, Request ohne Anmeldung', wg.group.id)
 
         expect: 'Ist-Verhalten: Spring Security antwortet ohne Authentifizierung mit 403, nicht 401'
-        send(get('/api/groups/shopping-lists-with-items/{groupId}', wg.group.id)
-                .param('requestTimeStamp', FRONTEND_TIMESTAMP as String)).status == 403
+        send(get('/api/groups/shopping-lists-with-items/{groupId}', wg.group.id)).status == 403
     }
 
     def "Liste einer fremden Gruppe umbenennen: 404"() {
@@ -213,8 +215,90 @@ class ShoppingListControllerApiSpec extends IntegrationSpec implements ApiReques
         fremdeListen[0].shoppingItems*.id == [fremderEintragId]
     }
 
+    def "Listen umsortieren: 200 mit groupId, revision und normalisierter Reihenfolge, GET danach liefert sie"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def a = fixtures.shoppingList(wg, sortOrder: 0)
+        def b = fixtures.shoppingList(wg, sortOrder: 1)
+        def c = fixtures.shoppingList(wg, sortOrder: 2)
+        def (groupId, aId, bId, cId) = [wg.group.id, a.id, b.id, c.id]
+        flushAndClear()
+        LOG.info('Szenario: Gruppe {}, Mitglied {}, Listen {}; gewünscht {} (B fehlt)', groupId, ben.id, [aId, bId, cId], [cId, aId])
+
+        when:
+        def response = send(put('/api/groups/shopping-list/reorder'), user: ben,
+                body: [groupId: groupId, shoppingListIds: [cId, aId]])
+        def body = json(response)
+        flushAndClear()
+        def listen = json(getShoppingLists(groupId, ben))
+        LOG.info('Antwort: {}; GET danach: Listen {}, listOrderRevision {}', body, listen*.id, listen*.listOrderRevision)
+
+        then:
+        response.status == 200
+        body.keySet() == ['groupId', 'revision', 'shoppingListIds'] as Set
+        body.groupId == groupId
+        body.revision == 1
+        body.shoppingListIds == [cId, aId, bId]
+        listen*.id == [cId, aId, bId]
+        listen*.listOrderRevision == [1, 1, 1]
+        1 * notificationService.sendShoppingListOrderNotification(groupId, _)
+    }
+
+    def "Listen umsortieren #fall: #status"() {
+        given:
+        def ben = fixtures.user()
+        def fremder = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg)
+        def groupId = unbekannteGruppe ? -1L : wg.group.id
+        def angemeldet = [mitglied: ben, fremder: fremder][wer]
+        LOG.info('Szenario: Gruppe {} mit Liste {}, Mitglied {}, Nicht-Mitglied {}; Request für Gruppe {} {}',
+                wg.group.id, liste.id, ben.id, fremder.id, groupId, fall)
+
+        when:
+        def request = put('/api/groups/shopping-list/reorder')
+        def requestBody = [groupId: groupId, shoppingListIds: [liste.id]]
+        def response = angemeldet ? send(request, user: angemeldet, body: requestBody) : send(request, body: requestBody)
+        LOG.info('Antwort: {}', response.contentAsString)
+
+        then:
+        response.status == status
+        0 * notificationService._
+
+        where:
+        fall                | wer        | unbekannteGruppe || status
+        'ohne Anmeldung'    | null       | false            || 403
+        'als Nicht-Mitglied'| 'fremder'  | false            || 403
+        'unbekannte Gruppe' | 'mitglied' | true             || 404
+    }
+
+    def "Zeitstempel älterer App-Versionen (#zeitstempel) wird ignoriert: sofort 200 mit den Listen, kein 304"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg)
+        def (groupId, listId) = [wg.group.id, liste.id]
+        flushAndClear()
+        LOG.info('Szenario: Gruppe {}, Mitglied {}, Liste {}; requestTimeStamp {} ({})', groupId, ben.id, listId, requestTimeStamp, zeitstempel)
+
+        when:
+        def response = send(get('/api/groups/shopping-lists-with-items/{groupId}', groupId)
+                .param('requestTimeStamp', requestTimeStamp as String), user: ben)
+        def body = json(response)
+        LOG.info('Antwort: Listen {}', body*.id)
+
+        then:
+        response.status == 200
+        body*.id == [listId]
+
+        where:
+        zeitstempel                     | requestTimeStamp
+        'bisheriger Frontend-Wert 1900' | DateUtils.toDate(LocalDate.of(1900, 1, 1)).time
+        'in der Zukunft (früher 304)'   | DateUtils.toDate(LocalDate.of(2999, 12, 31)).time
+    }
+
     private MockHttpServletResponse getShoppingLists(Long groupId, User angemeldet) {
-        send(get('/api/groups/shopping-lists-with-items/{groupId}', groupId)
-                .param('requestTimeStamp', FRONTEND_TIMESTAMP as String), user: angemeldet)
+        send(get('/api/groups/shopping-lists-with-items/{groupId}', groupId), user: angemeldet)
     }
 }

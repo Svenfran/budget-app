@@ -45,7 +45,6 @@ export class CategoryService {
   };
 
   addCategory(category: CategoryDto): void {
-    const currentCategories = this.categories();
     this.http
       .post<CategoryDto>(this.addCategoryUrl, category)
       .subscribe({
@@ -54,13 +53,11 @@ export class CategoryService {
         },
         error: (err) => {
           console.error("Error adding category:", err);
-          this.categories.set(currentCategories);
         }
       })
   };
 
   updateCategory(category: CategoryDto): void {
-    const currentCategories = this.categories();
     this.http
       .put<CategoryDto>(this.updateCategoryUrl, category)
       .subscribe({
@@ -72,13 +69,11 @@ export class CategoryService {
         },
         error: (err) => {
           console.error("Error updating category:", err);
-          this.categories.set(currentCategories);
         }
       })
   };
 
   deleteCategory(category: CategoryDto): void {
-    const currentCategories = this.categories();
     this.http
       .post<CategoryDto>(this.deleteCategoryUrl, category)
       .subscribe({
@@ -89,7 +84,6 @@ export class CategoryService {
         },
         error: (err) => {
           console.error("Error deleting category:", err);
-          this.categories.set(currentCategories);
           if (err.status === 404) {
             let header = this.translate.instant("alerts.category.delete.error_message_service.header");
             let message = this.translate.instant("alerts.category.delete.error_message_service.message", {categoryName: category.name});

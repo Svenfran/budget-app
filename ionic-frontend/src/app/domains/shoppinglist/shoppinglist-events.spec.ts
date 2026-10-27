@@ -2,7 +2,9 @@ import { aShoppingItem, aShoppingList } from 'src/testing/test-data';
 import { AddEditShoppingItemDto } from './model/add-edit-shopping-item-dto';
 import { AddEditShoppinglistDto } from './model/add-edit-shoppinglist-dto';
 import { ShoppinglistDto } from './model/shoppinglist-dto';
-import { addItem, addList, deleteAllItems, deleteItem, deleteList, updateItem, updateList } from './shoppinglist-events';
+import {
+  addItem, addList, deleteAllItems, deleteItem, deleteList, reorderItems, reorderLists, updateItem, updateList
+} from './shoppinglist-events';
 
 describe('shoppinglist-events', () => {
   const GROUP_ID = 1;
@@ -112,6 +114,45 @@ describe('shoppinglist-events', () => {
       const lists = [aShoppingList({ shoppingItems: [aShoppingItem()] })];
 
       expect(deleteAllItems(lists, [])).toBe(lists);
+    });
+  });
+
+  describe('Reihenfolge (DIV-1)', () => {
+    const listIds = (lists: ShoppinglistDto[]) => lists.map(list => list.id);
+    const [a, b, c] = [aShoppingList({ id: 1 }), aShoppingList({ id: 2 }), aShoppingList({ id: 3 })];
+
+    it('reorderLists sortiert exakt nach der ID-Reihenfolge', () => {
+      expect(listIds(reorderLists([a, b, c], [3, 1, 2]))).toEqual([3, 1, 2]);
+    });
+
+    it('reorderLists ignoriert unbekannte und doppelte IDs, lokal fehlende kommen in alter Reihenfolge ans Ende', () => {
+      expect(listIds(reorderLists([a, b, c], [99, 3, 3]))).toEqual([3, 1, 2]);
+    });
+
+    it('reorderLists gibt dasselbe Array zurück, wenn sich nichts ändert', () => {
+      const lists = [a, b, c];
+
+      expect(reorderLists(lists, [1, 2, 3])).toBe(lists);
+      expect(reorderLists(lists, [])).toBe(lists);
+    });
+
+    it('reorderItems sortiert nur die Einträge der Zielliste, andere Listen bleiben dieselben Objekte', () => {
+      const [x, y, z] = [aShoppingItem({ id: 11 }), aShoppingItem({ id: 12 }), aShoppingItem({ id: 13 })];
+      const liste = aShoppingList({ id: 10, shoppingItems: [x, y, z] });
+      const andere = aShoppingList({ id: 20, shoppingItems: [aShoppingItem({ id: 21 }), aShoppingItem({ id: 22 })] });
+
+      const result = reorderItems([liste, andere], 10, [13, 99, 11]);
+
+      expect(itemIds(result[0])).toEqual([13, 11, 12]);
+      expect(result[1]).toBe(andere);
+    });
+
+    it('reorderItems mit unbekannter Liste oder unveränderter Reihenfolge gibt dasselbe Array zurück', () => {
+      const liste = aShoppingList({ id: 10, shoppingItems: [aShoppingItem({ id: 11 }), aShoppingItem({ id: 12 })] });
+      const lists = [liste];
+
+      expect(reorderItems(lists, 99, [12, 11])).toBe(lists);
+      expect(reorderItems(lists, 10, [11, 12])).toBe(lists);
     });
   });
 });

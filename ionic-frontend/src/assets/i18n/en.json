@@ -236,6 +236,12 @@
                     "ok": "OK",
                     "loading": "Update list item..."
                 }
+            },
+            "reorder": {
+                "error": "The order could not be saved."
+            },
+            "save": {
+                "error": "The change could not be saved."
             }
         },
         "user_profile": {

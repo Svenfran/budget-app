@@ -22,7 +22,7 @@ Project-specific details live in the sub-project files — read the relevant one
 - **Backend URL**: frontend `src/config/config.ts` (dev, LAN IP on port 9090 = backend `dev` profile) / `config.prod.ts` (Railway) — both git-ignored, created from `src/config/config.example.ts`. New client origins must be added to the backend's `app.cors.allowed-origins`, not in code.
 - **DTO contract**: backend `dto/` classes ↔ frontend `model/*Dto` interfaces. There is no shared schema or code generation — a field change must be made on both sides by hand.
 - **WebSocket** (`/ws`, STOMP over SockJS): CONNECT needs the same credentials as REST (`Authorization: Bearer <jwt>` + `DeviceId`), the session principal is the userId. Backend `NotificationService` sends via `convertAndSendToUser(userId, "/notification/<action>")` to every group member **except the user who triggered the change** (that client updates its own state from the REST response); clients subscribe to `/user/notification/<action>` (no userId in the topic). Plus a global `/notification/health` broadcast (`{status}`) every 10 s. Clients may only subscribe to these destinations and never SEND.
-  - Currently synced live: groups, members, owner change, shopping lists and items (where each is subscribed: see `ionic-frontend/CLAUDE.md`).
+  - Currently synced live: groups, members, owner change, shopping lists and items including their order (`reorder-lists`/`reorder-items`; where each is subscribed: see `ionic-frontend/CLAUDE.md`).
   - **Not** synced live: carts, categories, settlements — other members only see them on refetch.
   - Notifications are sent **after commit** (`TransactionSynchronization.afterCommit` in `NotificationService`; immediately if no transaction is active). Recipients and payload are determined inside the transaction; a rollback sends nothing. Entities have no `@Version` / optimistic locking, so concurrent edits are last-write-wins.
   - After a reconnect or a resume from background (> 30 s), the app silently re-fetches the live-synced data (groups, members, shopping lists), throttled to once per 60 s; carts, categories and statistics are not re-fetched.
@@ -47,7 +47,7 @@ Project-specific details live in the sub-project files — read the relevant one
 Group data (groups, members, carts, categories, shopping lists/items, settlements) is seen by several users at once. When changing it, consider all three layers together:
 - **REST API** — endpoint, DTO, `VerificationService` check, typed exception + mapping in `RestResponseEntityExceptionHandler`.
 - **WebSocket sync** — does the change need a (new or changed) notification in `NotificationService`, and a matching subscription in the frontend? Keep topic names and payload DTOs identical on both sides; remember the triggering user receives no notification.
-- **Frontend state** — signal services that update state after a successful response and restore their snapshot on error (see `ionic-frontend/CLAUDE.md`), `groupId` filter against the active group, refetch triggers (`triggerUpdate()`).
+- **Frontend state** — signal services that update state after a successful response and leave it unchanged on error (no snapshot restore; the shopping-list order is the one optimistic exception, see `ionic-frontend/CLAUDE.md`), `groupId` filter against the active group, refetch triggers (`triggerUpdate()`).
 
 Also check explicitly:
 - **Permissions** — who may perform the change (member, owner, removed member); no endpoint without a `VerificationService` check.

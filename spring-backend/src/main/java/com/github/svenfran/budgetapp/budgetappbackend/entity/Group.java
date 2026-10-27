@@ -32,6 +32,11 @@ public class Group implements Serializable {
     @Column(name = "last_update_shoppinglist")
     private Date lastUpdateShoppingList;
 
+    // Ändert nur der Reorder der Einkaufslisten per Update-Query (updatable = false): updateGroup und die
+    // Einkaufslisten-Pfade speichern die Gruppe per save/merge und würden sonst den gespeicherten Wert überschreiben
+    @Column(name = "list_order_revision", nullable = false, updatable = false)
+    private long listOrderRevision;
+
     @OneToMany(mappedBy = "group")
     @JsonBackReference
     private Set<Cart> carts;
@@ -180,6 +185,14 @@ public class Group implements Serializable {
         this.lastUpdateShoppingList = lastUpdateShoppingList;
     }
 
+    public long getListOrderRevision() {
+        return listOrderRevision;
+    }
+
+    public void setListOrderRevision(long listOrderRevision) {
+        this.listOrderRevision = listOrderRevision;
+    }
+
     @Override
     public String toString() {
         return "Group{" +
@@ -188,6 +201,7 @@ public class Group implements Serializable {
                 ", dateCreated=" + dateCreated +
                 ", lastUpdate=" + lastUpdate +
                 ", lastUpdateShoppingList=" + lastUpdateShoppingList +
+                ", listOrderRevision=" + listOrderRevision +
                 ", ownerId=" + (owner == null ? null : owner.getId()) +
                 '}';
     }

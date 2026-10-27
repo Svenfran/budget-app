@@ -34,6 +34,11 @@ public class ShoppingItem implements Serializable {
     @JoinColumn(name = "shoppinglist_id", nullable = false)
     private ShoppingList shoppingList;
 
+    // Position ändert nur der Reorder per Update-Query (updatable = false): der Update-Pfad speichert per merge eine
+    // aus dem DTO neu erzeugte Entity und würde sonst die gespeicherte Position überschreiben
+    @Column(name = "sort_order", nullable = false, updatable = false)
+    private int sortOrder;
+
     public ShoppingItem(Long id, String name, boolean isCompleted, Date dateCreated, Date lastUpdate, ShoppingList shoppingList) {
         this.id = id;
         this.name = name;
@@ -94,6 +99,14 @@ public class ShoppingItem implements Serializable {
         this.lastUpdate = lastUpdate;
     }
 
+    public int getSortOrder() {
+        return sortOrder;
+    }
+
+    public void setSortOrder(int sortOrder) {
+        this.sortOrder = sortOrder;
+    }
+
     @Override
     public String toString() {
         return "ShoppingItem{" +
@@ -102,6 +115,7 @@ public class ShoppingItem implements Serializable {
                 ", isCompleted=" + isCompleted +
                 ", dateCreated=" + dateCreated +
                 ", lastUpdate=" + lastUpdate +
+                ", sortOrder=" + sortOrder +
                 ", shoppingListId=" + (shoppingList == null ? null : shoppingList.getId()) +
                 '}';
     }

@@ -1,6 +1,7 @@
 package com.github.svenfran.budgetapp.budgetappbackend.controller;
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto;
+import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingItemOrderDto;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.service.ShoppingItemService;
 import org.springframework.http.HttpStatus;
@@ -36,6 +37,12 @@ public class ShoppingItemController {
     public ResponseEntity<AddEditShoppingItemDto> deleteShoppingItem(@RequestBody AddEditShoppingItemDto shoppingItemDto) throws UserNotFoundException, GroupNotFoundException, ShoppingListNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingItemNotFoundException, ShoppingListDoesNotBelongToGroupException, ShoppingItemDoesNotBelongToShoppingListException {
         shoppingItemService.deleteShoppingItem(shoppingItemDto);
         return new ResponseEntity<>(HttpStatus.OK);
+    }
+
+    @PutMapping("/groups/shopping-list/reorder-items")
+    public ResponseEntity<ShoppingItemOrderDto> reorderShoppingItems(@RequestBody ShoppingItemOrderDto shoppingItemOrderDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingListNotFoundException, ShoppingListDoesNotBelongToGroupException {
+        ShoppingItemOrderDto order = shoppingItemService.reorderShoppingItems(shoppingItemOrderDto);
+        return new ResponseEntity<>(order, HttpStatus.OK);
     }
 
     @PostMapping("/groups/shopping-list/delete-all-items")

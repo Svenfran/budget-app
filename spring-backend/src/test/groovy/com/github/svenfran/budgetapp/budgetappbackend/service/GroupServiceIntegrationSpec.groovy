@@ -84,6 +84,30 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
         0 * notificationService._
     }
 
+    def "Gruppe umbenennen lässt die Revision der Listenreihenfolge unverändert"() {
+        given:
+        def wg = fixtures.group()
+        def groupId = wg.group.id
+        flushAndClear()
+        // listOrderRevision ist updatable = false und lässt sich nur per Update-Query setzen
+        entityManager.createQuery('update Group g set g.listOrderRevision = 4 where g.id = :groupId')
+                .setParameter('groupId', groupId).executeUpdate()
+        loginAs(wg.owner)
+        LOG.info('Szenario: Gruppe {} mit listOrderRevision 4, Owner {} (angemeldet); neuer Name "Neue WG"', groupId, wg.owner.id)
+
+        when:
+        groupService.updateGroup(new GroupDto(id: groupId, name: 'Neue WG'))
+        flushAndClear()
+        def gespeichert = groupRepository.findById(groupId).get()
+        def (name, revision) = [gespeichert.name, gespeichert.listOrderRevision]
+        LOG.info('groupService.updateGroup(Gruppe {}, name "Neue WG") -> name "{}", listOrderRevision {}', groupId, name, revision)
+
+        then:
+        1 * notificationService.sendGroupUpdateNotification(groupId, _)
+        name == 'Neue WG'
+        revision == 4L
+    }
+
     def "Mitglied hinzufügen löst add-group-member mit dem neuen Mitglied aus"() {
         given:
         def wg = fixtures.group()
@@ -568,7 +592,7 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
         def carts = cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(groupId)
         def kategorien = categoryRepository.findAllByGroup_IdOrderByName(groupId)
         def templates = templateRepository.findByGroupId(groupId)
-        def listen = shoppingListRepository.findAllByGroup_IdOrderById(groupId)
+        def listen = shoppingListRepository.findAllByGroup_IdOrderBySortOrderAscIdAsc(groupId)
         def eintragVorhanden = shoppingItemRepository.findById(eintrag.id).present
         LOG.info('groupService.deleteGroup(Gruppe {}) -> Gruppe vorhanden {}; Historie {}, Einkäufe {}, Kategorien {}, Templates {}, Listen {}, Eintrag vorhanden {}',
                 groupId, gruppeVorhanden, historieDerGruppe.size(), carts.size(), kategorien.size(), templates.size(), listen.size(), eintragVorhanden)
