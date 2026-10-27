@@ -42,7 +42,7 @@ describe('ShoppinglistPage – Gruppenwechsel und Umbenennung', () => {
       imports: [IonicModule.forRoot(), FormsModule, TranslateModule, DragDropModule],
       providers: [
         ...provideServiceTesting(),
-        { provide: ShoppinglistService, useValue: { getShoppingLists: () => lists, getShoppingListsWithItems: load } },
+        { provide: ShoppinglistService, useValue: { getShoppingLists: () => lists, getShoppingListsWithItems: load, releaseUpdates: () => undefined } },
         { provide: WebSocketService, useValue: jasmine.createSpyObj('WebSocketService', ['subscribe', 'unsubscribeOwner']) },
         { provide: StorageService, useValue: storageServiceFake() },
         { provide: AuthService, useValue: auth },
@@ -255,7 +255,7 @@ describe('ShoppinglistPage – Drag & Drop', () => {
     });
   });
 
-  describe('Puffer für WebSocket-Updates während des Drags', () => {
+  describe('Puffer für Updates während des Drags (WebSocket, GET, REST, PUT-Antworten)', () => {
     it('ein Update während des Drags wird erst nach dem Drop angewandt', () => {
       page.onDragStarted();
       event('update-list', { id: 2, name: 'Neu', groupId: 1 });
@@ -337,10 +337,10 @@ describe('ShoppinglistPage – Drag & Drop', () => {
       expect(listIds()).toEqual([1, 2, 3]);
     });
 
-    it('ein Eintrag mit veralteter Kontext-Generation wird beim Leeren nicht ausgeführt', async () => {
+    it('ein Eintrag mit veralteter Kontext-Generation wird beim Leeren nicht ausgeführt (Wechsel ohne Neuladen der Seite)', async () => {
       page.onDragStarted();
       event('update-list', { id: 2, name: 'Neu', groupId: 1 });
-      spyOn(service, 'currentGeneration').and.returnValue(999);
+      groupService.setActiveGroup(urlaub);
 
       page.onDragEnded();
       await Promise.resolve();
@@ -348,17 +348,89 @@ describe('ShoppinglistPage – Drag & Drop', () => {
       expect(service.getShoppingLists()()[1].name).toBe('Liste 2');
     });
 
-    it('ngOnDestroy setzt Puffer und Drag-Zustand zurück', async () => {
+    it('ngOnDestroy gibt den Puffer frei: zurückgestellte Updates werden angewandt, danach wirken Updates sofort', () => {
       page.onDragStarted();
       event('update-list', { id: 2, name: 'Neu', groupId: 1 });
 
       page.ngOnDestroy();
-      page.onDragEnded();
-      await Promise.resolve();
       event('update-list', { id: 3, name: 'Danach', groupId: 1 });
 
-      expect(service.getShoppingLists()()[1].name).toBe('Liste 2');
+      expect(service.getShoppingLists()()[1].name).toBe('Neu');
       expect(service.getShoppingLists()()[2].name).toBe('Danach');
+    });
+
+    // Codex-Review F-002: nicht nur WebSocket-Events, auch GET-, REST- und PUT-Antworten ändern die Datenbasis
+    it('GET entfernt A während des Drags (Listen): der Move rechnet gegen [A,B,C], danach wird die Löschung angewandt', async () => {
+      service.getShoppingListsWithItems(wg, undefined, { silent: true });
+      const get = http.expectOne(loadUrl(1));
+      page.onDragStarted();
+      get.flush(loadedLists().filter(list => list.id !== 1));
+
+      expect(listIds()).toEqual([1, 2, 3]);
+
+      page.onDragEnded();
+      page.onListDropped(drop(3, 1));
+      await Promise.resolve();
+
+      const req = http.expectOne(`${api}/shopping-list/reorder`);
+      expect(req.request.body.shoppingListIds).toEqual([1, 3, 2]);
+      expect(listIds()).toEqual([3, 2]);
+      req.flush({ groupId: 1, revision: 6, shoppingListIds: [3, 2] });
+      expect(listIds()).toEqual([3, 2]);
+    });
+
+    it('GET entfernt Eintrag 11 während des Drags (Einträge): der Move rechnet gegen [11,12,13], danach wird die Löschung angewandt', async () => {
+      service.getShoppingListsWithItems(wg, undefined, { silent: true });
+      const get = http.expectOne(loadUrl(1));
+      page.onDragStarted();
+      get.flush(loadedLists().map(list => list.id === 1
+        ? { ...list, shoppingItems: list.shoppingItems.filter(item => item.id !== 11) } : list));
+
+      expect(itemIdsOfA()).toEqual([11, 12, 13]);
+
+      page.onDragEnded();
+      page.onItemDropped(listA(), drop(13, 1));
+      await Promise.resolve();
+
+      const req = http.expectOne(`${api}/shopping-list/reorder-items`);
+      expect(req.request.body.shoppingItemIds).toEqual([11, 13, 12]);
+      expect(itemIdsOfA()).toEqual([13, 12]);
+      req.flush({ groupId: 1, shoppingListId: 1, revision: 3, shoppingItemIds: [13, 12] });
+      expect(itemIdsOfA()).toEqual([13, 12]);
+    });
+
+    it('REST-Antwort (Eintrag angelegt) während des Drags wird erst nach dem Drop angewandt', () => {
+      service.addItemToShoppingList({ id: null, name: 'Brot', completed: false, shoppingListId: 1, groupId: 1 });
+      const add = http.expectOne(`${api}/shopping-list/add-item`);
+      page.onDragStarted();
+      add.flush({ id: 14, name: 'Brot', completed: false, shoppingListId: 1, groupId: 1 });
+
+      expect(itemIdsOfA()).toEqual([11, 12, 13]);
+
+      page.onDragEnded();
+      page.onItemDropped(listA(), drop(13, 2));
+
+      expect(itemIdsOfA()).toEqual([11, 12, 13, 14]);
+    });
+
+    it('Fehler-Antwort eines früheren Moves während des Drags: Toast sofort, Rücksprung und Refetch erst nach dem Drop', () => {
+      const alerts = TestBed.inject(AlertService) as jasmine.SpyObj<AlertService>;
+      page.onListDropped(drop(3, 0));
+      const put = http.expectOne(`${api}/shopping-list/reorder`);
+      expect(listIds()).toEqual([3, 1, 2]);
+
+      page.onDragStarted();
+      put.flush('Server error', { status: 500, statusText: 'Server Error' });
+
+      expect(alerts.showToast).toHaveBeenCalledOnceWith('alerts.shoppinglist.reorder.error');
+      expect(listIds()).toEqual([3, 1, 2]);
+      http.expectNone(loadUrl(1));
+
+      page.onDragEnded();
+      page.onListDropped(drop(3, 0));
+
+      expect(listIds()).toEqual([1, 2, 3]);
+      http.expectOne(loadUrl(1)).flush(loadedLists());
     });
   });
 });

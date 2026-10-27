@@ -739,6 +739,39 @@ describe('ShoppinglistService', () => {
       });
     });
 
+    describe('Zurückstellen während eines Drags (holdUpdates/releaseUpdates, Codex-Review F-002)', () => {
+      it('GET- und REST-Antworten werden während des Holds zurückgestellt und beim Release in Eingangsreihenfolge angewandt', () => {
+        load(response([1, 2, 3], 5));
+        service.getShoppingListsWithItems(group, undefined, { silent: true });
+        const get = http.expectOne(loadUrl);
+        service.updateShoppingList(listDto({ id: 2, name: 'Umbenannt', groupId: 7 }));
+        const update = http.expectOne(`${api}/shopping-list/update`);
+
+        service.holdUpdates();
+        get.flush(response([3, 2], 5));
+        update.flush(listDto({ id: 2, name: 'Umbenannt', groupId: 7 }));
+        expect(listIds()).toEqual([1, 2, 3]);
+
+        service.releaseUpdates();
+
+        expect(listIds()).toEqual([3, 2]);
+        expect(service.getShoppingLists()()[1].name).toBe('Umbenannt');
+      });
+
+      it('ohne Hold wirken Änderungen sofort; ein Kontextwechsel während des Holds verwirft die zurückgestellten', () => {
+        const applied: string[] = [];
+        service.applyOrDefer(() => applied.push('sofort'));
+
+        service.holdUpdates();
+        service.applyOrDefer(() => applied.push('alte Gruppe'));
+        groupService.setActiveGroup(andereGruppe);
+        service.releaseUpdates();
+        service.applyOrDefer(() => applied.push('danach'));
+
+        expect(applied).toEqual(['sofort', 'danach']);
+      });
+    });
+
     describe('GET während eines offenen eigenen Reorders (Codex-Review F-001)', () => {
       const withItems = (lists: ShoppinglistDto[], listId: number, itemIds: number[]) =>
         lists.map(list => list.id === listId ? { ...list, shoppingItems: itemIds.map(id => aShoppingItem({ id })) } : list);

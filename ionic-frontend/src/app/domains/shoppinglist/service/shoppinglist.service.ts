@@ -47,6 +47,12 @@ export class ShoppinglistService {
   private generation = 0;
   private contextGroupId: number;
   private contextSession: number;
+  /**
+   * Während eines Drags (`holdUpdates`) werden asynchrone Änderungen der Listen zurückgestellt, damit die Indizes
+   * des CDK zur dargestellten Datenbasis passen (Codex-Review F-002). Die eigene Aktion `move*` wirkt sofort.
+   */
+  private held = false;
+  private deferredUpdates: { apply: () => void; generation: number }[] = [];
 
   constructor(
     private http: HttpClient,
@@ -67,10 +73,29 @@ export class ShoppinglistService {
     return this.shoppingLists;
   }
 
-  /** Kontext-Generation für den Drag-Puffer der Seite (Phase 4). */
-  public currentGeneration(): number {
+  /** Drag-Start: asynchrone Änderungen der Listen bis `releaseUpdates` zurückstellen. */
+  public holdUpdates(): void {
     this.syncContext();
-    return this.generation;
+    this.held = true;
+  }
+
+  /** Drop bzw. Drag-Ende: zurückgestellte Änderungen der aktuellen Kontext-Generation in Eingangsreihenfolge anwenden. */
+  public releaseUpdates(): void {
+    this.syncContext();
+    this.held = false;
+    const updates = this.deferredUpdates;
+    this.deferredUpdates = [];
+    updates.filter(update => update.generation === this.generation).forEach(update => update.apply());
+  }
+
+  /** Änderung der Listen sofort anwenden oder, während eines Drags, zurückstellen (auch für die WebSocket-Handler). */
+  public applyOrDefer(apply: () => void): void {
+    this.syncContext();
+    if (!this.held) {
+      apply();
+      return;
+    }
+    this.deferredUpdates.push({ apply, generation: this.generation });
   }
 
   getShoppingListsWithItems(group: Group, onComplete?: () => void, options: LoadOptions = {}): void{
@@ -87,9 +112,11 @@ export class ShoppinglistService {
         next: (result) => {
           // überholt (z. B. inzwischen andere Gruppe aktiv): die Listen der aktuellen Gruppe nicht überschreiben
           if (inContext() && options.isCurrent?.() !== false) {
-            const visible = this.shoppingLists();
-            this.shoppingLists.set(result || []);
-            this.acceptLoadedOrder(result || [], visible);
+            this.applyOrDefer(() => {
+              const visible = this.shoppingLists();
+              this.shoppingLists.set(result || []);
+              this.acceptLoadedOrder(result || [], visible);
+            });
           }
           onComplete?.();
         },
@@ -100,7 +127,7 @@ export class ShoppinglistService {
             return;
           }
           console.error('Error fetching shoppinglists:', err);
-          if (inContext()) this.shoppingLists.set([]);
+          if (inContext()) this.applyOrDefer(() => this.shoppingLists.set([]));
           onComplete?.();
         },
       });
@@ -118,8 +145,10 @@ export class ShoppinglistService {
               name: result.name,
               shoppingItems: []
           }
-          this.shoppingLists.update(items => [...items, newList]);
-          this.confirmListAdded(newList.id);
+          this.applyOrDefer(() => {
+            this.shoppingLists.update(items => [...items, newList]);
+            this.confirmListAdded(newList.id);
+          });
         },
         error: (err) => {
           console.error('Error adding shopping list:', err);
@@ -133,9 +162,9 @@ export class ShoppinglistService {
       .put<AddEditShoppinglistDto>(this.updateShoppingListUrl, updateShoppingList)
       .subscribe({
         next: (result) => {
-          this.shoppingLists.update(items => items.map(list =>
+          this.applyOrDefer(() => this.shoppingLists.update(items => items.map(list =>
             list.id === result.id ? {...list, name: result.name} : list
-          ))
+          )));
         },
         error: (err) => {
           console.error("Error updating shopping list:", err);
@@ -149,10 +178,12 @@ export class ShoppinglistService {
       .post<void>(this.deleteShoppingListUrl, deleteShoppingList)
       .subscribe({
         next: () => {
-          this.shoppingLists.update(items => items.filter(list =>
-            list.id !== deleteShoppingList.id
-          ))
-          this.removeItemScope(deleteShoppingList.id!);
+          this.applyOrDefer(() => {
+            this.shoppingLists.update(items => items.filter(list =>
+              list.id !== deleteShoppingList.id
+            ));
+            this.removeItemScope(deleteShoppingList.id!);
+          });
         },
         error: (err) => {
           console.error('Error deleting shopping list:', err);
@@ -179,14 +210,16 @@ export class ShoppinglistService {
       .subscribe({
         next: (result) => {
           if (!inContext()) return;
-          this.listScope = accept(this.listScope, result.revision, result.shoppingListIds);
-          this.finishListMove(group, false);
+          this.applyOrDefer(() => {
+            this.listScope = accept(this.listScope, result.revision, result.shoppingListIds);
+            this.finishListMove(group, false);
+          });
         },
         error: (err) => {
           if (!inContext()) return;
           console.error('Error reordering shopping lists:', err);
           this.alertService.showToast(this.translate.instant('alerts.shoppinglist.reorder.error'));
-          this.finishListMove(group, true);
+          this.applyOrDefer(() => this.finishListMove(group, true));
         }
       });
   }
@@ -226,17 +259,19 @@ export class ShoppinglistService {
             completed: result.completed
           }
 
-          this.shoppingLists.update(lists =>
-            lists.map(list =>
-              list.id === result.shoppingListId
-                ? {
-                    ...list,
-                    shoppingItems: [...list.shoppingItems, newItem]
-                  }
-                : list
-            )
-          );
-          this.confirmItemAdded(result.shoppingListId, newItem.id);
+          this.applyOrDefer(() => {
+            this.shoppingLists.update(lists =>
+              lists.map(list =>
+                list.id === result.shoppingListId
+                  ? {
+                      ...list,
+                      shoppingItems: [...list.shoppingItems, newItem]
+                    }
+                  : list
+              )
+            );
+            this.confirmItemAdded(result.shoppingListId, newItem.id);
+          });
         },
         error: (err) => {
           console.error("Error adding shopping item:", err);
@@ -260,7 +295,7 @@ export class ShoppinglistService {
               completed: result.completed
             }
 
-            this.shoppingLists.update(lists =>
+            this.applyOrDefer(() => this.shoppingLists.update(lists =>
               lists.map(list =>
                 list.shoppingItems.some(item => item.id === updatedItem.id)
                   ? {
@@ -271,7 +306,7 @@ export class ShoppinglistService {
                     }
                   : list
               )
-            )
+            ));
           },
           error: (err) => {
             console.error("Error updating shopping item:", err);
@@ -285,7 +320,7 @@ export class ShoppinglistService {
         .post<void>(this.deleteItemFromShoppingListUrl, deleteShoppingItem)
         .subscribe({
           next: () => {
-            this.shoppingLists.update(lists =>
+            this.applyOrDefer(() => this.shoppingLists.update(lists =>
               lists.map(list =>
                 list.id === deleteShoppingItem.shoppingListId
                   ? {
@@ -294,7 +329,7 @@ export class ShoppinglistService {
                     }
                   : list
               )
-            )
+            ));
           },
           error: (err) => {
             console.error("Error deleting shopping item:", err);
@@ -308,7 +343,7 @@ export class ShoppinglistService {
         .post<void>(this.deleteAllItemsFromShoppingListUrl, deleteShoppingItems)
         .subscribe({
           next: () => {
-            this.shoppingLists.update(lists =>
+            this.applyOrDefer(() => this.shoppingLists.update(lists =>
               lists.map(list =>
                 list.id === deleteShoppingItems[0].shoppingListId
                 ? {
@@ -319,8 +354,7 @@ export class ShoppinglistService {
                   }
                 : list
               )
-            )
-
+            ));
           },
           error: (err) => {
             console.error("Error deleting completed items:", err);
@@ -350,15 +384,17 @@ export class ShoppinglistService {
       .subscribe({
         next: (result) => {
           if (!inContext()) return;
-          const current = this.itemScopes.get(listId);
-          if (current) this.itemScopes.set(listId, accept(current, result.revision, result.shoppingItemIds));
-          this.finishItemMove(group, listId, false);
+          this.applyOrDefer(() => {
+            const current = this.itemScopes.get(listId);
+            if (current) this.itemScopes.set(listId, accept(current, result.revision, result.shoppingItemIds));
+            this.finishItemMove(group, listId, false);
+          });
         },
         error: (err) => {
           if (!inContext()) return;
           console.error('Error reordering shopping items:', err);
           this.alertService.showToast(this.translate.instant('alerts.shoppinglist.reorder.error'));
-          this.finishItemMove(group, listId, true);
+          this.applyOrDefer(() => this.finishItemMove(group, listId, true));
         }
       });
   }
@@ -390,6 +426,7 @@ export class ShoppinglistService {
     this.generation++;
     this.listScope = emptyScope(UNKNOWN_REVISION);
     this.itemScopes.clear();
+    this.deferredUpdates = [];
   }
 
   /**

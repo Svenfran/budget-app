@@ -31,10 +31,6 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
   public activeGroup = this.groupService.activeGroup();
   /** Drag & Drop startet nach Antippen und kurzem Halten (DIV-1, E1); Wert am Gerät abgestimmt (Phase 4a). */
   public dragStartDelay = { touch: 300, mouse: 0 };
-  /** Während eines Drags dürfen WebSocket-Events die Listen nicht ändern, sonst passen die Indizes des CDK nicht mehr. */
-  private dragging = false;
-  /** Während des Drags eingetroffene Updates, je mit der Kontext-Generation des Service beim Eintreffen. */
-  private deferredUpdates: { apply: () => void; generation: number }[] = [];
   /** Ende des letzten Drags: ein direkt folgender Click gehört zur Geste und wird ignoriert. */
   private dragEndedAt = 0;
   private static readonly CLICK_AFTER_DRAG_MS = 400;
@@ -59,8 +55,8 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
       this.groupService.activeGroupId();
       this.groupService.session();
       const activeGroup = untracked(() => this.groupService.activeGroup());
-      // gepufferte Updates gehören zur alten Gruppe bzw. Sitzung
-      this.resetDrag();
+      // ein unterbrochener Drag gibt den Puffer frei; Updates der alten Gruppe bzw. Sitzung verwirft der Service
+      this.shoppinglistService.releaseUpdates();
       this.isLoading = true;
       if (!activeGroup.flag?.includes(INIT_VALUES.DEFAULT)) {
         this.shoppingLists.set([]);
@@ -81,7 +77,7 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
   ngOnDestroy() {
     // nur die eigenen Topics, die globalen von AppComponent bleiben bestehen
     this.webSocketService.unsubscribeOwner('shoppinglist');
-    this.resetDrag();
+    this.shoppinglistService.releaseUpdates();
   }
 
   refreshShoppingList(event: CustomEvent) {
@@ -307,18 +303,18 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
   }
 
   // Drag & Drop (DIV-1). Das CDK löst synchron erst `ended`, dann `dropped` aus; der Move wird deshalb im Drop-Handler
-  // gegen den während der Geste unveränderten Zustand berechnet, erst danach werden gepufferte Updates angewandt.
+  // gegen den während der Geste unveränderten Zustand berechnet, erst danach gibt der Service zurückgestellte
+  // Änderungen (WebSocket, GET, REST, PUT-Antworten) frei.
 
   onDragStarted(slidingItem?: IonItemSliding) {
-    this.dragging = true;
+    this.shoppinglistService.holdUpdates();
     slidingItem?.close();
   }
 
   onDragEnded() {
-    this.dragging = false;
     this.dragEndedAt = Date.now();
     // Rückfall für einen Drag ohne Drop; nach einem Drop ist der Puffer schon leer
-    queueMicrotask(() => this.applyDeferredUpdates());
+    queueMicrotask(() => this.shoppinglistService.releaseUpdates());
   }
 
   /** Drop einer Liste: die gezogene ID wird im aktuellen Zustand neu aufgelöst, eine inzwischen gelöschte verworfen. */
@@ -327,7 +323,7 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
     if (this.shoppingLists().some(list => list.id === listId)) {
       this.shoppinglistService.moveShoppingList(this.activeGroup, listId, event.currentIndex);
     }
-    this.applyDeferredUpdates();
+    this.shoppinglistService.releaseUpdates();
   }
 
   /** Drop eines Eintrags innerhalb seiner Liste (Liste und Eintrag werden im aktuellen Zustand neu aufgelöst). */
@@ -337,39 +333,19 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
     if (current?.shoppingItems.some(item => item.id === itemId)) {
       this.shoppinglistService.moveShoppingItem(this.activeGroup, list.id, itemId, event.currentIndex);
     }
-    this.applyDeferredUpdates();
+    this.shoppinglistService.releaseUpdates();
   }
 
   private isClickAfterDrag(): boolean {
     return Date.now() - this.dragEndedAt < ShoppinglistPage.CLICK_AFTER_DRAG_MS;
   }
 
-  /** WebSocket-Update sofort anwenden oder, während eines Drags, bis zum Drop puffern. */
-  private applyOrDefer(apply: () => void) {
-    if (!this.dragging) {
-      apply();
-      return;
-    }
-    this.deferredUpdates.push({ apply, generation: this.shoppinglistService.currentGeneration() });
-  }
-
-  private applyDeferredUpdates() {
-    const updates = this.deferredUpdates;
-    this.deferredUpdates = [];
-    const generation = this.shoppinglistService.currentGeneration();
-    updates.filter(update => update.generation === generation).forEach(update => update.apply());
-  }
-
-  private resetDrag() {
-    this.dragging = false;
-    this.deferredUpdates = [];
-  }
-
   private subscribeToTopics() {
     const options = { owner: 'shoppinglist', filterByActiveGroup: true };
-    // alle Handler laufen über applyOrDefer: während eines Drags werden sie gepuffert (DIV-1)
+    // alle Handler laufen über den Puffer des Service: während eines Drags werden sie zurückgestellt (DIV-1)
     const on = <T>(action: string, handler: (data: T) => void) =>
-      this.webSocketService.subscribe<T>(`/user/notification/${action}`, data => this.applyOrDefer(() => handler(data)), options);
+      this.webSocketService.subscribe<T>(`/user/notification/${action}`,
+        data => this.shoppinglistService.applyOrDefer(() => handler(data)), options);
     const onList = (action: string, apply: (lists: ShoppinglistDto[], data: AddEditShoppinglistDto) => ShoppinglistDto[]) =>
       on<AddEditShoppinglistDto>(action, data => this.shoppingLists.update(lists => apply(lists, data)));
     const onItem = (action: string, apply: (lists: ShoppinglistDto[], data: AddEditShoppingItemDto) => ShoppinglistDto[]) =>
