@@ -220,10 +220,25 @@ describe('ShoppinglistPage – Drag & Drop', () => {
     // Verschieben zwischen Listen (DIV-2): die CDK-Container tragen die Listen-ID als Daten
     describe('in eine andere Liste', () => {
       const moveUrl = `${api}/shopping-list/move-item`;
-      const dropBetween = (itemId: number, sourceListId: number, targetListId: number, currentIndex: number) =>
-        ({ item: { data: itemId }, previousContainer: { data: sourceListId }, container: { data: targetListId }, currentIndex }) as
-          unknown as CdkDragDrop<number, number, number>;
+      const dropBetween = (itemId: number, sourceListId: number, targetListId: number, currentIndex: number,
+                           isPointerOverContainer = true) =>
+        ({
+          item: { data: itemId }, previousContainer: { data: sourceListId }, container: { data: targetListId }, currentIndex,
+          isPointerOverContainer,
+        }) as unknown as CdkDragDrop<number, number, number>;
       const listB = () => service.getShoppingLists()().find(list => list.id === 2)!;
+
+      it('Codex F-001: losgelassen außerhalb des zuletzt betretenen Containers: kein Move, der Puffer wird freigegeben', () => {
+        const move = spyOn(service, 'moveShoppingItemToList').and.callThrough();
+        const release = spyOn(service, 'releaseUpdates').and.callThrough();
+
+        page.onItemDropped(listB(), dropBetween(12, 1, 2, 0, false));
+
+        expect(move).not.toHaveBeenCalled();
+        expect(release).toHaveBeenCalled();
+        http.expectNone(moveUrl);
+        expect(itemIdsOfA()).toEqual([11, 12, 13]);
+      });
 
       it('Drop in eine andere Liste: moveShoppingItemToList mit Eintrag, Quelle, Ziel und Index, danach Puffer frei', () => {
         const move = spyOn(service, 'moveShoppingItemToList').and.callThrough();
@@ -545,16 +560,23 @@ describe('ShoppinglistPage – Drag & Drop mit echter Geste', () => {
   /**
    * Zieht `handle` mit der Maus: Druck, kleine Bewegung (startet den Drag), dann in Schritten zum Ziel, das erst nach
    * dem Start berechnet wird (die Ablagefläche leerer Listen entsteht erst mit dem Drag). `whileDragging` läuft vor
-   * dem Loslassen.
+   * dem Loslassen; `via` ist ein Zwischenpunkt, über den der Weg führt. Jeder Punkt wird erst berechnet, wenn er
+   * angesteuert wird: betritt der Eintrag eine andere Liste, verschiebt sich das Layout (wie ein Mensch folgt der Weg
+   * dem Ziel).
    */
-  async function drag(handle: HTMLElement, target: () => Point, whileDragging?: () => void) {
+  async function drag(handle: HTMLElement, target: () => Point, whileDragging?: () => void, via?: () => Point) {
     const start = center(handle);
     mouse(handle, 'mousedown', start);
     mouse(document, 'mousemove', { x: start.x, y: start.y + 10 });
-    const end = target();
-    for (const step of [0.25, 0.5, 0.75, 1]) {
-      mouse(document, 'mousemove', { x: start.x + (end.x - start.x) * step, y: start.y + (end.y - start.y) * step });
+    let from = start;
+    for (const next of via ? [via, target] : [target]) {
+      const to = next();
+      for (const step of [0.25, 0.5, 0.75, 1]) {
+        mouse(document, 'mousemove', { x: from.x + (to.x - from.x) * step, y: from.y + (to.y - from.y) * step });
+      }
+      from = to;
     }
+    const end = from;
     whileDragging?.();
     mouse(document, 'mouseup', end);
     // das CDK meldet den Drop erst nach der Rückanimation der Vorschau (200 ms, .cdk-drag-animating)
@@ -634,10 +656,11 @@ describe('ShoppinglistPage – Drag & Drop mit echter Geste', () => {
       return { x: rect.left + rect.width / 2, y: rect.top + 24 };
     };
 
+    // über B hinein, dann zu Bs Mitte nach dem Wechsel (A ist dann einen Eintrag kürzer, B rückt nach oben)
     await drag(items(1)[0], flaechenMitte, () => {
       flaecheWaehrendDrag = el('#item-list-2').getBoundingClientRect().height;
       klasseWaehrendDrag = scrollHost.classList.contains('item-drag-active');
-    });
+    }, flaechenMitte);
 
     expect(klasseWaehrendDrag).toBeTrue();
     expect(flaecheWaehrendDrag).toBeGreaterThanOrEqual(48);
@@ -674,6 +697,26 @@ describe('ShoppinglistPage – Drag & Drop mit echter Geste', () => {
     http.expectNone(`${api}/shopping-list/reorder-items`);
     expect(items(1).length).toBe(2);
     expect(items(4).length).toBe(1);
+  });
+
+  it('Codex F-001: Weg über die aufgeklappte Liste B, losgelassen auf der eingeklappten Liste D: kein Move', async () => {
+    page.toggleLists = { 1: true, 2: true };
+    fixture.detectChanges();
+    let platzhalterIn: string | undefined;
+
+    await drag(items(1)[1], () => center(listHeader(3)), () => {
+      platzhalterIn = document.querySelector('.cdk-drag-placeholder')?.parentElement?.id;
+    }, () => {
+      const rect = el('#item-list-2').getBoundingClientRect();
+      return { x: rect.left + rect.width / 2, y: rect.top + 24 };
+    });
+
+    // B ist der zuletzt betretene Container (das CDK lässt den Platzhalter dort), losgelassen wurde über D
+    expect(platzhalterIn).toBe('item-list-2');
+    http.expectNone(moveUrl);
+    http.expectNone(`${api}/shopping-list/reorder-items`);
+    expect(items(1).length).toBe(2);
+    expect(items(2).length).toBe(0);
   });
 
   it('Listen-Drag über die Item-Container: nur die Listenreihenfolge ändert sich, kein move-item', async () => {

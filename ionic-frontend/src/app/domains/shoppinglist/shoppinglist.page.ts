@@ -342,7 +342,8 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
   /**
    * Drop eines Eintrags: innerhalb seiner Liste nur umsortieren (Liste und Eintrag werden im aktuellen Zustand neu
    * aufgelöst), aus einer anderen Liste verschieben (DIV-2; Quelle/Ziel aus den Container-Daten, der Service verwirft
-   * den Move, wenn Eintrag oder Liste inzwischen fehlen).
+   * den Move, wenn Eintrag oder Liste inzwischen fehlen). Das CDK meldet als Ziel den zuletzt betretenen Container,
+   * auch wenn außerhalb losgelassen wurde; verschoben wird nur, wenn der Zeiger über ihm liegt (Codex-Review F-001).
    */
   onItemDropped(list: ShoppinglistDto, event: CdkDragDrop<number, number, number>) {
     const itemId = event.item.data;
@@ -351,7 +352,7 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
       if (current?.shoppingItems.some(item => item.id === itemId)) {
         this.shoppinglistService.moveShoppingItem(this.activeGroup, list.id, itemId, event.currentIndex);
       }
-    } else {
+    } else if (event.isPointerOverContainer) {
       this.shoppinglistService.moveShoppingItemToList(this.activeGroup, itemId, event.previousContainer.data,
         event.container.data, event.currentIndex);
     }
