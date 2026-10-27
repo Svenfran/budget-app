@@ -86,3 +86,10 @@ ion-list {
 .item-drag-active .item-drop-list--empty {
     min-height: 48px;
 }
+
+// mögliche Ziele (aufgeklappte andere Listen) während eines Item-Drags; Ionic-Farben, daher auch im Dark Mode passend
+.item-drop-list.cdk-drop-list-receiving {
+    border-radius: 6px;
+    outline: 1px dashed rgba(var(--ion-color-primary-rgb), 0.6);
+    background: rgba(var(--ion-color-primary-rgb), 0.04);
+}

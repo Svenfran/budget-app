@@ -358,6 +358,11 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
     this.shoppinglistService.releaseUpdates();
   }
 
+  /** Ein Eintrag mit offenem Move ist bis zur Antwort nicht erneut ziehbar (höchstens ein Move je Eintrag). */
+  isMovePending(itemId: number): boolean {
+    return this.shoppinglistService.isMovePending(itemId);
+  }
+
   itemDropListId(listId: number): string {
     return `item-list-${listId}`;
   }

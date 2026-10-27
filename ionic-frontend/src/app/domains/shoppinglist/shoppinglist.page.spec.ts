@@ -216,6 +216,83 @@ describe('ShoppinglistPage – Drag & Drop', () => {
       expect(moveList).not.toHaveBeenCalled();
       expect(moveItem).not.toHaveBeenCalled();
     });
+
+    // Verschieben zwischen Listen (DIV-2): die CDK-Container tragen die Listen-ID als Daten
+    describe('in eine andere Liste', () => {
+      const moveUrl = `${api}/shopping-list/move-item`;
+      const dropBetween = (itemId: number, sourceListId: number, targetListId: number, currentIndex: number) =>
+        ({ item: { data: itemId }, previousContainer: { data: sourceListId }, container: { data: targetListId }, currentIndex }) as
+          unknown as CdkDragDrop<number, number, number>;
+      const listB = () => service.getShoppingLists()().find(list => list.id === 2)!;
+
+      it('Drop in eine andere Liste: moveShoppingItemToList mit Eintrag, Quelle, Ziel und Index, danach Puffer frei', () => {
+        const move = spyOn(service, 'moveShoppingItemToList').and.callThrough();
+        const release = spyOn(service, 'releaseUpdates').and.callThrough();
+
+        page.onItemDropped(listB(), dropBetween(12, 1, 2, 0));
+
+        expect(move).toHaveBeenCalledOnceWith(jasmine.objectContaining({ id: 1 }), 12, 1, 2, 0);
+        expect(release).toHaveBeenCalled();
+        const req = http.expectOne(moveUrl);
+        expect(req.request.body).toEqual({
+          groupId: 1, shoppingItemId: 12, sourceShoppingListId: 1, targetShoppingListId: 2, targetShoppingItemIds: [12]
+        });
+        req.flush({
+          groupId: 1, shoppingItemId: 12,
+          source: { groupId: 1, shoppingListId: 1, revision: 3, shoppingItemIds: [11, 13] },
+          target: { groupId: 1, shoppingListId: 2, revision: 3, shoppingItemIds: [12] },
+        });
+        expect(itemIdsOfA()).toEqual([11, 13]);
+        expect(listB().shoppingItems.map(item => item.id)).toEqual([12]);
+      });
+
+      it('Drop in dieselbe Liste (gleicher Container): weiterhin reorder-items, kein move-item (AC8)', () => {
+        const container = { data: 1 };
+        const sameList = { item: { data: 13 }, previousContainer: container, container, currentIndex: 0 } as
+          unknown as CdkDragDrop<number, number, number>;
+
+        page.onItemDropped(listA(), sameList);
+
+        http.expectNone(moveUrl);
+        http.expectOne(`${api}/shopping-list/reorder-items`).flush({ groupId: 1, shoppingListId: 1, revision: 3, shoppingItemIds: [13, 11, 12] });
+        expect(itemIdsOfA()).toEqual([13, 11, 12]);
+      });
+
+      it('Ziel inzwischen gelöscht bzw. Eintrag entfernt: kein Request, der Puffer wird trotzdem freigegeben', () => {
+        const release = spyOn(service, 'releaseUpdates').and.callThrough();
+        // bereits angewandte Löschungen, das CDK liefert aber noch die Container-Daten von vorher
+        const staleB = listB();
+        event('delete-list', { id: 2, name: 'Liste 2', groupId: 1 });
+        event('delete-item', { id: 13, name: 'x', completed: false, shoppingListId: 1, groupId: 1 });
+
+        page.onItemDropped(staleB, dropBetween(12, 1, 2, 0));
+        page.onItemDropped(listA(), dropBetween(13, 1, 3, 0));
+
+        http.expectNone(moveUrl);
+        expect(release).toHaveBeenCalled();
+        expect(listIds()).toEqual([1, 3]);
+        expect(itemIdsOfA()).toEqual([11, 12]);
+      });
+
+      it('ein Eintrag mit offenem Move ist nicht ziehbar, nach der Antwort wieder', () => {
+        /** Ist der `index`-te Eintrag im Container der Liste gesperrt (CDK-Klasse von `cdkDragDisabled`)? */
+        const dragDisabled = (listId: number, index: number) => {
+          fixture.detectChanges();
+          const element = (fixture.nativeElement as HTMLElement).querySelectorAll(`#item-list-${listId} > ion-item`)[index];
+          return element.classList.contains('cdk-drag-disabled');
+        };
+
+        page.onItemDropped(listB(), dropBetween(11, 1, 2, 0));
+
+        expect(page.isMovePending(11)).toBeTrue();
+        expect(dragDisabled(2, 0)).withContext('11, jetzt in B').toBeTrue();
+        expect(dragDisabled(1, 0)).withContext('12 in A').toBeFalse();
+        http.expectOne(moveUrl).flush('Server error', { status: 500, statusText: 'Server Error' });
+        http.expectOne(loadUrl(1)).flush(loadedLists());
+        expect(page.isMovePending(11)).toBeFalse();
+        expect(dragDisabled(1, 0)).withContext('11, zurück in A').toBeFalse();
+      });
+    });
   });
 
   describe('Abhaken', () => {

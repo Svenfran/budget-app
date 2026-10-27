@@ -63,6 +63,7 @@
             (cdkDropListDropped)="onItemDropped(list, $event)">
             <ion-item *ngFor="let item of list.shoppingItems; let j = index; trackBy: trackByItemId"
               cdkDrag [cdkDragData]="item.id" [cdkDragStartDelay]="dragStartDelay" cdkDragBoundary=".ion-content-scroll-host"
+              [cdkDragDisabled]="isMovePending(item.id)"
               (cdkDragStarted)="onDragStarted(undefined, true)" (cdkDragEnded)="onDragEnded()">
               <div class="item-drag-placeholder" *cdkDragPlaceholder></div>
               <ion-text slot="start">{{ j + 1 }}</ion-text>
