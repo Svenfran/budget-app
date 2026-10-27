@@ -15,8 +15,6 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 
-import java.time.LocalDate
-
 import static com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData.REFERENCE_DATE
 
 /**
@@ -345,7 +343,7 @@ class ShoppingListServiceIntegrationSpec extends IntegrationSpec {
         0 * notificationService._
     }
 
-    def "Listen laden (#zeitstempel) liefert nur die eigenen Listen nach id, Einträge je Liste nach id"() {
+    def "Listen laden liefert nur die eigenen Listen nach id, Einträge je Liste nach id"() {
         given:
         def ben = fixtures.user()
         def wg = fixtures.group(members: [ben])
@@ -363,10 +361,9 @@ class ShoppingListServiceIntegrationSpec extends IntegrationSpec {
                 groupId, ben.id, ids.erste, ids.milch, ids.brot, ids.zweite, ids.fremd, andereGruppe.group.id)
 
         when:
-        def result = shoppingListService.getShoppingListsForGroup(groupId, requestTimeStamp)
-        def listen = result.get()
-        LOG.info('shoppingListService.getShoppingListsForGroup(Gruppe {}, {}) -> Listen {}, Einträge der ersten {}',
-                groupId, requestTimeStamp, listen*.id, listen[0].shoppingItems*.id)
+        def listen = shoppingListService.getShoppingListsForGroup(groupId)
+        LOG.info('shoppingListService.getShoppingListsForGroup(Gruppe {}) -> Listen {}, Einträge der ersten {}',
+                groupId, listen*.id, listen[0].shoppingItems*.id)
 
         then:
         0 * notificationService._
@@ -376,11 +373,6 @@ class ShoppingListServiceIntegrationSpec extends IntegrationSpec {
         listen[0].shoppingItems*.name == ['Milch', 'Brot']
         listen[0].shoppingItems*.completed == [false, true]
         listen[1].shoppingItems.isEmpty()
-
-        where:
-        zeitstempel                         | requestTimeStamp
-        'ohne Zeitstempel'                  | null
-        'Zeitstempel 1900-01-01 (Frontend)' | DateUtils.toDate(LocalDate.of(1900, 1, 1)).time
     }
 
     def "Listen laden für eine Gruppe ohne Listen liefert eine leere Liste"() {
@@ -393,11 +385,11 @@ class ShoppingListServiceIntegrationSpec extends IntegrationSpec {
         LOG.info('Szenario: Gruppe {} ohne Einkaufslisten, Mitglied {} (angemeldet)', groupId, ben.id)
 
         when:
-        def result = shoppingListService.getShoppingListsForGroup(groupId, null)
-        LOG.info('shoppingListService.getShoppingListsForGroup(Gruppe {}, null) -> {}', groupId, result.get()*.id)
+        def result = shoppingListService.getShoppingListsForGroup(groupId)
+        LOG.info('shoppingListService.getShoppingListsForGroup(Gruppe {}) -> {}', groupId, result*.id)
 
         then:
-        result.get().isEmpty()
+        result.isEmpty()
     }
 
     def "Nicht-Mitglied darf die Listen einer Gruppe nicht laden"() {
@@ -411,8 +403,8 @@ class ShoppingListServiceIntegrationSpec extends IntegrationSpec {
         LOG.info('Szenario: Gruppe {} mit einer Liste, Owner {}; Nicht-Mitglied {} (angemeldet)', groupId, wg.owner.id, fremder.id)
 
         when:
-        LOG.info('shoppingListService.getShoppingListsForGroup(Gruppe {}, null), erwartet NotOwnerOrMemberOfGroupException', groupId)
-        shoppingListService.getShoppingListsForGroup(groupId, null)
+        LOG.info('shoppingListService.getShoppingListsForGroup(Gruppe {}), erwartet NotOwnerOrMemberOfGroupException', groupId)
+        shoppingListService.getShoppingListsForGroup(groupId)
 
         then:
         thrown(NotOwnerOrMemberOfGroupException)
@@ -531,7 +523,7 @@ class ShoppingListServiceIntegrationSpec extends IntegrationSpec {
                 groupId, ben.id, ids.erste, ids.zweite, ids.dritte, ids.erste, ids.x, ids.y, ids.z)
 
         when:
-        def listen = shoppingListService.getShoppingListsForGroup(groupId, null).get()
+        def listen = shoppingListService.getShoppingListsForGroup(groupId)
         LOG.info('shoppingListService.getShoppingListsForGroup(Gruppe {}) -> Listen {}, Einträge von {} {}, listOrderRevision {}, itemOrderRevision {}',
                 groupId, listen*.id, ids.erste, listen[1].shoppingItems*.id, listen*.listOrderRevision, listen*.itemOrderRevision)
 

@@ -323,7 +323,7 @@ class ShoppingReorderConcurrencyIntegrationSpec extends IntegrationSpec {
 
     /** Lädt die Listen wie das GET (in eigener Transaktion: die Einträge werden lazy nachgeladen). */
     private List<ShoppingListDto> geladen(User user, Long groupId) {
-        inTransaction(user) { shoppingListService.getShoppingListsForGroup(groupId, null).get() } as List<ShoppingListDto>
+        inTransaction(user) { shoppingListService.getShoppingListsForGroup(groupId) } as List<ShoppingListDto>
     }
 
     private List<Long> listIds(Long groupId) {

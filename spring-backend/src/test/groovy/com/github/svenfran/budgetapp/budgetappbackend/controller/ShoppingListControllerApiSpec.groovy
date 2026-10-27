@@ -28,9 +28,6 @@ class ShoppingListControllerApiSpec extends IntegrationSpec implements ApiReques
 
     private static final Logger LOG = LoggerFactory.getLogger(ShoppingListControllerApiSpec)
 
-    /** Zeitstempel, den das Frontend immer sendet (shoppinglist.service.ts, INITIAL_REQUEST_TIMESTAMP). */
-    private static final long FRONTEND_TIMESTAMP = DateUtils.toDate(LocalDate.of(1900, 1, 1)).time
-
     @Autowired ObjectMapper objectMapper
 
     def "Mitglied erhält die Listen der Gruppe mit ihren Einträgen und den Reihenfolge-Revisionen als JSON"() {
@@ -166,8 +163,7 @@ class ShoppingListControllerApiSpec extends IntegrationSpec implements ApiReques
         LOG.info('Szenario: Gruppe {}, Request ohne Anmeldung', wg.group.id)
 
         expect: 'Ist-Verhalten: Spring Security antwortet ohne Authentifizierung mit 403, nicht 401'
-        send(get('/api/groups/shopping-lists-with-items/{groupId}', wg.group.id)
-                .param('requestTimeStamp', FRONTEND_TIMESTAMP as String)).status == 403
+        send(get('/api/groups/shopping-lists-with-items/{groupId}', wg.group.id)).status == 403
     }
 
     def "Liste einer fremden Gruppe umbenennen: 404"() {
@@ -277,8 +273,32 @@ class ShoppingListControllerApiSpec extends IntegrationSpec implements ApiReques
         'unbekannte Gruppe' | 'mitglied' | true             || 404
     }
 
+    def "Zeitstempel älterer App-Versionen (#zeitstempel) wird ignoriert: sofort 200 mit den Listen, kein 304"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg)
+        def (groupId, listId) = [wg.group.id, liste.id]
+        flushAndClear()
+        LOG.info('Szenario: Gruppe {}, Mitglied {}, Liste {}; requestTimeStamp {} ({})', groupId, ben.id, listId, requestTimeStamp, zeitstempel)
+
+        when:
+        def response = send(get('/api/groups/shopping-lists-with-items/{groupId}', groupId)
+                .param('requestTimeStamp', requestTimeStamp as String), user: ben)
+        def body = json(response)
+        LOG.info('Antwort: Listen {}', body*.id)
+
+        then:
+        response.status == 200
+        body*.id == [listId]
+
+        where:
+        zeitstempel                     | requestTimeStamp
+        'bisheriger Frontend-Wert 1900' | DateUtils.toDate(LocalDate.of(1900, 1, 1)).time
+        'in der Zukunft (früher 304)'   | DateUtils.toDate(LocalDate.of(2999, 12, 31)).time
+    }
+
     private MockHttpServletResponse getShoppingLists(Long groupId, User angemeldet) {
-        send(get('/api/groups/shopping-lists-with-items/{groupId}', groupId)
-                .param('requestTimeStamp', FRONTEND_TIMESTAMP as String), user: angemeldet)
+        send(get('/api/groups/shopping-lists-with-items/{groupId}', groupId), user: angemeldet)
     }
 }

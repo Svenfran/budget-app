@@ -12,7 +12,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Optional;
 
 @RestController
 @RequestMapping("/api")
@@ -25,13 +24,9 @@ public class ShoppingListController {
     }
 
     @GetMapping("/groups/shopping-lists-with-items/{groupId}")
-    public ResponseEntity<List<ShoppingListDto>> getShoppingListsForGroup(
-            @PathVariable("groupId") Long groupId, @RequestParam(value = "requestTimeStamp", required = false) Long requestTimeStamp) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, InterruptedException {
-        Optional<List<ShoppingListDto>> groupShoppingList = shoppingListService.getShoppingListsForGroup(groupId, requestTimeStamp);
-        if (groupShoppingList.isEmpty()) {
-            return new ResponseEntity<>(HttpStatus.NOT_MODIFIED);
-        }
-        return new ResponseEntity<>(groupShoppingList.get(), HttpStatus.OK);
+    public ResponseEntity<List<ShoppingListDto>> getShoppingListsForGroup(@PathVariable("groupId") Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
+        List<ShoppingListDto> groupShoppingList = shoppingListService.getShoppingListsForGroup(groupId);
+        return new ResponseEntity<>(groupShoppingList, HttpStatus.OK);
     }
 
     @PostMapping("/groups/shopping-list/add")
