@@ -29,3 +29,54 @@ ion-list {
     padding-top: 0;
     padding-bottom: 0;
 }
+
+// Drag & Drop (DIV-1)
+.cdk-drag-preview {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+    opacity: 0.95;
+    // die Vorschau hängt am body, außerhalb von ion-content
+    --background: var(--ion-item-background, var(--ion-background-color));
+    background: var(--ion-item-background, var(--ion-background-color));
+}
+
+.ion-content-scroll-host {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+}
+
+// Das CDK setzt auf Drag-Handles dauerhaft touch-action: none; der Listen-Header wäre dann keine Scrollfläche mehr.
+// Der Drag startet erst nach der Haltezeit, eine Bewegung davor bricht ihn ab und scrollt.
+.list-header.cdk-drag-handle {
+    touch-action: pan-y !important;
+}
+
+.item-drag-placeholder {
+    height: 48px;
+    border: 2px dashed var(--ion-color-primary);
+    border-radius: 6px;
+    background: rgba(var(--ion-color-primary-rgb), 0.08);
+}
+
+.cdk-drag-animating,
+.cdk-drop-list-dragging .cdk-drag:not(.cdk-drag-placeholder) {
+    transition: transform 200ms ease;
+}
+
+.list-drag-preview {
+    padding: 12px 16px;
+    font-weight: bold;
+    background: var(--ion-item-background, var(--ion-background-color));
+    color: var(--ion-text-color);
+}
+
+.list-drag-placeholder {
+    height: 48px;
+    margin-bottom: 12px;
+    border: 2px dashed var(--ion-color-primary);
+    border-radius: 6px;
+}

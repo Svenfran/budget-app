@@ -1,3 +1,5 @@
+import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
+import { HttpTestingController } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormsModule } from '@angular/forms';
@@ -10,7 +12,8 @@ import { AlertService } from 'src/app/service/alert.service';
 import { GroupService } from 'src/app/service/group.service';
 import { StorageService } from 'src/app/service/storage.service';
 import { WebSocketService } from 'src/app/service/websocket.service';
-import { aGroup, aLoggedInUser, aShoppingList } from 'src/testing/test-data';
+import { environment } from 'src/environments/environment';
+import { aGroup, aLoggedInUser, aShoppingItem, aShoppingList, REFERENCE_DATE } from 'src/testing/test-data';
 import { alertServiceSpy, authServiceStub, provideServiceTesting, storageServiceFake } from 'src/testing/test-providers';
 import { ShoppinglistDto } from './model/shoppinglist-dto';
 import { ShoppinglistService } from './service/shoppinglist.service';
@@ -36,7 +39,7 @@ describe('ShoppinglistPage – Gruppenwechsel und Umbenennung', () => {
       .and.callFake((_group: unknown, onComplete?: () => void) => onComplete?.());
     TestBed.configureTestingModule({
       declarations: [ShoppinglistPage],
-      imports: [IonicModule.forRoot(), FormsModule, TranslateModule],
+      imports: [IonicModule.forRoot(), FormsModule, TranslateModule, DragDropModule],
       providers: [
         ...provideServiceTesting(),
         { provide: ShoppinglistService, useValue: { getShoppingLists: () => lists, getShoppingListsWithItems: load } },
@@ -112,5 +115,239 @@ describe('ShoppinglistPage – Gruppenwechsel und Umbenennung', () => {
     fixture.detectChanges();
 
     expect(load).toHaveBeenCalledOnceWith(jasmine.objectContaining({ id: 1 }), jasmine.any(Function));
+  });
+});
+
+// DIV-1: Drag & Drop. Mit echtem ShoppinglistService und gemocktem HTTP; die CDK-Events werden als Objekte an die
+// Handler übergeben (ohne echte Geste), WebSocket-Handler werden über den Subscribe-Spy direkt aufgerufen.
+describe('ShoppinglistPage – Drag & Drop', () => {
+  let fixture: ComponentFixture<ShoppinglistPage>;
+  let page: ShoppinglistPage;
+  let service: ShoppinglistService;
+  let groupService: GroupService;
+  let http: HttpTestingController;
+  let session: BehaviorSubject<User | null>;
+  let handlers: Record<string, (data: unknown) => void>;
+  const api = `${environment.apiBaseUrl}/api/groups`;
+  const loadUrl = (groupId: number) =>
+    `${api}/shopping-lists-with-items/${groupId}?requestTimeStamp=${new Date('1900-01-01').getTime()}`;
+  const wg = aGroup({ id: 1, name: 'WG' });
+  const urlaub = aGroup({ id: 2, name: 'Urlaub' });
+
+  const drop = (data: number, currentIndex: number) =>
+    ({ item: { data }, currentIndex }) as unknown as CdkDragDrop<unknown, unknown, number>;
+  const listIds = () => service.getShoppingLists()().map(list => list.id);
+  const listA = () => service.getShoppingLists()().find(list => list.id === 1)!;
+  const itemIdsOfA = () => listA().shoppingItems.map(item => item.id);
+  const event = (topic: string, data: unknown) => handlers[`/user/notification/${topic}`](data);
+  /** Listen A (1, Einträge 11-13), B (2), C (3) mit Revisionen wie aus dem GET. */
+  const loadedLists = (): ShoppinglistDto[] => [1, 2, 3].map(id => ({
+    id, name: `Liste ${id}`, listOrderRevision: 5, itemOrderRevision: 2,
+    shoppingItems: id === 1 ? [11, 12, 13].map(itemId => aShoppingItem({ id: itemId })) : [],
+  }));
+
+  beforeEach(() => {
+    spyOn(console, 'error');
+    handlers = {};
+    session = new BehaviorSubject<User | null>(aLoggedInUser({ id: 7 }));
+    const auth = authServiceStub(null);
+    (Object.getOwnPropertyDescriptor(auth, 'user')!.get as jasmine.Spy).and.returnValue(session);
+    const webSocket = jasmine.createSpyObj<WebSocketService>('WebSocketService', ['subscribe', 'unsubscribeOwner']);
+    webSocket.subscribe.and.callFake(((topic: string, handler: (data: unknown) => void) => {
+      handlers[topic] = handler;
+    }) as never);
+    TestBed.configureTestingModule({
+      declarations: [ShoppinglistPage],
+      imports: [IonicModule.forRoot(), FormsModule, TranslateModule, DragDropModule],
+      providers: [
+        ...provideServiceTesting(),
+        { provide: WebSocketService, useValue: webSocket },
+        { provide: StorageService, useValue: storageServiceFake() },
+        { provide: AuthService, useValue: auth },
+        { provide: AlertService, useValue: alertServiceSpy() },
+      ],
+    });
+    groupService = TestBed.inject(GroupService);
+    service = TestBed.inject(ShoppinglistService);
+    http = TestBed.inject(HttpTestingController);
+    groupService.setActiveGroup(wg);
+    fixture = TestBed.createComponent(ShoppinglistPage);
+    page = fixture.componentInstance;
+    fixture.detectChanges();
+    http.expectOne(loadUrl(1)).flush(loadedLists());
+  });
+
+  afterEach(() => http.verify());
+
+  describe('Drop', () => {
+    it('Drop einer Liste: moveShoppingList mit der gezogenen ID und dem Zielindex, PUT mit der neuen Reihenfolge', () => {
+      const move = spyOn(service, 'moveShoppingList').and.callThrough();
+
+      page.onListDropped(drop(3, 0));
+
+      expect(move).toHaveBeenCalledOnceWith(jasmine.objectContaining({ id: 1 }), 3, 0);
+      const req = http.expectOne(`${api}/shopping-list/reorder`);
+      expect(req.request.body.shoppingListIds).toEqual([3, 1, 2]);
+      req.flush({ groupId: 1, revision: 6, shoppingListIds: [3, 1, 2] });
+      expect(listIds()).toEqual([3, 1, 2]);
+    });
+
+    it('Drop eines Eintrags: moveShoppingItem für seine Liste', () => {
+      const move = spyOn(service, 'moveShoppingItem').and.callThrough();
+
+      page.onItemDropped(listA(), drop(13, 0));
+
+      expect(move).toHaveBeenCalledOnceWith(jasmine.objectContaining({ id: 1 }), 1, 13, 0);
+      http.expectOne(`${api}/shopping-list/reorder-items`).flush({ groupId: 1, shoppingListId: 1, revision: 3, shoppingItemIds: [13, 11, 12] });
+      expect(itemIdsOfA()).toEqual([13, 11, 12]);
+    });
+
+    it('Drop einer inzwischen gelöschten Liste bzw. eines gelöschten Eintrags: kein Aufruf, kein Request', () => {
+      const moveList = spyOn(service, 'moveShoppingList');
+      const moveItem = spyOn(service, 'moveShoppingItem');
+      const staleA = listA();
+      event('delete-list', { id: 3, name: 'Liste 3', groupId: 1 });
+      event('delete-item', { id: 13, name: 'x', completed: false, shoppingListId: 1, groupId: 1 });
+
+      page.onListDropped(drop(3, 0));
+      page.onItemDropped(staleA, drop(13, 0));
+
+      expect(moveList).not.toHaveBeenCalled();
+      expect(moveItem).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Klick nach dem Drag', () => {
+    beforeEach(() => {
+      jasmine.clock().install();
+      jasmine.clock().mockDate(REFERENCE_DATE);
+    });
+
+    afterEach(() => jasmine.clock().uninstall());
+
+    it('der Click direkt nach dem Drag-Ende wird ignoriert (kein Auf-/Zuklappen, kein Abhaken), der folgende wirkt', () => {
+      const item = listA().shoppingItems[0];
+
+      page.onDragEnded();
+      page.toggleList(listA());
+      page.markAsDone(listA(), item);
+
+      expect(page.toggleLists[1]).toBeFalsy();
+      http.expectNone(`${api}/shopping-list/update-item`);
+
+      jasmine.clock().tick(500);
+      page.toggleList(listA());
+      page.markAsDone(listA(), item);
+
+      expect(page.toggleLists[1]).toBeTrue();
+      http.expectOne(`${api}/shopping-list/update-item`).flush({ ...item, completed: true, shoppingListId: 1, groupId: 1 });
+    });
+  });
+
+  describe('Puffer für WebSocket-Updates während des Drags', () => {
+    it('ein Update während des Drags wird erst nach dem Drop angewandt', () => {
+      page.onDragStarted();
+      event('update-list', { id: 2, name: 'Neu', groupId: 1 });
+
+      expect(service.getShoppingLists()()[1].name).toBe('Liste 2');
+
+      page.onDragEnded();
+      page.onListDropped(drop(2, 1));
+
+      expect(service.getShoppingLists()()[1].name).toBe('Neu');
+    });
+
+    it('echte CDK-Folge (Listen): ended, dann dropped – der Move rechnet gegen [A,B,C], danach wird die gepufferte Löschung von A angewandt', async () => {
+      page.onDragStarted();
+      event('delete-list', { id: 1, name: 'Liste 1', groupId: 1 });
+
+      page.onDragEnded();
+      page.onListDropped(drop(3, 1));
+      await Promise.resolve();
+
+      const req = http.expectOne(`${api}/shopping-list/reorder`);
+      expect(req.request.body.shoppingListIds).toEqual([1, 3, 2]);
+      expect(listIds()).toEqual([3, 2]);
+      req.flush({ groupId: 1, revision: 6, shoppingListIds: [1, 3, 2] });
+      expect(listIds()).toEqual([3, 2]);
+    });
+
+    it('echte CDK-Folge (Einträge): der Move rechnet gegen [11,12,13], danach wird die gepufferte Löschung von 11 angewandt', async () => {
+      page.onDragStarted();
+      event('delete-item', { id: 11, name: 'x', completed: false, shoppingListId: 1, groupId: 1 });
+
+      page.onDragEnded();
+      page.onItemDropped(listA(), drop(13, 1));
+      await Promise.resolve();
+
+      const req = http.expectOne(`${api}/shopping-list/reorder-items`);
+      expect(req.request.body.shoppingItemIds).toEqual([11, 13, 12]);
+      expect(itemIdsOfA()).toEqual([13, 12]);
+      req.flush({ groupId: 1, shoppingListId: 1, revision: 3, shoppingItemIds: [11, 13, 12] });
+      expect(itemIdsOfA()).toEqual([13, 12]);
+    });
+
+    it('Drag ohne Drop: der Puffer wird nach dem Drag-Ende per Microtask geleert', async () => {
+      page.onDragStarted();
+      event('update-list', { id: 2, name: 'Neu', groupId: 1 });
+
+      page.onDragEnded();
+      expect(service.getShoppingLists()()[1].name).toBe('Liste 2');
+      await Promise.resolve();
+
+      expect(service.getShoppingLists()()[1].name).toBe('Neu');
+    });
+
+    it('Gruppenwechsel bei gefülltem Puffer: der Puffer wird verworfen, die neue Gruppe bleibt unverändert', async () => {
+      page.onDragStarted();
+      event('add-list', { id: 9, name: 'Neu', groupId: 1 });
+
+      groupService.setActiveGroup(urlaub);
+      fixture.detectChanges();
+      http.expectOne(loadUrl(2)).flush([aShoppingList({ id: 20 })]);
+      page.onDragEnded();
+      await Promise.resolve();
+
+      expect(listIds()).toEqual([20]);
+    });
+
+    it('Logout/Login mit derselben Gruppe bei gefülltem Puffer: der Puffer wird verworfen', async () => {
+      page.onDragStarted();
+      event('add-list', { id: 9, name: 'Neu', groupId: 1 });
+
+      session.next(null);
+      session.next(aLoggedInUser({ id: 7 }));
+      groupService.setActiveGroup(wg);
+      fixture.detectChanges();
+      http.expectOne(loadUrl(1)).flush(loadedLists());
+      page.onDragEnded();
+      await Promise.resolve();
+
+      expect(listIds()).toEqual([1, 2, 3]);
+    });
+
+    it('ein Eintrag mit veralteter Kontext-Generation wird beim Leeren nicht ausgeführt', async () => {
+      page.onDragStarted();
+      event('update-list', { id: 2, name: 'Neu', groupId: 1 });
+      spyOn(service, 'currentGeneration').and.returnValue(999);
+
+      page.onDragEnded();
+      await Promise.resolve();
+
+      expect(service.getShoppingLists()()[1].name).toBe('Liste 2');
+    });
+
+    it('ngOnDestroy setzt Puffer und Drag-Zustand zurück', async () => {
+      page.onDragStarted();
+      event('update-list', { id: 2, name: 'Neu', groupId: 1 });
+
+      page.ngOnDestroy();
+      page.onDragEnded();
+      await Promise.resolve();
+      event('update-list', { id: 3, name: 'Danach', groupId: 1 });
+
+      expect(service.getShoppingLists()()[1].name).toBe('Liste 2');
+      expect(service.getShoppingLists()()[2].name).toBe('Danach');
+    });
   });
 });

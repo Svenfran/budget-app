@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
 import { IonicModule } from '@ionic/angular';
+import { DragDropModule } from '@angular/cdk/drag-drop';
 
 import { ShoppinglistPageRoutingModule } from './shoppinglist-routing.module';
 
@@ -15,6 +16,7 @@ import { TranslateModule } from '@ngx-translate/core';
     FormsModule,
     IonicModule,
     TranslateModule,
+    DragDropModule,
     ShoppinglistPageRoutingModule
   ],
   declarations: [ShoppinglistPage]

@@ -13,10 +13,13 @@
   </ion-toolbar>
 </ion-header>
 
-<ion-content>
+<!-- Eigener Scroll-Container statt des Shadow-DOM-Scrollers von ion-content: das CDK findet ihn als scrollbaren
+     Vorfahren (Auto-Scroll beim Ziehen, DIV-1); ion-refresher nutzt ihn über die Klasse ion-content-scroll-host -->
+<ion-content [scrollY]="false">
   <ion-refresher slot="fixed" (ionRefresh)="refreshShoppingList($event)">
     <ion-refresher-content></ion-refresher-content>
   </ion-refresher>
+  <div class="ion-content-scroll-host" cdkScrollable>
   <ion-grid class="ion-padding">    
     <ion-row>
       <ion-col class="ion-text-center" size-md="6" offset-md="3" *ngIf="isLoading">
@@ -27,10 +30,16 @@
       </ion-col>
     </ion-row>
     <ion-row>
-      <ion-col size-md="6" offset-md="3">
-        <ion-list *ngFor="let list of shoppingLists(); trackBy: trackByListId">
-          <ion-item-sliding class="list-header" #slidingItem>
-            <ion-item lines="none" (click)="toggleLists[list.id] = !toggleLists[list.id]">
+      <ion-col size-md="6" offset-md="3" cdkDropList cdkDropListLockAxis="y" (cdkDropListDropped)="onListDropped($event)">
+        <ion-list *ngFor="let list of shoppingLists(); trackBy: trackByListId"
+          cdkDrag [cdkDragData]="list.id" [cdkDragStartDelay]="dragStartDelay" cdkDragBoundary=".ion-content-scroll-host"
+          (cdkDragStarted)="onDragStarted(slidingItem)" (cdkDragEnded)="onDragEnded()">
+          <!-- Eigene Vorschau und Platzhalter: das CDK klont sonst die ganze Liste, der Klon des ion-input hat kein
+               inneres input-Element und der Drag-Start bricht ab (DIV-1) -->
+          <div class="list-drag-preview" *cdkDragPreview>{{ list.name }} ({{ list.shoppingItems.length }})</div>
+          <div class="list-drag-placeholder" *cdkDragPlaceholder></div>
+          <ion-item-sliding class="list-header" #slidingItem cdkDragHandle>
+            <ion-item lines="none" (click)="toggleList(list)">
               <ion-label [class.bold]="list.shoppingItems.length > 0">{{ list.name }} ({{ list.shoppingItems.length }})</ion-label>
               <ion-icon *ngIf="!toggleLists[list.id]" name="chevron-up-outline" slot="end" size="small"></ion-icon>
               <ion-icon *ngIf="toggleLists[list.id]" name="chevron-down-outline" slot="end" size="small"></ion-icon>
@@ -45,9 +54,13 @@
             </ion-item-options>
           </ion-item-sliding>
 
-          <div *ngIf="list.shoppingItems.length > 0">
+          <div *ngIf="list.shoppingItems.length > 0"
+            cdkDropList cdkDropListLockAxis="y" (cdkDropListDropped)="onItemDropped(list, $event)">
             <ion-item *ngFor="let item of list.shoppingItems; let j = index; trackBy: trackByItemId"
-              [hidden]="!toggleLists[list.id]">
+              [hidden]="!toggleLists[list.id]"
+              cdkDrag [cdkDragData]="item.id" [cdkDragStartDelay]="dragStartDelay" cdkDragBoundary=".ion-content-scroll-host"
+              (cdkDragStarted)="onDragStarted()" (cdkDragEnded)="onDragEnded()">
+              <div class="item-drag-placeholder" *cdkDragPlaceholder></div>
               <ion-text slot="start">{{ j + 1 }}</ion-text>
               <ion-label [class.done]="item.completed" (click)="markAsDone(list, item)">
                 <ion-text>{{ item.name }}</ion-text>
@@ -100,4 +113,5 @@
       </ion-col>
     </ion-row>
   </ion-grid>  
+  </div>
 </ion-content>
