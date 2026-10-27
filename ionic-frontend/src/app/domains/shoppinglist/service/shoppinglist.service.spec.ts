@@ -739,6 +739,61 @@ describe('ShoppinglistService', () => {
       });
     });
 
+    describe('GET während eines offenen eigenen Reorders (Codex-Review F-001)', () => {
+      const withItems = (lists: ShoppinglistDto[], listId: number, itemIds: number[]) =>
+        lists.map(list => list.id === listId ? { ...list, shoppingItems: itemIds.map(id => aShoppingItem({ id })) } : list);
+
+      it('Listen: die optimistische Reihenfolge bleibt vor Abschluss des PUT, eine neue Liste aus dem GET kommt ans Ende', () => {
+        load(response([1, 2, 3], 5));
+        service.moveShoppingList(group, 3, 0);
+        const req = http.expectOne(listReorderUrl);
+
+        load(response([1, 2, 3, 4], 5));
+
+        expect(listIds()).toEqual([3, 1, 2, 4]);
+        req.flush(listOrder(6, [3, 1, 2]));
+        expect(listIds()).toEqual([3, 1, 2, 4]);
+      });
+
+      it('Listen: eine im GET gelöschte Liste verschwindet; scheitert danach der PUT, gilt der bestätigte Stand', () => {
+        load(response([1, 2, 3], 5));
+        service.moveShoppingList(group, 3, 0);
+        const req = http.expectOne(listReorderUrl);
+
+        load(response([1, 3], 5));
+        expect(listIds()).toEqual([3, 1]);
+
+        req.flush('Server error', serverError);
+        expect(listIds()).toEqual([1, 3]);
+        expect(alerts.showToast).toHaveBeenCalledOnceWith(toastKey);
+        http.expectOne(loadUrl).flush(response([1, 3], 5));
+      });
+
+      it('Einträge: die optimistische Reihenfolge bleibt vor Abschluss des PUT, ein neuer Eintrag kommt ans Ende', () => {
+        load(response([1, 2], 5, [11, 12, 13], 2));
+        service.moveShoppingItem(group, 1, 13, 0);
+        const req = http.expectOne(itemReorderUrl);
+
+        load(withItems(response([1, 2], 5, [], 2), 1, [11, 12, 13, 14]));
+
+        expect(itemIdsOf(1)).toEqual([13, 11, 12, 14]);
+        req.flush(itemOrder(1, 3, [13, 11, 12]));
+        expect(itemIdsOf(1)).toEqual([13, 11, 12, 14]);
+      });
+
+      it('nur der Bereich mit offenem Request bleibt optimistisch: die Listenreihenfolge folgt dem GET', () => {
+        load(response([1, 2, 3], 5, [11, 12, 13], 2));
+        service.moveShoppingItem(group, 1, 13, 0);
+        const req = http.expectOne(itemReorderUrl);
+
+        load(withItems(response([2, 1, 3], 6, [], 2), 1, [11, 12, 13]));
+
+        expect(listIds()).toEqual([2, 1, 3]);
+        expect(itemIdsOf(1)).toEqual([13, 11, 12]);
+        req.flush(itemOrder(1, 3, [13, 11, 12]));
+      });
+    });
+
     describe('Laden', () => {
       it('GET mit älterer Revision als ein bestätigtes Event: Reihenfolge des Events bleibt, Inhalte werden übernommen', () => {
         load(response([1, 2, 3], 5));

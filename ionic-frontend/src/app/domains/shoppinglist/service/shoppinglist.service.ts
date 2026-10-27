@@ -87,8 +87,9 @@ export class ShoppinglistService {
         next: (result) => {
           // überholt (z. B. inzwischen andere Gruppe aktiv): die Listen der aktuellen Gruppe nicht überschreiben
           if (inContext() && options.isCurrent?.() !== false) {
+            const visible = this.shoppingLists();
             this.shoppingLists.set(result || []);
-            this.acceptLoadedOrder(result || []);
+            this.acceptLoadedOrder(result || [], visible);
           }
           onComplete?.();
         },
@@ -405,8 +406,12 @@ export class ShoppinglistService {
       && session === this.groupService.session();
   }
 
-  /** GET: Reihenfolgen und Revisionen übernehmen (≥-Regel), offene Requests bleiben unberührt; dann `reconcile`. */
-  private acceptLoadedOrder(lists: ShoppinglistDto[]): void {
+  /**
+   * GET: Reihenfolgen und Revisionen übernehmen (≥-Regel), offene Requests bleiben unberührt. Bereiche ohne offene
+   * eigene Requests zeigen danach die bestätigte Reihenfolge (`reconcile`), Bereiche mit offenen Requests behalten die
+   * bisher sichtbare, optimistische Reihenfolge (Codex-Review F-001) – tolerant auf die neuen Inhalte angewandt.
+   */
+  private acceptLoadedOrder(lists: ShoppinglistDto[], previous: ShoppinglistDto[]): void {
     const listRevision = lists[0]?.listOrderRevision ?? UNKNOWN_REVISION;
     this.listScope = acceptFromLoad(this.listScope, listRevision, lists.map(list => list.id));
     for (const list of lists) {
@@ -414,8 +419,19 @@ export class ShoppinglistService {
       this.itemScopes.set(list.id, acceptFromLoad(scope, list.itemOrderRevision ?? UNKNOWN_REVISION,
         list.shoppingItems.map(item => item.id)));
     }
-    this.reconcileLists();
-    lists.forEach(list => this.reconcileItems(list.id));
+    if (this.listScope.pending > 0) {
+      this.shoppingLists.update(current => reorderLists(current, previous.map(list => list.id)));
+    } else {
+      this.reconcileLists();
+    }
+    for (const list of lists) {
+      if ((this.itemScopes.get(list.id)?.pending ?? 0) > 0) {
+        const previousIds = previous.find(p => p.id === list.id)?.shoppingItems.map(item => item.id) ?? [];
+        this.shoppingLists.update(current => reorderItems(current, list.id, previousIds));
+      } else {
+        this.reconcileItems(list.id);
+      }
+    }
   }
 
   private confirmListAdded(listId: number): void {
