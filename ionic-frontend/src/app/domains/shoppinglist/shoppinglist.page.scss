@@ -80,3 +80,9 @@ ion-list {
     border: 2px dashed var(--ion-color-primary);
     border-radius: 6px;
 }
+
+// Verschieben zwischen Listen (DIV-2): leere Item-Container bekommen nur während eines Item-Drags eine Höhe. Die
+// Klasse setzt onDragStarted synchron, damit das CDK die Fläche schon beim Messen der Container sieht.
+.item-drag-active .item-drop-list--empty {
+    min-height: 48px;
+}

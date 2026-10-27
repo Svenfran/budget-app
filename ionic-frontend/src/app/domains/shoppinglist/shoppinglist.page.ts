@@ -1,5 +1,7 @@
-import { Component, effect, OnDestroy, OnInit, QueryList, untracked, ViewChildren } from '@angular/core';
-import { CdkDragDrop } from '@angular/cdk/drag-drop';
+import {
+  Component, computed, effect, ElementRef, OnDestroy, OnInit, QueryList, Renderer2, untracked, ViewChild, ViewChildren
+} from '@angular/core';
+import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
 import { ShoppinglistService } from './service/shoppinglist.service';
 import { AddEditShoppinglistDto } from './model/add-edit-shoppinglist-dto';
 import { AlertService } from 'src/app/service/alert.service';
@@ -24,6 +26,7 @@ import { ShoppingitemMovedDto } from './model/shoppingitem-moved-dto';
 })
 export class ShoppinglistPage implements OnInit, OnDestroy {
   @ViewChildren(IonInput) inputFields!: QueryList<IonInput>; 
+  @ViewChild('scrollHost', { static: true }) scrollHost!: ElementRef<HTMLElement>;
   public shoppingLists = this.shoppinglistService.getShoppingLists();
   public isLoading: boolean = true;
   /** Aufklappzustand je Listen-ID (nicht Index), damit hinzukommende/entfernte Listen ihn nicht verschieben. */
@@ -35,6 +38,8 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
   /** Ende des letzten Drags: ein direkt folgender Click gehört zur Geste und wird ignoriert. */
   private dragEndedAt = 0;
   private static readonly CLICK_AFTER_DRAG_MS = 400;
+  /** IDs aller Item-Container: jeder ist mit den übrigen verbunden (das CDK lässt den eigenen aus), DIV-2. */
+  public connectedItemLists = computed(() => this.shoppingLists().map(list => this.itemDropListId(list.id)));
 
 
   constructor(
@@ -44,7 +49,8 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
     private loadingCtrl: LoadingController,
     private webSocketService: WebSocketService,
     private groupService: GroupService,
-    private translate: TranslateService
+    private translate: TranslateService,
+    private renderer: Renderer2
   ) {
     // Anzeige: hält den Gruppennamen aktuell (auch bei Umbenennung), ohne neu zu laden
     effect(() => {
@@ -307,12 +313,18 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
   // gegen den während der Geste unveränderten Zustand berechnet, erst danach gibt der Service zurückgestellte
   // Änderungen (WebSocket, GET, REST, PUT-Antworten) frei.
 
-  onDragStarted(slidingItem?: IonItemSliding) {
+  /**
+   * `itemDrag` (DIV-2): Die Klasse für die Ablagefläche leerer Listen wird synchron gesetzt, nicht per Binding – das
+   * CDK misst die Container direkt nach `started`, ohne Change Detection dazwischen.
+   */
+  onDragStarted(slidingItem?: IonItemSliding, itemDrag = false) {
     this.shoppinglistService.holdUpdates();
     slidingItem?.close();
+    if (itemDrag) this.renderer.addClass(this.scrollHost.nativeElement, 'item-drag-active');
   }
 
   onDragEnded() {
+    this.renderer.removeClass(this.scrollHost.nativeElement, 'item-drag-active');
     this.dragEndedAt = Date.now();
     // Rückfall für einen Drag ohne Drop; nach einem Drop ist der Puffer schon leer
     queueMicrotask(() => this.shoppinglistService.releaseUpdates());
@@ -327,15 +339,31 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
     this.shoppinglistService.releaseUpdates();
   }
 
-  /** Drop eines Eintrags innerhalb seiner Liste (Liste und Eintrag werden im aktuellen Zustand neu aufgelöst). */
-  onItemDropped(list: ShoppinglistDto, event: CdkDragDrop<unknown, unknown, number>) {
+  /**
+   * Drop eines Eintrags: innerhalb seiner Liste nur umsortieren (Liste und Eintrag werden im aktuellen Zustand neu
+   * aufgelöst), aus einer anderen Liste verschieben (DIV-2; Quelle/Ziel aus den Container-Daten, der Service verwirft
+   * den Move, wenn Eintrag oder Liste inzwischen fehlen).
+   */
+  onItemDropped(list: ShoppinglistDto, event: CdkDragDrop<number, number, number>) {
     const itemId = event.item.data;
-    const current = this.shoppingLists().find(l => l.id === list.id);
-    if (current?.shoppingItems.some(item => item.id === itemId)) {
-      this.shoppinglistService.moveShoppingItem(this.activeGroup, list.id, itemId, event.currentIndex);
+    if (event.previousContainer === event.container) {
+      const current = this.shoppingLists().find(l => l.id === list.id);
+      if (current?.shoppingItems.some(item => item.id === itemId)) {
+        this.shoppinglistService.moveShoppingItem(this.activeGroup, list.id, itemId, event.currentIndex);
+      }
+    } else {
+      this.shoppinglistService.moveShoppingItemToList(this.activeGroup, itemId, event.previousContainer.data,
+        event.container.data, event.currentIndex);
     }
     this.shoppinglistService.releaseUpdates();
   }
+
+  itemDropListId(listId: number): string {
+    return `item-list-${listId}`;
+  }
+
+  /** Einträge nur in aufgeklappte Listen ablegen (E1); das CDK prüft das schon beim Start des Drags. */
+  canEnterItemList = (_drag: CdkDrag, drop: CdkDropList<number>): boolean => !!this.toggleLists[drop.data];
 
   private isClickAfterDrag(): boolean {
     return Date.now() - this.dragEndedAt < ShoppinglistPage.CLICK_AFTER_DRAG_MS;

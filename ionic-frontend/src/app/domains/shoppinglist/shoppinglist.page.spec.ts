@@ -134,8 +134,9 @@ describe('ShoppinglistPage – Drag & Drop', () => {
   const wg = aGroup({ id: 1, name: 'WG' });
   const urlaub = aGroup({ id: 2, name: 'Urlaub' });
 
-  const drop = (data: number, currentIndex: number) =>
-    ({ item: { data }, currentIndex }) as unknown as CdkDragDrop<unknown, unknown, number>;
+  // Containertyp aus dem Aufruf: Listen-Drops (unknown) und Item-Drops (number)
+  const drop = <T = unknown>(data: number, currentIndex: number) =>
+    ({ item: { data }, currentIndex }) as unknown as CdkDragDrop<T, T, number>;
   const listIds = () => service.getShoppingLists()().map(list => list.id);
   const listA = () => service.getShoppingLists()().find(list => list.id === 1)!;
   const itemIdsOfA = () => listA().shoppingItems.map(item => item.id);
@@ -432,5 +433,179 @@ describe('ShoppinglistPage – Drag & Drop', () => {
       expect(listIds()).toEqual([1, 2, 3]);
       http.expectOne(loadUrl(1)).flush(loadedLists());
     });
+  });
+});
+
+// DIV-2: Verschieben zwischen Listen mit echter Maus-Geste (echtes CDK, reales Layout im Karma-Browser). Prüft, was die
+// Handler-Tests nicht zeigen können: verbundene Item-Container, Ablagefläche leerer Listen, eingeklappte Listen als
+// Nicht-Ziel und dass ein Listen-Drag keine Item-Container erreicht.
+describe('ShoppinglistPage – Drag & Drop mit echter Geste', () => {
+  let fixture: ComponentFixture<ShoppinglistPage>;
+  let page: ShoppinglistPage;
+  let http: HttpTestingController;
+  const api = `${environment.apiBaseUrl}/api/groups`;
+  const moveUrl = `${api}/shopping-list/move-item`;
+  /** A (1: 11, 12), B (2: leer), C (3: 31, 32), D (4: 41); D bleibt eingeklappt. */
+  const loadedLists = (): ShoppinglistDto[] => [[1, [11, 12]], [2, []], [3, [31, 32]], [4, [41]]].map(([id, items]) => ({
+    id: id as number, name: `Liste ${id}`, listOrderRevision: 5, itemOrderRevision: 2,
+    shoppingItems: (items as number[]).map(itemId => aShoppingItem({ id: itemId, name: `Artikel ${itemId}` })),
+  }));
+
+  type Point = { x: number; y: number };
+  const el = (selector: string) => (fixture.nativeElement as HTMLElement).querySelector(selector) as HTMLElement;
+  const items = (listId: number) =>
+    Array.from((fixture.nativeElement as HTMLElement).querySelectorAll(`#item-list-${listId} > ion-item`)) as HTMLElement[];
+  const center = (element: Element): Point => {
+    const rect = element.getBoundingClientRect();
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  };
+  const mouse = (target: EventTarget, type: string, point: Point) => target.dispatchEvent(new MouseEvent(type, {
+    bubbles: true, cancelable: true, clientX: point.x, clientY: point.y, button: 0, buttons: type === 'mouseup' ? 0 : 1,
+    // detail 0 hält das CDK für einen Screenreader-Klick und startet keinen Drag
+    detail: 1,
+  }));
+
+  /**
+   * Zieht `handle` mit der Maus: Druck, kleine Bewegung (startet den Drag), dann in Schritten zum Ziel, das erst nach
+   * dem Start berechnet wird (die Ablagefläche leerer Listen entsteht erst mit dem Drag). `whileDragging` läuft vor
+   * dem Loslassen.
+   */
+  async function drag(handle: HTMLElement, target: () => Point, whileDragging?: () => void) {
+    const start = center(handle);
+    mouse(handle, 'mousedown', start);
+    mouse(document, 'mousemove', { x: start.x, y: start.y + 10 });
+    const end = target();
+    for (const step of [0.25, 0.5, 0.75, 1]) {
+      mouse(document, 'mousemove', { x: start.x + (end.x - start.x) * step, y: start.y + (end.y - start.y) * step });
+    }
+    whileDragging?.();
+    mouse(document, 'mouseup', end);
+    // das CDK meldet den Drop erst nach der Rückanimation der Vorschau (200 ms, .cdk-drag-animating)
+    await new Promise(resolve => setTimeout(resolve, 300));
+    fixture.detectChanges();
+  }
+
+  /**
+   * Ionic lädt seine Web Components im Testbrowser verzögert nach; solange ein Element hydriert, ist sein Inhalt nicht
+   * im Layout. Vor der Geste daher warten, bis alle ion-Elemente der Seite fertig gerendert sind.
+   */
+  async function ionicReady() {
+    const ionElements = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('*'))
+      .filter(element => element.tagName.startsWith('ION-'));
+    await Promise.all([...new Set(ionElements.map(element => element.tagName.toLowerCase()))]
+      .map(tag => customElements.whenDefined(tag)));
+    await Promise.all(ionElements.map(element => (element as HTMLElement & { componentOnReady?: () => Promise<unknown> })
+      .componentOnReady?.()));
+  }
+
+  // Die Seite mit vier Listen ist höher als der Karma-Viewport; ohne sichtbare Ziele findet das CDK keinen Container
+  // (elementFromPoint) und begrenzt die Vorschau auf den Scroll-Host. Nur für diesen Block: Karma-iframe erhöhen.
+  const frame = window.frameElement as HTMLElement | null;
+  const frameHeight = frame?.style.height ?? '';
+  beforeAll(() => { if (frame) frame.style.height = '1600px'; });
+  afterAll(() => { if (frame) frame.style.height = frameHeight; });
+
+  beforeEach(async () => {
+    spyOn(console, 'error');
+    const auth = authServiceStub(null);
+    (Object.getOwnPropertyDescriptor(auth, 'user')!.get as jasmine.Spy)
+      .and.returnValue(new BehaviorSubject<User | null>(aLoggedInUser({ id: 7 })));
+    TestBed.configureTestingModule({
+      declarations: [ShoppinglistPage],
+      imports: [IonicModule.forRoot(), FormsModule, TranslateModule, DragDropModule],
+      providers: [
+        ...provideServiceTesting(),
+        { provide: WebSocketService, useValue: jasmine.createSpyObj('WebSocketService', ['subscribe', 'unsubscribeOwner']) },
+        { provide: StorageService, useValue: storageServiceFake() },
+        { provide: AuthService, useValue: auth },
+        { provide: AlertService, useValue: alertServiceSpy() },
+      ],
+    });
+    http = TestBed.inject(HttpTestingController);
+    TestBed.inject(GroupService).setActiveGroup(aGroup({ id: 1, name: 'WG' }));
+    fixture = TestBed.createComponent(ShoppinglistPage);
+    page = fixture.componentInstance;
+    // wie in der App füllt die Seite den Viewport (ion-content und Scroll-Host haben 100 % Höhe)
+    (fixture.nativeElement as HTMLElement).style.cssText = 'position: fixed; inset: 0;';
+    fixture.detectChanges();
+    http.expectOne(`${api}/shopping-lists-with-items/1`).flush(loadedLists());
+    page.toggleLists = { 1: true, 2: true, 3: true };
+    fixture.detectChanges();
+    await ionicReady();
+  });
+
+  afterEach(() => http.verify());
+
+  /** Header-Zeile der n-ten Liste (Drag-Handle des Listen-Drags). */
+  const listHeader = (index: number) =>
+    (fixture.nativeElement as HTMLElement).querySelectorAll('ion-list .list-header')[index] as HTMLElement;
+  const moved = (itemId: number, source: [number, number[]], target: [number, number[]]) => ({
+    groupId: 1, shoppingItemId: itemId,
+    source: { groupId: 1, shoppingListId: source[0], revision: 3, shoppingItemIds: source[1] },
+    target: { groupId: 1, shoppingListId: target[0], revision: 3, shoppingItemIds: target[1] },
+  });
+
+  it('Eintrag aus A in die aufgeklappte leere Liste B: Ablagefläche nur während des Drags, PUT move-item mit Ziel B, Index 0', async () => {
+    const scrollHost = el('.ion-content-scroll-host');
+    expect(el('#item-list-2').getBoundingClientRect().height).withContext('ohne Drag keine Fläche').toBe(0);
+    let flaecheWaehrendDrag = 0;
+    let klasseWaehrendDrag = false;
+
+    // Mitte der vorgesehenen 48-px-Fläche (ohne Fläche läge der Punkt unterhalb der Liste, nicht auf ihrer Kante)
+    const flaechenMitte = () => {
+      const rect = el('#item-list-2').getBoundingClientRect();
+      return { x: rect.left + rect.width / 2, y: rect.top + 24 };
+    };
+
+    await drag(items(1)[0], flaechenMitte, () => {
+      flaecheWaehrendDrag = el('#item-list-2').getBoundingClientRect().height;
+      klasseWaehrendDrag = scrollHost.classList.contains('item-drag-active');
+    });
+
+    expect(klasseWaehrendDrag).toBeTrue();
+    expect(flaecheWaehrendDrag).toBeGreaterThanOrEqual(48);
+    expect(scrollHost.classList.contains('item-drag-active')).toBeFalse();
+    const req = http.expectOne(moveUrl);
+    expect(req.request.body).toEqual({
+      groupId: 1, shoppingItemId: 11, sourceShoppingListId: 1, targetShoppingListId: 2, targetShoppingItemIds: [11]
+    });
+    req.flush(moved(11, [1, [12]], [2, [11]]));
+    expect(items(2).length).toBe(1);
+    expect(items(1).length).toBe(1);
+  });
+
+  it('Eintrag aus A zwischen die zwei Einträge der aufgeklappten Liste C: Zielindex 1', async () => {
+    // abwärts gezogen tauscht das CDK den Platzhalter mit dem Eintrag unter dem Zeiger: Ende auf 31 heißt nach 31
+    await drag(items(1)[1], () => center(items(3)[0]));
+
+    const req = http.expectOne(moveUrl);
+    expect(req.request.body).toEqual(jasmine.objectContaining({
+      shoppingItemId: 12, sourceShoppingListId: 1, targetShoppingListId: 3, targetShoppingItemIds: [31, 12, 32]
+    }));
+    req.flush(moved(12, [1, [11]], [3, [31, 12, 32]]));
+  });
+
+  it('eingeklappte Liste D wird nicht betreten: Drop auf ihrer Position verschiebt nichts', async () => {
+    // B und C eingeklappt: der Weg von A nach D führt über keinen anderen aufgeklappten Container (das CDK ließe den
+    // Eintrag sonst im zuletzt betretenen); gezogen wird der letzte Eintrag, damit A selbst nicht umsortiert
+    page.toggleLists = { 1: true };
+    fixture.detectChanges();
+
+    await drag(items(1)[1], () => center(listHeader(3)));
+
+    http.expectNone(moveUrl);
+    http.expectNone(`${api}/shopping-list/reorder-items`);
+    expect(items(1).length).toBe(2);
+    expect(items(4).length).toBe(1);
+  });
+
+  it('Listen-Drag über die Item-Container: nur die Listenreihenfolge ändert sich, kein move-item', async () => {
+    await drag(listHeader(2), () => center(items(1)[0]));
+
+    http.expectNone(moveUrl);
+    http.expectNone(`${api}/shopping-list/reorder-items`);
+    const reorder = http.expectOne(`${api}/shopping-list/reorder`);
+    expect(reorder.request.body.shoppingListIds).toEqual([3, 1, 2, 4]);
+    reorder.flush({ groupId: 1, revision: 6, shoppingListIds: [3, 1, 2, 4] });
   });
 });
