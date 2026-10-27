@@ -10,7 +10,9 @@ import { WebSocketService } from 'src/app/service/websocket.service';
 import { GroupService } from 'src/app/service/group.service';
 import { INIT_NUMBERS, INIT_VALUES } from 'src/app/constants/default-values';
 import { TranslateService } from '@ngx-translate/core';
-import { addItem, addList, deleteAllItems, deleteItem, deleteList, updateItem, updateList } from './shoppinglist-events';
+import { deleteAllItems, deleteItem, deleteList, updateItem, updateList } from './shoppinglist-events';
+import { ShoppinglistOrderDto } from './model/shoppinglist-order-dto';
+import { ShoppingitemOrderDto } from './model/shoppingitem-order-dto';
 
 @Component({
   selector: 'app-shoppinglist',
@@ -292,14 +294,24 @@ export class ShoppinglistPage implements OnInit {
       this.webSocketService.subscribe<AddEditShoppingItemDto>(
         `/user/notification/${action}`, data => this.shoppingLists.update(lists => apply(lists, data)), options);
 
-    onList('add-list', addList);
+    this.webSocketService.subscribe<AddEditShoppinglistDto>(
+      `/user/notification/add-list`, data => this.shoppinglistService.onListAdded(data), options);
     onList('update-list', updateList);
-    onList('delete-list', deleteList);
-    onItem('add-item', addItem);
+    this.webSocketService.subscribe<AddEditShoppinglistDto>(`/user/notification/delete-list`, data => {
+      this.shoppingLists.update(lists => deleteList(lists, data));
+      this.shoppinglistService.removeItemScope(data.id!);
+    }, options);
+    this.webSocketService.subscribe<AddEditShoppingItemDto>(
+      `/user/notification/add-item`, data => this.shoppinglistService.onItemAdded(data), options);
     onItem('update-item', updateItem);
     onItem('delete-item', deleteItem);
     this.webSocketService.subscribe<AddEditShoppingItemDto[]>(
       `/user/notification/delete-all-items`, data => this.shoppingLists.update(lists => deleteAllItems(lists, data)), options);
+    // Reihenfolge (DIV-1): der Service übernimmt nur neuere Revisionen
+    this.webSocketService.subscribe<ShoppinglistOrderDto>(
+      `/user/notification/reorder-lists`, data => this.shoppinglistService.applyListOrder(data), options);
+    this.webSocketService.subscribe<ShoppingitemOrderDto>(
+      `/user/notification/reorder-items`, data => this.shoppinglistService.applyItemOrder(data), options);
   }
 
   trackByListId(_: number, list: ShoppinglistDto): number {

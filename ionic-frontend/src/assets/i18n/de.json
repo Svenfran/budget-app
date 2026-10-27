@@ -236,6 +236,9 @@
                     "ok": "OK",
                     "loading": "Aktualisiere Eintrag..."
                 }
+            },
+            "reorder": {
+                "error": "Die Reihenfolge konnte nicht gespeichert werden."
             }
         },
         "user_profile": {

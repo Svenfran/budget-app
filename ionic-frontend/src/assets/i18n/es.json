@@ -236,6 +236,9 @@
                     "ok": "OK",
                     "loading": "Actualizando elemento..."
                 }
+            },
+            "reorder": {
+                "error": "No se pudo guardar el orden."
             }
         },
         "user_profile": {

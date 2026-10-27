@@ -60,3 +60,31 @@ export function deleteAllItems(lists: ShoppinglistDto[], data: AddEditShoppingIt
 function toItem(data: AddEditShoppingItemDto): ShoppingitemDto {
   return { id: data.id!, name: data.name, completed: data.completed };
 }
+
+/*
+ * Reihenfolge (DIV-1): sortiert tolerant nach einer ID-Reihenfolge. Unbekannte IDs werden ignoriert, lokal vorhandene,
+ * aber nicht enthaltene Einträge folgen in ihrer bisherigen Reihenfolge. Ändert sich nichts, kommt dasselbe Array
+ * zurück (kein unnötiges Signal-Update).
+ */
+
+export function reorderLists(lists: ShoppinglistDto[], ids: number[]): ShoppinglistDto[] {
+  return orderByIds(lists, ids);
+}
+
+export function reorderItems(lists: ShoppinglistDto[], listId: number, ids: number[]): ShoppinglistDto[] {
+  const target = lists.find(list => list.id === listId);
+  if (!target) return lists;
+  const shoppingItems = orderByIds(target.shoppingItems, ids);
+  if (shoppingItems === target.shoppingItems) return lists;
+  return lists.map(list => list === target ? { ...list, shoppingItems } : list);
+}
+
+function orderByIds<T extends { id: number }>(entries: T[], ids: number[]): T[] {
+  const position = new Map<number, number>();
+  ids.forEach(id => { if (!position.has(id)) position.set(id, position.size); });
+  const sorted = entries
+    .map((entry, index) => ({ entry, rank: position.get(entry.id) ?? position.size + index }))
+    .sort((a, b) => a.rank - b.rank)
+    .map(({ entry }) => entry);
+  return sorted.every((entry, index) => entry === entries[index]) ? entries : sorted;
+}
