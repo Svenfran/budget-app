@@ -88,7 +88,11 @@ public class ShoppingListService {
         if (requestTimeStamp != null && lastUpdate != null && requestTimeStamp > lastUpdate.getTime()) {
             return Optional.empty();
         }
-        return Optional.of(shoppingListRepository.findAllByGroup_IdOrderById(groupId).stream().map(ShoppingListDto::new).toList());
+        // Revision vor den Listen lesen: sie ist dann nie neuer als die gelieferte Reihenfolge
+        var listOrderRevision = groupRepository.findListOrderRevision(groupId);
+        return Optional.of(shoppingListRepository.findAllByGroup_IdOrderBySortOrderAscIdAsc(groupId).stream()
+                .map(shoppingList -> new ShoppingListDto(shoppingList, listOrderRevision))
+                .toList());
     }
 
     private void untilTimeIsUp(long milliseconds){
@@ -106,12 +110,13 @@ public class ShoppingListService {
         var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(addEditShoppingListDto.getGroupId());
         verificationService.verifyIsPartOfGroup(user, group);
-        group.setLastUpdateShoppingList(Date.from(clock.instant()));
-        groupRepository.save(group);
+        // Gruppe sperren, bevor die Position gelesen wird: eine parallele Anlage oder Umsortierung wartet bis zum Commit
+        groupRepository.touchShoppingLists(group.getId(), Date.from(clock.instant()));
 
         var newList = shoppingListDtoMapper.addEditShoppingListDtoToEntity(addEditShoppingListDto, group);
         // Anlegen legt immer neu an: eine mitgesendete ID würde per merge eine bestehende (auch fremde) Liste überschreiben
         newList.setId(null);
+        newList.setSortOrder(shoppingListRepository.findMaxSortOrderByGroupId(group.getId()) + 1);
         var addedList = new AddEditShoppingListDto(shoppingListRepository.save(newList));
 
         notificationService.sendShoppingListNotification(

@@ -41,7 +41,7 @@ class EntityToStringSpec extends Specification {
         def text = group.toString()
 
         then:
-        text == "Group{id=10, name='WG', dateCreated=null, lastUpdate=null, lastUpdateShoppingList=null, ownerId=1}"
+        text == "Group{id=10, name='WG', dateCreated=null, lastUpdate=null, lastUpdateShoppingList=null, listOrderRevision=0, ownerId=1}"
     }
 
     def "toString eines Einkaufs, der in den Einkäufen seiner Gruppe steht, wirft keinen Fehler"() {
@@ -106,8 +106,8 @@ class EntityToStringSpec extends Specification {
 
         then:
         categoryText == "Category{id=20, name='Lebensmittel', groupId=10}"
-        listText == "ShoppingList{id=40, name='Wocheneinkauf', dateCreated=null, lastUpdate=null, groupId=10}"
-        itemText == "ShoppingItem{id=50, name='Milch', isCompleted=true, dateCreated=null, lastUpdate=null, shoppingListId=40}"
+        listText == "ShoppingList{id=40, name='Wocheneinkauf', dateCreated=null, lastUpdate=null, sortOrder=0, itemOrderRevision=0, groupId=10}"
+        itemText == "ShoppingItem{id=50, name='Milch', isCompleted=true, dateCreated=null, lastUpdate=null, sortOrder=0, shoppingListId=40}"
     }
 
     def "toString des Tokens enthält weder Tokenwert noch Geräte-ID"() {

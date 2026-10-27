@@ -1,0 +1,34 @@
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!-- DIV-1: user-defined order of shopping lists (per group) and shopping items (per list). sort_order is backfilled
+         with the previous display order (by id). The order revisions count saved reorders per group (lists) and per
+         list (items) so clients can discard outdated orders. The SQL file is also executed by
+         SortOrderBackfillIntegrationSpec. -->
+    <changeSet author="sven" id="20261026120000-1">
+        <addColumn tableName="shoppinglist">
+            <column name="sort_order" type="INTEGER"/>
+        </addColumn>
+        <addColumn tableName="shoppingitem">
+            <column name="sort_order" type="INTEGER"/>
+        </addColumn>
+        <sqlFile path="db/changelog/release-1.x/sql/20261026120000-1_backfillSortOrder.sql"
+                 relativeToChangelogFile="false" splitStatements="true"/>
+        <addNotNullConstraint tableName="shoppinglist" columnName="sort_order" columnDataType="INTEGER"/>
+        <addNotNullConstraint tableName="shoppingitem" columnName="sort_order" columnDataType="INTEGER"/>
+        <addColumn tableName="group_details">
+            <column name="list_order_revision" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <addColumn tableName="shoppinglist">
+            <column name="item_order_revision" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

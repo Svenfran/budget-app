@@ -50,11 +50,12 @@ public class ShoppingItemService {
         verificationService.verifyIsPartOfGroup(user, group);
         var shoppingList = dataLoaderService.loadShoppingList(dto.getShoppingListId());
         verificationService.verifyShoppingListIsPartOfGroup(shoppingList, group);
-        group.setLastUpdateShoppingList(Date.from(clock.instant()));
-        groupRepository.save(group);
+        // Gruppe sperren, bevor die Position gelesen wird: eine parallele Anlage oder Umsortierung wartet bis zum Commit
+        groupRepository.touchShoppingLists(group.getId(), Date.from(clock.instant()));
         var newItem = shoppingItemDtoMapper.addEditShoppingItemDtoToEntity(dto, shoppingList);
         // Anlegen legt immer neu an: eine mitgesendete ID würde per merge einen bestehenden (auch fremden) Eintrag überschreiben
         newItem.setId(null);
+        newItem.setSortOrder(shoppingItemRepository.findMaxSortOrderByShoppingListId(shoppingList.getId()) + 1);
         var addedItem = new AddEditShoppingItemDto(shoppingItemRepository.save(newItem));
 
         notificationService.sendShoppingItemNotification(

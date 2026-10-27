@@ -115,7 +115,7 @@ class ShoppingListServiceIntegrationSpec extends IntegrationSpec {
         when:
         def result = shoppingListService.addShoppingList(new AddEditShoppingListDto(name: 'Wocheneinkauf', groupId: groupId))
         flushAndClear()
-        def listen = shoppingListRepository.findAllByGroup_IdOrderById(groupId)
+        def listen = shoppingListRepository.findAllByGroup_IdOrderBySortOrderAscIdAsc(groupId)
         def lastUpdate = lastUpdateShoppingList(groupId)
         LOG.info('shoppingListService.addShoppingList(Gruppe {}) -> Liste {}; Listen der Gruppe {}, lastUpdateShoppingList {}',
                 groupId, result.id, listen*.id, lastUpdate)
@@ -139,7 +139,7 @@ class ShoppingListServiceIntegrationSpec extends IntegrationSpec {
         when:
         def result = shoppingListService.addShoppingList(new AddEditShoppingListDto(name: 'Baumarkt', groupId: groupId))
         flushAndClear()
-        def listen = shoppingListRepository.findAllByGroup_IdOrderById(groupId)
+        def listen = shoppingListRepository.findAllByGroup_IdOrderBySortOrderAscIdAsc(groupId)
         LOG.info('shoppingListService.addShoppingList(Gruppe {}) -> Liste {}; Listen der Gruppe {}', groupId, result.id, listen*.id)
 
         then:
@@ -203,7 +203,7 @@ class ShoppingListServiceIntegrationSpec extends IntegrationSpec {
         when:
         shoppingListService.deleteShoppingList(new AddEditShoppingListDto(id: listId, groupId: groupId))
         flushAndClear()
-        def listen = shoppingListRepository.findAllByGroup_IdOrderById(groupId)
+        def listen = shoppingListRepository.findAllByGroup_IdOrderBySortOrderAscIdAsc(groupId)
         def verbliebeneEintraege = (itemIds + kaffeeId).findAll { shoppingItemRepository.existsById(it) }
         def lastUpdate = lastUpdateShoppingList(groupId)
         LOG.info('shoppingListService.deleteShoppingList(Liste {}) -> Listen der Gruppe {}, verbliebene Einträge {}, lastUpdateShoppingList {}',
@@ -237,7 +237,7 @@ class ShoppingListServiceIntegrationSpec extends IntegrationSpec {
         thrown(NotOwnerOrMemberOfGroupException)
         0 * notificationService._
         flushAndClear()
-        def listen = shoppingListRepository.findAllByGroup_IdOrderById(groupId)
+        def listen = shoppingListRepository.findAllByGroup_IdOrderBySortOrderAscIdAsc(groupId)
         listen*.id == [listId]
         listen*.name == ['Alt']
         lastUpdateShoppingList(groupId).time == START.time
@@ -266,7 +266,7 @@ class ShoppingListServiceIntegrationSpec extends IntegrationSpec {
         thrown(NotOwnerOrMemberOfGroupException)
         0 * notificationService._
         flushAndClear()
-        shoppingListRepository.findAllByGroup_IdOrderById(groupId).isEmpty()
+        shoppingListRepository.findAllByGroup_IdOrderBySortOrderAscIdAsc(groupId).isEmpty()
         lastUpdateShoppingList(groupId).time == START.time
     }
 
@@ -324,7 +324,7 @@ class ShoppingListServiceIntegrationSpec extends IntegrationSpec {
         thrown(ShoppingListNotFoundException)
         0 * notificationService._
         flushAndClear()
-        shoppingListRepository.findAllByGroup_IdOrderById(groupId).isEmpty()
+        shoppingListRepository.findAllByGroup_IdOrderBySortOrderAscIdAsc(groupId).isEmpty()
         lastUpdateShoppingList(groupId).time == START.time
     }
 
@@ -437,7 +437,7 @@ class ShoppingListServiceIntegrationSpec extends IntegrationSpec {
         when:
         def result = shoppingListService.addShoppingList(new AddEditShoppingListDto(id: fremdeListId, name: 'Gekapert', groupId: groupId))
         flushAndClear()
-        def eigeneListen = shoppingListRepository.findAllByGroup_IdOrderById(groupId)
+        def eigeneListen = shoppingListRepository.findAllByGroup_IdOrderBySortOrderAscIdAsc(groupId)
         def fremd = shoppingListRepository.findById(fremdeListId).get()
         def fremdName = fremd.name
         def fremdGroupId = fremd.group.id
@@ -454,6 +454,93 @@ class ShoppingListServiceIntegrationSpec extends IntegrationSpec {
         fremdGroupId == andereGroupId
         fremdEintraege == [fremderEintragId]
         lastUpdateShoppingList(andereGroupId).time == START.time
+    }
+
+    // Reihenfolge (DIV-1): Position bei Anlage, Schutz vor Merge-Überschreibung, sortiertes Laden mit Revisionen
+
+    def "Neue Liste kommt ans Ende: Position max + 1 auch bei Lücken, Listen anderer Gruppen zählen nicht"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def erste = fixtures.shoppingList(wg, sortOrder: 0)
+        def zweite = fixtures.shoppingList(wg, sortOrder: 5)
+        def andereGruppe = fixtures.group()
+        fixtures.shoppingList(andereGruppe, sortOrder: 9)
+        def groupId = wg.group.id
+        def (ersteId, zweiteId) = [erste.id, zweite.id]
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Mitglied {} (angemeldet), Listen {} (Position 0) und {} (Position 5); Gruppe {} mit Liste an Position 9',
+                groupId, ben.id, ersteId, zweiteId, andereGruppe.group.id)
+
+        when:
+        def result = shoppingListService.addShoppingList(new AddEditShoppingListDto(name: 'Neu', groupId: groupId))
+        flushAndClear()
+        def position = shoppingListRepository.findById(result.id).get().sortOrder
+        def listen = shoppingListRepository.findAllByGroup_IdOrderBySortOrderAscIdAsc(groupId)*.id
+        LOG.info('shoppingListService.addShoppingList(Gruppe {}) -> Liste {} an Position {}; Listen der Gruppe {}',
+                groupId, result.id, position, listen)
+
+        then:
+        position == 6
+        listen == [ersteId, zweiteId, result.id]
+    }
+
+    def "Liste umbenennen lässt Position und Item-Revision unverändert"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg, name: 'Alt', sortOrder: 3, itemOrderRevision: 4L)
+        def groupId = wg.group.id
+        def listId = liste.id
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Mitglied {} (angemeldet), Liste {} "Alt" an Position 3 mit itemOrderRevision 4 -> "Neu"',
+                groupId, ben.id, listId)
+
+        when:
+        shoppingListService.updateShoppingList(new AddEditShoppingListDto(id: listId, name: 'Neu', groupId: groupId))
+        flushAndClear()
+        def gespeichert = shoppingListRepository.findById(listId).get()
+        def (name, position, revision) = [gespeichert.name, gespeichert.sortOrder, gespeichert.itemOrderRevision]
+        LOG.info('shoppingListService.updateShoppingList(Liste {}) -> "{}", Position {}, itemOrderRevision {}', listId, name, position, revision)
+
+        then:
+        name == 'Neu'
+        position == 3
+        revision == 4L
+    }
+
+    def "Listen laden liefert Listen und Einträge nach Position (bei Gleichstand nach id) mit den Revisionen"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def erste = fixtures.shoppingList(wg, sortOrder: 1, itemOrderRevision: 2L)
+        def zweite = fixtures.shoppingList(wg, sortOrder: 0)
+        def dritte = fixtures.shoppingList(wg, sortOrder: 1)
+        def x = fixtures.shoppingItem(erste, sortOrder: 2)
+        def y = fixtures.shoppingItem(erste, sortOrder: 0)
+        def z = fixtures.shoppingItem(erste, sortOrder: 0)
+        def groupId = wg.group.id
+        def ids = [erste: erste.id, zweite: zweite.id, dritte: dritte.id, x: x.id, y: y.id, z: z.id]
+        flushAndClear()
+        // listOrderRevision ist updatable = false und lässt sich nur per Update-Query setzen
+        entityManager.createQuery('update Group g set g.listOrderRevision = 5 where g.id = :groupId')
+                .setParameter('groupId', groupId).executeUpdate()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {} (listOrderRevision 5), Mitglied {} (angemeldet); Listen {} (Position 1, itemOrderRevision 2), {} (0), {} (1); Einträge von {}: {} (2), {} (0), {} (0)',
+                groupId, ben.id, ids.erste, ids.zweite, ids.dritte, ids.erste, ids.x, ids.y, ids.z)
+
+        when:
+        def listen = shoppingListService.getShoppingListsForGroup(groupId, null).get()
+        LOG.info('shoppingListService.getShoppingListsForGroup(Gruppe {}) -> Listen {}, Einträge von {} {}, listOrderRevision {}, itemOrderRevision {}',
+                groupId, listen*.id, ids.erste, listen[1].shoppingItems*.id, listen*.listOrderRevision, listen*.itemOrderRevision)
+
+        then:
+        listen*.id == [ids.zweite, ids.erste, ids.dritte]
+        listen[1].shoppingItems*.id == [ids.y, ids.z, ids.x]
+        listen*.listOrderRevision == [5L, 5L, 5L]
+        listen*.itemOrderRevision == [0L, 2L, 0L]
     }
 
     private void ausfuehren(String aktion, Long groupId, Long listId) {

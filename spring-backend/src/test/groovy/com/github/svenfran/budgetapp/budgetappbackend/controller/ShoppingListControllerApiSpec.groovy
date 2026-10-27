@@ -33,29 +33,35 @@ class ShoppingListControllerApiSpec extends IntegrationSpec implements ApiReques
 
     @Autowired ObjectMapper objectMapper
 
-    def "Mitglied erhält die Listen der Gruppe mit ihren Einträgen als JSON"() {
+    def "Mitglied erhält die Listen der Gruppe mit ihren Einträgen und den Reihenfolge-Revisionen als JSON"() {
         given:
         def ben = fixtures.user()
         def wg = fixtures.group(members: [ben])
-        def liste = fixtures.shoppingList(wg, name: 'Wocheneinkauf')
+        def liste = fixtures.shoppingList(wg, name: 'Wocheneinkauf', itemOrderRevision: 3L)
         def milch = fixtures.shoppingItem(liste, name: 'Milch', completed: false)
         def brot = fixtures.shoppingItem(liste, name: 'Brot', completed: true)
         def (groupId, listId, milchId, brotId) = [wg.group.id, liste.id, milch.id, brot.id]
         flushAndClear()
-        LOG.info('Szenario: Gruppe {}, Mitglied {}, Liste {} "Wocheneinkauf" mit Einträgen {} "Milch" offen, {} "Brot" erledigt',
+        // listOrderRevision ist updatable = false und lässt sich nur per Update-Query setzen
+        entityManager.createQuery('update Group g set g.listOrderRevision = 7 where g.id = :groupId')
+                .setParameter('groupId', groupId).executeUpdate()
+        LOG.info('Szenario: Gruppe {} (listOrderRevision 7), Mitglied {}, Liste {} "Wocheneinkauf" (itemOrderRevision 3) mit Einträgen {} "Milch" offen, {} "Brot" erledigt',
                 groupId, ben.id, listId, milchId, brotId)
 
         when:
         def response = getShoppingLists(groupId, ben)
         def body = json(response)
-        LOG.info('Antwort: Listen {}, Felder {}, Einträge {}, Eintrag-Felder {}',
-                body*.id, body[0].keySet(), body[0].shoppingItems*.id, body[0].shoppingItems[0].keySet())
+        LOG.info('Antwort: Listen {}, Felder {}, Revisionen {}/{}, Einträge {}, Eintrag-Felder {}',
+                body*.id, body[0].keySet(), body[0].listOrderRevision, body[0].itemOrderRevision,
+                body[0].shoppingItems*.id, body[0].shoppingItems[0].keySet())
 
         then:
         response.status == 200
         body*.id == [listId]
-        body[0].keySet() == ['id', 'name', 'shoppingItems'] as Set
+        body[0].keySet() == ['id', 'name', 'shoppingItems', 'listOrderRevision', 'itemOrderRevision'] as Set
         body[0].name == 'Wocheneinkauf'
+        body[0].listOrderRevision == 7
+        body[0].itemOrderRevision == 3
         body[0].shoppingItems*.id == [milchId, brotId]
         body[0].shoppingItems[0].keySet() == ['id', 'name', 'completed'] as Set
         body[0].shoppingItems*.name == ['Milch', 'Brot']

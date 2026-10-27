@@ -636,6 +636,74 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
         }
     }
 
+    // Reihenfolge (DIV-1): Position bei Anlage, Schutz vor Merge-Überschreibung
+
+    def "Neuer Eintrag kommt ans Ende: Position max + 1 auch bei Lücken, Einträge anderer Listen zählen nicht"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        wg.group.lastUpdateShoppingList = START
+        def liste = fixtures.shoppingList(wg)
+        fixtures.shoppingItem(liste, sortOrder: 0)
+        fixtures.shoppingItem(liste, sortOrder: 4)
+        def andereListe = fixtures.shoppingList(wg)
+        fixtures.shoppingItem(andereListe, sortOrder: 8)
+        def groupId = wg.group.id
+        def listId = liste.id
+        def andereListId = andereListe.id
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: heute {}, Gruppe {} (lastUpdateShoppingList {}), Mitglied {} (angemeldet), Liste {} mit Einträgen an Position 0 und 4; Liste {} mit Eintrag an Position 8',
+                testClock.today, groupId, START, ben.id, listId, andereListId)
+
+        when:
+        def result = shoppingItemService.addShoppingItem(
+                new AddEditShoppingItemDto(name: 'Milch', shoppingListId: listId, groupId: groupId))
+        flushAndClear()
+        def position = shoppingItemRepository.findById(result.id).get().sortOrder
+        def lastUpdate = lastUpdateShoppingList(groupId)
+        LOG.info('shoppingItemService.addShoppingItem(Liste {}) -> Eintrag {} an Position {}, lastUpdateShoppingList {}',
+                listId, result.id, position, lastUpdate)
+
+        then:
+        position == 5
+        lastUpdate.time == testClock.instant().toEpochMilli()
+    }
+
+    def "Eintrag #aktion lässt seine Position unverändert"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg)
+        def eintrag = fixtures.shoppingItem(liste, name: 'Milch', completed: false, sortOrder: 3)
+        def groupId = wg.group.id
+        def listId = liste.id
+        def itemId = eintrag.id
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Mitglied {} (angemeldet), Liste {}, Eintrag {} "Milch" offen an Position 3 -> "{}", erledigt {}',
+                groupId, ben.id, listId, itemId, name, completed)
+
+        when:
+        shoppingItemService.updateShoppingItem(new AddEditShoppingItemDto(
+                id: itemId, name: name, completed: completed, shoppingListId: listId, groupId: groupId))
+        flushAndClear()
+        def gespeichert = shoppingItemRepository.findById(itemId).get()
+        def (gespeichertName, gespeichertCompleted, position) = [gespeichert.name, gespeichert.completed, gespeichert.sortOrder]
+        LOG.info('shoppingItemService.updateShoppingItem(Eintrag {}) -> "{}", erledigt {}, Position {}',
+                itemId, gespeichertName, gespeichertCompleted, position)
+
+        then:
+        gespeichertName == name
+        gespeichertCompleted == completed
+        position == 3
+
+        where:
+        aktion       | name         | completed
+        'abhaken'    | 'Milch'      | true
+        'umbenennen' | 'Hafermilch' | false
+    }
+
     /** IDs der Einträge einer Liste, aufsteigend (lädt die Liste neu; vorher flushAndClear()). */
     private List<Long> eintragIds(Long listId) {
         shoppingListRepository.findById(listId).get().shoppingItems*.id.sort()

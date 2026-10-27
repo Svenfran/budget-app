@@ -61,4 +61,6 @@
 
     <include context="dev,test,prod" file="db/changelog/release-1.x/20261025120000-1_addNotNullConstraintToTokenDeviceId.xml" relativeToChangelogFile="false"/>
 
+    <include context="dev,test,prod" file="db/changelog/release-1.x/20261026120000-1_addSortOrderAndOrderRevisionToShoppingTables.xml" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

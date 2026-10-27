@@ -33,6 +33,14 @@ public class ShoppingList implements Serializable {
     @JoinColumn(name = "group_id", nullable = false)
     private Group group;
 
+    // Position und Revision ändert nur der Reorder per Update-Query (updatable = false): die Update-Pfade speichern
+    // per merge eine aus dem DTO neu erzeugte Entity und würden sonst die gespeicherten Werte überschreiben
+    @Column(name = "sort_order", nullable = false, updatable = false)
+    private int sortOrder;
+
+    @Column(name = "item_order_revision", nullable = false, updatable = false)
+    private long itemOrderRevision;
+
     @OneToMany(mappedBy = "shoppingList")
     @JsonBackReference
     private Set<ShoppingItem> shoppingItems;
@@ -97,6 +105,22 @@ public class ShoppingList implements Serializable {
         this.lastUpdate = lastUpdate;
     }
 
+    public int getSortOrder() {
+        return sortOrder;
+    }
+
+    public void setSortOrder(int sortOrder) {
+        this.sortOrder = sortOrder;
+    }
+
+    public long getItemOrderRevision() {
+        return itemOrderRevision;
+    }
+
+    public void setItemOrderRevision(long itemOrderRevision) {
+        this.itemOrderRevision = itemOrderRevision;
+    }
+
     @Override
     public String toString() {
         return "ShoppingList{" +
@@ -104,6 +128,8 @@ public class ShoppingList implements Serializable {
                 ", name='" + name + '\'' +
                 ", dateCreated=" + dateCreated +
                 ", lastUpdate=" + lastUpdate +
+                ", sortOrder=" + sortOrder +
+                ", itemOrderRevision=" + itemOrderRevision +
                 ", groupId=" + (group == null ? null : group.getId()) +
                 '}';
     }
