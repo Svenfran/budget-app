@@ -1,7 +1,7 @@
 import {
   Component, computed, effect, ElementRef, OnDestroy, OnInit, QueryList, Renderer2, untracked, ViewChild, ViewChildren
 } from '@angular/core';
-import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
+import { CdkDrag, CdkDragDrop, CdkDragMove, CdkDropList } from '@angular/cdk/drag-drop';
 import { ShoppinglistService } from './service/shoppinglist.service';
 import { AddEditShoppinglistDto } from './model/add-edit-shoppinglist-dto';
 import { AlertService } from 'src/app/service/alert.service';
@@ -323,8 +323,27 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
     if (itemDrag) this.renderer.addClass(this.scrollHost.nativeElement, 'item-drag-active');
   }
 
+  /**
+   * Item-Drag (DIV-2, Codex-Review F-001): Das CDK lässt den Platzhalter in der zuletzt betretenen Liste, auch wenn der
+   * Zeiger sie wieder verlässt; ein Drop dort verschiebt aber nicht. Liegt der Platzhalter in einer fremden Liste und
+   * der Zeiger nicht über ihr, wird er als inaktiv dargestellt. Läuft außerhalb der Change Detection (je Bewegung).
+   */
+  onItemDragMoved(event: CdkDragMove<number>) {
+    const container = this.scrollHost.nativeElement.querySelector('.cdk-drag-placeholder')?.parentElement;
+    const rect = container?.getBoundingClientRect();
+    const { x, y } = event.pointerPosition;
+    const outside = !!container && !!rect && container !== event.source.dropContainer.element.nativeElement
+      && !(x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom);
+    if (outside) {
+      this.renderer.addClass(this.scrollHost.nativeElement, 'item-drop-outside');
+    } else {
+      this.renderer.removeClass(this.scrollHost.nativeElement, 'item-drop-outside');
+    }
+  }
+
   onDragEnded() {
     this.renderer.removeClass(this.scrollHost.nativeElement, 'item-drag-active');
+    this.renderer.removeClass(this.scrollHost.nativeElement, 'item-drop-outside');
     this.dragEndedAt = Date.now();
     // Rückfall für einen Drag ohne Drop; nach einem Drop ist der Puffer schon leer
     queueMicrotask(() => this.shoppinglistService.releaseUpdates());

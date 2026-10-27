@@ -649,6 +649,7 @@ describe('ShoppinglistPage – Drag & Drop mit echter Geste', () => {
     expect(el('#item-list-2').getBoundingClientRect().height).withContext('ohne Drag keine Fläche').toBe(0);
     let flaecheWaehrendDrag = 0;
     let klasseWaehrendDrag = false;
+    let inaktivUeberB = true;
 
     // Mitte der vorgesehenen 48-px-Fläche (ohne Fläche läge der Punkt unterhalb der Liste, nicht auf ihrer Kante)
     const flaechenMitte = () => {
@@ -660,9 +661,11 @@ describe('ShoppinglistPage – Drag & Drop mit echter Geste', () => {
     await drag(items(1)[0], flaechenMitte, () => {
       flaecheWaehrendDrag = el('#item-list-2').getBoundingClientRect().height;
       klasseWaehrendDrag = scrollHost.classList.contains('item-drag-active');
+      inaktivUeberB = scrollHost.classList.contains('item-drop-outside');
     }, flaechenMitte);
 
     expect(klasseWaehrendDrag).toBeTrue();
+    expect(inaktivUeberB).withContext('Zeiger über dem Ziel: Platzhalter aktiv').toBeFalse();
     expect(flaecheWaehrendDrag).toBeGreaterThanOrEqual(48);
     expect(scrollHost.classList.contains('item-drag-active')).toBeFalse();
     const req = http.expectOne(moveUrl);
@@ -691,8 +694,14 @@ describe('ShoppinglistPage – Drag & Drop mit echter Geste', () => {
     page.toggleLists = { 1: true };
     fixture.detectChanges();
 
-    await drag(items(1)[1], () => center(listHeader(3)));
+    let inaktiv = true;
 
+    await drag(items(1)[1], () => center(listHeader(3)), () => {
+      inaktiv = el('.ion-content-scroll-host').classList.contains('item-drop-outside');
+    });
+
+    // der Platzhalter steht in der Quelle A: dort gilt er auch außerhalb (Umsortieren wie DIV-1), bleibt also aktiv
+    expect(inaktiv).toBeFalse();
     http.expectNone(moveUrl);
     http.expectNone(`${api}/shopping-list/reorder-items`);
     expect(items(1).length).toBe(2);
@@ -703,16 +712,21 @@ describe('ShoppinglistPage – Drag & Drop mit echter Geste', () => {
     page.toggleLists = { 1: true, 2: true };
     fixture.detectChanges();
     let platzhalterIn: string | undefined;
+    let inaktivBeimLoslassen = false;
 
     await drag(items(1)[1], () => center(listHeader(3)), () => {
       platzhalterIn = document.querySelector('.cdk-drag-placeholder')?.parentElement?.id;
+      inaktivBeimLoslassen = el('.ion-content-scroll-host').classList.contains('item-drop-outside');
     }, () => {
       const rect = el('#item-list-2').getBoundingClientRect();
       return { x: rect.left + rect.width / 2, y: rect.top + 24 };
     });
 
-    // B ist der zuletzt betretene Container (das CDK lässt den Platzhalter dort), losgelassen wurde über D
+    // B ist der zuletzt betretene Container (das CDK lässt den Platzhalter dort), losgelassen wurde über D; der
+    // Platzhalter in B ist deshalb als inaktiv markiert, nach dem Drop nicht mehr
     expect(platzhalterIn).toBe('item-list-2');
+    expect(inaktivBeimLoslassen).toBeTrue();
+    expect(el('.ion-content-scroll-host').classList.contains('item-drop-outside')).toBeFalse();
     http.expectNone(moveUrl);
     http.expectNone(`${api}/shopping-list/reorder-items`);
     expect(items(1).length).toBe(2);

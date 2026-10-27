@@ -88,6 +88,14 @@ ion-list {
 }
 
 // mögliche Ziele (aufgeklappte andere Listen) während eines Item-Drags; Ionic-Farben, daher auch im Dark Mode passend
+// Zeiger hat die betretene fremde Liste wieder verlassen: Loslassen verschiebt nicht (Codex-Review F-001), der
+// Platzhalter dort wirkt daher inaktiv statt wie ein Ziel
+.item-drop-outside .item-drag-placeholder {
+    border-color: var(--ion-color-medium);
+    background: transparent;
+    opacity: 0.4;
+}
+
 .item-drop-list.cdk-drop-list-receiving {
     border-radius: 6px;
     outline: 1px dashed rgba(var(--ion-color-primary-rgb), 0.6);
