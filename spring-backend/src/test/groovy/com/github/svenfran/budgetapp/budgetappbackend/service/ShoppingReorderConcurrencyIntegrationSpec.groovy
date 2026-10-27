@@ -2,10 +2,13 @@ package com.github.svenfran.budgetapp.budgetappbackend.service
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingListDto
+import com.github.svenfran.budgetapp.budgetappbackend.dto.MoveShoppingItemDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingItemOrderDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingListDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingListOrderDto
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.ShoppingItemDoesNotBelongToShoppingListException
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.ShoppingListNotFoundException
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingItemRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingListRepository
@@ -30,7 +33,8 @@ import java.util.concurrent.TimeUnit
 /**
  * Gleichzeitige Änderungen an der Reihenfolge der Einkaufslisten (DIV-1): Alle Reorders und Anlagen einer Gruppe
  * sperren zuerst die Gruppenzeile und laufen dadurch nacheinander; es gilt die zuletzt committete Reihenfolge (AC14),
- * Listen- und Item-Reorder blockieren sich nicht kreuzweise, neue Einträge landen am Ende (AC7).
+ * Listen- und Item-Reorder blockieren sich nicht kreuzweise, neue Einträge landen am Ende (AC7). Verschieben zwischen
+ * Listen (DIV-2) nutzt dieselbe Sperre: parallele Änderungen, Löschungen und das Laden sehen den Move ganz oder gar nicht.
  *
  * Ablauf je Feature (overlapping): Transaktion 1 führt ihren Aufruf aus und hält die Transaktion offen; Transaktion 2
  * startet in einem zweiten Thread und muss an der Gruppensperre warten (geprüft über pg_stat_activity, ohne sleep);
@@ -272,6 +276,258 @@ class ShoppingReorderConcurrencyIntegrationSpec extends IntegrationSpec {
         gespeichert == [z, y, x, w]
         wPosition == 3
         geladen == gespeichert
+    }
+
+    // Verschieben zwischen Listen (DIV-2)
+
+    def "Abhaken mit altem Listenstand wartet auf den Move und setzt die Zuordnung nicht zurück"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def groupId = wg.group.id
+        def (a, b) = (1..2).collect { fixtures.shoppingList(wg) }
+        def (aId, bId) = [a.id, b.id]
+        def xId = fixtures.shoppingItem(a, name: 'Milch', completed: false).id
+        def uId = fixtures.shoppingItem(b).id
+        LOG.info('Szenario: Gruppe {}, Mitglied {}, Liste A {} mit X {} "Milch", Liste B {} mit U {}; T1 verschiebt X nach B und hält offen, T2 hakt X mit Liste A ab',
+                groupId, ben.id, aId, xId, bId, uId)
+
+        when:
+        overlapping(ben,
+                { shoppingItemService.moveShoppingItem(new MoveShoppingItemDto(groupId, xId, aId, bId, [uId, xId])) },
+                { shoppingItemService.updateShoppingItem(new AddEditShoppingItemDto(id: xId, name: 'Milch', completed: true, shoppingListId: aId, groupId: groupId)) })
+        def (inA, inB) = [aId, bId].collect { itemIds(it) }
+        def completed = shoppingItemRepository.findById(xId).get().completed
+        LOG.info('beide committet -> A {}, B {}, X erledigt {}', inA, inB, completed)
+
+        then:
+        inA == []
+        inB == [uId, xId]
+        completed
+    }
+
+    def "Zwei Moves desselben Eintrags: der zweite wartet und wird abgewiesen, der Eintrag steht genau einmal in der Liste des ersten"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def groupId = wg.group.id
+        def (a, b, c) = (1..3).collect { fixtures.shoppingList(wg) }
+        def (aId, bId, cId) = [a.id, b.id, c.id]
+        def xId = fixtures.shoppingItem(a).id
+        LOG.info('Szenario: Gruppe {}, Mitglied {}, Listen A {} mit X {}, B {}, C {}; T1 verschiebt X nach B und hält offen, T2 verschiebt X von A nach C',
+                groupId, ben.id, aId, xId, bId, cId)
+
+        when:
+        def (erste, zweite) = overlapping(ben,
+                { shoppingItemService.moveShoppingItem(new MoveShoppingItemDto(groupId, xId, aId, bId, [xId])) },
+                { abgefangen { shoppingItemService.moveShoppingItem(new MoveShoppingItemDto(groupId, xId, aId, cId, [xId])) } })
+        def (inA, inB, inC) = [aId, bId, cId].collect { itemIds(it) }
+        def revisionen = [aId, bId, cId].collect { shoppingListRepository.findItemOrderRevision(it) }
+        LOG.info('T1 -> target {}; T2 -> {}; gespeichert A {}, B {}, C {}, Revisionen {}', erste.target.shoppingItemIds, zweite.class.simpleName, inA, inB, inC, revisionen)
+
+        then:
+        zweite instanceof ShoppingItemDoesNotBelongToShoppingListException
+        inA == []
+        inB == [xId]
+        inC == []
+        revisionen == [1L, 1L, 0L]
+    }
+
+    def "Move und Item-Reorder der Zielliste überlappend (#zuerst zuerst): kein Deadlock, Reihenfolge und Revisionen konsistent"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def groupId = wg.group.id
+        def (a, b) = (1..2).collect { fixtures.shoppingList(wg) }
+        def (aId, bId) = [a.id, b.id]
+        def xId = fixtures.shoppingItem(a).id
+        def (uId, vId) = (1..2).collect { fixtures.shoppingItem(b, sortOrder: it).id }
+        def move = { shoppingItemService.moveShoppingItem(new MoveShoppingItemDto(groupId, xId, aId, bId, [xId, uId, vId])) }
+        def reorder = { shoppingItemService.reorderShoppingItems(new ShoppingItemOrderDto(groupId: groupId, shoppingListId: bId, shoppingItemIds: [vId, uId])) }
+        LOG.info('Szenario: Gruppe {}, Mitglied {}, Liste A {} mit X {}, Liste B {} mit U {}, V {}; Move X an den Anfang von B, Reorder B [V,U]; {} zuerst (hält offen)',
+                groupId, ben.id, aId, xId, bId, uId, vId, zuerst)
+
+        when:
+        zuerst == 'Move' ? overlapping(ben, move, reorder) : overlapping(ben, reorder, move)
+        def inB = itemIds(bId)
+        def (revisionA, revisionB) = [aId, bId].collect { shoppingListRepository.findItemOrderRevision(it) }
+        LOG.info('beide committet -> B {}, Revisionen A {}, B {}', inB, revisionA, revisionB)
+
+        then:
+        inB == erwartet.collect { [X: xId, U: uId, V: vId][it] }
+        revisionA == 1L
+        revisionB == 2L
+
+        where:
+        zuerst    || erwartet
+        'Move'    || ['V', 'U', 'X']
+        'Reorder' || ['X', 'U', 'V']
+    }
+
+    def "Zielliste wird gelöscht, während der Move wartet: der Move wird mit ShoppingListNotFoundException abgewiesen, nichts ändert sich"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def groupId = wg.group.id
+        def (a, b) = (1..2).collect { fixtures.shoppingList(wg) }
+        def (aId, bId) = [a.id, b.id]
+        def (xId, pId) = (0..1).collect { fixtures.shoppingItem(a, sortOrder: it).id }
+        LOG.info('Szenario: Gruppe {}, Mitglied {}, Liste A {} mit X {}, P {}, Liste B {}; T1 löscht B und hält offen, T2 verschiebt X nach B',
+                groupId, ben.id, aId, xId, pId, bId)
+
+        when:
+        def (loeschen, move) = overlapping(ben,
+                { shoppingListService.deleteShoppingList(new AddEditShoppingListDto(id: bId, groupId: groupId)) },
+                { abgefangen { shoppingItemService.moveShoppingItem(new MoveShoppingItemDto(groupId, xId, aId, bId, [xId])) } })
+        def inA = itemIds(aId)
+        def revisionA = shoppingListRepository.findItemOrderRevision(aId)
+        def bVorhanden = shoppingListRepository.existsById(bId)
+        LOG.info('beide committet -> T2 {}; A {} (Revision {}), B vorhanden {}', move.class.simpleName, inA, revisionA, bVorhanden)
+
+        then:
+        move instanceof ShoppingListNotFoundException
+        inA == [xId, pId]
+        revisionA == 0L
+        !bVorhanden
+    }
+
+    def "Quellliste wird gelöscht, während der Move die Sperre hält: der verschobene Eintrag bleibt in der Zielliste erhalten"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def groupId = wg.group.id
+        def (a, b) = (1..2).collect { fixtures.shoppingList(wg) }
+        def (aId, bId) = [a.id, b.id]
+        def (xId, pId) = (0..1).collect { fixtures.shoppingItem(a, sortOrder: it).id }
+        LOG.info('Szenario: Gruppe {}, Mitglied {}, Liste A {} mit X {}, P {}, Liste B {}; T1 verschiebt X nach B und hält offen, T2 löscht A',
+                groupId, ben.id, aId, xId, pId, bId)
+
+        when:
+        overlapping(ben,
+                { shoppingItemService.moveShoppingItem(new MoveShoppingItemDto(groupId, xId, aId, bId, [xId])) },
+                { shoppingListService.deleteShoppingList(new AddEditShoppingListDto(id: aId, groupId: groupId)) })
+        def listen = listIds(groupId)
+        def inB = itemIds(bId)
+        def pVorhanden = shoppingItemRepository.existsById(pId)
+        LOG.info('beide committet -> Listen {}, B {}, P vorhanden {}', listen, inB, pVorhanden)
+
+        then:
+        listen == [bId]
+        inB == [xId]
+        !pVorhanden
+    }
+
+    def "Zielliste wird nach dem Move-Commit gelöscht: der verschobene Eintrag wird mit ihr gelöscht, die Quellliste bleibt"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def groupId = wg.group.id
+        def (a, b) = (1..2).collect { fixtures.shoppingList(wg) }
+        def (aId, bId) = [a.id, b.id]
+        def (xId, pId) = (0..1).collect { fixtures.shoppingItem(a, sortOrder: it).id }
+        def uId = fixtures.shoppingItem(b).id
+        LOG.info('Szenario: Gruppe {}, Mitglied {}, Liste A {} mit X {}, P {}, Liste B {} mit U {}; T1 verschiebt X nach B und hält offen, T2 löscht B',
+                groupId, ben.id, aId, xId, pId, bId, uId)
+
+        when:
+        overlapping(ben,
+                { shoppingItemService.moveShoppingItem(new MoveShoppingItemDto(groupId, xId, aId, bId, [xId, uId])) },
+                { shoppingListService.deleteShoppingList(new AddEditShoppingListDto(id: bId, groupId: groupId)) })
+        def listen = listIds(groupId)
+        def inA = itemIds(aId)
+        def verbliebeneEintraege = [xId, pId, uId].findAll { shoppingItemRepository.existsById(it) }
+        LOG.info('beide committet -> Listen {}, A {}, verbliebene Einträge {}', listen, inA, verbliebeneEintraege)
+
+        then:
+        listen == [aId]
+        inA == [pId]
+        verbliebeneEintraege == [pId]
+    }
+
+    def "Laden liest einen einheitlichen Stand: ein während des Ladens committeter Move (#richtung) erscheint nicht in der Antwort"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def groupId = wg.group.id
+        def listen = [A: fixtures.shoppingList(wg, sortOrder: 0), B: fixtures.shoppingList(wg, sortOrder: 1)]
+        def (aId, bId) = [listen.A.id, listen.B.id]
+        def xId = fixtures.shoppingItem(listen[quelle], sortOrder: 0).id
+        def pId = fixtures.shoppingItem(listen.A, sortOrder: 1).id
+        def uId = fixtures.shoppingItem(listen.B, sortOrder: 1).id
+        def vorher = quelle == 'A' ? [(aId): [xId, pId], (bId): [uId]] : [(aId): [pId], (bId): [xId, uId]]
+        def (quellId, zielId) = [listen[quelle].id, listen[ziel].id]
+        def zielBestand = vorher[zielId]
+        LOG.info('Szenario: Gruppe {}, Mitglied {}, Listen A {}, B {}, Einträge {}; T1 sperrt shoppingitem, das Laden wartet darauf, T1 verschiebt X {} von {} nach {} und committet',
+                groupId, ben.id, aId, bId, vorher, xId, quelle, ziel)
+
+        when:
+        def antwort = ladenWaehrend(ben, groupId) {
+            shoppingItemService.moveShoppingItem(new MoveShoppingItemDto(groupId, xId, quellId, zielId, [xId] + zielBestand))
+        }
+        def geladen = antwort.collectEntries { [it.id, it.shoppingItems*.id] }
+        def revisionen = antwort*.itemOrderRevision
+        def gespeichert = [(aId): itemIds(aId), (bId): itemIds(bId)]
+        LOG.info('getShoppingListsForGroup -> {}, itemOrderRevision {}; gespeichert nach dem Move {}', geladen, revisionen, gespeichert)
+
+        then: "die Antwort ist vollständig der Stand vor dem Move, gespeichert ist der Stand danach"
+        geladen == vorher
+        revisionen == [0L, 0L]
+        gespeichert[quellId] == vorher[quellId] - xId
+        gespeichert[zielId] == [xId] + zielBestand
+
+        where:
+        richtung | quelle | ziel
+        'A -> B' | 'A'    | 'B'
+        'B -> A' | 'B'    | 'A'
+    }
+
+    /**
+     * Lädt die Listen über den Service-Proxy ohne äußere Transaktion, während Transaktion 1 die Tabelle shoppingitem
+     * exklusiv sperrt: Das Laden liest Revision und Listen und wartet beim Nachladen der Einträge (geprüft über
+     * pg_stat_activity). Erst dann führt Transaktion 1 {@code aenderung} aus und committet. Liefert die Antwort des
+     * Ladens.
+     */
+    private List<ShoppingListDto> ladenWaehrend(User user, Long groupId, Closure aenderung) {
+        def gesperrt = new CountDownLatch(1)
+        def aenderungFreigabe = new CountDownLatch(1)
+        def pool = Executors.newFixedThreadPool(2)
+        try {
+            def t1 = pool.submit({
+                inTransaction(user) {
+                    jdbcTemplate.execute('LOCK TABLE shoppingitem IN ACCESS EXCLUSIVE MODE')
+                    gesperrt.countDown()
+                    assert aenderungFreigabe.await(TIMEOUT, TimeUnit.SECONDS)
+                    aenderung.call()
+                }
+            } as Callable)
+            assert gesperrt.await(TIMEOUT, TimeUnit.SECONDS)
+            def laden = pool.submit({
+                loginAs(user)
+                try {
+                    shoppingListService.getShoppingListsForGroup(groupId)
+                } finally {
+                    SecurityContextHolder.clearContext()
+                }
+            } as Callable)
+            new PollingConditions(timeout: TIMEOUT).eventually {
+                assert wartendAufSperre() == 1
+            }
+            aenderungFreigabe.countDown()
+            t1.get(TIMEOUT, TimeUnit.SECONDS)
+            laden.get(TIMEOUT, TimeUnit.SECONDS) as List<ShoppingListDto>
+        } finally {
+            aenderungFreigabe.countDown()
+            pool.shutdownNow()
+        }
+    }
+
+    /** Führt {@code aufruf} aus und liefert eine geworfene Exception als Ergebnis (die Transaktion committet). */
+    private static Object abgefangen(Closure aufruf) {
+        try {
+            aufruf.call()
+        } catch (Exception e) {
+            e
+        }
     }
 
     /**

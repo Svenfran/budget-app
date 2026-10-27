@@ -10,6 +10,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingItemRep
 import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingListRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.service.mapper.ShoppingListDtoMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
@@ -50,6 +51,9 @@ public class ShoppingListService {
         this.clock = clock;
     }
 
+    // Ein Snapshot für Revision, Listen und die lazy nachgeladenen Einträge: ein parallel committeter Move kann einen
+    // Eintrag sonst in derselben Antwort doppelt (in beiden Listen) oder gar nicht liefern
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public List<ShoppingListDto> getShoppingListsForGroup(Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
         var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(groupId);
@@ -113,10 +117,11 @@ public class ShoppingListService {
         verificationService.verifyIsPartOfGroup(user, group);
         var shoppingList = dataLoaderService.loadShoppingList(dto.getId());
         verificationService.verifyShoppingListIsPartOfGroup(shoppingList, group);
+        // Gruppe sperren, bevor die Einträge gelesen werden: ein parallel laufender Move in diese oder aus dieser Liste
+        // committet vorher, gelöscht wird der aktuelle Bestand
+        groupRepository.touchShoppingLists(group.getId(), Date.from(clock.instant()));
         shoppingItemRepository.deleteAll(shoppingList.getShoppingItems());
         shoppingListRepository.deleteById(shoppingList.getId());
-        group.setLastUpdateShoppingList(Date.from(clock.instant()));
-        groupRepository.save(group);
         notificationService.sendShoppingListNotification(
                 group.getId(),
                 dto,

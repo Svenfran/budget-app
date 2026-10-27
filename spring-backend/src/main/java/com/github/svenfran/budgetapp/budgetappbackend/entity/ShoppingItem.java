@@ -30,8 +30,10 @@ public class ShoppingItem implements Serializable {
     @UpdateTimestamp
     private Date lastUpdate;
 
+    // Liste ändert nur der Move per Update-Query (updatable = false): der Update-Pfad speichert per merge eine aus dem
+    // DTO neu erzeugte Entity und würde sonst einen parallel committeten Move zurücksetzen
     @ManyToOne
-    @JoinColumn(name = "shoppinglist_id", nullable = false)
+    @JoinColumn(name = "shoppinglist_id", nullable = false, updatable = false)
     private ShoppingList shoppingList;
 
     // Position ändert nur der Reorder per Update-Query (updatable = false): der Update-Pfad speichert per merge eine

@@ -1,9 +1,11 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto
+import com.github.svenfran.budgetapp.budgetappbackend.dto.MoveShoppingItemDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingItemOrderDto
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOrMemberOfGroupException
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.ShoppingItemDoesNotBelongToShoppingListException
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.ShoppingItemMoveWithinSameListException
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.ShoppingItemNotFoundException
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.ShoppingListDoesNotBelongToGroupException
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.ShoppingListNotFoundException
@@ -38,6 +40,7 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
     @Autowired ShoppingItemRepository shoppingItemRepository
     @Autowired ShoppingListRepository shoppingListRepository
     @Autowired GroupRepository groupRepository
+    @Autowired ShoppingListService shoppingListService
 
     def "Eintrag anlegen löst add-item mit dem gespeicherten Eintrag aus"() {
         given:
@@ -819,6 +822,259 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
         fall                          | fallFremdeListe || erwartet
         'Liste einer fremden Gruppe'  | true            || ShoppingListDoesNotBelongToGroupException
         'Nicht-Mitglied'              | false           || NotOwnerOrMemberOfGroupException
+    }
+
+    // Verschieben zwischen Listen (DIV-2)
+
+    def "Eintrag in eine andere Liste verschieben speichert Liste und Position, normalisiert die Quelle, erhöht beide Revisionen und meldet move-item"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        wg.group.lastUpdateShoppingList = START
+        def a = fixtures.shoppingList(wg, itemOrderRevision: 3L)
+        def p = fixtures.shoppingItem(a, sortOrder: 0)
+        def x = fixtures.shoppingItem(a, name: 'Milch', completed: true, sortOrder: 2)
+        def q = fixtures.shoppingItem(a, sortOrder: 5)
+        def b = fixtures.shoppingList(wg, itemOrderRevision: 7L)
+        def u = fixtures.shoppingItem(b, sortOrder: 0)
+        def v = fixtures.shoppingItem(b, sortOrder: 1)
+        def groupId = wg.group.id
+        def (aId, bId) = [a.id, b.id]
+        def (pId, xId, qId, uId, vId) = [p.id, x.id, q.id, u.id, v.id]
+        def gesendet = null
+        flushAndClear()
+        def dateCreated = shoppingItemRepository.findById(xId).get().dateCreated
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {} (lastUpdateShoppingList {}), Mitglied {} (angemeldet); Liste A {} (Revision 3) mit {} an Position 0/2/5, X {} "Milch" erledigt; Liste B {} (Revision 7) mit {}; X nach B, gewünscht {}',
+                groupId, START, ben.id, aId, [pId, xId, qId], xId, bId, [uId, vId], [uId, xId, vId])
+
+        when:
+        def result = shoppingItemService.moveShoppingItem(new MoveShoppingItemDto(groupId, xId, aId, bId, [uId, xId, vId]))
+        flushAndClear()
+        def gespeichert = shoppingItemRepository.findById(xId).get()
+        def (listeVonX, name, completed, erstellt) = [gespeichert.shoppingList.id, gespeichert.name, gespeichert.completed, gespeichert.dateCreated]
+        def positionen = [pId, qId, uId, xId, vId].collectEntries { [it, shoppingItemRepository.findById(it).get().sortOrder] }
+        def (revisionA, revisionB) = [aId, bId].collect { shoppingListRepository.findItemOrderRevision(it) }
+        def lastUpdate = lastUpdateShoppingList(groupId)
+        LOG.info('shoppingItemService.moveShoppingItem(X {}, A {} -> B {}) -> source {} (Revision {}), target {} (Revision {}); X in Liste {} "{}" erledigt {}, Positionen {}, Revisionen A {} B {}, lastUpdateShoppingList {}',
+                xId, aId, bId, result.source.shoppingItemIds, result.source.revision, result.target.shoppingItemIds, result.target.revision,
+                listeVonX, name, completed, positionen, revisionA, revisionB, lastUpdate)
+
+        then:
+        1 * notificationService.sendShoppingItemMoveNotification(groupId, _) >> { gesendet = it[1] }
+        0 * notificationService._
+        result.groupId == groupId
+        result.shoppingItemId == xId
+        result.source.groupId == groupId
+        result.source.shoppingListId == aId
+        result.source.revision == 4L
+        result.source.shoppingItemIds == [pId, qId]
+        result.target.groupId == groupId
+        result.target.shoppingListId == bId
+        result.target.revision == 8L
+        result.target.shoppingItemIds == [uId, xId, vId]
+        gesendet.is(result)
+        listeVonX == bId
+        positionen == [(pId): 0, (qId): 1, (uId): 0, (xId): 1, (vId): 2]
+        revisionA == 4L
+        revisionB == 8L
+        name == 'Milch'
+        completed
+        erstellt == dateCreated
+        lastUpdate.time == testClock.instant().toEpochMilli()
+    }
+
+    def "Laden nach dem Verschieben liefert den Eintrag nur in der Zielliste an der gespeicherten Position"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def a = fixtures.shoppingList(wg, sortOrder: 0)
+        def x = fixtures.shoppingItem(a, sortOrder: 0)
+        def p = fixtures.shoppingItem(a, sortOrder: 1)
+        def b = fixtures.shoppingList(wg, sortOrder: 1)
+        def u = fixtures.shoppingItem(b, sortOrder: 0)
+        def groupId = wg.group.id
+        def (aId, bId, xId, pId, uId) = [a.id, b.id, x.id, p.id, u.id]
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Mitglied {} (angemeldet); Liste A {} mit {}, Liste B {} mit {}; X {} an den Anfang von B',
+                groupId, ben.id, aId, [xId, pId], bId, [uId], xId)
+
+        when:
+        shoppingItemService.moveShoppingItem(new MoveShoppingItemDto(groupId, xId, aId, bId, [xId, uId]))
+        flushAndClear()
+        def geladen = shoppingListService.getShoppingListsForGroup(groupId).collectEntries { [it.id, it.shoppingItems*.id] }
+        LOG.info('shoppingItemService.moveShoppingItem(X {}, A -> B) aufgerufen; Laden -> {}', xId, geladen)
+
+        then:
+        geladen == [(aId): [pId], (bId): [xId, uId]]
+    }
+
+    def "Verschieben mit #fall: der Eintrag steht danach nur in der Zielliste, beide Listen lückenlos"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def a = fixtures.shoppingList(wg)
+        def x = fixtures.shoppingItem(a, sortOrder: 0)
+        def quellRest = (1..<quellAnzahl).collect { fixtures.shoppingItem(a, sortOrder: it).id }
+        def b = fixtures.shoppingList(wg)
+        def zielBestand = (0..<zielAnzahl).collect { fixtures.shoppingItem(b, sortOrder: it).id }
+        def groupId = wg.group.id
+        def (aId, bId, xId) = [a.id, b.id, x.id]
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Mitglied {} (angemeldet); Liste A {} mit X {} und {}, Liste B {} mit {}; X ans Ende von B ({})',
+                groupId, ben.id, aId, xId, quellRest, bId, zielBestand, fall)
+
+        when:
+        def result = shoppingItemService.moveShoppingItem(new MoveShoppingItemDto(groupId, xId, aId, bId, zielBestand + xId))
+        flushAndClear()
+        def (inA, inB) = [aId, bId].collect { shoppingItemRepository.findIdsInOrder(it) }
+        def positionenB = inB.collect { shoppingItemRepository.findById(it).get().sortOrder }
+        LOG.info('shoppingItemService.moveShoppingItem(X {}, A -> B) -> source {}, target {}; gespeichert A {}, B {} (Positionen {})',
+                xId, result.source.shoppingItemIds, result.target.shoppingItemIds, inA, inB, positionenB)
+
+        then:
+        result.source.shoppingItemIds == quellRest
+        result.target.shoppingItemIds == zielBestand + xId
+        inA == quellRest
+        inB == zielBestand + xId
+        positionenB == (0..zielAnzahl).toList()
+
+        where:
+        fall                             | quellAnzahl | zielAnzahl
+        'leerer Zielliste'               | 2           | 0
+        'dem letzten Eintrag der Quelle' | 1           | 2
+    }
+
+    def "Verschieben übernimmt die Zielreihenfolge tolerant: unbekannte, fremde und doppelte IDs ignoriert, fehlender Eintrag hinten"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def a = fixtures.shoppingList(wg)
+        def x = fixtures.shoppingItem(a, sortOrder: 0)
+        def p = fixtures.shoppingItem(a, sortOrder: 1)
+        def b = fixtures.shoppingList(wg)
+        def u = fixtures.shoppingItem(b, sortOrder: 0)
+        def v = fixtures.shoppingItem(b, sortOrder: 1)
+        def groupId = wg.group.id
+        def (aId, bId, xId, pId, uId, vId) = [a.id, b.id, x.id, p.id, u.id, v.id]
+        def gewuenscht = [UNBEKANNT, vId, pId, vId, uId]
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Mitglied {} (angemeldet); Liste A {} mit {}, Liste B {} mit {}; X {} nach B, gewünscht {} (X fehlt, P aus A)',
+                groupId, ben.id, aId, [xId, pId], bId, [uId, vId], xId, gewuenscht)
+
+        when:
+        def result = shoppingItemService.moveShoppingItem(new MoveShoppingItemDto(groupId, xId, aId, bId, gewuenscht))
+        flushAndClear()
+        def (inA, inB) = [aId, bId].collect { shoppingItemRepository.findIdsInOrder(it) }
+        LOG.info('shoppingItemService.moveShoppingItem(X {}, A -> B) -> target {}; gespeichert A {}, B {}', xId, result.target.shoppingItemIds, inA, inB)
+
+        then:
+        result.target.shoppingItemIds == [vId, uId, xId]
+        inB == [vId, uId, xId]
+        inA == [pId]
+    }
+
+    def "Verschieben mit #fall wird abgewiesen, Zuordnung, Positionen und Revisionen bleiben"() {
+        given:
+        def ben = fixtures.user()
+        def fremder = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def andereGruppe = fixtures.group()
+        def a = fixtures.shoppingList(wg)
+        def x = fixtures.shoppingItem(a, sortOrder: 0)
+        def y = fixtures.shoppingItem(a, sortOrder: 1)
+        def b = fixtures.shoppingList(wg)
+        def u = fixtures.shoppingItem(b, sortOrder: 0)
+        def f = fixtures.shoppingList(andereGruppe)
+        def groupId = wg.group.id
+        def ids = [A: a.id, B: b.id, F: f.id]
+        def (xId, yId, uId) = [x.id, y.id, u.id]
+        def angemeldet = wer == 'fremder' ? fremder : ben
+        flushAndClear()
+        loginAs(angemeldet)
+        LOG.info('Szenario: Gruppe {} (Mitglied {}), Listen {} (F gehört Gruppe {}); A mit {}, B mit {}; angemeldet {}; X {} von {} nach {}',
+                groupId, ben.id, ids, andereGruppe.group.id, [xId, yId], [uId], angemeldet.id, xId, quelle, ziel)
+
+        when:
+        LOG.info('shoppingItemService.moveShoppingItem(X {}, {} -> {}), erwartet {}', xId, quelle, ziel, erwartet.simpleName)
+        shoppingItemService.moveShoppingItem(new MoveShoppingItemDto(groupId, xId, ids[quelle], ids[ziel], [xId]))
+
+        then:
+        thrown(erwartet)
+        0 * notificationService._
+        flushAndClear()
+        shoppingItemRepository.findIdsInOrder(ids.A) == [xId, yId]
+        shoppingItemRepository.findIdsInOrder(ids.B) == [uId]
+        [xId, yId, uId].collect { shoppingItemRepository.findById(it).get().sortOrder } == [0, 1, 0]
+        ids.values().collect { shoppingListRepository.findItemOrderRevision(it) } == [0L, 0L, 0L]
+
+        where:
+        fall                              | quelle | ziel | wer        || erwartet
+        'gleicher Quell- und Zielliste'   | 'A'    | 'A'  | 'mitglied' || ShoppingItemMoveWithinSameListException
+        'Eintrag nicht in der Quellliste' | 'B'    | 'A'  | 'mitglied' || ShoppingItemDoesNotBelongToShoppingListException
+        'Zielliste einer fremden Gruppe'  | 'A'    | 'F'  | 'mitglied' || ShoppingListDoesNotBelongToGroupException
+        'Nicht-Mitglied'                  | 'A'    | 'B'  | 'fremder'  || NotOwnerOrMemberOfGroupException
+    }
+
+    def "Abhaken nach dem Verschieben mit der neuen Liste lässt die Zuordnung unverändert"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def a = fixtures.shoppingList(wg)
+        def x = fixtures.shoppingItem(a, name: 'Milch', completed: false, sortOrder: 0)
+        def b = fixtures.shoppingList(wg)
+        def u = fixtures.shoppingItem(b, sortOrder: 0)
+        def groupId = wg.group.id
+        def (aId, bId, xId, uId) = [a.id, b.id, x.id, u.id]
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Mitglied {} (angemeldet); X {} "Milch" in Liste A {}, Liste B {} mit {}; X ans Ende von B, danach abhaken mit Liste B',
+                groupId, ben.id, xId, aId, bId, [uId])
+
+        when:
+        shoppingItemService.moveShoppingItem(new MoveShoppingItemDto(groupId, xId, aId, bId, [uId, xId]))
+        flushAndClear()
+        shoppingItemService.updateShoppingItem(new AddEditShoppingItemDto(
+                id: xId, name: 'Milch', completed: true, shoppingListId: bId, groupId: groupId))
+        flushAndClear()
+        def gespeichert = shoppingItemRepository.findById(xId).get()
+        def (listeVonX, completed, position) = [gespeichert.shoppingList.id, gespeichert.completed, gespeichert.sortOrder]
+        LOG.info('moveShoppingItem(X {}, A -> B) und updateShoppingItem(X, Liste B, erledigt) -> X in Liste {}, erledigt {}, Position {}',
+                xId, listeVonX, completed, position)
+
+        then:
+        listeVonX == bId
+        completed
+        position == 1
+    }
+
+    def "Speichern einer Entity mit anderer Liste ändert die Zuordnung nicht (shoppingList ist updatable = false)"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def a = fixtures.shoppingList(wg)
+        def x = fixtures.shoppingItem(a, name: 'Milch')
+        def b = fixtures.shoppingList(wg)
+        def (aId, bId, xId) = [a.id, b.id, x.id]
+        flushAndClear()
+        LOG.info('Szenario: Gruppe {}, X {} "Milch" in Liste A {}; X mit Liste B {} und neuem Namen per save', wg.group.id, xId, aId, bId)
+
+        when:
+        def eintrag = shoppingItemRepository.findById(xId).get()
+        eintrag.shoppingList = shoppingListRepository.findById(bId).get()
+        eintrag.name = 'Hafermilch'
+        shoppingItemRepository.save(eintrag)
+        flushAndClear()
+        def gespeichert = shoppingItemRepository.findById(xId).get()
+        def (listeVonX, name) = [gespeichert.shoppingList.id, gespeichert.name]
+        LOG.info('shoppingItemRepository.save(X {} mit Liste B) -> X in Liste {}, Name "{}"', xId, listeVonX, name)
+
+        then:
+        listeVonX == aId
+        name == 'Hafermilch'
     }
 
     /** IDs der Einträge einer Liste, aufsteigend (lädt die Liste neu; vorher flushAndClear()). */

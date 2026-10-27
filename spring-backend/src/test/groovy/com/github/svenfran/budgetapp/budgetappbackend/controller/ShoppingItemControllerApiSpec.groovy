@@ -282,6 +282,79 @@ class ShoppingItemControllerApiSpec extends IntegrationSpec implements ApiReques
         'mit Liste fremder Gruppe'   | 'mitglied' | true                  || 404
     }
 
+    def "Eintrag verschieben: 200 mit groupId, shoppingItemId und den Reihenfolgen samt Revision von source und target, GET danach liefert sie"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def a = fixtures.shoppingList(wg, sortOrder: 0)
+        def x = fixtures.shoppingItem(a, sortOrder: 0)
+        def p = fixtures.shoppingItem(a, sortOrder: 1)
+        def b = fixtures.shoppingList(wg, sortOrder: 1)
+        def u = fixtures.shoppingItem(b, sortOrder: 0)
+        def (groupId, aId, bId, xId, pId, uId) = [wg.group.id, a.id, b.id, x.id, p.id, u.id]
+        flushAndClear()
+        LOG.info('Szenario: Gruppe {}, Mitglied {}; Liste A {} mit {}, Liste B {} mit {}; X {} ans Ende von B',
+                groupId, ben.id, aId, [xId, pId], bId, [uId], xId)
+
+        when:
+        def response = moveItem(ben, [groupId: groupId, shoppingItemId: xId, sourceShoppingListId: aId,
+                                      targetShoppingListId: bId, targetShoppingItemIds: [uId, xId]])
+        def body = json(response)
+        flushAndClear()
+        def geladen = json(send(get('/api/groups/shopping-lists-with-items/{groupId}', groupId), user: ben))
+        LOG.info('Antwort: {}; GET danach: {}', body, geladen.collect { [it.id, it.shoppingItems*.id, it.itemOrderRevision] })
+
+        then:
+        response.status == 200
+        body.keySet() == ['groupId', 'shoppingItemId', 'source', 'target'] as Set
+        body.groupId == groupId
+        body.shoppingItemId == xId
+        body.source == [groupId: groupId, shoppingListId: aId, revision: 1, shoppingItemIds: [pId]]
+        body.target == [groupId: groupId, shoppingListId: bId, revision: 1, shoppingItemIds: [uId, xId]]
+        geladen*.shoppingItems*.id == [[pId], [uId, xId]]
+        geladen*.itemOrderRevision == [1, 1]
+        1 * notificationService.sendShoppingItemMoveNotification(groupId, _)
+    }
+
+    def "Eintrag verschieben #fall: #status"() {
+        given:
+        def ben = fixtures.user()
+        def fremder = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def andereGruppe = fixtures.group()
+        def a = fixtures.shoppingList(wg)
+        def x = fixtures.shoppingItem(a)
+        def b = fixtures.shoppingList(wg)
+        def f = fixtures.shoppingList(andereGruppe)
+        def groupId = wg.group.id
+        def ids = [A: a.id, B: b.id, F: f.id]
+        def angemeldet = [mitglied: ben, fremder: fremder][wer]
+        LOG.info('Szenario: Gruppe {} (Mitglied {}, Nicht-Mitglied {}); Listen {} (F gehört Gruppe {}); X {} in A; Request {}',
+                groupId, ben.id, fremder.id, ids, andereGruppe.group.id, x.id, fall)
+
+        when:
+        def requestBody = [groupId: groupId, shoppingItemId: x.id, sourceShoppingListId: ids[quelle],
+                           targetShoppingListId: ids[ziel], targetShoppingItemIds: [x.id]]
+        def response = angemeldet ? moveItem(angemeldet, requestBody) : send(put('/api/groups/shopping-list/move-item'), body: requestBody)
+        LOG.info('Antwort: {}', response.contentAsString)
+
+        then:
+        response.status == status
+        0 * notificationService._
+
+        where:
+        fall                                  | wer        | quelle | ziel || status
+        'ohne Anmeldung'                      | null       | 'A'    | 'B'  || 403
+        'als Nicht-Mitglied'                  | 'fremder'  | 'A'    | 'B'  || 403
+        'in dieselbe Liste'                   | 'mitglied' | 'A'    | 'A'  || 400
+        'mit Eintrag nicht in der Quellliste' | 'mitglied' | 'B'    | 'A'  || 404
+        'in eine Liste fremder Gruppe'        | 'mitglied' | 'A'    | 'F'  || 404
+    }
+
+    private MockHttpServletResponse moveItem(User angemeldet, Map body) {
+        send(put('/api/groups/shopping-list/move-item'), user: angemeldet, body: body)
+    }
+
     private MockHttpServletResponse deleteAllItems(User angemeldet, List<Map> items) {
         send(post('/api/groups/shopping-list/delete-all-items'), user: angemeldet, body: items)
     }

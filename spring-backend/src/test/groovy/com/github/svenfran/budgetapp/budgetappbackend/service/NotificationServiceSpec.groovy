@@ -4,6 +4,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingListDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.GroupDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.GroupMembersDto
+import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingItemMovedDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingItemOrderDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingListOrderDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto
@@ -221,6 +222,29 @@ class NotificationServiceSpec extends Specification {
         dto.shoppingListId == 5L
         dto.revision == 3L
         dto.shoppingItemIds == [7L, 5L, 6L]
+    }
+
+    def "Verschobener Eintrag geht mit beiden Reihenfolgen auf /notification/move-item an alle außer dem auslösenden Nutzer"() {
+        given:
+        def dto = new ShoppingItemMovedDto(GRUPPE_ID, 7L,
+                new ShoppingItemOrderDto(GRUPPE_ID, 5L, 4L, [8L, 9L]),
+                new ShoppingItemOrderDto(GRUPPE_ID, 6L, 9L, [10L, 7L]))
+
+        when:
+        service.sendShoppingItemMoveNotification(GRUPPE_ID, dto)
+
+        then:
+        1 * gmhService.getGroupMembersAndOwner(GRUPPE_ID) >> aktiveMitglieder
+        1 * messagingTemplate.convertAndSendToUser('2', '/notification/move-item', dto)
+        1 * messagingTemplate.convertAndSendToUser('3', '/notification/move-item', dto)
+        0 * messagingTemplate.convertAndSendToUser('1', _, _)
+        0 * messagingTemplate._
+        dto.shoppingItemId == 7L
+        dto.source.shoppingListId == 5L
+        dto.source.shoppingItemIds == [8L, 9L]
+        dto.target.shoppingListId == 6L
+        dto.target.revision == 9L
+        dto.target.shoppingItemIds == [10L, 7L]
     }
 
     def "Leere Liste bei delete-all-items sendet nichts und wirft nicht"() {
