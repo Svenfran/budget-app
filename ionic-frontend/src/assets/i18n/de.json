@@ -237,6 +237,9 @@
                     "loading": "Aktualisiere Eintrag..."
                 }
             },
+            "move": {
+                "error": "Der Eintrag konnte nicht verschoben werden."
+            },
             "reorder": {
                 "error": "Die Reihenfolge konnte nicht gespeichert werden."
             },

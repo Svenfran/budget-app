@@ -14,6 +14,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { deleteAllItems, deleteItem, deleteList, updateItem, updateList } from './shoppinglist-events';
 import { ShoppinglistOrderDto } from './model/shoppinglist-order-dto';
 import { ShoppingitemOrderDto } from './model/shoppingitem-order-dto';
+import { ShoppingitemMovedDto } from './model/shoppingitem-moved-dto';
 
 @Component({
   selector: 'app-shoppinglist',
@@ -364,6 +365,8 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
     // Reihenfolge (DIV-1): der Service übernimmt nur neuere Revisionen
     on<ShoppinglistOrderDto>('reorder-lists', data => this.shoppinglistService.applyListOrder(data));
     on<ShoppingitemOrderDto>('reorder-items', data => this.shoppinglistService.applyItemOrder(data));
+    // Verschieben zwischen Listen (DIV-2): der Service ändert die Zuordnung nur bei passendem lokalem Stand
+    on<ShoppingitemMovedDto>('move-item', data => this.shoppinglistService.applyItemMove(data));
   }
 
   trackByListId(_: number, list: ShoppinglistDto): number {

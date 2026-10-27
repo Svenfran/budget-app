@@ -237,6 +237,9 @@
                     "loading": "Update list item..."
                 }
             },
+            "move": {
+                "error": "The item could not be moved."
+            },
             "reorder": {
                 "error": "The order could not be saved."
             },
