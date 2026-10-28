@@ -1,6 +1,7 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto
+import com.github.svenfran.budgetapp.budgetappbackend.dto.AddShoppingItemsDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.MoveShoppingItemDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingItemOrderDto
 import com.github.svenfran.budgetapp.budgetappbackend.entity.ShoppingPurchase
@@ -62,7 +63,7 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
 
         when:
         def result = shoppingItemService.addShoppingItem(
-                new AddEditShoppingItemDto(name: 'Milch', shoppingListId: listId, groupId: groupId))
+                new AddEditShoppingItemDto(name: 'Milch', shoppingListId: listId, groupId: groupId)).item
         LOG.info('shoppingItemService.addShoppingItem(Liste {}, "Milch") -> Eintrag {}', listId, result.id)
 
         then:
@@ -161,7 +162,7 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
 
         when:
         def result = shoppingItemService.addShoppingItem(
-                new AddEditShoppingItemDto(name: 'Milch', shoppingListId: listId, groupId: groupId))
+                new AddEditShoppingItemDto(name: 'Milch', shoppingListId: listId, groupId: groupId)).item
         flushAndClear()
         def gespeichert = shoppingItemRepository.findById(result.id).get()
         def gespeichertListId = gespeichert.shoppingList.id
@@ -563,7 +564,7 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
 
         when:
         def result = shoppingItemService.addShoppingItem(new AddEditShoppingItemDto(
-                id: fremderEintragId, name: 'Gekapert', completed: true, shoppingListId: listId, groupId: groupId))
+                id: fremderEintragId, name: 'Gekapert', completed: true, shoppingListId: listId, groupId: groupId)).item
         flushAndClear()
         def eigeneEintraege = eintragIds(listId)
         def fremd = shoppingItemRepository.findById(fremderEintragId).get()
@@ -677,7 +678,7 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
 
         when:
         def result = shoppingItemService.addShoppingItem(
-                new AddEditShoppingItemDto(name: 'Milch', shoppingListId: listId, groupId: groupId))
+                new AddEditShoppingItemDto(name: 'Milch', shoppingListId: listId, groupId: groupId)).item
         flushAndClear()
         def position = shoppingItemRepository.findById(result.id).get().sortOrder
         def lastUpdate = lastUpdateShoppingList(groupId)
@@ -1268,6 +1269,235 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
 
         where:
         aktion << ['delete', 'delete-all']
+    }
+
+    // Mehrere Einträge übernehmen und Duplikatprüfung beim Anlegen (DIV-23)
+
+    def "Mehrere Einträge übernehmen: offen, in Request-Reihenfolge am Ende, je add-item gemeldet, lastUpdateShoppingList gesetzt"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        wg.group.lastUpdateShoppingList = START
+        def liste = fixtures.shoppingList(wg)
+        def kaffee = fixtures.shoppingItem(liste, name: 'Kaffee')
+        def groupId = wg.group.id
+        def listId = liste.id
+        def kaffeeId = kaffee.id
+        def gemeldet = []
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Mitglied {} (angemeldet), Liste {} mit Eintrag {} "Kaffee"; übernommen werden Milch, Brot, Eier',
+                groupId, ben.id, listId, kaffeeId)
+
+        when:
+        def angelegt = shoppingItemService.addShoppingItems(new AddShoppingItemsDto(groupId: groupId, shoppingListId: listId, names: ['Milch', 'Brot', 'Eier']))
+        flushAndClear()
+        def reihenfolge = shoppingItemRepository.findIdsInOrder(listId)
+        def offen = angelegt.collect { shoppingItemRepository.findById(it.id).get() }.every { !it.completed }
+        def lastUpdate = lastUpdateShoppingList(groupId)
+        LOG.info('shoppingItemService.addShoppingItems(Liste {}) -> {} {}; Reihenfolge der Liste {}, alle offen {}, lastUpdateShoppingList {}',
+                listId, angelegt*.id, angelegt*.name, reihenfolge, offen, lastUpdate)
+
+        then:
+        angelegt*.name == ['Milch', 'Brot', 'Eier']
+        angelegt.every { it.shoppingListId == listId && it.groupId == groupId && !it.completed }
+        reihenfolge == [kaffeeId] + angelegt*.id
+        offen
+        lastUpdate.time == testClock.instant().toEpochMilli()
+        3 * notificationService.sendShoppingItemNotification(groupId, _, 'add') >> { gemeldet << it[1].id }
+        0 * notificationService._
+        gemeldet == angelegt*.id
+    }
+
+    def "Mehrere Einträge übernehmen überspringt offen vorhandene Namen und Duplikate im Request, nur erledigt vorhandene werden angelegt"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg)
+        fixtures.shoppingItem(liste, name: ' milch', completed: false)
+        fixtures.shoppingItem(liste, name: 'Brot', completed: true)
+        def groupId = wg.group.id
+        def listId = liste.id
+        def names = ['Milch', 'brot', 'Eier', ' EIER ', '', null, '  ']
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Mitglied {} (angemeldet), Liste {} mit " milch" (offen) und "Brot" (erledigt); übernommen werden {}',
+                groupId, ben.id, listId, names)
+
+        when:
+        def angelegt = shoppingItemService.addShoppingItems(new AddShoppingItemsDto(groupId: groupId, shoppingListId: listId, names: names))
+        flushAndClear()
+        def namenDerListe = shoppingListRepository.findById(listId).get().shoppingItems*.name.sort()
+        LOG.info('shoppingItemService.addShoppingItems(Liste {}) -> {}; Namen der Liste {}', listId, angelegt*.name, namenDerListe)
+
+        then:
+        angelegt*.name == ['brot', 'Eier']
+        namenDerListe == [' milch', 'Brot', 'Eier', 'brot'].sort()
+        2 * notificationService.sendShoppingItemNotification(groupId, _, 'add')
+        0 * notificationService._
+    }
+
+    def "Mehrere Einträge übernehmen mit #fall legt nichts an und meldet nichts"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg)
+        def milch = fixtures.shoppingItem(liste, name: 'Milch')
+        def groupId = wg.group.id
+        def listId = liste.id
+        def milchId = milch.id
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Mitglied {} (angemeldet), Liste {} mit Eintrag {} "Milch" (offen); übernommen werden {}',
+                groupId, ben.id, listId, milchId, names)
+
+        when:
+        def angelegt = shoppingItemService.addShoppingItems(new AddShoppingItemsDto(groupId: groupId, shoppingListId: listId, names: names))
+        flushAndClear()
+        def eintraegeDerListe = eintragIds(listId)
+        LOG.info('shoppingItemService.addShoppingItems(Liste {}) -> {}; Einträge der Liste {}', listId, angelegt, eintraegeDerListe)
+
+        then:
+        angelegt == []
+        eintraegeDerListe == [milchId]
+        0 * notificationService._
+
+        where:
+        fall                        | names
+        'leerer Liste'              | []
+        'names null'                | null
+        'nur leeren Namen'          | ['', '  ', null]
+        'nur vorhandenen Namen'     | ['milch', 'MILCH ']
+    }
+
+    def "Mehrere Einträge übernehmen mit #fall: #erwartet.simpleName, nichts wird angelegt"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg)
+        def fremdeListe = fixtures.shoppingList(fixtures.group())
+        def groupId = wg.group.id
+        def angemeldet = fall == 'Nicht-Mitglied' ? fixtures.user() : ben
+        def listId = [
+                'Nicht-Mitglied'          : liste.id,
+                'Liste einer fremden Gruppe': fremdeListe.id,
+                'unbekannter Liste'       : UNBEKANNT][fall]
+        def (eigeneListId, fremdeListId) = [liste.id, fremdeListe.id]
+        flushAndClear()
+        loginAs(angemeldet)
+        LOG.info('Szenario: Gruppe {}, angemeldet User {} ({}), Ziel-Liste {}', groupId, angemeldet.id, fall, listId)
+
+        when:
+        LOG.info('shoppingItemService.addShoppingItems(Liste {}, ["Milch"]), erwartet {}', listId, erwartet.simpleName)
+        shoppingItemService.addShoppingItems(new AddShoppingItemsDto(groupId: groupId, shoppingListId: listId, names: ['Milch']))
+
+        then:
+        thrown(erwartet)
+        0 * notificationService._
+        flushAndClear()
+        eintragIds(eigeneListId).isEmpty()
+        eintragIds(fremdeListId).isEmpty()
+
+        where:
+        fall                         || erwartet
+        'Nicht-Mitglied'             || NotOwnerOrMemberOfGroupException
+        'Liste einer fremden Gruppe' || ShoppingListDoesNotBelongToGroupException
+        'unbekannter Liste'          || ShoppingListNotFoundException
+    }
+
+    def "Eintrag anlegen mit dem Namen eines offenen Eintrags (#name) legt nichts an und liefert den vorhandenen ohne Meldung"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg)
+        def tomaten = fixtures.shoppingItem(liste, name: 'Tomaten', completed: false)
+        def groupId = wg.group.id
+        def listId = liste.id
+        def tomatenId = tomaten.id
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Mitglied {} (angemeldet), Liste {} mit offenem Eintrag {} "Tomaten"; neu: "{}"', groupId, ben.id, listId, tomatenId, name)
+
+        when:
+        def result = shoppingItemService.addShoppingItem(new AddEditShoppingItemDto(name: name, shoppingListId: listId, groupId: groupId))
+        flushAndClear()
+        def eintraegeDerListe = eintragIds(listId)
+        LOG.info('shoppingItemService.addShoppingItem(Liste {}, "{}") -> angelegt {}, Eintrag {} "{}"; Einträge der Liste {}',
+                listId, name, result.created, result.item.id, result.item.name, eintraegeDerListe)
+
+        then:
+        !result.created
+        result.item.id == tomatenId
+        result.item.name == 'Tomaten'
+        !result.item.completed
+        eintraegeDerListe == [tomatenId]
+        0 * notificationService._
+
+        where:
+        name << ['Tomaten', ' tomaten ', 'TOMATEN']
+    }
+
+    def "Eintrag anlegen mit dem Namen eines #fall legt einen neuen offenen Eintrag an"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg)
+        def andereListe = fixtures.shoppingList(wg)
+        def vorhanden = fixtures.shoppingItem(fall == 'erledigten Eintrags' ? liste : andereListe, name: 'Tomaten', completed: fall == 'erledigten Eintrags')
+        def groupId = wg.group.id
+        def listId = liste.id
+        def vorhandenId = vorhanden.id
+        def gesendet = null
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Mitglied {} (angemeldet), Liste {}; Eintrag {} "Tomaten" ({}); neu: "Tomaten" in Liste {}',
+                groupId, ben.id, listId, vorhandenId, fall, listId)
+
+        when:
+        def result = shoppingItemService.addShoppingItem(new AddEditShoppingItemDto(name: 'Tomaten', shoppingListId: listId, groupId: groupId))
+        flushAndClear()
+        def eintraegeDerListe = eintragIds(listId)
+        LOG.info('shoppingItemService.addShoppingItem(Liste {}, "Tomaten") -> angelegt {}, Eintrag {}; Einträge der Liste {}',
+                listId, result.created, result.item.id, eintraegeDerListe)
+
+        then:
+        result.created
+        result.item.id != vorhandenId
+        !result.item.completed
+        eintraegeDerListe == (fall == 'erledigten Eintrags' ? [vorhandenId, result.item.id] : [result.item.id])
+        1 * notificationService.sendShoppingItemNotification(groupId, _, 'add') >> { gesendet = it[1] }
+        gesendet.id == result.item.id
+
+        where:
+        fall << ['erledigten Eintrags', 'Eintrags in einer anderen Liste']
+    }
+
+    def "Eintrag ohne Namen wird wie bisher angelegt und macht keinen anderen Namen zum Duplikat"() {
+        given: 'die API erzwingt keinen Namen'
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg)
+        def namenlos = fixtures.shoppingItem(liste, name: null, completed: false)
+        def groupId = wg.group.id
+        def listId = liste.id
+        def namenlosId = namenlos.id
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Mitglied {} (angemeldet), Liste {} mit offenem namenlosem Eintrag {}; neu: ohne Namen, dann "Milch"',
+                groupId, ben.id, listId, namenlosId)
+
+        when:
+        def ohneName = shoppingItemService.addShoppingItem(new AddEditShoppingItemDto(name: null, shoppingListId: listId, groupId: groupId))
+        def milch = shoppingItemService.addShoppingItem(new AddEditShoppingItemDto(name: 'Milch', shoppingListId: listId, groupId: groupId))
+        flushAndClear()
+        def eintraegeDerListe = eintragIds(listId)
+        LOG.info('addShoppingItem(ohne Namen) -> angelegt {}, Eintrag {}; addShoppingItem("Milch") -> angelegt {}, Eintrag {}; Einträge der Liste {}',
+                ohneName.created, ohneName.item.id, milch.created, milch.item.id, eintraegeDerListe)
+
+        then:
+        ohneName.created
+        milch.created
+        eintraegeDerListe == [namenlosId, ohneName.item.id, milch.item.id]
     }
 
     private List<ShoppingPurchase> kaeufe(Long listId) {

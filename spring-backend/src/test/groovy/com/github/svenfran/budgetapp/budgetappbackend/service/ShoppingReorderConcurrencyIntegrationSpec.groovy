@@ -2,6 +2,7 @@ package com.github.svenfran.budgetapp.budgetappbackend.service
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingListDto
+import com.github.svenfran.budgetapp.budgetappbackend.dto.AddShoppingItemsDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.MoveShoppingItemDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingItemOrderDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingListDto
@@ -40,7 +41,8 @@ import java.util.concurrent.TimeUnit
  * Listen- und Item-Reorder blockieren sich nicht kreuzweise, neue Einträge landen am Ende (AC7). Verschieben zwischen
  * Listen (DIV-2) nutzt dieselbe Sperre: parallele Änderungen, Löschungen und das Laden sehen den Move ganz oder gar nicht.
  * Das Löschen von Einträgen (DIV-23) sperrt die Gruppe vor dem Laden der Einträge: ein Kauf wird mit dem zuletzt
- * committeten Stand erfasst und höchstens einmal.
+ * committeten Stand erfasst und höchstens einmal. Anlegen (einzeln wie mehrfach) prüft offene Einträge gleichen Namens
+ * erst nach der Sperre: gleichzeitige Anlagen desselben Namens ergeben genau einen offenen Eintrag.
  *
  * Ablauf je Feature (overlapping): Transaktion 1 führt ihren Aufruf aus und hält die Transaktion offen; Transaktion 2
  * startet in einem zweiten Thread und muss an der Gruppensperre warten (geprüft über pg_stat_activity, ohne sleep);
@@ -244,7 +246,7 @@ class ShoppingReorderConcurrencyIntegrationSpec extends IntegrationSpec {
 
         when:
         def (anlage, reorder) = overlapping(ben,
-                { shoppingItemService.addShoppingItem(new AddEditShoppingItemDto(name: 'W', shoppingListId: listId, groupId: groupId)) },
+                { shoppingItemService.addShoppingItem(new AddEditShoppingItemDto(name: 'W', shoppingListId: listId, groupId: groupId)).item },
                 { shoppingItemService.reorderShoppingItems(new ShoppingItemOrderDto(groupId: groupId, shoppingListId: listId, shoppingItemIds: [z, y, x])) })
         def w = anlage.id
         def gespeichert = itemIds(listId)
@@ -271,7 +273,7 @@ class ShoppingReorderConcurrencyIntegrationSpec extends IntegrationSpec {
         when:
         def (reorder, anlage) = overlapping(ben,
                 { shoppingItemService.reorderShoppingItems(new ShoppingItemOrderDto(groupId: groupId, shoppingListId: listId, shoppingItemIds: [z, y, x])) },
-                { shoppingItemService.addShoppingItem(new AddEditShoppingItemDto(name: 'W', shoppingListId: listId, groupId: groupId)) })
+                { shoppingItemService.addShoppingItem(new AddEditShoppingItemDto(name: 'W', shoppingListId: listId, groupId: groupId)).item })
         def w = anlage.id
         def gespeichert = itemIds(listId)
         def wPosition = shoppingItemRepository.findById(w).get().sortOrder
@@ -570,6 +572,50 @@ class ShoppingReorderConcurrencyIntegrationSpec extends IntegrationSpec {
         zurueckhaken instanceof ObjectOptimisticLockingFailureException
         eintraege == []
         kaufIds == [xId]
+    }
+
+    def "Einzel-Anlegen hält die Sperre, Mehrfach-Anlegen desselben Namens wartet und überspringt ihn: genau ein offener Eintrag"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def groupId = wg.group.id
+        def liste = fixtures.shoppingList(wg)
+        def listId = liste.id
+        LOG.info('Szenario: Gruppe {}, Mitglied {}, leere Liste {}; T1 legt "Milch" an und hält offen, T2 übernimmt ["milch", "Brot"]', groupId, ben.id, listId)
+
+        when:
+        def (einzel, mehrfach) = overlapping(ben,
+                { shoppingItemService.addShoppingItem(new AddEditShoppingItemDto(name: 'Milch', shoppingListId: listId, groupId: groupId)) },
+                { shoppingItemService.addShoppingItems(new AddShoppingItemsDto(groupId: groupId, shoppingListId: listId, names: ['milch', 'Brot'])) })
+        def namen = shoppingItemRepository.findAllById(itemIds(listId))*.name.sort()
+        LOG.info('T1 -> angelegt {}, Eintrag {}; T2 -> {}; Namen der Liste {}', einzel.created, einzel.item.id, mehrfach*.name, namen)
+
+        then:
+        einzel.created
+        mehrfach*.name == ['Brot']
+        namen == ['Brot', 'Milch']
+    }
+
+    def "Zwei Mehrfach-Anlagen mit demselben Namen: die zweite wartet und überspringt ihn"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def groupId = wg.group.id
+        def liste = fixtures.shoppingList(wg)
+        def listId = liste.id
+        LOG.info('Szenario: Gruppe {}, Mitglied {}, leere Liste {}; T1 übernimmt ["Milch"] und hält offen, T2 übernimmt [" MILCH", "Eier"]', groupId, ben.id, listId)
+
+        when:
+        def (erste, zweite) = overlapping(ben,
+                { shoppingItemService.addShoppingItems(new AddShoppingItemsDto(groupId: groupId, shoppingListId: listId, names: ['Milch'])) },
+                { shoppingItemService.addShoppingItems(new AddShoppingItemsDto(groupId: groupId, shoppingListId: listId, names: [' MILCH', 'Eier'])) })
+        def namen = shoppingItemRepository.findAllById(itemIds(listId))*.name.sort()
+        LOG.info('T1 -> {}; T2 -> {}; Namen der Liste {}', erste*.name, zweite*.name, namen)
+
+        then:
+        erste*.name == ['Milch']
+        zweite*.name == ['Eier']
+        namen == ['Eier', 'Milch']
     }
 
     private List<Long> kaufIds(Long listId) {

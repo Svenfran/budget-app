@@ -1,11 +1,13 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto;
+import com.github.svenfran.budgetapp.budgetappbackend.dto.AddShoppingItemsDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.MoveShoppingItemDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingItemMovedDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingItemOrderDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.ShoppingItem;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
+import com.github.svenfran.budgetapp.budgetappbackend.helper.ShoppingItemNames;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.SortOrderMerger;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingItemRepository;
@@ -17,7 +19,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class ShoppingItemService {
@@ -57,15 +61,29 @@ public class ShoppingItemService {
         this.clock = clock;
     }
 
+    /** Ergebnis von addShoppingItem: der angelegte Eintrag oder der vorhandene offene Eintrag gleichen Namens. */
+    public record AddShoppingItemResult(AddEditShoppingItemDto item, boolean created) {
+    }
+
+    /**
+     * Legt einen Eintrag an, außer die Liste hat schon einen offenen Eintrag gleichen Namens (DIV-23, verglichen über
+     * ShoppingItemNames): dann bleibt alles unverändert, ohne Benachrichtigung, und der vorhandene Eintrag wird geliefert.
+     * Ein nur erledigter gleichnamiger Eintrag zählt nicht; ein Eintrag ohne Namen ist nie ein Duplikat.
+     */
     @Transactional
-    public AddEditShoppingItemDto addShoppingItem(AddEditShoppingItemDto dto) throws UserNotFoundException, GroupNotFoundException, ShoppingListNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingListDoesNotBelongToGroupException {
+    public AddShoppingItemResult addShoppingItem(AddEditShoppingItemDto dto) throws UserNotFoundException, GroupNotFoundException, ShoppingListNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingListDoesNotBelongToGroupException {
         var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(dto.getGroupId());
         verificationService.verifyIsPartOfGroup(user, group);
         var shoppingList = dataLoaderService.loadShoppingList(dto.getShoppingListId());
         verificationService.verifyShoppingListIsPartOfGroup(shoppingList, group);
-        // Gruppe sperren, bevor die Position gelesen wird: eine parallele Anlage oder Umsortierung wartet bis zum Commit
+        // Gruppe sperren, bevor Position und offene Einträge gelesen werden: eine parallele Anlage oder Umsortierung
+        // wartet bis zum Commit
         groupRepository.touchShoppingLists(group.getId(), Date.from(clock.instant()));
+        var existing = findOpenItemByName(shoppingList.getId(), dto.getName());
+        if (existing.isPresent()) {
+            return new AddShoppingItemResult(new AddEditShoppingItemDto(existing.get()), false);
+        }
         var newItem = shoppingItemDtoMapper.addEditShoppingItemDtoToEntity(dto, shoppingList);
         // Anlegen legt immer neu an: eine mitgesendete ID würde per merge einen bestehenden (auch fremden) Eintrag überschreiben
         newItem.setId(null);
@@ -78,7 +96,54 @@ public class ShoppingItemService {
                 "add"
         );
 
-        return addedItem;
+        return new AddShoppingItemResult(addedItem, true);
+    }
+
+    /**
+     * Legt mehrere offene Einträge in Request-Reihenfolge am Ende der Liste an (DIV-23, Übernahme von Vorschlägen).
+     * Übersprungen werden leere Namen, Duplikate im Request und Namen, die bereits als offener Eintrag auf der Liste
+     * stehen. Liefert nur die angelegten Einträge; je Eintrag wird add-item gemeldet.
+     */
+    @Transactional
+    public List<AddEditShoppingItemDto> addShoppingItems(AddShoppingItemsDto dto) throws UserNotFoundException, GroupNotFoundException, ShoppingListNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingListDoesNotBelongToGroupException {
+        var user = dataLoaderService.getAuthenticatedUser();
+        var group = dataLoaderService.loadGroup(dto.getGroupId());
+        verificationService.verifyIsPartOfGroup(user, group);
+        var shoppingList = dataLoaderService.loadShoppingList(dto.getShoppingListId());
+        verificationService.verifyShoppingListIsPartOfGroup(shoppingList, group);
+        // Gruppe sperren wie beim Einzel-Anlegen, bevor Position und offene Einträge gelesen werden
+        groupRepository.touchShoppingLists(group.getId(), Date.from(clock.instant()));
+        var taken = new HashSet<String>();
+        shoppingItemRepository.findOpenItems(shoppingList.getId())
+                .forEach(item -> taken.add(ShoppingItemNames.normalize(item.getName())));
+        var sortOrder = shoppingItemRepository.findMaxSortOrderByShoppingListId(shoppingList.getId());
+        var names = dto.getNames() == null ? List.<String>of() : dto.getNames();
+        var addedItems = new ArrayList<AddEditShoppingItemDto>();
+        for (var name : names) {
+            var key = ShoppingItemNames.normalize(name);
+            if (key == null || !taken.add(key)) {
+                continue;
+            }
+            var newItem = new ShoppingItem(null, name.trim(), false, null, null, shoppingList);
+            newItem.setSortOrder(++sortOrder);
+            addedItems.add(new AddEditShoppingItemDto(shoppingItemRepository.save(newItem)));
+        }
+
+        for (var addedItem : addedItems) {
+            notificationService.sendShoppingItemNotification(group.getId(), addedItem, "add");
+        }
+
+        return addedItems;
+    }
+
+    private Optional<ShoppingItem> findOpenItemByName(Long shoppingListId, String name) {
+        var key = ShoppingItemNames.normalize(name);
+        if (key == null) {
+            return Optional.empty();
+        }
+        return shoppingItemRepository.findOpenItems(shoppingListId).stream()
+                .filter(item -> key.equals(ShoppingItemNames.normalize(item.getName())))
+                .findFirst();
     }
 
     @Transactional
