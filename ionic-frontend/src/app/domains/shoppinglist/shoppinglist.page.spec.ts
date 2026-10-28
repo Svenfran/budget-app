@@ -733,6 +733,34 @@ describe('ShoppinglistPage – Drag & Drop mit echter Geste', () => {
     expect(items(2).length).toBe(0);
   });
 
+  it('Codex-Review 2 F-001: B betreten und seitlich verlassen: Platzhalter inaktiv, Loslassen verschiebt nicht', async () => {
+    // die Item-Container sperren die x-Achse (cdkDropListLockAxis): das CDK meldet beim Bewegen das x beim Aufnehmen,
+    // entscheidet beim Drop aber mit der tatsächlichen Zeigerposition
+    page.toggleLists = { 1: true, 2: true };
+    fixture.detectChanges();
+    const flaechenMitte = () => {
+      const rect = el('#item-list-2').getBoundingClientRect();
+      return { x: rect.left + rect.width / 2, y: rect.top + 24 };
+    };
+    const rechtsNeben = () => {
+      const rect = el('#item-list-2').getBoundingClientRect();
+      return { x: rect.right + 10, y: rect.top + 24 };
+    };
+    let platzhalterIn: string | undefined;
+    let inaktivBeimLoslassen = false;
+
+    await drag(items(1)[1], rechtsNeben, () => {
+      platzhalterIn = document.querySelector('.cdk-drag-placeholder')?.parentElement?.id;
+      inaktivBeimLoslassen = el('.ion-content-scroll-host').classList.contains('item-drop-outside');
+    }, flaechenMitte);
+
+    expect(platzhalterIn).toBe('item-list-2');
+    expect(inaktivBeimLoslassen).toBeTrue();
+    http.expectNone(moveUrl);
+    expect(items(1).length).toBe(2);
+    expect(el('.ion-content-scroll-host').classList.contains('item-drop-outside')).toBeFalse();
+  });
+
   it('Listen-Drag über die Item-Container: nur die Listenreihenfolge ändert sich, kein move-item', async () => {
     await drag(listHeader(2), () => center(items(1)[0]));
 

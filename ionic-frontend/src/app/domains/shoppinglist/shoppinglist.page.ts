@@ -326,12 +326,18 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
   /**
    * Item-Drag (DIV-2, Codex-Review F-001): Das CDK lässt den Platzhalter in der zuletzt betretenen Liste, auch wenn der
    * Zeiger sie wieder verlässt; ein Drop dort verschiebt aber nicht. Liegt der Platzhalter in einer fremden Liste und
-   * der Zeiger nicht über ihr, wird er als inaktiv dargestellt. Läuft außerhalb der Change Detection (je Bewegung).
+   * der Zeiger nicht über ihr, wird er als inaktiv dargestellt. Läuft bei jeder Bewegung (das CDK meldet sie innerhalb
+   * der Angular-Zone).
+   *
+   * Geprüft wird die tatsächliche Zeigerposition wie beim Drop (`isPointerOverContainer`), nicht `pointerPosition`:
+   * die ist wegen `cdkDropListLockAxis="y"` auf die x-Koordinate beim Aufnehmen festgelegt (Codex-Review 2, F-001).
    */
   onItemDragMoved(event: CdkDragMove<number>) {
     const container = this.scrollHost.nativeElement.querySelector('.cdk-drag-placeholder')?.parentElement;
     const rect = container?.getBoundingClientRect();
-    const { x, y } = event.pointerPosition;
+    const pointer = 'touches' in event.event ? event.event.touches[0] ?? event.event.changedTouches[0] : event.event;
+    const x = pointer?.clientX ?? event.pointerPosition.x;
+    const y = pointer?.clientY ?? event.pointerPosition.y;
     const outside = !!container && !!rect && container !== event.source.dropContainer.element.nativeElement
       && !(x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom);
     if (outside) {
