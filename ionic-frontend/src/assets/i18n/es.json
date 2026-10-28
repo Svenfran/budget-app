@@ -237,6 +237,9 @@
                     "loading": "Actualizando elemento..."
                 }
             },
+            "move": {
+                "error": "No se pudo mover el elemento."
+            },
             "reorder": {
                 "error": "No se pudo guardar el orden."
             },

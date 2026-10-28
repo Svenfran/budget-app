@@ -1,6 +1,8 @@
 package com.github.svenfran.budgetapp.budgetappbackend.controller;
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto;
+import com.github.svenfran.budgetapp.budgetappbackend.dto.MoveShoppingItemDto;
+import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingItemMovedDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingItemOrderDto;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.service.ShoppingItemService;
@@ -43,6 +45,12 @@ public class ShoppingItemController {
     public ResponseEntity<ShoppingItemOrderDto> reorderShoppingItems(@RequestBody ShoppingItemOrderDto shoppingItemOrderDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingListNotFoundException, ShoppingListDoesNotBelongToGroupException {
         ShoppingItemOrderDto order = shoppingItemService.reorderShoppingItems(shoppingItemOrderDto);
         return new ResponseEntity<>(order, HttpStatus.OK);
+    }
+
+    @PutMapping("/groups/shopping-list/move-item")
+    public ResponseEntity<ShoppingItemMovedDto> moveShoppingItem(@RequestBody MoveShoppingItemDto moveShoppingItemDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingListNotFoundException, ShoppingListDoesNotBelongToGroupException, ShoppingItemMoveWithinSameListException, ShoppingItemNotFoundException, ShoppingItemDoesNotBelongToShoppingListException {
+        ShoppingItemMovedDto moved = shoppingItemService.moveShoppingItem(moveShoppingItemDto);
+        return new ResponseEntity<>(moved, HttpStatus.OK);
     }
 
     @PostMapping("/groups/shopping-list/delete-all-items")

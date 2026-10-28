@@ -8,12 +8,16 @@ import { AddEditShoppingItemDto } from '../model/add-edit-shopping-item-dto';
 import { ShoppingitemDto } from '../model/shoppingitem-dto';
 import { ShoppinglistOrderDto } from '../model/shoppinglist-order-dto';
 import { ShoppingitemOrderDto } from '../model/shoppingitem-order-dto';
+import { MoveShoppingItemDto } from '../model/move-shopping-item-dto';
+import { ShoppingitemMovedDto } from '../model/shoppingitem-moved-dto';
 import { INIT_VALUES } from 'src/app/constants/default-values';
 import { Group } from 'src/app/model/group';
 import { LoadOptions } from 'src/app/model/load-options';
 import { AlertService } from 'src/app/service/alert.service';
 import { GroupService } from 'src/app/service/group.service';
-import { addItem, addList, reorderItems, reorderLists } from '../shoppinglist-events';
+import {
+  addItem, addList, deleteAllItems, deleteItem, locateItem, moveItem, reorderItems, reorderLists
+} from '../shoppinglist-events';
 import {
   accept, acceptFromLoad, begin, confirmAdded, emptyScope, finish, OrderScope, UNKNOWN_REVISION
 } from '../shoppinglist-order';
@@ -36,6 +40,7 @@ export class ShoppinglistService {
   private deleteItemFromShoppingListUrl = `${this.apiBaseUrl}/api/groups/shopping-list/delete-item`;
   private deleteAllItemsFromShoppingListUrl = `${this.apiBaseUrl}/api/groups/shopping-list/delete-all-items`;
   private reorderShoppingItemsUrl = `${this.apiBaseUrl}/api/groups/shopping-list/reorder-items`;
+  private moveItemUrl = `${this.apiBaseUrl}/api/groups/shopping-list/move-item`;
 
   // Reihenfolge (DIV-1): bestätigter Stand und offene Requests je Bereich, siehe shoppinglist-order.ts
   private listScope: OrderScope = emptyScope(UNKNOWN_REVISION);
@@ -53,6 +58,20 @@ export class ShoppinglistService {
    */
   private held = false;
   private deferredUpdates: { apply: () => void; generation: number }[] = [];
+  /**
+   * Verschieben zwischen Listen (DIV-2), Übergangstabelle M1–M11 im Plan. Höchstens ein offener eigener Move je
+   * Eintrag; `conflict`: während des Requests kam ein fremdes `move-item` für ihn (die Antwort löst dann einen
+   * Refetch aus statt eines lokalen Rücksprungs).
+   */
+  private pendingMoves = new Map<number, { sourceListId: number; targetListId: number; conflict: boolean }>();
+  /**
+   * Bestätigte Zuordnungswechsel, solange ein GET läuft: eine GET-Antwort mit älterem Stand bekommt sie nachgespielt.
+   * `openLoads` hält je laufendem GET (eindeutige `loadId`) den `moveSeq` beim Start.
+   */
+  private moveLog: { seq: number; itemId: number; sourceListId: number; targetListId: number }[] = [];
+  private moveSeq = 0;
+  private openLoads = new Map<number, number>();
+  private loadSeq = 0;
 
   constructor(
     private http: HttpClient,
@@ -106,6 +125,8 @@ export class ShoppinglistService {
     };
 
     const inContext = this.captureContext();
+    const loadId = ++this.loadSeq;
+    this.openLoads.set(loadId, this.moveSeq);
     this.http
       .get<ShoppinglistDto[]>(`${this.shoppingListsWithItemsUrl}/${group.id}`)
       .subscribe({
@@ -114,13 +135,18 @@ export class ShoppinglistService {
           if (inContext() && options.isCurrent?.() !== false) {
             this.applyOrDefer(() => {
               const visible = this.shoppingLists();
-              this.shoppingLists.set(result || []);
+              // Inhalte: Antwort + seither bestätigte und offene Zuordnungswechsel; Reihenfolgen aus der rohen Antwort
+              this.shoppingLists.set(this.withMoves(result || [], this.openLoads.get(loadId) ?? this.moveSeq));
               this.acceptLoadedOrder(result || [], visible);
+              this.endLoad(loadId);
             });
+          } else {
+            this.endLoad(loadId);
           }
           onComplete?.();
         },
         error: (err) => {
+          this.endLoad(loadId);
           if (options.silent) {
             console.warn('Silent resync of shoppinglists failed:', err);
             onComplete?.();
@@ -253,25 +279,7 @@ export class ShoppinglistService {
       .subscribe({
         next: (result) => {
           if (!inContext()) return;
-          const newItem: ShoppingitemDto = {
-            id: result.id!,
-            name: result.name,
-            completed: result.completed
-          }
-
-          this.applyOrDefer(() => {
-            this.shoppingLists.update(lists =>
-              lists.map(list =>
-                list.id === result.shoppingListId
-                  ? {
-                      ...list,
-                      shoppingItems: [...list.shoppingItems, newItem]
-                    }
-                  : list
-              )
-            );
-            this.confirmItemAdded(result.shoppingListId, newItem.id);
-          });
+          this.applyOrDefer(() => this.appendItem(result));
         },
         error: (err) => {
           console.error("Error adding shopping item:", err);
@@ -320,16 +328,7 @@ export class ShoppinglistService {
         .post<void>(this.deleteItemFromShoppingListUrl, deleteShoppingItem)
         .subscribe({
           next: () => {
-            this.applyOrDefer(() => this.shoppingLists.update(lists =>
-              lists.map(list =>
-                list.id === deleteShoppingItem.shoppingListId
-                  ? {
-                    ...list,
-                    shoppingItems: list.shoppingItems.filter(item => item.id !== deleteShoppingItem.id)
-                    }
-                  : list
-              )
-            ));
+            this.applyOrDefer(() => this.shoppingLists.update(lists => deleteItem(lists, deleteShoppingItem)));
           },
           error: (err) => {
             console.error("Error deleting shopping item:", err);
@@ -343,18 +342,7 @@ export class ShoppinglistService {
         .post<void>(this.deleteAllItemsFromShoppingListUrl, deleteShoppingItems)
         .subscribe({
           next: () => {
-            this.applyOrDefer(() => this.shoppingLists.update(lists =>
-              lists.map(list =>
-                list.id === deleteShoppingItems[0].shoppingListId
-                ? {
-                    ...list,
-                    shoppingItems: list.shoppingItems.filter(items =>
-                      !deleteShoppingItems.some(deletedItem => deletedItem.id === items.id)
-                    )
-                  }
-                : list
-              )
-            ));
+            this.applyOrDefer(() => this.shoppingLists.update(lists => deleteAllItems(lists, deleteShoppingItems)));
           },
           error: (err) => {
             console.error("Error deleting completed items:", err);
@@ -407,11 +395,97 @@ export class ShoppinglistService {
     this.reconcileItems(data.shoppingListId);
   }
 
+  /**
+   * Verschiebt einen Eintrag optimistisch in eine andere Liste an `toIndex` (M1). Verworfen, wenn für ihn schon ein
+   * Move offen ist, Quelle = Ziel, er nicht in der Quelle steht oder das Ziel fehlt. Bei einem Fehler springt er
+   * zurück (Toast, danach stiller Refetch).
+   */
+  moveShoppingItemToList(group: Group, itemId: number, sourceListId: number, targetListId: number, toIndex: number): void {
+    this.syncContext();
+    if (this.pendingMoves.has(itemId) || sourceListId === targetListId) return;
+    const source = this.shoppingLists().find(list => list.id === sourceListId);
+    const target = this.shoppingLists().find(list => list.id === targetListId);
+    if (!source || !target || !source.shoppingItems.some(item => item.id === itemId)) return;
+    const sourceIds = source.shoppingItems.map(item => item.id);
+    const targetIds = target.shoppingItems.map(item => item.id);
+    const ids = [...targetIds];
+    ids.splice(Math.max(0, Math.min(toIndex, ids.length)), 0, itemId);
+
+    const inContext = this.captureContext();
+    this.beginItemScope(sourceListId, sourceIds);
+    this.beginItemScope(targetListId, targetIds);
+    this.pendingMoves.set(itemId, { sourceListId, targetListId, conflict: false });
+    this.shoppingLists.update(lists => reorderItems(moveItem(lists, itemId, sourceListId, targetListId), targetListId, ids));
+    const body: MoveShoppingItemDto = {
+      groupId: group.id, shoppingItemId: itemId, sourceShoppingListId: sourceListId, targetShoppingListId: targetListId,
+      targetShoppingItemIds: ids
+    };
+    this.http
+      .put<ShoppingitemMovedDto>(this.moveItemUrl, body)
+      .subscribe({
+        next: (result) => {
+          if (!inContext()) return;
+          this.applyOrDefer(() => this.finishMove(group, itemId, result));
+        },
+        error: (err) => {
+          if (!inContext()) return;
+          console.error('Error moving shopping item:', err);
+          this.alertService.showToast(this.translate.instant('alerts.shoppinglist.move.error'));
+          this.applyOrDefer(() => this.finishMove(group, itemId, null));
+        }
+      });
+  }
+
+  /** Eigener Move des Eintrags noch offen (die Page sperrt ihn so lange gegen erneutes Ziehen). */
+  isMovePending(itemId: number): boolean {
+    return this.pendingMoves.has(itemId);
+  }
+
+  /**
+   * WebSocket `move-item` (M4–M7): beide Reihenfolgen übernehmen, wenn neuer; die Zuordnung nur ändern, wenn der
+   * lokale Stand zum Event passt, sonst still neu laden. Der Eintrag wird nie aus dem Event erzeugt.
+   */
+  applyItemMove(data: ShoppingitemMovedDto): void {
+    this.syncContext();
+    const itemId = data.shoppingItemId;
+    const sourceListId = data.source.shoppingListId;
+    const targetListId = data.target.shoppingListId;
+    // überholt (M5b): das Ziel ist mindestens so neu bestätigt wie das Event und enthält den Eintrag nicht
+    const confirmedTarget = this.itemScopes.get(targetListId)?.confirmed;
+    const overtaken = !!confirmedTarget && confirmedTarget.revision >= data.target.revision
+      && !confirmedTarget.ids.includes(itemId);
+    for (const order of [data.source, data.target]) {
+      const scope = this.itemScopes.get(order.shoppingListId) ?? emptyScope(UNKNOWN_REVISION);
+      this.itemScopes.set(order.shoppingListId, accept(scope, order.revision, order.shoppingItemIds));
+    }
+
+    let refetch = false;
+    const pending = this.pendingMoves.get(itemId);
+    if (pending) {
+      this.pendingMoves.set(itemId, { ...pending, conflict: true });
+    } else {
+      const location = locateItem(this.shoppingLists(), itemId);
+      const targetExists = this.shoppingLists().some(list => list.id === targetListId);
+      if (location === sourceListId && targetExists) {
+        if (!overtaken) {
+          this.shoppingLists.update(lists => moveItem(lists, itemId, sourceListId, targetListId));
+          this.logMove(itemId, sourceListId, targetListId);
+        }
+      } else if (location === targetListId) {
+        this.logMove(itemId, sourceListId, targetListId);
+      } else {
+        refetch = true;
+      }
+    }
+    this.reconcileItems(sourceListId);
+    this.reconcileItems(targetListId);
+    if (refetch) this.getShoppingListsWithItems(this.groupService.activeGroup(), undefined, { silent: true });
+  }
+
   /** WebSocket `add-item`: Eintrag anhängen (idempotent) und in die bestätigte Reihenfolge aufnehmen. */
   onItemAdded(data: AddEditShoppingItemDto): void {
     this.syncContext();
-    this.shoppingLists.update(lists => addItem(lists, data));
-    this.confirmItemAdded(data.shoppingListId, data.id!);
+    this.appendItem(data);
   }
 
   // Reihenfolge: Hilfsmethoden
@@ -427,6 +501,9 @@ export class ShoppinglistService {
     this.listScope = emptyScope(UNKNOWN_REVISION);
     this.itemScopes.clear();
     this.deferredUpdates = [];
+    this.pendingMoves.clear();
+    this.moveLog = [];
+    this.openLoads.clear();
   }
 
   /**
@@ -478,6 +555,19 @@ export class ShoppinglistService {
     this.reconcileLists();
   }
 
+  /**
+   * Neuer Eintrag (REST-Antwort oder `add-item`): anhängen, wenn er in keiner Liste steht, und nur dann in die
+   * bestätigte Reihenfolge seiner Liste aufnehmen. Steht er schon in einer anderen Liste (z. B. inzwischen verschoben,
+   * DIV-2), bleibt deren bestätigte Reihenfolge unberührt.
+   */
+  private appendItem(data: AddEditShoppingItemDto): void {
+    const lists = this.shoppingLists();
+    const updated = addItem(lists, data);
+    if (updated === lists) return;
+    this.shoppingLists.set(updated);
+    this.confirmItemAdded(data.shoppingListId, data.id!);
+  }
+
   private confirmItemAdded(listId: number, itemId: number): void {
     const visibleIds = this.shoppingLists().find(list => list.id === listId)?.shoppingItems.map(item => item.id) ?? [];
     const scope = withFallback(this.itemScopes.get(listId) ?? emptyScope(UNKNOWN_REVISION), visibleIds);
@@ -499,6 +589,69 @@ export class ShoppinglistService {
     this.itemScopes.set(listId, result.scope);
     if (result.reconcile) this.reconcileItems(listId);
     if (result.refetch) this.getShoppingListsWithItems(group, undefined, { silent: true });
+  }
+
+  private beginItemScope(listId: number, currentIds: number[]): void {
+    this.itemScopes.set(listId, begin(withFallback(this.itemScopes.get(listId) ?? emptyScope(UNKNOWN_REVISION), currentIds)));
+  }
+
+  /**
+   * PUT-Antwort eines eigenen Moves (M2/M3), `result = null` bei einem Fehler. Ohne fremdes Event (`conflict`) springt
+   * der Eintrag bei einem Fehler lokal zurück; mit `conflict` klärt ein stiller Refetch die Zuordnung.
+   */
+  private finishMove(group: Group, itemId: number, result: ShoppingitemMovedDto | null): void {
+    const move = this.pendingMoves.get(itemId);
+    if (!move) return;
+    this.pendingMoves.delete(itemId);
+    const failed = result === null;
+    if (result) {
+      for (const order of [result.source, result.target]) {
+        const scope = this.itemScopes.get(order.shoppingListId);
+        if (scope) this.itemScopes.set(order.shoppingListId, accept(scope, order.revision, order.shoppingItemIds));
+      }
+      if (!move.conflict) this.logMove(itemId, move.sourceListId, move.targetListId);
+    } else if (!move.conflict) {
+      this.shoppingLists.update(lists => moveItem(lists, itemId, move.targetListId, move.sourceListId));
+    }
+    let refetch = move.conflict;
+    for (const listId of [move.sourceListId, move.targetListId]) {
+      const scope = this.itemScopes.get(listId);
+      if (!scope) continue; // Liste inzwischen gelöscht
+      const finished = finish(scope, failed);
+      this.itemScopes.set(listId, finished.scope);
+      if (finished.reconcile) this.reconcileItems(listId);
+      refetch ||= finished.refetch;
+    }
+    if (refetch) this.getShoppingListsWithItems(group, undefined, { silent: true });
+  }
+
+  /** Bestätigten Zuordnungswechsel für laufende GETs merken (nur solange einer läuft). */
+  private logMove(itemId: number, sourceListId: number, targetListId: number): void {
+    if (this.openLoads.size === 0) return;
+    this.moveLog.push({ seq: ++this.moveSeq, itemId, sourceListId, targetListId });
+  }
+
+  /** GET-Inhalte + seit `startSeq` bestätigte und offene eigene Zuordnungswechsel (wirken nur bei passender Quelle). */
+  private withMoves(lists: ShoppinglistDto[], startSeq: number): ShoppinglistDto[] {
+    let result = lists;
+    for (const entry of this.moveLog) {
+      if (entry.seq > startSeq) result = moveItem(result, entry.itemId, entry.sourceListId, entry.targetListId);
+    }
+    for (const [itemId, move] of this.pendingMoves) {
+      result = moveItem(result, itemId, move.sourceListId, move.targetListId);
+    }
+    return result;
+  }
+
+  /** GET beendet (Erfolg, Fehler oder verworfen): Log bis zum ältesten noch laufenden GET kürzen. */
+  private endLoad(loadId: number): void {
+    this.openLoads.delete(loadId);
+    if (this.openLoads.size === 0) {
+      this.moveLog = [];
+      return;
+    }
+    const oldestStart = Math.min(...this.openLoads.values());
+    this.moveLog = this.moveLog.filter(entry => entry.seq > oldestStart);
   }
 
   /** Sichtbare Listenreihenfolge = bestätigte, solange keine eigenen Requests offen sind. */

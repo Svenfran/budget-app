@@ -13,6 +13,8 @@ import { alertServiceSpy, authServiceStub, provideServiceTesting, storageService
 import { AddEditShoppingItemDto } from '../model/add-edit-shopping-item-dto';
 import { AddEditShoppinglistDto } from '../model/add-edit-shoppinglist-dto';
 import { ShoppinglistDto } from '../model/shoppinglist-dto';
+import { ShoppingitemMovedDto } from '../model/shoppingitem-moved-dto';
+import { deleteItem, updateItem } from '../shoppinglist-events';
 import { ShoppinglistService } from './shoppinglist.service';
 
 // Die Einkaufslisten-Specs prüfen nur Zustand und HTTP, keine Navigation (z. B. server-unavailable),
@@ -298,6 +300,48 @@ describe('ShoppinglistService', () => {
 
       expect(service.getShoppingLists()()).toEqual(existing);
       expect(alerts.showToast).toHaveBeenCalledOnceWith('alerts.shoppinglist.save.error');
+    });
+
+    // Einträge können die Liste wechseln (DIV-2): Antworten und Events mit veralteter shoppingListId
+    describe('nach einem Listenwechsel', () => {
+      it('Anlegen: steht der Eintrag bei der POST-Antwort schon in einer anderen Liste, entsteht kein Duplikat', () => {
+        const verschoben = aShoppingItem({ id: 22, name: 'Milch' });
+        const lists = [{ ...existing[0], shoppingItems: [...existing[0].shoppingItems, verschoben] }, existing[1]];
+        service.getShoppingLists().set(lists);
+
+        service.addItemToShoppingList(itemDto({ shoppingListId: 20 }));
+        http.expectOne(`${api}/shopping-list/add-item`).flush(itemDto({ id: 22, shoppingListId: 20 }));
+
+        expect(service.getShoppingLists()()).toBe(lists);
+      });
+
+      it('add-item-Event für einen Eintrag, der schon in einer anderen Liste steht: keine Änderung', () => {
+        const lists = service.getShoppingLists()();
+
+        service.onItemAdded(itemDto({ id: 11, shoppingListId: 20 }));
+
+        expect(service.getShoppingLists()()).toBe(lists);
+      });
+
+      it('Löschen mit veralteter shoppingListId entfernt den Eintrag aus der Liste, in der er steht', () => {
+        service.deleteItemFromShoppingList(itemDto({ id: 21, shoppingListId: 10 }));
+        http.expectOne(`${api}/shopping-list/delete-item`).flush(null);
+
+        expect(service.getShoppingLists()()).toEqual([existing[0], { ...existing[1], shoppingItems: [] }]);
+      });
+
+      it('Erledigte löschen mit veralteter shoppingListId entfernt auch den Eintrag in der anderen Liste', () => {
+        service.deleteAllCompletedShoppingItems([
+          itemDto({ id: 12, completed: true, shoppingListId: 10 }),
+          itemDto({ id: 21, completed: true, shoppingListId: 10 }),
+        ]);
+        http.expectOne(`${api}/shopping-list/delete-all-items`).flush(null);
+
+        expect(service.getShoppingLists()()).toEqual([
+          { ...existing[0], shoppingItems: [existing[0].shoppingItems[0], existing[0].shoppingItems[2]] },
+          { ...existing[1], shoppingItems: [] },
+        ]);
+      });
     });
   });
 
@@ -847,6 +891,337 @@ describe('ShoppinglistService', () => {
         service.applyListOrder(listOrder(5, [1, 2, 3]));
 
         expect(listIds()).toEqual([2, 3, 1]);
+      });
+    });
+
+    // Verschieben zwischen Listen (DIV-2): Fälle entlang der Übergangstabelle M1–M11 im Plan (Abschnitt 7).
+    // Zustand jeweils vor und nach dem flush.
+    describe('Eintrag zwischen Listen verschieben (DIV-2)', () => {
+      const moveUrl = `${api}/shopping-list/move-item`;
+      const moveToast = 'alerts.shoppinglist.move.error';
+
+      /** Listen in Reihenfolge der Schlüssel (IDs aufsteigend) mit Einträgen und optionalen Item-Revisionen. */
+      const lists = (items: Record<number, number[]>, revisions: Record<number, number> = {}): ShoppinglistDto[] =>
+        Object.entries(items).map(([id, itemIds]) => ({
+          id: +id, name: `Liste ${id}`, listOrderRevision: 5, itemOrderRevision: revisions[+id] ?? 0,
+          shoppingItems: itemIds.map(itemId => aShoppingItem({ id: itemId, name: `Artikel ${itemId}` })),
+        }));
+      /** Sichtbarer Zustand: Liste → IDs ihrer Einträge. */
+      const state = () => service.getShoppingLists()().reduce<Record<number, number[]>>((result, list) =>
+        ({ ...result, [list.id]: list.shoppingItems.map(item => item.id) }), {});
+      const moved = (itemId: number, source: [number, number, number[]], target: [number, number, number[]]): ShoppingitemMovedDto => ({
+        groupId: 7, shoppingItemId: itemId,
+        source: itemOrder(source[0], source[1], source[2]), target: itemOrder(target[0], target[1], target[2]),
+      });
+      /** Stilles GET starten (Resync), die Antwort flusht der Test. */
+      const startLoad = () => {
+        service.getShoppingListsWithItems(group, undefined, { silent: true });
+        return http.expectOne(loadUrl);
+      };
+      const switchTo = (target: typeof group) => {
+        groupService.setActiveGroup(target);
+        TestBed.flushEffects();
+      };
+
+      describe('eigener Move', () => {
+        it('PUT mit Quelle, Ziel und Zielreihenfolge; sofort sichtbar; Erfolg übernimmt beide Revisionen', () => {
+          load(lists({ 1: [11, 12], 2: [21, 22] }));
+          const milch = service.getShoppingLists()()[0].shoppingItems[0];
+
+          service.moveShoppingItemToList(group, 11, 1, 2, 1);
+          const req = http.expectOne(moveUrl);
+
+          expect(req.request.method).toBe('PUT');
+          expect(req.request.body).toEqual({
+            groupId: 7, shoppingItemId: 11, sourceShoppingListId: 1, targetShoppingListId: 2, targetShoppingItemIds: [21, 11, 22]
+          });
+          expect(state()).toEqual({ 1: [12], 2: [21, 11, 22] });
+          expect(service.getShoppingLists()()[1].shoppingItems[1]).toBe(milch);
+          expect(service.isMovePending(11)).toBeTrue();
+
+          req.flush(moved(11, [1, 1, [12]], [2, 1, [21, 11, 22]]));
+          expect(state()).toEqual({ 1: [12], 2: [21, 11, 22] });
+          expect(service.isMovePending(11)).toBeFalse();
+
+          // ein älteres reorder-items (Revision 0) ändert nichts mehr
+          service.applyItemOrder(itemOrder(2, 0, [22, 21]));
+          expect(state()).toEqual({ 1: [12], 2: [21, 11, 22] });
+        });
+
+        it('zweiter Move desselben Eintrags während des ersten und ungültige Moves: kein Request, keine Änderung', () => {
+          load(lists({ 1: [11, 12], 2: [21], 3: [] }));
+          service.moveShoppingItemToList(group, 11, 1, 2, 0);
+          const req = http.expectOne(moveUrl);
+          const vorher = state();
+
+          service.moveShoppingItemToList(group, 11, 2, 3, 0);
+          service.moveShoppingItemToList(group, 12, 1, 1, 0);
+          service.moveShoppingItemToList(group, 21, 1, 3, 0);
+          service.moveShoppingItemToList(group, 12, 1, 9, 0);
+
+          http.expectNone(moveUrl);
+          expect(state()).toEqual(vorher);
+          req.flush(moved(11, [1, 1, [12]], [2, 1, [11, 21]]));
+        });
+      });
+
+      describe('Fehler', () => {
+        it('Toast, der Eintrag steht vor dem Refetch wieder an seinem Platz in der Quelle', () => {
+          load(lists({ 1: [11, 12, 13], 2: [21] }));
+          service.moveShoppingItemToList(group, 12, 1, 2, 0);
+          expect(state()).toEqual({ 1: [11, 13], 2: [12, 21] });
+
+          http.expectOne(moveUrl).flush('Server error', serverError);
+
+          expect(state()).toEqual({ 1: [11, 12, 13], 2: [21] });
+          expect(alerts.showToast).toHaveBeenCalledOnceWith(moveToast);
+          expect(service.isMovePending(12)).toBeFalse();
+          http.expectOne(loadUrl).flush(lists({ 1: [11, 12, 13], 2: [21] }));
+          expect(state()).toEqual({ 1: [11, 12, 13], 2: [21] });
+        });
+
+        it('scheitert auch der Refetch, bleibt der Eintrag in der Quelle', () => {
+          load(lists({ 1: [11, 12, 13], 2: [21] }));
+          service.moveShoppingItemToList(group, 12, 1, 2, 1);
+
+          http.expectOne(moveUrl).flush('Server error', serverError);
+          http.expectOne(loadUrl).flush('Server error', serverError);
+
+          expect(state()).toEqual({ 1: [11, 12, 13], 2: [21] });
+        });
+
+        it('fremdes move-item während des Requests (conflict), danach eigener Fehler: kein Rücksprung, Refetch klärt', () => {
+          load(lists({ 1: [11, 12], 2: [21], 3: [] }));
+          service.moveShoppingItemToList(group, 12, 1, 2, 1);
+          const req = http.expectOne(moveUrl);
+
+          service.applyItemMove(moved(12, [1, 1, [11]], [3, 1, [12]]));
+          expect(state()).toEqual({ 1: [11], 2: [21, 12], 3: [] });
+
+          req.flush('Not found', { status: 404, statusText: 'Not Found' });
+          expect(itemIdsOf(1)).toEqual([11]);
+          expect(alerts.showToast).toHaveBeenCalledOnceWith(moveToast);
+          http.expectOne(loadUrl).flush(lists({ 1: [11], 2: [21], 3: [12] }, { 1: 1, 3: 1 }));
+
+          expect(state()).toEqual({ 1: [11], 2: [21], 3: [12] });
+        });
+
+        it('fremdes move-item während des Requests (conflict), danach eigener Erfolg: stiller Refetch', () => {
+          load(lists({ 1: [11, 12], 2: [21], 3: [] }));
+          service.moveShoppingItemToList(group, 12, 1, 2, 1);
+          const req = http.expectOne(moveUrl);
+          service.applyItemMove(moved(12, [2, 2, [21]], [3, 1, [12]]));
+
+          req.flush(moved(12, [1, 1, [11]], [2, 1, [21, 12]]));
+
+          expect(alerts.showToast).not.toHaveBeenCalled();
+          http.expectOne(loadUrl).flush(lists({ 1: [11], 2: [21], 3: [12] }, { 1: 1, 2: 2, 3: 1 }));
+          expect(state()).toEqual({ 1: [11], 2: [21], 3: [12] });
+        });
+
+        it('Kontextwechsel während des Moves: Antwort verworfen, kein Toast, kein Refetch', () => {
+          load(lists({ 1: [11], 2: [] }));
+          service.moveShoppingItemToList(group, 11, 1, 2, 0);
+          const req = http.expectOne(moveUrl);
+
+          switchTo(andereGruppe);
+          req.flush('Server error', serverError);
+
+          expect(alerts.showToast).not.toHaveBeenCalled();
+          expect(service.isMovePending(11)).toBeFalse();
+        });
+      });
+
+      describe('Events', () => {
+        it('reorder-items des Ziels (Revision 2, enthält X) vor move-item (Revision 1): X steht laut Revision 2 im Ziel', () => {
+          load(lists({ 1: [11, 12], 2: [21, 22] }));
+
+          service.applyItemOrder(itemOrder(2, 2, [21, 11, 22]));
+          service.applyItemMove(moved(11, [1, 1, [12]], [2, 1, [11, 21, 22]]));
+
+          expect(state()).toEqual({ 1: [12], 2: [21, 11, 22] });
+        });
+
+        it('vertauschte Events B→C vor A→B: Refetch, das ältere Event ist überholt, danach steht X in C', () => {
+          load(lists({ 1: [11], 2: [], 3: [] }));
+
+          service.applyItemMove(moved(11, [2, 2, []], [3, 1, [11]]));
+          const refetch = http.expectOne(loadUrl);
+          service.applyItemMove(moved(11, [1, 1, []], [2, 1, [11]]));
+          expect(state()).toEqual({ 1: [11], 2: [], 3: [] });
+
+          refetch.flush(lists({ 1: [], 2: [], 3: [11] }, { 1: 1, 2: 2, 3: 1 }));
+          expect(state()).toEqual({ 1: [], 2: [], 3: [11] });
+        });
+
+        it('überholtes Event nach einem GET mit späterem Rück-Move (M5b): kein Move', () => {
+          load(lists({ 1: [11], 2: [] }, { 1: 2, 2: 2 }));
+
+          service.applyItemMove(moved(11, [1, 1, []], [2, 1, [11]]));
+
+          expect(state()).toEqual({ 1: [11], 2: [] });
+        });
+
+        it('delete-item vor einem verspäteten move-item: X erscheint nicht wieder, Refetch', () => {
+          load(lists({ 1: [11, 12], 2: [] }));
+          service.getShoppingLists().update(current => deleteItem(current, itemDto({ id: 11, shoppingListId: 1, groupId: 7 })));
+
+          service.applyItemMove(moved(11, [1, 1, [12]], [2, 1, [11]]));
+
+          expect(state()).toEqual({ 1: [12], 2: [] });
+          http.expectOne(loadUrl).flush(lists({ 1: [12], 2: [] }, { 1: 1, 2: 1 }));
+          expect(state()).toEqual({ 1: [12], 2: [] });
+        });
+
+        it('update-item vor move-item: Name und Erledigt-Status bleiben erhalten', () => {
+          load(lists({ 1: [11], 2: [] }));
+          service.getShoppingLists().update(current =>
+            updateItem(current, itemDto({ id: 11, name: 'Hafermilch', completed: true, shoppingListId: 1, groupId: 7 })));
+
+          service.applyItemMove(moved(11, [1, 1, []], [2, 1, [11]]));
+
+          expect(service.getShoppingLists()()[1].shoppingItems).toEqual([{ id: 11, name: 'Hafermilch', completed: true }]);
+        });
+
+        it('move-item vor add-list: Refetch; nach dessen Antwort steht X in der neuen Liste', () => {
+          load(lists({ 1: [11] }));
+
+          service.applyItemMove(moved(11, [1, 1, []], [5, 1, [11]]));
+          expect(state()).toEqual({ 1: [11] });
+
+          http.expectOne(loadUrl).flush(lists({ 1: [], 5: [11] }, { 1: 1, 5: 1 }));
+          expect(state()).toEqual({ 1: [], 5: [11] });
+        });
+
+        it('move-item vor add-list und add-item (Eintrag lokal unbekannt): Refetch, X wird nicht aus dem Event erzeugt', () => {
+          load(lists({ 1: [] }));
+
+          service.applyItemMove(moved(11, [1, 1, []], [5, 1, [11]]));
+          expect(state()).toEqual({ 1: [] });
+
+          http.expectOne(loadUrl).flush(lists({ 1: [], 5: [11] }, { 1: 1, 5: 1 }));
+          expect(state()).toEqual({ 1: [], 5: [11] });
+        });
+
+        it('move-item während holdUpdates wirkt erst nach releaseUpdates', () => {
+          load(lists({ 1: [11], 2: [] }));
+
+          service.holdUpdates();
+          service.applyOrDefer(() => service.applyItemMove(moved(11, [1, 1, []], [2, 1, [11]])));
+          expect(state()).toEqual({ 1: [11], 2: [] });
+
+          service.releaseUpdates();
+          expect(state()).toEqual({ 1: [], 2: [11] });
+        });
+      });
+
+      describe('GET (F-002)', () => {
+        it('GET gestartet, eigener Move bestätigt, alte GET-Antwort: X bleibt im Ziel', () => {
+          load(lists({ 1: [11, 12], 2: [21] }));
+          const get = startLoad();
+          service.moveShoppingItemToList(group, 11, 1, 2, 0);
+          http.expectOne(moveUrl).flush(moved(11, [1, 1, [12]], [2, 1, [11, 21]]));
+
+          get.flush(lists({ 1: [11, 12], 2: [21] }));
+
+          expect(state()).toEqual({ 1: [12], 2: [11, 21] });
+          // die bestätigten Reihenfolgen stammen aus der neueren Revision: Revision 0 aus dem GET ändert nichts
+          service.applyItemOrder(itemOrder(2, 1, [21, 11]));
+          expect(state()).toEqual({ 1: [12], 2: [11, 21] });
+        });
+
+        it('GET gestartet, move-item-Event, alte GET-Antwort: X bleibt im Ziel', () => {
+          load(lists({ 1: [11, 12], 2: [21] }));
+          const get = startLoad();
+          service.applyItemMove(moved(11, [1, 1, [12]], [2, 1, [21, 11]]));
+
+          get.flush(lists({ 1: [11, 12], 2: [21] }));
+
+          expect(state()).toEqual({ 1: [12], 2: [21, 11] });
+        });
+
+        it('GET während eines offenen eigenen Moves: X bleibt an der gewählten Position; scheitert der PUT, springt er zurück', () => {
+          load(lists({ 1: [11, 12], 2: [21, 22] }));
+          service.moveShoppingItemToList(group, 11, 1, 2, 1);
+          const req = http.expectOne(moveUrl);
+
+          load(lists({ 1: [11, 12], 2: [21, 22] }));
+          expect(state()).toEqual({ 1: [12], 2: [21, 11, 22] });
+
+          req.flush('Server error', serverError);
+          expect(state()).toEqual({ 1: [11, 12], 2: [21, 22] });
+          http.expectOne(loadUrl).flush(lists({ 1: [11, 12], 2: [21, 22] }));
+        });
+
+        it('nach Ende aller GETs wirkt ein bestätigter Move nicht mehr auf spätere Ladeantworten', () => {
+          load(lists({ 1: [11], 2: [] }));
+          const get = startLoad();
+          service.applyItemMove(moved(11, [1, 1, []], [2, 1, [11]]));
+          get.flush(lists({ 1: [], 2: [11] }, { 1: 1, 2: 1 }));
+
+          // später zurückverschoben (z. B. vom eigenen Zweitgerät, ohne Event)
+          load(lists({ 1: [11], 2: [] }, { 1: 2, 2: 2 }));
+
+          expect(state()).toEqual({ 1: [11], 2: [] });
+        });
+
+        for (const ende of ['Erfolg', 'Fehler']) {
+          it(`zwei parallele GETs mit gleichem Start, GET 1 endet mit ${ende}, dann die alte Antwort von GET 2: X bleibt im Ziel`, () => {
+            load(lists({ 1: [11], 2: [] }));
+            const get1 = startLoad();
+            const get2 = startLoad();
+            service.applyItemMove(moved(11, [1, 1, []], [2, 1, [11]]));
+
+            if (ende === 'Erfolg') get1.flush(lists({ 1: [], 2: [11] }, { 1: 1, 2: 1 }));
+            else get1.flush('Server error', serverError);
+            get2.flush(lists({ 1: [11], 2: [] }));
+            expect(state()).toEqual({ 1: [], 2: [11] });
+
+            // danach ist der Log leer: ein späteres GET mit X in A wird übernommen
+            load(lists({ 1: [11], 2: [] }, { 1: 2, 2: 2 }));
+            expect(state()).toEqual({ 1: [11], 2: [] });
+          });
+        }
+
+        it('M6 mit laufendem GET: A→B (neuer) vor B→A (älter), dann GET mit Zwischenstand X in A: X steht in B', () => {
+          load(lists({ 1: [], 2: [11] }, { 1: 1, 2: 1 }));
+          const get = startLoad();
+
+          service.applyItemMove(moved(11, [1, 3, []], [2, 3, [11]]));
+          service.applyItemMove(moved(11, [2, 2, []], [1, 2, [11]]));
+          get.flush(lists({ 1: [11], 2: [] }, { 1: 2, 2: 2 }));
+
+          expect(state()).toEqual({ 1: [], 2: [11] });
+        });
+
+        it('Grenze der Nachspielung: GET mit späterem Rück-Move verschiebt vorübergehend falsch, dessen Event korrigiert', () => {
+          load(lists({ 1: [11], 2: [] }));
+          const get = startLoad();
+          service.applyItemMove(moved(11, [1, 1, []], [2, 1, [11]]));
+
+          get.flush(lists({ 1: [11], 2: [] }, { 1: 2, 2: 2 }));
+          expect(state()).toEqual({ 1: [], 2: [11] });
+
+          service.applyItemMove(moved(11, [2, 2, []], [1, 2, [11]]));
+          expect(state()).toEqual({ 1: [11], 2: [] });
+        });
+
+        it('Kontextwechsel leert offene Moves und Log: nach Rückkehr wird eine Ladeantwort unverändert übernommen', () => {
+          load(lists({ 1: [11], 2: [] }));
+          const get = startLoad();
+          service.applyItemMove(moved(11, [1, 1, []], [2, 1, [11]]));
+          service.moveShoppingItemToList(group, 11, 2, 1, 0);
+          const req = http.expectOne(moveUrl);
+
+          switchTo(andereGruppe);
+          switchTo(group);
+          expect(service.isMovePending(11)).toBeFalse();
+          get.flush(lists({ 1: [11], 2: [] }));
+          req.flush(moved(11, [2, 2, []], [1, 2, [11]]));
+          load(lists({ 1: [11], 2: [] }));
+
+          expect(state()).toEqual({ 1: [11], 2: [] });
+        });
       });
     });
   });

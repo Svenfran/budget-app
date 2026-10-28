@@ -1,6 +1,8 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto;
+import com.github.svenfran.budgetapp.budgetappbackend.dto.MoveShoppingItemDto;
+import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingItemMovedDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingItemOrderDto;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.SortOrderMerger;
@@ -171,6 +173,54 @@ public class ShoppingItemService {
         notificationService.sendShoppingItemOrderNotification(group.getId(), order);
 
         return order;
+    }
+
+    /**
+     * Verschiebt einen Eintrag in eine andere Liste der Gruppe: ändert die Zuordnung, normalisiert die Quellliste,
+     * speichert die gewünschte Reihenfolge der Zielliste (tolerant, siehe SortOrderMerger) und erhöht beide
+     * Revisionen. Sperrreihenfolge wie beim Reorder: Gruppe → Listen (aufsteigend nach id) → Einträge. Eintrag und
+     * Zielliste werden erst nach der Gruppensperre geprüft, sodass ein parallel committeter Move oder eine gelöschte
+     * Zielliste zu 404 führt. Die Eintragsdaten bleiben unverändert (Bulk-Updates, kein @UpdateTimestamp).
+     */
+    @Transactional
+    public ShoppingItemMovedDto moveShoppingItem(MoveShoppingItemDto dto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingListNotFoundException, ShoppingListDoesNotBelongToGroupException, ShoppingItemMoveWithinSameListException, ShoppingItemNotFoundException, ShoppingItemDoesNotBelongToShoppingListException {
+        var user = dataLoaderService.getAuthenticatedUser();
+        var group = dataLoaderService.loadGroup(dto.getGroupId());
+        verificationService.verifyIsPartOfGroup(user, group);
+        var source = dataLoaderService.loadShoppingList(dto.getSourceShoppingListId());
+        verificationService.verifyShoppingListIsPartOfGroup(source, group);
+        var target = dataLoaderService.loadShoppingList(dto.getTargetShoppingListId());
+        verificationService.verifyShoppingListIsPartOfGroup(target, group);
+        if (source.getId().equals(target.getId())) {
+            throw new ShoppingItemMoveWithinSameListException("Shoppingitem with Id " + dto.getShoppingItemId() + " cannot be moved within shopping list with Id " + source.getId());
+        }
+        groupRepository.touchShoppingLists(group.getId(), Date.from(clock.instant()));
+        var shoppingItem = dataLoaderService.loadShoppingItem(dto.getShoppingItemId());
+        verificationService.verifyShoppingItemIsPartOfShoppingList(source, shoppingItem);
+        if (!shoppingListRepository.existsById(target.getId())) {
+            throw new ShoppingListNotFoundException(String.format("Shoppinglist with Id %s not found", target.getId()));
+        }
+        shoppingListRepository.incrementItemOrderRevision(Math.min(source.getId(), target.getId()));
+        shoppingListRepository.incrementItemOrderRevision(Math.max(source.getId(), target.getId()));
+        if (shoppingItemRepository.moveToList(shoppingItem.getId(), source, target) != 1) {
+            throw new IllegalStateException("Shoppingitem with Id " + shoppingItem.getId() + " could not be moved to shopping list with Id " + target.getId());
+        }
+
+        var sourceIds = shoppingItemRepository.findIdsInOrder(source.getId());
+        for (int position = 0; position < sourceIds.size(); position++) {
+            shoppingItemRepository.updateSortOrder(sourceIds.get(position), source.getId(), position);
+        }
+        var targetIds = SortOrderMerger.merge(dto.getTargetShoppingItemIds(), shoppingItemRepository.findIdsInOrder(target.getId()));
+        for (int position = 0; position < targetIds.size(); position++) {
+            shoppingItemRepository.updateSortOrder(targetIds.get(position), target.getId(), position);
+        }
+        var moved = new ShoppingItemMovedDto(group.getId(), shoppingItem.getId(),
+                new ShoppingItemOrderDto(group.getId(), source.getId(), shoppingListRepository.findItemOrderRevision(source.getId()), sourceIds),
+                new ShoppingItemOrderDto(group.getId(), target.getId(), shoppingListRepository.findItemOrderRevision(target.getId()), targetIds));
+
+        notificationService.sendShoppingItemMoveNotification(group.getId(), moved);
+
+        return moved;
     }
 
 }

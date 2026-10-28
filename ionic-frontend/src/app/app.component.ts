@@ -8,6 +8,7 @@ import { GroupService } from './service/group.service';
 import { Group } from './model/group';
 import { AlertController, isPlatform, LoadingController, NavController, Platform } from '@ionic/angular';
 import { App } from '@capacitor/app';
+import { Keyboard } from '@capacitor/keyboard';
 import { PluginListenerHandle } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { NavigationBar } from '@hugotomazi/capacitor-navigation-bar';
@@ -23,6 +24,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { LanguageService } from './service/language.service';
 import { ShoppinglistService } from './domains/shoppinglist/service/shoppinglist.service';
 import { isLongBackground, ResyncThrottle } from './service/resync-throttle';
+import { KeyboardOffset } from './service/keyboard-offset';
 
 @Component({
   selector: 'app-root',
@@ -49,6 +51,8 @@ export class AppComponent {
   );
   private reconnectedSub?: Subscription;
   private appStateListeners: Promise<PluginListenerHandle>[] = [];
+  private keyboardListeners: Promise<PluginListenerHandle>[] = [];
+  private removeResizeListener?: () => void;
   private pausedAt: number | null = null;
   private backButtonSubscription: any;
   public backendStatus = this.healthService.backendStatus;
@@ -192,6 +196,7 @@ export class AppComponent {
     this.initBackButton();
     this.initUser();
     this.initResync();
+    this.initKeyboardOffset();
   }
 
   switchLanguage(lang: string) {
@@ -282,6 +287,34 @@ export class AppComponent {
     }
   }
 
+  /**
+   * Setzt `--keyboard-offset` (global.scss) auf den von der Tastatur verdeckten Teil der WebView, damit Alerts mit
+   * Eingabefeld im freien Bereich zentriert werden – ab dem zweiten Öffnen synchron mit der Tastatur-Animation,
+   * beim ersten Öffnen nach dem Einblenden (Geräteverhalten wird dabei gemessen, siehe KeyboardOffset).
+   */
+  private initKeyboardOffset() {
+    if (!isPlatform('capacitor')) return;
+    const root = document.documentElement;
+    const keyboardOffset = new KeyboardOffset(window.innerHeight, window.innerWidth);
+    const setOffset = (px: number | null) => {
+      if (px !== null) root.style.setProperty('--keyboard-offset', `${px}px`);
+    };
+    this.keyboardListeners = [
+      Keyboard.addListener('keyboardWillShow', info => setOffset(keyboardOffset.willShow(info.keyboardHeight))),
+      Keyboard.addListener('keyboardDidShow', info => setOffset(keyboardOffset.didShow(info.keyboardHeight, window.innerHeight))),
+      Keyboard.addListener('keyboardWillHide', () => {
+        keyboardOffset.willHide();
+        root.style.removeProperty('--keyboard-offset');
+      }),
+      Keyboard.addListener('keyboardDidHide', () => keyboardOffset.didHide(window.innerHeight)),
+    ];
+    // Größenänderung: bei offener Tastatur neu messen (die WebView wird ggf. erst nach keyboardDidShow verkleinert), bei
+    // geschlossener Tastatur nach einer Drehung die Höhe ohne Tastatur aktualisieren (KeyboardOffset.viewportResized)
+    const onResize = () => setOffset(keyboardOffset.viewportResized(window.innerWidth, window.innerHeight));
+    window.addEventListener('resize', onResize);
+    this.removeResizeListener = () => window.removeEventListener('resize', onResize);
+  }
+
   initBackButton() {
     if (this.backButtonSubscription) {
       this.backButtonSubscription.unsubscribe();
@@ -338,6 +371,8 @@ export class AppComponent {
     this.reconnectedSub?.unsubscribe();
     this.resyncThrottle.reset();
     this.appStateListeners.forEach(listener => listener.then(handle => handle.remove()));
+    this.keyboardListeners.forEach(listener => listener.then(handle => handle.remove()));
+    this.removeResizeListener?.();
   }
 
   subscribeToTopics() {

@@ -3,7 +3,8 @@ import { AddEditShoppingItemDto } from './model/add-edit-shopping-item-dto';
 import { AddEditShoppinglistDto } from './model/add-edit-shoppinglist-dto';
 import { ShoppinglistDto } from './model/shoppinglist-dto';
 import {
-  addItem, addList, deleteAllItems, deleteItem, deleteList, reorderItems, reorderLists, updateItem, updateList
+  addItem, addList, deleteAllItems, deleteItem, deleteList, locateItem, moveItem, reorderItems, reorderLists, updateItem,
+  updateList
 } from './shoppinglist-events';
 
 describe('shoppinglist-events', () => {
@@ -46,7 +47,7 @@ describe('shoppinglist-events', () => {
       const andere = aShoppingList();
 
       expect(deleteList([liste, andere], listEvent({ id: liste.id }))).toEqual([andere]);
-      expect(deleteList([liste, andere], listEvent({ id: 999 }))).toEqual([liste, andere]);
+      expect(deleteList([liste, andere], listEvent({ id: -1 }))).toEqual([liste, andere]);
     });
   });
 
@@ -74,7 +75,7 @@ describe('shoppinglist-events', () => {
       const liste = aShoppingList();
       const lists = [liste];
 
-      const result = addItem(lists, { ...itemEvent(liste, {}), shoppingListId: 999 });
+      const result = addItem(lists, { ...itemEvent(liste, {}), shoppingListId: -1 });
 
       expect(result).toBe(lists);
     });
@@ -114,6 +115,55 @@ describe('shoppinglist-events', () => {
       const lists = [aShoppingList({ shoppingItems: [aShoppingItem()] })];
 
       expect(deleteAllItems(lists, [])).toBe(lists);
+    });
+  });
+
+  describe('Listenwechsel von Einträgen (DIV-2)', () => {
+    const [x, y, u] = [aShoppingItem({ id: 11, name: 'Milch', completed: true }), aShoppingItem({ id: 12 }), aShoppingItem({ id: 21 })];
+    const quelle = aShoppingList({ id: 1, shoppingItems: [x, y] });
+    const ziel = aShoppingList({ id: 2, shoppingItems: [u] });
+    const dritte = aShoppingList({ id: 3 });
+    const lists = [quelle, ziel, dritte];
+
+    it('moveItem verschiebt das lokale Objekt ans Ende der Zielliste, andere Listen bleiben dieselben Objekte', () => {
+      const result = moveItem(lists, 11, 1, 2);
+
+      expect(itemIds(result[0])).toEqual([12]);
+      expect(itemIds(result[1])).toEqual([21, 11]);
+      expect(result[1].shoppingItems[1]).toBe(x);
+      expect(result[2]).toBe(dritte);
+    });
+
+    it('moveItem ändert nichts, wenn der Eintrag nicht in der Quelle steht, Quelle oder Ziel fehlen oder beide gleich sind', () => {
+      expect(moveItem(lists, 11, 2, 3)).toBe(lists);
+      expect(moveItem(lists, 99, 1, 2)).toBe(lists);
+      expect(moveItem(lists, 11, 9, 2)).toBe(lists);
+      expect(moveItem(lists, 11, 1, 9)).toBe(lists);
+      expect(moveItem(lists, 11, 1, 1)).toBe(lists);
+    });
+
+    it('locateItem liefert die Liste des Eintrags oder undefined', () => {
+      expect(locateItem(lists, 21)).toBe(2);
+      expect(locateItem(lists, 99)).toBeUndefined();
+    });
+
+    it('addItem ändert nichts, wenn der Eintrag schon in einer anderen Liste steht', () => {
+      expect(addItem(lists, itemEvent(dritte, { id: 11 }))).toBe(lists);
+    });
+
+    it('deleteItem entfernt den Eintrag auch bei veralteter shoppingListId', () => {
+      const result = deleteItem(lists, itemEvent(quelle, { id: 21 }));
+
+      expect(itemIds(result[1])).toEqual([]);
+      expect(result[0]).toBe(quelle);
+    });
+
+    it('deleteAllItems entfernt die Einträge aus allen Listen, auch bei veralteter shoppingListId', () => {
+      const result = deleteAllItems(lists, [itemEvent(quelle, { id: 12 }), itemEvent(quelle, { id: 21 })]);
+
+      expect(itemIds(result[0])).toEqual([11]);
+      expect(itemIds(result[1])).toEqual([]);
+      expect(result[2]).toBe(dritte);
     });
   });
 

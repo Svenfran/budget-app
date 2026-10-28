@@ -80,3 +80,24 @@ ion-list {
     border: 2px dashed var(--ion-color-primary);
     border-radius: 6px;
 }
+
+// Verschieben zwischen Listen (DIV-2): leere Item-Container bekommen nur während eines Item-Drags eine Höhe. Die
+// Klasse setzt onDragStarted synchron, damit das CDK die Fläche schon beim Messen der Container sieht.
+.item-drag-active .item-drop-list--empty {
+    min-height: 48px;
+}
+
+// mögliche Ziele (aufgeklappte andere Listen) während eines Item-Drags; Ionic-Farben, daher auch im Dark Mode passend
+// Zeiger hat die Liste mit dem Platzhalter (betretene fremde oder Ursprungsliste) verlassen: Loslassen bricht ab
+// (Codex-Review F-001, PR #46), der Platzhalter wirkt daher inaktiv statt wie ein Ziel
+.item-drop-outside .item-drag-placeholder {
+    border-color: var(--ion-color-medium);
+    background: transparent;
+    opacity: 0.4;
+}
+
+.item-drop-list.cdk-drop-list-receiving {
+    border-radius: 6px;
+    outline: 1px dashed rgba(var(--ion-color-primary-rgb), 0.6);
+    background: rgba(var(--ion-color-primary-rgb), 0.04);
+}

@@ -19,7 +19,7 @@
   <ion-refresher slot="fixed" (ionRefresh)="refreshShoppingList($event)">
     <ion-refresher-content></ion-refresher-content>
   </ion-refresher>
-  <div class="ion-content-scroll-host" cdkScrollable>
+  <div class="ion-content-scroll-host" cdkScrollable #scrollHost>
   <ion-grid class="ion-padding">    
     <ion-row>
       <ion-col class="ion-text-center" size-md="6" offset-md="3" *ngIf="isLoading">
@@ -54,12 +54,18 @@
             </ion-item-options>
           </ion-item-sliding>
 
-          <div *ngIf="list.shoppingItems.length > 0"
-            cdkDropList cdkDropListLockAxis="y" (cdkDropListDropped)="onItemDropped(list, $event)">
+          <!-- Item-Container immer gerendert und mit denen der anderen Listen verbunden (DIV-2): Einträge lassen sich in
+               jede aufgeklappte Liste verschieben, eine leere bekommt während eines Item-Drags eine Ablagefläche -->
+          <div class="item-drop-list" [class.item-drop-list--empty]="list.shoppingItems.length === 0"
+            [hidden]="!toggleLists[list.id]"
+            cdkDropList cdkDropListLockAxis="y" [id]="itemDropListId(list.id)" [cdkDropListData]="list.id"
+            [cdkDropListConnectedTo]="connectedItemLists()" [cdkDropListEnterPredicate]="canEnterItemList"
+            (cdkDropListDropped)="onItemDropped(list, $event)">
             <ion-item *ngFor="let item of list.shoppingItems; let j = index; trackBy: trackByItemId"
-              [hidden]="!toggleLists[list.id]"
               cdkDrag [cdkDragData]="item.id" [cdkDragStartDelay]="dragStartDelay" cdkDragBoundary=".ion-content-scroll-host"
-              (cdkDragStarted)="onDragStarted()" (cdkDragEnded)="onDragEnded()">
+              [cdkDragDisabled]="isMovePending(item.id)"
+              (cdkDragStarted)="onDragStarted(undefined, true)" (cdkDragMoved)="onItemDragMoved($event)"
+              (cdkDragEnded)="onDragEnded()">
               <div class="item-drag-placeholder" *cdkDragPlaceholder></div>
               <ion-text slot="start">{{ j + 1 }}</ion-text>
               <ion-label [class.done]="item.completed" (click)="markAsDone(list, item)">

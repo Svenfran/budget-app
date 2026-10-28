@@ -88,6 +88,29 @@ ion-modal {
   --border-radius: 8px;
 }
 
+// Alerts im von der Tastatur freien Bereich zentrieren; --keyboard-offset setzt AppComponent.initKeyboardOffset().
+// `:root` hebt die Spezifität über Ionics `.sc-ion-alert-*-h` (Host ist absolut mit top/bottom 0 positioniert).
+// Padding statt `bottom`: der Backdrop (absolut im Host) deckt so weiter den ganzen Bildschirm ab, nur der Alert wird im
+// freien Bereich zentriert und sein max-height (90 %) bezieht sich auf diesen Bereich.
+:root ion-alert {
+  padding-bottom: var(--keyboard-offset, 0px);
+  transition: padding-bottom 250ms ease-out; // etwa die Dauer der Tastatur-Animation
+  // zentriert über die Auto-Ränder des Wrappers: passt der Alert nicht in den freien Bereich (z. B. Querformat mit
+  // Tastatur), werden sie 0 und er steht oben statt über den Rand hinaus
+  align-items: flex-start;
+}
+
+// Passt der Alert nicht, scrollt sein Inhalt (Titel und Eingabefeld oben sichtbar, Buttons per Scrollen erreichbar);
+// die Teile behalten ihre Höhe, statt gestaucht zu werden
+:root ion-alert .alert-wrapper {
+  margin-block: auto;
+  overflow-y: auto;
+
+  > * {
+    flex-shrink: 0;
+  }
+}
+
 .pw-item {
   align-items: center;
 }

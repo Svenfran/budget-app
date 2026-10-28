@@ -80,6 +80,14 @@ public class NotificationService {
                 "reorder shopping items of list with id {} (revision {})", dto.getShoppingListId(), dto.getRevision());
     }
 
+    public void sendShoppingItemMoveNotification(Long groupId, ShoppingItemMovedDto dto) throws UserNotFoundException {
+        var history = gmhService.getGroupMembersAndOwner(groupId);
+        notifyMembers(history, "/notification/move-item", dto,
+                "move shopping item with id {} from list {} to list {} (revisions {}/{})", dto.getShoppingItemId(),
+                dto.getSource().getShoppingListId(), dto.getTarget().getShoppingListId(),
+                dto.getSource().getRevision(), dto.getTarget().getRevision());
+    }
+
     public void sendGroupUpdateNotification(Long groupId, GroupDto groupDto) throws UserNotFoundException {
         var history = gmhService.getGroupMembersAndOwner(groupId);
         notifyMembers(history, "/notification/update-group", groupDto,
