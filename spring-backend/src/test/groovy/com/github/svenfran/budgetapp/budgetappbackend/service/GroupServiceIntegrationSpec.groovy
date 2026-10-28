@@ -14,6 +14,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupMembership
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingItemRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingListRepository
+import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingPurchaseRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
 import org.slf4j.Logger
@@ -38,6 +39,7 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
     @Autowired CategoryRepository categoryRepository
     @Autowired ShoppingListRepository shoppingListRepository
     @Autowired ShoppingItemRepository shoppingItemRepository
+    @Autowired ShoppingPurchaseRepository shoppingPurchaseRepository
     @Autowired UserRepository userRepository
 
     def "Neuberechnung setzt den Durchschnitt pro Mitglied auf 0, wenn zum Kaufdatum niemand Mitglied ist"() {
@@ -612,6 +614,32 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
         memberIds(andereGroupId) == [benId]
         historie(andereGroupId, benId) == [[MEMBER, REFERENCE_DATE.minusYears(1), null]]
         cartRepository.findById(andererCart.id).present
+    }
+
+    def "Gruppe löschen entfernt ihre Einkaufshistorie, auch die gelöschter Listen; die Historie anderer Gruppen bleibt"() {
+        given:
+        def wg = fixtures.group()
+        def andereWg = fixtures.group()
+        def liste = fixtures.shoppingList(wg)
+        def andereListe = fixtures.shoppingList(andereWg)
+        def groupId = wg.group.id
+        def kaufId = fixtures.purchase(liste).id
+        def verwaistId = fixtures.purchase(liste, shoppingListId: -1L).id
+        def andererKaufId = fixtures.purchase(andereListe).id
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: Gruppe {} (Owner {} angemeldet) mit Kauf {} der Liste {} und verwaistem Kauf {} (gelöschte Liste); Gruppe {} mit Kauf {}',
+                groupId, wg.owner.id, kaufId, liste.id, verwaistId, andereWg.group.id, andererKaufId)
+
+        when:
+        groupService.deleteGroup(groupId)
+        flushAndClear()
+        def verbliebeneKaeufe = [kaufId, verwaistId, andererKaufId].findAll { shoppingPurchaseRepository.existsById(it) }
+        LOG.info('groupService.deleteGroup(Gruppe {}) -> verbliebene Käufe {}', groupId, verbliebeneKaeufe)
+
+        then:
+        !groupRepository.existsById(groupId)
+        verbliebeneKaeufe == [andererKaufId]
     }
 
     def "#rolle kann die Gruppe nicht löschen"() {

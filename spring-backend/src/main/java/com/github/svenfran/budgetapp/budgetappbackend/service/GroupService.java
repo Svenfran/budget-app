@@ -31,6 +31,8 @@ public class GroupService {
 
     private final ShoppingItemRepository shoppingItemRepository;
 
+    private final ShoppingPurchaseRepository shoppingPurchaseRepository;
+
     private final GroupMembershipHistoryService groupMembershipHistoryService;
 
     private final GroupMembershipHistoryRepository gmhRepository;
@@ -50,6 +52,7 @@ public class GroupService {
     public GroupService(GroupRepository groupRepository, GroupDtoMapper groupDtoMapper, CartRepository cartRepository,
                         CategoryRepository categoryRepository, ShoppingListRepository shoppingListRepository,
                         ShoppingItemRepository shoppingItemRepository,
+                        ShoppingPurchaseRepository shoppingPurchaseRepository,
                         GroupMembershipHistoryService groupMembershipHistoryService,
                         GroupMembershipHistoryRepository gmhRepository, DataLoaderService dataLoaderService,
                         VerificationService verificationService, NotificationService notificationService,
@@ -60,6 +63,7 @@ public class GroupService {
         this.categoryRepository = categoryRepository;
         this.shoppingListRepository = shoppingListRepository;
         this.shoppingItemRepository = shoppingItemRepository;
+        this.shoppingPurchaseRepository = shoppingPurchaseRepository;
         this.groupMembershipHistoryService = groupMembershipHistoryService;
         this.gmhRepository = gmhRepository;
         this.dataLoaderService = dataLoaderService;
@@ -176,6 +180,7 @@ public class GroupService {
             shoppingListRepository.deleteAll(group.getShoppingLists());
         }
         cartTemplateRepository.deleteAll(cartTemplateRepository.findByGroupId(group.getId()));
+        shoppingPurchaseRepository.deleteByGroupId(group.getId());
         groupRepository.deleteById(id);
         notificationService.sendGroupDeletedNotification(history, new GroupDto(group));
     }

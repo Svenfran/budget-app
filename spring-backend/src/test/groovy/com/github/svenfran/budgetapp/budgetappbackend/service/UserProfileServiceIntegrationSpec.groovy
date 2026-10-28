@@ -1,6 +1,8 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service
 
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartTemplateRepository
+import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository
+import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingPurchaseRepository
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -14,6 +16,8 @@ class UserProfileServiceIntegrationSpec extends IntegrationSpec {
 
     @Autowired UserProfileService userProfileService
     @Autowired CartTemplateRepository cartTemplateRepository
+    @Autowired GroupRepository groupRepository
+    @Autowired ShoppingPurchaseRepository shoppingPurchaseRepository
 
     def "Konto löschen als Owner löst delete-group für die eigene Gruppe mit den aktiven Mitgliedern aus"() {
         given:
@@ -35,6 +39,33 @@ class UserProfileServiceIntegrationSpec extends IntegrationSpec {
                 { it*.userId as Set == [ownerId, benId] as Set },
                 { it.id == groupId })
         0 * notificationService._
+    }
+
+    def "Konto löschen als Owner löscht die Einkaufshistorie seiner Gruppe; Gruppen, in denen er Mitglied ist, behalten ihre"() {
+        given:
+        def owner = fixtures.user()
+        def eigeneWg = fixtures.group(owner: owner)
+        def andereWg = fixtures.group(members: [owner])
+        def eigeneGroupId = eigeneWg.group.id
+        def kaufId = fixtures.purchase(fixtures.shoppingList(eigeneWg)).id
+        def andererKaufId = fixtures.purchase(fixtures.shoppingList(andereWg)).id
+        def ownerId = owner.id
+        flushAndClear()
+        loginAs(owner)
+        LOG.info('Szenario: Nutzer {} (angemeldet) ist Owner von Gruppe {} mit Kauf {} und Mitglied von Gruppe {} mit Kauf {}',
+                ownerId, eigeneGroupId, kaufId, andereWg.group.id, andererKaufId)
+
+        when:
+        userProfileService.deleteUserProfile(ownerId)
+        flushAndClear()
+        def gruppeVorhanden = groupRepository.existsById(eigeneGroupId)
+        def verbliebeneKaeufe = [kaufId, andererKaufId].findAll { shoppingPurchaseRepository.existsById(it) }
+        LOG.info('userProfileService.deleteUserProfile(Nutzer {}) -> Gruppe {} vorhanden {}, verbliebene Käufe {}',
+                ownerId, eigeneGroupId, gruppeVorhanden, verbliebeneKaeufe)
+
+        then:
+        !gruppeVorhanden
+        verbliebeneKaeufe == [andererKaufId]
     }
 
     def "Konto löschen als Mitglied beendet seine aktiven Templates der Gruppe zum heutigen Tag (testClock)"() {

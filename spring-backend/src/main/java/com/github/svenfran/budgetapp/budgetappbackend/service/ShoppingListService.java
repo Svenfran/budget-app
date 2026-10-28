@@ -34,13 +34,16 @@ public class ShoppingListService {
 
     private final NotificationService notificationService;
 
+    private final ShoppingPurchaseService shoppingPurchaseService;
+
     private final Clock clock;
 
     public ShoppingListService(ShoppingListRepository shoppingListRepository,
                                ShoppingListDtoMapper shoppingListDtoMapper,
                                ShoppingItemRepository shoppingItemRepository, GroupRepository groupRepository,
                                DataLoaderService dataLoaderService, VerificationService verificationService,
-                               NotificationService notificationService, Clock clock) {
+                               NotificationService notificationService,
+                               ShoppingPurchaseService shoppingPurchaseService, Clock clock) {
         this.shoppingListRepository = shoppingListRepository;
         this.shoppingListDtoMapper = shoppingListDtoMapper;
         this.shoppingItemRepository = shoppingItemRepository;
@@ -48,6 +51,7 @@ public class ShoppingListService {
         this.dataLoaderService = dataLoaderService;
         this.verificationService = verificationService;
         this.notificationService = notificationService;
+        this.shoppingPurchaseService = shoppingPurchaseService;
         this.clock = clock;
     }
 
@@ -120,6 +124,8 @@ public class ShoppingListService {
         // Gruppe sperren, bevor die Einträge gelesen werden: ein parallel laufender Move in diese oder aus dieser Liste
         // committet vorher, gelöscht wird der aktuelle Bestand
         groupRepository.touchShoppingLists(group.getId(), Date.from(clock.instant()));
+        // Erledigte Einträge gelten als gekauft; die Historie bleibt nach dem Löschen der Liste erhalten (DIV-23)
+        shoppingPurchaseService.recordPurchases(shoppingList, shoppingList.getShoppingItems());
         shoppingItemRepository.deleteAll(shoppingList.getShoppingItems());
         shoppingListRepository.deleteById(shoppingList.getId());
         notificationService.sendShoppingListNotification(

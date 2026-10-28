@@ -18,6 +18,9 @@ public interface ShoppingItemRepository extends CrudRepository<ShoppingItem, Lon
     @Query("select i.id from ShoppingItem i where i.shoppingList.id = :shoppingListId order by i.sortOrder, i.id")
     List<Long> findIdsInOrder(@Param("shoppingListId") Long shoppingListId);
 
+    @Query("select i from ShoppingItem i where i.shoppingList.id = :shoppingListId and i.isCompleted = false order by i.sortOrder, i.id")
+    List<ShoppingItem> findOpenItems(@Param("shoppingListId") Long shoppingListId);
+
     @Modifying
     @Query("update ShoppingItem i set i.sortOrder = :sortOrder where i.id = :id and i.shoppingList.id = :shoppingListId")
     void updateSortOrder(@Param("id") Long id, @Param("shoppingListId") Long shoppingListId, @Param("sortOrder") int sortOrder);

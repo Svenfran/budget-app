@@ -17,6 +17,7 @@ import { deleteAllItems, deleteItem, deleteList, updateItem, updateList } from '
 import { ShoppinglistOrderDto } from './model/shoppinglist-order-dto';
 import { ShoppingitemOrderDto } from './model/shoppingitem-order-dto';
 import { ShoppingitemMovedDto } from './model/shoppingitem-moved-dto';
+import { ShoppingSuggestionsDto } from './model/shopping-suggestions-dto';
 
 @Component({
   selector: 'app-shoppinglist',
@@ -290,6 +291,52 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
       shoppingListId: list.id
     };
     this.shoppinglistService.updateItemOfShoppingList(updateShoppingItem, false);
+  }
+
+  /**
+   * Einkaufsvorschläge (DIV-23): laden, zur Auswahl anbieten, nur die ausgewählten hinzufügen. Der Kontext (Gruppe,
+   * Sitzung, Liste) wird beim Öffnen festgehalten: nach einem Wechsel erscheint kein Dialog mehr, und ein noch offener
+   * Dialog sendet beim Bestätigen nichts.
+   */
+  onShowSuggestions(list: ShoppinglistDto): Promise<void> {
+    const inContext = this.shoppinglistService.captureSuggestionContext(list.id);
+    const groupId = this.activeGroup.id;
+    return this.loadingCtrl.create({
+      message: this.translate.instant('alerts.shoppinglist.suggestions.loading')
+    }).then(loadingEl => {
+      loadingEl.present();
+      this.shoppinglistService.getSuggestions(groupId, list.id).subscribe({
+        next: (suggestions) => {
+          loadingEl.dismiss();
+          if (inContext()) this.presentSuggestions(groupId, list.id, suggestions, inContext);
+        },
+        error: (err) => {
+          loadingEl.dismiss();
+          console.error("Error loading shopping suggestions:", err);
+          if (inContext()) this.alertService.showToast(this.translate.instant('alerts.shoppinglist.suggestions.error'));
+        }
+      });
+    });
+  }
+
+  private presentSuggestions(groupId: number, listId: number, suggestions: ShoppingSuggestionsDto, inContext: () => boolean) {
+    const empty = suggestions.names.length === 0;
+    const message = empty
+      ? this.translate.instant('alerts.shoppinglist.suggestions.empty')
+      : suggestions.defaultSuggestions ? this.translate.instant('alerts.shoppinglist.suggestions.defaults_hint') : undefined;
+    const cancel = { text: this.translate.instant('alerts.shoppinglist.suggestions.cancel'), role: 'cancel' };
+    this.alertCtrl.create({
+      header: this.translate.instant('alerts.shoppinglist.suggestions.header'),
+      message,
+      inputs: suggestions.names.map(name => ({ type: 'checkbox' as const, label: name, value: name })),
+      buttons: empty ? [cancel] : [cancel, {
+        text: this.translate.instant('alerts.shoppinglist.suggestions.ok'),
+        handler: (selected: string[]) => {
+          if (!inContext() || !selected?.length) return;
+          this.shoppinglistService.addItemsToShoppingList({ groupId, shoppingListId: listId, names: selected });
+        }
+      }]
+    }).then(alertEl => alertEl.present());
   }
 
   deleteListOfItems(list: ShoppinglistDto) {

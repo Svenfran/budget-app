@@ -1,6 +1,7 @@
 package com.github.svenfran.budgetapp.budgetappbackend.controller;
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto;
+import com.github.svenfran.budgetapp.budgetappbackend.dto.AddShoppingItemsDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.MoveShoppingItemDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingItemMovedDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingItemOrderDto;
@@ -25,8 +26,15 @@ public class ShoppingItemController {
 
     @PostMapping("/groups/shopping-list/add-item")
     public ResponseEntity<AddEditShoppingItemDto> addShoppingItem(@RequestBody AddEditShoppingItemDto shoppingItemDto) throws UserNotFoundException, GroupNotFoundException, ShoppingListNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingListDoesNotBelongToGroupException {
-        AddEditShoppingItemDto newItem = shoppingItemService.addShoppingItem(shoppingItemDto);
-        return new ResponseEntity<>(newItem, HttpStatus.CREATED);
+        var result = shoppingItemService.addShoppingItem(shoppingItemDto);
+        // 200 statt 201: ein offener Eintrag gleichen Namens steht schon auf der Liste, geliefert wird dieser (DIV-23)
+        return new ResponseEntity<>(result.item(), result.created() ? HttpStatus.CREATED : HttpStatus.OK);
+    }
+
+    @PostMapping("/groups/shopping-list/add-items")
+    public ResponseEntity<List<AddEditShoppingItemDto>> addShoppingItems(@RequestBody AddShoppingItemsDto addShoppingItemsDto) throws UserNotFoundException, GroupNotFoundException, ShoppingListNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingListDoesNotBelongToGroupException {
+        List<AddEditShoppingItemDto> newItems = shoppingItemService.addShoppingItems(addShoppingItemsDto);
+        return new ResponseEntity<>(newItems, HttpStatus.CREATED);
     }
 
     @PutMapping("/groups/shopping-list/update-item")

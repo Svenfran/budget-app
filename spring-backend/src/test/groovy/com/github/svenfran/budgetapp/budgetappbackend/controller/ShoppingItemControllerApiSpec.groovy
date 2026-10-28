@@ -351,6 +351,103 @@ class ShoppingItemControllerApiSpec extends IntegrationSpec implements ApiReques
         'in eine Liste fremder Gruppe'        | 'mitglied' | 'A'    | 'F'  || 404
     }
 
+    // Mehrere Einträge übernehmen und Duplikatprüfung beim Anlegen (DIV-23)
+
+    def "Eintrag anlegen mit dem Namen eines offenen Eintrags: 200 mit dem vorhandenen Eintrag, nichts wird angelegt"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg)
+        def tomaten = fixtures.shoppingItem(liste, name: 'Tomaten', completed: false)
+        def (groupId, listId, tomatenId) = [wg.group.id, liste.id, tomaten.id]
+        LOG.info('Szenario: Gruppe {}, Mitglied {}, Liste {} mit offenem Eintrag {} "Tomaten"; neu: "tomaten"', groupId, ben.id, listId, tomatenId)
+
+        when:
+        def response = send(post('/api/groups/shopping-list/add-item'), user: ben,
+                body: [id: null, name: 'tomaten', completed: false, shoppingListId: listId, groupId: groupId])
+        def body = json(response)
+        LOG.info('Antwort: {}', body)
+
+        then:
+        response.status == 200
+        body.keySet() == ['id', 'name', 'completed', 'shoppingListId', 'groupId'] as Set
+        body.id == tomatenId
+        body.name == 'Tomaten'
+        body.completed == false
+        0 * notificationService._
+    }
+
+    def "Mehrere Einträge übernehmen: 201 mit einem Array nur der angelegten Einträge"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg)
+        fixtures.shoppingItem(liste, name: 'Milch', completed: false)
+        def (groupId, listId) = [wg.group.id, liste.id]
+        LOG.info('Szenario: Gruppe {}, Mitglied {}, Liste {} mit offenem Eintrag "Milch"; übernommen werden Milch, Brot, Eier', groupId, ben.id, listId)
+
+        when:
+        def response = addItems(ben, [groupId: groupId, shoppingListId: listId, names: ['Milch', 'Brot', 'Eier']])
+        def body = json(response)
+        LOG.info('Antwort: {}', body)
+
+        then:
+        response.status == 201
+        body*.name == ['Brot', 'Eier']
+        body[0].keySet() == ['id', 'name', 'completed', 'shoppingListId', 'groupId'] as Set
+        body.every { it.id != null && it.completed == false && it.shoppingListId == listId && it.groupId == groupId }
+        2 * notificationService.sendShoppingItemNotification(groupId, _, 'add')
+    }
+
+    def "Mehrere Einträge übernehmen als Nicht-Mitglied: 403, nichts wird angelegt"() {
+        given:
+        def wg = fixtures.group()
+        def liste = fixtures.shoppingList(wg)
+        def fremder = fixtures.user()
+        LOG.info('Szenario: Gruppe {}, Liste {}; anfragender User {} ist kein Mitglied', wg.group.id, liste.id, fremder.id)
+
+        when:
+        def response = addItems(fremder, [groupId: wg.group.id, shoppingListId: liste.id, names: ['Milch']])
+        LOG.info('Antwort: {}', response.contentAsString)
+
+        then:
+        response.status == 403
+        0 * notificationService._
+    }
+
+    def "Ohne Anmeldung wird das Übernehmen mehrerer Einträge mit 403 abgelehnt"() {
+        given:
+        def wg = fixtures.group()
+        def liste = fixtures.shoppingList(wg)
+        LOG.info('Szenario: Gruppe {}, Liste {}, Request ohne Anmeldung', wg.group.id, liste.id)
+
+        expect:
+        send(post('/api/groups/shopping-list/add-items'),
+                body: [groupId: wg.group.id, shoppingListId: liste.id, names: ['Milch']]).status == 403
+    }
+
+    def "Mehrere Einträge in die Liste einer fremden Gruppe übernehmen: 404"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def fremdeListe = fixtures.shoppingList(fixtures.group())
+        def (groupId, fremdeListId) = [wg.group.id, fremdeListe.id]
+        LOG.info('Szenario: Gruppe {}, Mitglied {}; Liste {} gehört einer anderen Gruppe', groupId, ben.id, fremdeListId)
+
+        when:
+        def response = addItems(ben, [groupId: groupId, shoppingListId: fremdeListId, names: ['Milch']])
+        LOG.info('Antwort: {}', response.contentAsString)
+
+        then:
+        response.status == 404
+        response.contentAsString.contains('does not belong to group')
+        0 * notificationService._
+    }
+
+    private MockHttpServletResponse addItems(User angemeldet, Map body) {
+        send(post('/api/groups/shopping-list/add-items'), user: angemeldet, body: body)
+    }
+
     private MockHttpServletResponse moveItem(User angemeldet, Map body) {
         send(put('/api/groups/shopping-list/move-item'), user: angemeldet, body: body)
     }
