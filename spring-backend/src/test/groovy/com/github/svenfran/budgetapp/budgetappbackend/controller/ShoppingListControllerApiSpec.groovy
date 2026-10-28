@@ -298,6 +298,107 @@ class ShoppingListControllerApiSpec extends IntegrationSpec implements ApiReques
         'in der Zukunft (früher 304)'   | DateUtils.toDate(LocalDate.of(2999, 12, 31)).time
     }
 
+    // Einkaufsvorschläge (DIV-23)
+
+    def "Vorschläge einer Liste mit Käufen: 200 mit groupId, shoppingListId, defaultSuggestions false und den Namen"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg)
+        fixtures.purchase(liste, itemName: 'Milch', purchasedAt: DateUtils.toDate(LocalDate.of(2025, 6, 1)))
+        fixtures.purchase(liste, itemName: 'Brot', purchasedAt: DateUtils.toDate(LocalDate.of(2025, 6, 2)))
+        def (groupId, listId) = [wg.group.id, liste.id]
+        flushAndClear()
+        LOG.info('Szenario: Gruppe {}, Mitglied {}, Liste {} mit Käufen Milch (01.06.), Brot (02.06.)', groupId, ben.id, listId)
+
+        when:
+        def response = getSuggestions(groupId, listId, ben)
+        def body = json(response)
+        LOG.info('Antwort: Felder {}, defaultSuggestions {}, names {}', body.keySet(), body.defaultSuggestions, body.names)
+
+        then:
+        response.status == 200
+        body.keySet() == ['groupId', 'shoppingListId', 'defaultSuggestions', 'names'] as Set
+        body.groupId == groupId
+        body.shoppingListId == listId
+        body.defaultSuggestions == false
+        body.names == ['Brot', 'Milch']
+    }
+
+    def "Vorschläge einer Liste ohne Käufe: Standardvorschläge in der Sprache aus Accept-Language #sprache"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg)
+        def (groupId, listId) = [wg.group.id, liste.id]
+        flushAndClear()
+        LOG.info('Szenario: Gruppe {}, Mitglied {}, Liste {} ohne Käufe und Einträge; Accept-Language {}', groupId, ben.id, listId, sprache)
+
+        when:
+        def response = send(get('/api/groups/shopping-list/suggestions/{groupId}/{shoppingListId}', groupId, listId)
+                .header('Accept-Language', sprache), user: ben)
+        def body = json(response)
+        LOG.info('Antwort: defaultSuggestions {}, names {}', body.defaultSuggestions, body.names)
+
+        then:
+        response.status == 200
+        body.defaultSuggestions == true
+        body.names == erwartet
+
+        where:
+        sprache || erwartet
+        'de'    || ['Milch', 'Tomaten', 'Äpfel', 'Joghurt', 'Beeren', 'Bananen', 'Avocado']
+        'en'    || ['Milk', 'Tomatoes', 'Apples', 'Yogurt', 'Berries', 'Bananas', 'Avocado']
+        'es'    || ['Leche', 'Tomates', 'Manzanas', 'Yogur', 'Bayas', 'Plátanos', 'Aguacate']
+    }
+
+    def "Nicht-Mitglied erhält 403 beim Abruf der Vorschläge"() {
+        given:
+        def wg = fixtures.group()
+        def liste = fixtures.shoppingList(wg)
+        def fremder = fixtures.user()
+        LOG.info('Szenario: Gruppe {}, Liste {}, anfragender User {} ist kein Mitglied', wg.group.id, liste.id, fremder.id)
+
+        when:
+        def response = getSuggestions(wg.group.id, liste.id, fremder)
+        LOG.info('Antwort: {}', response.contentAsString)
+
+        then:
+        response.status == 403
+    }
+
+    def "Ohne Anmeldung wird der Abruf der Vorschläge mit 403 abgelehnt"() {
+        given:
+        def wg = fixtures.group()
+        def liste = fixtures.shoppingList(wg)
+        LOG.info('Szenario: Gruppe {}, Liste {}, Request ohne Anmeldung', wg.group.id, liste.id)
+
+        expect:
+        send(get('/api/groups/shopping-list/suggestions/{groupId}/{shoppingListId}', wg.group.id, liste.id)).status == 403
+    }
+
+    def "Vorschläge für die Liste einer fremden Gruppe: 404"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def andereGruppe = fixtures.group()
+        def fremdeListe = fixtures.shoppingList(andereGruppe)
+        def (groupId, fremdeListId) = [wg.group.id, fremdeListe.id]
+        LOG.info('Szenario: Gruppe {}, Mitglied {}; Liste {} gehört Gruppe {}', groupId, ben.id, fremdeListId, andereGruppe.group.id)
+
+        when:
+        def response = getSuggestions(groupId, fremdeListId, ben)
+        LOG.info('Antwort: {}', response.contentAsString)
+
+        then:
+        response.status == 404
+        response.contentAsString.contains('does not belong to group')
+    }
+
+    private MockHttpServletResponse getSuggestions(Long groupId, Long listId, User angemeldet) {
+        send(get('/api/groups/shopping-list/suggestions/{groupId}/{shoppingListId}', groupId, listId), user: angemeldet)
+    }
+
     private MockHttpServletResponse getShoppingLists(Long groupId, User angemeldet) {
         send(get('/api/groups/shopping-lists-with-items/{groupId}', groupId), user: angemeldet)
     }
