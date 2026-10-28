@@ -28,6 +28,7 @@ class Fixtures {
     @Autowired TokenRepository tokenRepository
     @Autowired ShoppingListRepository shoppingListRepository
     @Autowired ShoppingItemRepository shoppingItemRepository
+    @Autowired ShoppingPurchaseRepository shoppingPurchaseRepository
 
     User user(Map overrides = [:]) {
         userRepository.save(TestData.user(overrides))
@@ -103,6 +104,11 @@ class Fixtures {
 
     ShoppingItem shoppingItem(Map overrides = [:], ShoppingList list) {
         shoppingItemRepository.save(TestData.shoppingItem([shoppingList: list] + overrides))
+    }
+
+    /** Kaufereignis der Liste (Gruppe und Liste aus der Liste). */
+    ShoppingPurchase purchase(Map overrides = [:], ShoppingList list) {
+        shoppingPurchaseRepository.save(TestData.shoppingPurchase([groupId: list.group.id, shoppingListId: list.id] + overrides))
     }
 
     @TupleConstructor

@@ -4,6 +4,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.MoveShoppingItemDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingItemMovedDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingItemOrderDto;
+import com.github.svenfran.budgetapp.budgetappbackend.entity.ShoppingItem;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.SortOrderMerger;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository;
@@ -35,13 +36,16 @@ public class ShoppingItemService {
 
     private final NotificationService notificationService;
 
+    private final ShoppingPurchaseService shoppingPurchaseService;
+
     private final Clock clock;
 
     public ShoppingItemService(ShoppingItemDtoMapper shoppingItemDtoMapper,
                                ShoppingItemRepository shoppingItemRepository,
                                ShoppingListRepository shoppingListRepository, DataLoaderService dataLoaderService,
                                GroupRepository groupRepository, VerificationService verificationService,
-                               NotificationService notificationService, Clock clock) {
+                               NotificationService notificationService,
+                               ShoppingPurchaseService shoppingPurchaseService, Clock clock) {
         this.shoppingItemDtoMapper = shoppingItemDtoMapper;
         this.shoppingItemRepository = shoppingItemRepository;
         this.shoppingListRepository = shoppingListRepository;
@@ -49,6 +53,7 @@ public class ShoppingItemService {
         this.groupRepository = groupRepository;
         this.verificationService = verificationService;
         this.notificationService = notificationService;
+        this.shoppingPurchaseService = shoppingPurchaseService;
         this.clock = clock;
     }
 
@@ -105,10 +110,12 @@ public class ShoppingItemService {
         verificationService.verifyIsPartOfGroup(user, group);
         var shoppingList = dataLoaderService.loadShoppingList(dto.getShoppingListId());
         verificationService.verifyShoppingListIsPartOfGroup(shoppingList, group);
+        // Gruppe sperren, bevor der Eintrag gelesen wird: ein parallel committeter Move oder ein paralleles Löschen ist
+        // dann sichtbar, und der Kauf wird mit dem zuletzt committeten Erledigt-Status erfasst
+        groupRepository.touchShoppingLists(group.getId(), Date.from(clock.instant()));
         var shoppingItem = dataLoaderService.loadShoppingItem(dto.getId());
         verificationService.verifyShoppingItemIsPartOfShoppingList(shoppingList, shoppingItem);
-        group.setLastUpdateShoppingList(Date.from(clock.instant()));
-        groupRepository.save(group);
+        shoppingPurchaseService.recordPurchases(shoppingList, List.of(shoppingItem));
         shoppingItemRepository.deleteById(shoppingItem.getId());
         notificationService.sendShoppingItemNotification(
                 group.getId(),
@@ -126,21 +133,27 @@ public class ShoppingItemService {
         verificationService.verifyIsPartOfGroup(user, group);
         var shoppingList = dataLoaderService.loadShoppingList(dtos.get(0).getShoppingListId());
         verificationService.verifyShoppingListIsPartOfGroup(shoppingList, group);
-        // Jeden Eintrag prüfen (auch nicht erledigte), bevor etwas geschrieben wird: die Exceptions sind checked und
-        // lösen keinen Rollback aus
+        // Gruppe sperren, bevor die Einträge gelesen werden (wie beim Einzel-Löschen)
+        groupRepository.touchShoppingLists(group.getId(), Date.from(clock.instant()));
+        // Jeden Eintrag prüfen (auch nicht erledigte), bevor die Einträge geschrieben werden: die Exceptions sind
+        // checked und lösen keinen Rollback aus (bestehen bleibt nur der Zeitstempel der Sperre)
+        var shoppingItems = new ArrayList<ShoppingItem>();
         for (var itemDto : dtos) {
             var shoppingItem = dataLoaderService.loadShoppingItem(itemDto.getId());
             verificationService.verifyShoppingItemIsPartOfShoppingList(shoppingList, shoppingItem);
+            shoppingItems.add(shoppingItem);
         }
-        // Nur erledigte Einträge werden gelöscht und gemeldet: Empfänger entfernen alle übermittelten IDs
+        // Nur als erledigt gesendete Einträge werden gelöscht und gemeldet: Empfänger entfernen alle übermittelten IDs
         var completedDtos = dtos.stream()
                 .filter(AddEditShoppingItemDto::isCompleted)
                 .toList();
         var itemIds = new ArrayList<>(completedDtos.stream()
                 .map(AddEditShoppingItemDto::getId)
                 .toList());
-        group.setLastUpdateShoppingList(Date.from(clock.instant()));
-        groupRepository.save(group);
+        // Als Kauf zählt davon nur, was auch serverseitig erledigt ist
+        shoppingPurchaseService.recordPurchases(shoppingList, shoppingItems.stream()
+                .filter(item -> itemIds.contains(item.getId()))
+                .toList());
         shoppingItemRepository.deleteAllById(itemIds);
         notificationService.sendShoppingItemDeleteAllNotification(
                 group.getId(),

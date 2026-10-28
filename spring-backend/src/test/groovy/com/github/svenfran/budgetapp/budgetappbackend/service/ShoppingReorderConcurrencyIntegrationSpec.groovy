@@ -8,18 +8,22 @@ import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingListDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingListOrderDto
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.ShoppingItemDoesNotBelongToShoppingListException
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.ShoppingItemNotFoundException
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.ShoppingListNotFoundException
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingItemRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingListRepository
+import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingPurchaseRepository
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.DatabaseCleaner
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.orm.ObjectOptimisticLockingFailureException
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.TransactionDefinition
 import org.springframework.transaction.annotation.Propagation
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionTemplate
@@ -35,6 +39,8 @@ import java.util.concurrent.TimeUnit
  * sperren zuerst die Gruppenzeile und laufen dadurch nacheinander; es gilt die zuletzt committete Reihenfolge (AC14),
  * Listen- und Item-Reorder blockieren sich nicht kreuzweise, neue Einträge landen am Ende (AC7). Verschieben zwischen
  * Listen (DIV-2) nutzt dieselbe Sperre: parallele Änderungen, Löschungen und das Laden sehen den Move ganz oder gar nicht.
+ * Das Löschen von Einträgen (DIV-23) sperrt die Gruppe vor dem Laden der Einträge: ein Kauf wird mit dem zuletzt
+ * committeten Stand erfasst und höchstens einmal.
  *
  * Ablauf je Feature (overlapping): Transaktion 1 führt ihren Aufruf aus und hält die Transaktion offen; Transaktion 2
  * startet in einem zweiten Thread und muss an der Gruppensperre warten (geprüft über pg_stat_activity, ohne sleep);
@@ -55,6 +61,7 @@ class ShoppingReorderConcurrencyIntegrationSpec extends IntegrationSpec {
     @Autowired ShoppingItemService shoppingItemService
     @Autowired ShoppingListRepository shoppingListRepository
     @Autowired ShoppingItemRepository shoppingItemRepository
+    @Autowired ShoppingPurchaseRepository shoppingPurchaseRepository
     @Autowired GroupRepository groupRepository
     @Autowired PlatformTransactionManager transactionManager
     @Autowired JdbcTemplate jdbcTemplate
@@ -487,6 +494,88 @@ class ShoppingReorderConcurrencyIntegrationSpec extends IntegrationSpec {
      * pg_stat_activity). Erst dann führt Transaktion 1 {@code aenderung} aus und committet. Liefert die Antwort des
      * Ladens.
      */
+    // Einkaufshistorie (DIV-23)
+
+    def "Move hält die Sperre, das Löschen desselben Eintrags in der Quellliste wartet und wird abgewiesen, kein Kauf"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def groupId = wg.group.id
+        def (a, b) = (1..2).collect { fixtures.shoppingList(wg) }
+        def (aId, bId) = [a.id, b.id]
+        def xId = fixtures.shoppingItem(a, name: 'Milch', completed: true).id
+        LOG.info('Szenario: Gruppe {}, Mitglied {}, Liste A {} mit X {} "Milch" erledigt, Liste B {}; T1 verschiebt X nach B und hält offen, T2 löscht X in A',
+                groupId, ben.id, aId, xId, bId)
+
+        when:
+        def (move, loeschen) = overlapping(ben,
+                { shoppingItemService.moveShoppingItem(new MoveShoppingItemDto(groupId, xId, aId, bId, [xId])) },
+                { abgefangen { shoppingItemService.deleteShoppingItem(new AddEditShoppingItemDto(id: xId, completed: true, shoppingListId: aId, groupId: groupId)) } })
+        def (inA, inB) = [aId, bId].collect { itemIds(it) }
+        def kaeufe = [aId, bId].collect { kaufIds(it) }
+        LOG.info('T1 -> target {}; T2 -> {}; gespeichert A {}, B {}, Käufe A/B {}', move.target.shoppingItemIds, loeschen?.class?.simpleName, inA, inB, kaeufe)
+
+        then:
+        loeschen instanceof ShoppingItemDoesNotBelongToShoppingListException
+        inA == []
+        inB == [xId]
+        kaeufe == [[], []]
+    }
+
+    def "Zwei Löschungen desselben erledigten Eintrags: die zweite wartet und wird abgewiesen, genau ein Kauf"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def groupId = wg.group.id
+        def liste = fixtures.shoppingList(wg)
+        def listId = liste.id
+        def xId = fixtures.shoppingItem(liste, name: 'Milch', completed: true).id
+        def loeschen = { shoppingItemService.deleteShoppingItem(new AddEditShoppingItemDto(id: xId, completed: true, shoppingListId: listId, groupId: groupId)) }
+        LOG.info('Szenario: Gruppe {}, Mitglied {}, Liste {} mit X {} "Milch" erledigt; T1 löscht X und hält offen, T2 löscht X', groupId, ben.id, listId, xId)
+
+        when:
+        def (erste, zweite) = overlapping(ben, loeschen, { abgefangen(loeschen) })
+        def eintraege = itemIds(listId)
+        def kaufIds = kaufIds(listId)
+        LOG.info('T2 -> {}; Einträge {}, Käufe {}', zweite?.class?.simpleName, eintraege, kaufIds)
+
+        then:
+        zweite instanceof ShoppingItemNotFoundException
+        eintraege == []
+        kaufIds == [xId]
+    }
+
+    def "Zurückhaken parallel zum Löschen (Ist-Verhalten): das Löschen erfasst den Kauf, das Zurückhaken scheitert danach"() {
+        given: 'update-item sperrt die Gruppe erst beim Commit; es läuft hier in einer eigenen Transaktion, damit sein Fehler als Ergebnis zurückkommt'
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def groupId = wg.group.id
+        def liste = fixtures.shoppingList(wg)
+        def listId = liste.id
+        def xId = fixtures.shoppingItem(liste, name: 'Milch', completed: true).id
+        def eigeneTransaktion = new TransactionTemplate(transactionManager)
+        eigeneTransaktion.propagationBehavior = TransactionDefinition.PROPAGATION_REQUIRES_NEW
+        LOG.info('Szenario: Gruppe {}, Mitglied {}, Liste {} mit X {} "Milch" erledigt; T1 löscht X und hält offen, T2 hakt X zurück',
+                groupId, ben.id, listId, xId)
+
+        when:
+        def (loeschen, zurueckhaken) = overlapping(ben,
+                { shoppingItemService.deleteShoppingItem(new AddEditShoppingItemDto(id: xId, completed: true, shoppingListId: listId, groupId: groupId)) },
+                { abgefangen { eigeneTransaktion.execute { shoppingItemService.updateShoppingItem(new AddEditShoppingItemDto(id: xId, name: 'Milch', completed: false, shoppingListId: listId, groupId: groupId)) } } })
+        def eintraege = itemIds(listId)
+        def kaufIds = kaufIds(listId)
+        LOG.info('T2 -> {}; Einträge {}, Käufe {}', zurueckhaken?.class?.name, eintraege, kaufIds)
+
+        then: 'das Update trifft den bereits gelöschten Eintrag (0 Zeilen)'
+        zurueckhaken instanceof ObjectOptimisticLockingFailureException
+        eintraege == []
+        kaufIds == [xId]
+    }
+
+    private List<Long> kaufIds(Long listId) {
+        shoppingPurchaseRepository.findByShoppingListIdOrderByPurchasedAtDescIdDesc(listId)*.sourceItemId
+    }
+
     private List<ShoppingListDto> ladenWaehrend(User user, Long groupId, Closure aenderung) {
         def gesperrt = new CountDownLatch(1)
         def aenderungFreigabe = new CountDownLatch(1)

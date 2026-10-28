@@ -40,6 +40,8 @@ public class UserProfileService {
 
     private final ShoppingItemRepository shoppingItemRepository;
 
+    private final ShoppingPurchaseRepository shoppingPurchaseRepository;
+
     private final GroupMembershipHistoryService gmhService;
 
     private final PasswordEncoder passwordEncoder;
@@ -63,7 +65,8 @@ public class UserProfileService {
     public UserProfileService(UserRepository userRepository, DataLoaderService dataLoaderService,
                               GroupService groupService, CartRepository cartRepository, GroupRepository groupRepository,
                               CategoryRepository categoryRepository, ShoppingListRepository shoppingListRepository,
-                              ShoppingItemRepository shoppingItemRepository, GroupMembershipHistoryService gmhService,
+                              ShoppingItemRepository shoppingItemRepository,
+                              ShoppingPurchaseRepository shoppingPurchaseRepository, GroupMembershipHistoryService gmhService,
                               PasswordEncoder passwordEncoder, TokenRepository tokenRepository,
                               EmailSenderService senderService, VerificationService verificationService,
                               CartTemplateRepository cartTemplateRepository, NotificationService notificationService,
@@ -77,6 +80,7 @@ public class UserProfileService {
         this.categoryRepository = categoryRepository;
         this.shoppingListRepository = shoppingListRepository;
         this.shoppingItemRepository = shoppingItemRepository;
+        this.shoppingPurchaseRepository = shoppingPurchaseRepository;
         this.gmhService = gmhService;
         this.passwordEncoder = passwordEncoder;
         this.tokenRepository = tokenRepository;
@@ -129,6 +133,7 @@ public class UserProfileService {
         );
 
         shoppingListRepository.deleteAll(group.getShoppingLists());
+        shoppingPurchaseRepository.deleteByGroupId(group.getId());
         groupRepository.deleteById(group.getId());
 
         notificationService.sendGroupDeletedNotification(history, new GroupDto(group));

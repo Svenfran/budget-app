@@ -1,0 +1,36 @@
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!-- DIV-23: purchase history of the shopping lists, one row per purchase (a completed item removed from its list).
+         shopping_list_id has no foreign key on purpose: the history outlives a deleted list and is only removed together
+         with its group. source_item_id (id of the removed shopping item) is unique so a purchase is recorded at most once.
+         item_name is nullable because shoppingitem.name is nullable. -->
+    <changeSet author="sven" id="20261028120000-1">
+        <createTable tableName="shopping_purchase">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="group_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_shopping_purchase_group"
+                             referencedTableName="group_details" referencedColumnNames="id"/>
+            </column>
+            <column name="shopping_list_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="item_name" type="VARCHAR(255)"/>
+            <column name="purchased_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_item_id" type="BIGINT">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uq_shopping_purchase_source_item"/>
+            </column>
+        </createTable>
+        <createIndex tableName="shopping_purchase" indexName="idx_shopping_purchase_list">
+            <column name="shopping_list_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

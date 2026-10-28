@@ -3,6 +3,7 @@ package com.github.svenfran.budgetapp.budgetappbackend.service
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.MoveShoppingItemDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.ShoppingItemOrderDto
+import com.github.svenfran.budgetapp.budgetappbackend.entity.ShoppingPurchase
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOrMemberOfGroupException
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.ShoppingItemDoesNotBelongToShoppingListException
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.ShoppingItemMoveWithinSameListException
@@ -13,6 +14,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingItemRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingListRepository
+import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingPurchaseRepository
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -25,7 +27,10 @@ import static com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestDat
  * Benachrichtigungen (Konzept 3.8, Ebene 1). Topic, Empfänger und Payload prüft NotificationServiceSpec.
  *
  * lastUpdateShoppingList setzt der Service aus dem Clock (testClock, Standard REFERENCE_DATE). Die Gruppen starten
- * mit einem Wert einen Tag davor (START); geprüft wird „auf testClock gesetzt“ bzw. „unverändert“.
+ * mit einem Wert einen Tag davor (START); geprüft wird „auf testClock gesetzt“ bzw. „unverändert“. Die Löschpfade
+ * sperren die Gruppe vor dem Laden der Einträge (DIV-23): ein danach abgewiesener Request setzt den Zeitstempel trotzdem.
+ *
+ * Einkaufshistorie (DIV-23): ein serverseitig erledigter Eintrag, der gelöscht wird, ist ein Kauf.
  */
 class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
 
@@ -41,6 +46,7 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
     @Autowired ShoppingListRepository shoppingListRepository
     @Autowired GroupRepository groupRepository
     @Autowired ShoppingListService shoppingListService
+    @Autowired ShoppingPurchaseRepository shoppingPurchaseRepository
 
     def "Eintrag anlegen löst add-item mit dem gespeicherten Eintrag aus"() {
         given:
@@ -436,10 +442,15 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
         def unveraendert = shoppingItemRepository.findById(itemId).get()
         unveraendert.name == 'Andere'
         !unveraendert.completed
-        lastUpdateShoppingList(groupId).time == START.time
+        lastUpdateShoppingList(groupId).time == (gesperrt ? testClock.instant().toEpochMilli() : START.time)
+        kaufIds(listId).isEmpty()
+        kaufIds(andereListId).isEmpty()
 
-        where:
-        aktion << ['update', 'delete', 'delete-all']
+        where: 'die Löschpfade sperren die Gruppe vor der Prüfung des Eintrags, der Zeitstempel bleibt dann gesetzt'
+        aktion       | gesperrt
+        'update'     | false
+        'delete'     | true
+        'delete-all' | true
     }
 
     def "#aktion mit unbekanntem Eintrag: ShoppingItemNotFoundException"() {
@@ -467,10 +478,13 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
         0 * notificationService._
         flushAndClear()
         eintragIds(listId) == [itemId]
-        lastUpdateShoppingList(groupId).time == START.time
+        lastUpdateShoppingList(groupId).time == (gesperrt ? testClock.instant().toEpochMilli() : START.time)
+        kaufIds(listId).isEmpty()
 
-        where:
-        aktion << ['update', 'delete-all']
+        where: 'die Löschpfade sperren die Gruppe vor der Prüfung des Eintrags, der Zeitstempel bleibt dann gesetzt'
+        aktion       | gesperrt
+        'update'     | false
+        'delete-all' | true
     }
 
     def "Eintrag in einer unbekannten Liste anlegen: ShoppingListNotFoundException"() {
@@ -566,7 +580,7 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
         fremdListId == fremdeListId
     }
 
-    def "Erledigte Einträge löschen mit #zweiter (#completedText) an zweiter Stelle: #erwartet.simpleName, nichts wird gelöscht"() {
+    def "Erledigte Einträge löschen mit #zweiter (#completedText) an zweiter Stelle: #erwartet.simpleName, nichts wird gelöscht, kein Kauf"() {
         given:
         def ben = fixtures.user()
         def wg = fixtures.group(members: [ben])
@@ -606,7 +620,8 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
         eintragIds(listId) == [milchId]
         shoppingItemRepository.existsById(andererEintragId)
         shoppingItemRepository.existsById(fremderEintragId)
-        lastUpdateShoppingList(groupId).time == START.time
+        lastUpdateShoppingList(groupId).time == testClock.instant().toEpochMilli()
+        kaufIds(listId).isEmpty()
 
         where:
         zweiter                        | completed || erwartet
@@ -1078,6 +1093,191 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
     }
 
     /** IDs der Einträge einer Liste, aufsteigend (lädt die Liste neu; vorher flushAndClear()). */
+    // Einkaufshistorie (DIV-23)
+
+    def "Erledigten Eintrag löschen erfasst genau einen Kauf mit Name, Liste, Gruppe und Zeitpunkt"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg)
+        def milch = fixtures.shoppingItem(liste, name: 'Milch', completed: true)
+        def groupId = wg.group.id
+        def listId = liste.id
+        def milchId = milch.id
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: heute {}, Gruppe {}, Mitglied {} (angemeldet), Liste {} mit erledigtem Eintrag {} "Milch"',
+                testClock.today, groupId, ben.id, listId, milchId)
+
+        when:
+        shoppingItemService.deleteShoppingItem(new AddEditShoppingItemDto(id: milchId, completed: true, shoppingListId: listId, groupId: groupId))
+        flushAndClear()
+        def vorhanden = shoppingItemRepository.existsById(milchId)
+        def kaeufe = kaeufe(listId)
+        LOG.info('shoppingItemService.deleteShoppingItem(Eintrag {}) -> Eintrag vorhanden {}, Käufe der Liste {}', milchId, vorhanden, kaeufe)
+
+        then:
+        !vorhanden
+        kaeufe.size() == 1
+        kaeufe[0].itemName == 'Milch'
+        kaeufe[0].shoppingListId == listId
+        kaeufe[0].groupId == groupId
+        kaeufe[0].sourceItemId == milchId
+        kaeufe[0].purchasedAt.time == testClock.instant().toEpochMilli()
+    }
+
+    def "Offenen Eintrag löschen erfasst keinen Kauf"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg)
+        def milch = fixtures.shoppingItem(liste, name: 'Milch', completed: false)
+        def groupId = wg.group.id
+        def listId = liste.id
+        def milchId = milch.id
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Mitglied {} (angemeldet), Liste {} mit offenem Eintrag {} "Milch"', groupId, ben.id, listId, milchId)
+
+        when:
+        shoppingItemService.deleteShoppingItem(new AddEditShoppingItemDto(id: milchId, shoppingListId: listId, groupId: groupId))
+        flushAndClear()
+        def vorhanden = shoppingItemRepository.existsById(milchId)
+        def kaufIds = kaufIds(listId)
+        LOG.info('shoppingItemService.deleteShoppingItem(Eintrag {}) -> Eintrag vorhanden {}, Käufe {}', milchId, vorhanden, kaufIds)
+
+        then:
+        !vorhanden
+        kaufIds.isEmpty()
+    }
+
+    def "Erledigte Einträge löschen erfasst nur serverseitig erledigte Einträge als Kauf, gelöscht wird wie gesendet"() {
+        given: 'Brot wurde von einem anderen Mitglied zurückgehakt, der Client sendet es noch als erledigt'
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg)
+        def milch = fixtures.shoppingItem(liste, name: 'Milch', completed: true)
+        def brot = fixtures.shoppingItem(liste, name: 'Brot', completed: false)
+        def kaffee = fixtures.shoppingItem(liste, name: 'Kaffee', completed: true)
+        def groupId = wg.group.id
+        def listId = liste.id
+        def milchId = milch.id
+        def brotId = brot.id
+        def kaffeeId = kaffee.id
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Mitglied {} (angemeldet), Liste {}: Milch {} erledigt, Brot {} offen (gesendet als erledigt), Kaffee {} erledigt (nicht gesendet)',
+                groupId, ben.id, listId, milchId, brotId, kaffeeId)
+
+        when:
+        shoppingItemService.deleteAllCompletedShoppingItems([milchId, brotId].collect {
+            new AddEditShoppingItemDto(id: it, completed: true, shoppingListId: listId, groupId: groupId)
+        })
+        flushAndClear()
+        def eintraegeDerListe = eintragIds(listId)
+        def kaufIds = kaufIds(listId)
+        LOG.info('shoppingItemService.deleteAllCompletedShoppingItems(Liste {}, Einträge {}, {}) -> Einträge der Liste {}, Käufe {}',
+                listId, milchId, brotId, eintraegeDerListe, kaufIds)
+
+        then:
+        eintraegeDerListe == [kaffeeId]
+        kaufIds == [milchId]
+    }
+
+    def "Erneutes Löschen desselben Eintrags: ShoppingItemNotFoundException, der Kauf bleibt einmal erfasst"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg)
+        def milch = fixtures.shoppingItem(liste, name: 'Milch', completed: true)
+        def groupId = wg.group.id
+        def listId = liste.id
+        def milchId = milch.id
+        def dto = new AddEditShoppingItemDto(id: milchId, completed: true, shoppingListId: listId, groupId: groupId)
+        flushAndClear()
+        loginAs(ben)
+        shoppingItemService.deleteShoppingItem(dto)
+        flushAndClear()
+        LOG.info('Szenario: Gruppe {}, Mitglied {} (angemeldet), Liste {}; erledigter Eintrag {} "Milch" bereits gelöscht und als Kauf erfasst',
+                groupId, ben.id, listId, milchId)
+
+        when:
+        LOG.info('shoppingItemService.deleteShoppingItem(Eintrag {}) erneut, erwartet ShoppingItemNotFoundException', milchId)
+        shoppingItemService.deleteShoppingItem(dto)
+
+        then:
+        thrown(ShoppingItemNotFoundException)
+        0 * notificationService._
+        flushAndClear()
+        kaufIds(listId) == [milchId]
+    }
+
+    def "Abhaken und Zurückhaken erzeugt keinen Kauf"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg)
+        def milch = fixtures.shoppingItem(liste, name: 'Milch', completed: false)
+        def groupId = wg.group.id
+        def listId = liste.id
+        def milchId = milch.id
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Mitglied {} (angemeldet), Liste {} mit offenem Eintrag {} "Milch"', groupId, ben.id, listId, milchId)
+
+        when:
+        [true, false, true].each { completed ->
+            shoppingItemService.updateShoppingItem(new AddEditShoppingItemDto(
+                    id: milchId, name: 'Milch', completed: completed, shoppingListId: listId, groupId: groupId))
+        }
+        flushAndClear()
+        def vorhanden = shoppingItemRepository.existsById(milchId)
+        def kaufIds = kaufIds(listId)
+        LOG.info('shoppingItemService.updateShoppingItem(Eintrag {}) erledigt -> offen -> erledigt -> Eintrag vorhanden {}, Käufe {}',
+                milchId, vorhanden, kaufIds)
+
+        then:
+        vorhanden
+        kaufIds.isEmpty()
+    }
+
+    def "Namenloser erledigter Eintrag wird per #aktion gelöscht und als Kauf ohne Namen erfasst"() {
+        given: 'die API erzwingt keinen Namen'
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg)
+        def eintrag = fixtures.shoppingItem(liste, name: null, completed: true)
+        def groupId = wg.group.id
+        def listId = liste.id
+        def itemId = eintrag.id
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Mitglied {} (angemeldet), Liste {} mit erledigtem Eintrag {} ohne Namen', groupId, ben.id, listId, itemId)
+
+        when:
+        ausfuehren(aktion, groupId, listId, itemId)
+        flushAndClear()
+        def vorhanden = shoppingItemRepository.existsById(itemId)
+        def kaeufe = kaeufe(listId)
+        LOG.info('shoppingItemService {} (Eintrag {}) -> Eintrag vorhanden {}, Käufe {}', aktion, itemId, vorhanden, kaeufe)
+
+        then:
+        !vorhanden
+        kaeufe*.sourceItemId == [itemId]
+        kaeufe[0].itemName == null
+
+        where:
+        aktion << ['delete', 'delete-all']
+    }
+
+    private List<ShoppingPurchase> kaeufe(Long listId) {
+        shoppingPurchaseRepository.findByShoppingListIdOrderByPurchasedAtDescIdDesc(listId)
+    }
+
+    private List<Long> kaufIds(Long listId) {
+        kaeufe(listId)*.sourceItemId.sort()
+    }
+
     private List<Long> eintragIds(Long listId) {
         shoppingListRepository.findById(listId).get().shoppingItems*.id.sort()
     }

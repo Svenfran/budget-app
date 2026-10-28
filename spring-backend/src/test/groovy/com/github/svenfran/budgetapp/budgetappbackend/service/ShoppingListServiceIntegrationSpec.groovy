@@ -10,6 +10,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingItemRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingListRepository
+import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingPurchaseRepository
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -37,6 +38,7 @@ class ShoppingListServiceIntegrationSpec extends IntegrationSpec {
     @Autowired ShoppingListRepository shoppingListRepository
     @Autowired ShoppingItemRepository shoppingItemRepository
     @Autowired GroupRepository groupRepository
+    @Autowired ShoppingPurchaseRepository shoppingPurchaseRepository
 
     def "Liste anlegen löst add-list mit der gespeicherten Liste aus"() {
         given:
@@ -647,6 +649,63 @@ class ShoppingListServiceIntegrationSpec extends IntegrationSpec {
             default:
                 throw new IllegalArgumentException("Unbekannte Aktion $aktion")
         }
+    }
+
+    // Einkaufshistorie (DIV-23)
+
+    def "Liste löschen erfasst erledigte Einträge als Kauf, die Historie bleibt mit der alten Listen-ID erhalten"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg, name: 'Edeka')
+        def frueherId = fixtures.purchase(liste, itemName: 'Kaffee').sourceItemId
+        def milch = fixtures.shoppingItem(liste, name: 'Milch', completed: true)
+        def brot = fixtures.shoppingItem(liste, name: 'Brot', completed: false)
+        def namenlos = fixtures.shoppingItem(liste, name: null, completed: true)
+        def groupId = wg.group.id
+        def listId = liste.id
+        def milchId = milch.id
+        def namenlosId = namenlos.id
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Mitglied {} (angemeldet), Liste {} "Edeka" mit früherem Kauf {} "Kaffee", Milch {} erledigt, Brot {} offen, namenloser Eintrag {} erledigt',
+                groupId, ben.id, listId, frueherId, milchId, brot.id, namenlosId)
+
+        when:
+        shoppingListService.deleteShoppingList(new AddEditShoppingListDto(id: listId, groupId: groupId))
+        flushAndClear()
+        def listeVorhanden = shoppingListRepository.existsById(listId)
+        def kaeufe = shoppingPurchaseRepository.findByShoppingListIdOrderByPurchasedAtDescIdDesc(listId)
+        LOG.info('shoppingListService.deleteShoppingList(Liste {}) -> Liste vorhanden {}, Käufe mit Listen-ID {}: {}',
+                listId, listeVorhanden, listId, kaeufe)
+
+        then:
+        !listeVorhanden
+        kaeufe*.sourceItemId as Set == [frueherId, milchId, namenlosId] as Set
+        kaeufe.every { it.groupId == groupId }
+    }
+
+    def "Liste umbenennen lässt die Historie unverändert"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg, name: 'Edeka')
+        def kaufId = fixtures.purchase(liste, itemName: 'Milch').id
+        def groupId = wg.group.id
+        def listId = liste.id
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Mitglied {} (angemeldet), Liste {} "Edeka" mit Kauf {} "Milch" -> "Rewe"', groupId, ben.id, listId, kaufId)
+
+        when:
+        shoppingListService.updateShoppingList(new AddEditShoppingListDto(id: listId, name: 'Rewe', groupId: groupId))
+        flushAndClear()
+        def kaeufe = shoppingPurchaseRepository.findByShoppingListIdOrderByPurchasedAtDescIdDesc(listId)
+        LOG.info('shoppingListService.updateShoppingList(Liste {}) -> Käufe {}', listId, kaeufe)
+
+        then:
+        kaeufe*.id == [kaufId]
+        kaeufe[0].itemName == 'Milch'
     }
 
     private Date lastUpdateShoppingList(Long groupId) {

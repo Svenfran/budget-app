@@ -70,6 +70,12 @@ class TestData {
         new ShoppingItem([name: "Eintrag ${nextId()}", completed: false] + overrides)
     }
 
+    /** Kaufereignis; sourceItemId ist negativ und kollidiert so nie mit der ID eines echten (gelöschten) Eintrags. */
+    static ShoppingPurchase shoppingPurchase(Map overrides = [:]) {
+        new ShoppingPurchase([itemName: "Artikel ${nextId()}", purchasedAt: DateUtils.toDate(REFERENCE_DATE),
+                              sourceItemId: -nextId()] + overrides)
+    }
+
     /** Gültiges Token (weder abgelaufen noch widerrufen); Platzhalter statt echtem JWT. Nutzer setzt der Aufrufer. */
     static Token token(Map overrides = [:]) {
         new Token([token: "token-${nextId()}", tokenType: TokenType.BEARER, expired: false, revoked: false,
