@@ -52,6 +52,7 @@ export class AppComponent {
   private reconnectedSub?: Subscription;
   private appStateListeners: Promise<PluginListenerHandle>[] = [];
   private keyboardListeners: Promise<PluginListenerHandle>[] = [];
+  private removeResizeListener?: () => void;
   private pausedAt: number | null = null;
   private backButtonSubscription: any;
   public backendStatus = this.healthService.backendStatus;
@@ -294,16 +295,24 @@ export class AppComponent {
   private initKeyboardOffset() {
     if (!isPlatform('capacitor')) return;
     const root = document.documentElement;
-    const keyboardOffset = new KeyboardOffset(window.innerHeight);
+    const keyboardOffset = new KeyboardOffset(window.innerHeight, window.innerWidth);
     const setOffset = (px: number | null) => {
       if (px !== null) root.style.setProperty('--keyboard-offset', `${px}px`);
     };
     this.keyboardListeners = [
       Keyboard.addListener('keyboardWillShow', info => setOffset(keyboardOffset.willShow(info.keyboardHeight))),
       Keyboard.addListener('keyboardDidShow', info => setOffset(keyboardOffset.didShow(info.keyboardHeight, window.innerHeight))),
-      Keyboard.addListener('keyboardWillHide', () => root.style.removeProperty('--keyboard-offset')),
+      Keyboard.addListener('keyboardWillHide', () => {
+        keyboardOffset.willHide();
+        root.style.removeProperty('--keyboard-offset');
+      }),
       Keyboard.addListener('keyboardDidHide', () => keyboardOffset.didHide(window.innerHeight)),
     ];
+    // Größenänderung: bei offener Tastatur neu messen (die WebView wird ggf. erst nach keyboardDidShow verkleinert), bei
+    // geschlossener Tastatur nach einer Drehung die Höhe ohne Tastatur aktualisieren (KeyboardOffset.viewportResized)
+    const onResize = () => setOffset(keyboardOffset.viewportResized(window.innerWidth, window.innerHeight));
+    window.addEventListener('resize', onResize);
+    this.removeResizeListener = () => window.removeEventListener('resize', onResize);
   }
 
   initBackButton() {
@@ -363,6 +372,7 @@ export class AppComponent {
     this.resyncThrottle.reset();
     this.appStateListeners.forEach(listener => listener.then(handle => handle.remove()));
     this.keyboardListeners.forEach(listener => listener.then(handle => handle.remove()));
+    this.removeResizeListener?.();
   }
 
   subscribeToTopics() {

@@ -722,6 +722,26 @@ describe('ShoppinglistPage – Drag & Drop mit echter Geste', () => {
     expect(items(4).length).toBe(1);
   });
 
+  it('Codex-Review 4: erster Eintrag innerhalb von A ans Ende sortiert: Platzhalter aktiv, reorder-items, neue Endposition', async () => {
+    page.toggleLists = { 1: true };
+    fixture.detectChanges();
+    // vor dem Start messen: während des Drags hängt das gezogene Element nicht mehr im Container
+    const position12 = center(items(1)[1]);
+    let inaktiv = true;
+
+    await drag(items(1)[0], () => position12, () => {
+      inaktiv = el('.ion-content-scroll-host').classList.contains('item-drop-outside');
+    });
+
+    expect(inaktiv).toBeFalse();
+    http.expectNone(moveUrl);
+    const reorder = http.expectOne(`${api}/shopping-list/reorder-items`);
+    expect(reorder.request.body.shoppingItemIds).toEqual([12, 11]);
+    reorder.flush({ groupId: 1, shoppingListId: 1, revision: 3, shoppingItemIds: [12, 11] });
+    fixture.detectChanges();
+    expect(items(1)[1].textContent).toContain('Artikel 11');
+  });
+
   it('PR #46: erster Eintrag über den zweiten hinweg aus A heraus gezogen: Abbruch, er bleibt an Position 1', async () => {
     // das CDK sortiert den Platzhalter beim Überqueren von 12 hinter 12 und lässt ihn beim Verlassen von A dort; ohne
     // Abbruchregel würde 11 beim Loslassen ans Ende von A gespeichert
