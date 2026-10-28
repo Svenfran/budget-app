@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { effect, Injectable, signal, untracked, WritableSignal } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
+import { Observable } from 'rxjs';
 import { environment } from 'src/environments/environment';
 import { AddEditShoppinglistDto } from '../model/add-edit-shoppinglist-dto';
 import { ShoppinglistDto } from '../model/shoppinglist-dto';
@@ -10,6 +11,8 @@ import { ShoppinglistOrderDto } from '../model/shoppinglist-order-dto';
 import { ShoppingitemOrderDto } from '../model/shoppingitem-order-dto';
 import { MoveShoppingItemDto } from '../model/move-shopping-item-dto';
 import { ShoppingitemMovedDto } from '../model/shoppingitem-moved-dto';
+import { ShoppingSuggestionsDto } from '../model/shopping-suggestions-dto';
+import { AddShoppingItemsDto } from '../model/add-shopping-items-dto';
 import { INIT_VALUES } from 'src/app/constants/default-values';
 import { Group } from 'src/app/model/group';
 import { LoadOptions } from 'src/app/model/load-options';
@@ -36,6 +39,8 @@ export class ShoppinglistService {
   private reorderShoppingListsUrl = `${this.apiBaseUrl}/api/groups/shopping-list/reorder`;
 
   private addItemToShoppingListUrl = `${this.apiBaseUrl}/api/groups/shopping-list/add-item`;
+  private addItemsToShoppingListUrl = `${this.apiBaseUrl}/api/groups/shopping-list/add-items`;
+  private suggestionsUrl = `${this.apiBaseUrl}/api/groups/shopping-list/suggestions`;
   private updateItemOfShoppingListUrl = `${this.apiBaseUrl}/api/groups/shopping-list/update-item`;
   private deleteItemFromShoppingListUrl = `${this.apiBaseUrl}/api/groups/shopping-list/delete-item`;
   private deleteAllItemsFromShoppingListUrl = `${this.apiBaseUrl}/api/groups/shopping-list/delete-all-items`;
@@ -272,13 +277,21 @@ export class ShoppinglistService {
 
   // SHOPPINGITEMS
 
+  /**
+   * 200 statt 201 (DIV-23): ein offener Eintrag gleichen Namens steht schon auf der Liste, die Antwort ist dieser
+   * Eintrag. Hinweis per Toast; `appendItem` ist idempotent und ergänzt ihn nur, falls er lokal noch fehlt.
+   */
   addItemToShoppingList(newShoppingItem: AddEditShoppingItemDto): void {
     const inContext = this.captureContext();
     this.http
-      .post<AddEditShoppingItemDto>(this.addItemToShoppingListUrl, newShoppingItem)
+      .post<AddEditShoppingItemDto>(this.addItemToShoppingListUrl, newShoppingItem, { observe: 'response' })
       .subscribe({
-        next: (result) => {
+        next: (response) => {
           if (!inContext()) return;
+          const result = response.body!;
+          if (response.status === 200) {
+            this.alertService.showToast(this.translate.instant('alerts.shoppinglist.item.duplicate', { itemName: result.name }));
+          }
           this.applyOrDefer(() => this.appendItem(result));
         },
         error: (err) => {
@@ -286,6 +299,37 @@ export class ShoppinglistService {
           this.alertService.showToast(this.translate.instant('alerts.shoppinglist.save.error'));
         }
       })
+    }
+
+    /** Einkaufsvorschläge einer Liste (DIV-23); transiente Dialogdaten, kein State. */
+    getSuggestions(groupId: number, shoppingListId: number): Observable<ShoppingSuggestionsDto> {
+      return this.http.get<ShoppingSuggestionsDto>(`${this.suggestionsUrl}/${groupId}/${shoppingListId}`);
+    }
+
+    /**
+     * Kontext beim Öffnen des Vorschlagsdialogs (DIV-23): gültig, solange Gruppe und Anmelde-Sitzung gleich sind und
+     * die Liste noch existiert. Ein veralteter Dialog zeigt nichts mehr an und sendet nichts.
+     */
+    captureSuggestionContext(shoppingListId: number): () => boolean {
+      const inContext = this.captureContext();
+      return () => inContext() && this.shoppingLists().some(list => list.id === shoppingListId);
+    }
+
+    /** Mehrere Einträge anlegen (DIV-23); die Antwort enthält nur die angelegten, übersprungene Namen fehlen. */
+    addItemsToShoppingList(dto: AddShoppingItemsDto): void {
+      const inContext = this.captureContext();
+      this.http
+        .post<AddEditShoppingItemDto[]>(this.addItemsToShoppingListUrl, dto)
+        .subscribe({
+          next: (result) => {
+            if (!inContext()) return;
+            this.applyOrDefer(() => result.forEach(item => this.appendItem(item)));
+          },
+          error: (err) => {
+            console.error("Error adding shopping items:", err);
+            this.alertService.showToast(this.translate.instant('alerts.shoppinglist.save.error'));
+          }
+        })
     }
 
     /**

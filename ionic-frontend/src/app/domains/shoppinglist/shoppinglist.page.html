@@ -108,6 +108,9 @@
           <ion-row [hidden]="!toggleLists[list.id]">
             <ion-col size-md="6" offset-md="3">
               <div class="chip">
+                <ion-chip (click)="onShowSuggestions(list)" color="primary">
+                  <ion-text><small>{{ 'domains.shoppinglists.suggestions' | translate }}</small></ion-text>
+                </ion-chip>
                 <ion-chip *ngIf="list.shoppingItems.length > 0" (click)="deleteListOfItems(list)" color="primary">
                   <ion-text><small>{{ 'domains.shoppinglists.delete_completed' | translate }}</small></ion-text>
                 </ion-chip>

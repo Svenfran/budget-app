@@ -1,5 +1,6 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { TranslateService } from '@ngx-translate/core';
 import { BehaviorSubject } from 'rxjs';
 import { AuthService } from 'src/app/auth/auth.service';
 import { User } from 'src/app/auth/user';
@@ -30,6 +31,8 @@ describe('ShoppinglistService', () => {
   const api = `${environment.apiBaseUrl}/api/groups`;
   const forbidden = { status: 403, statusText: 'Forbidden' };
   const forbiddenBody = 'User with ID 5 is either a member nor the owner of the group';
+  /** add-item legt an (201); 200 hieße „offener Eintrag gleichen Namens vorhanden“ (DIV-23) */
+  const created = { status: 201, statusText: 'Created' };
 
   const listDto = (overrides: Partial<AddEditShoppinglistDto> = {}): AddEditShoppinglistDto =>
     ({ id: null, name: 'Baumarkt', groupId: 1, ...overrides });
@@ -211,7 +214,7 @@ describe('ShoppinglistService', () => {
       const req = http.expectOne(`${api}/shopping-list/add-item`);
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual(dto);
-      req.flush({ ...dto, id: 22 });
+      req.flush({ ...dto, id: 22 }, created);
 
       expect(service.getShoppingLists()()).toEqual([
         existing[0],
@@ -310,7 +313,7 @@ describe('ShoppinglistService', () => {
         service.getShoppingLists().set(lists);
 
         service.addItemToShoppingList(itemDto({ shoppingListId: 20 }));
-        http.expectOne(`${api}/shopping-list/add-item`).flush(itemDto({ id: 22, shoppingListId: 20 }));
+        http.expectOne(`${api}/shopping-list/add-item`).flush(itemDto({ id: 22, shoppingListId: 20 }), created);
 
         expect(service.getShoppingLists()()).toBe(lists);
       });
@@ -379,7 +382,7 @@ describe('ShoppinglistService', () => {
     };
     const addItem = (listId: number, id: number) => {
       service.addItemToShoppingList(itemDto({ shoppingListId: listId, groupId: 7 }));
-      http.expectOne(`${api}/shopping-list/add-item`).flush(itemDto({ id, shoppingListId: listId, groupId: 7 }));
+      http.expectOne(`${api}/shopping-list/add-item`).flush(itemDto({ id, shoppingListId: listId, groupId: 7 }), created);
     };
     const listOrder = (revision: number, shoppingListIds: number[]) => ({ groupId: 7, revision, shoppingListIds });
     const itemOrder = (listId: number, revision: number, shoppingItemIds: number[]) =>
@@ -1222,6 +1225,157 @@ describe('ShoppinglistService', () => {
 
           expect(state()).toEqual({ 1: [11], 2: [] });
         });
+      });
+    });
+  });
+
+  describe('Vorschläge und mehrere Einträge (DIV-23)', () => {
+    const wg = aGroup({ id: 1, name: 'WG' });
+    const andereGruppe = aGroup({ id: 2, name: 'Urlaub' });
+    const switchTo = (target: typeof wg) => {
+      groupService.setActiveGroup(target);
+      TestBed.flushEffects();
+    };
+    const itemsOf = (listId: number) =>
+      service.getShoppingLists()().find(list => list.id === listId)!.shoppingItems.map(item => item.id);
+    const addItemsUrl = `${api}/shopping-list/add-items`;
+
+    beforeEach(() => switchTo(wg));
+
+    describe('Eintrag anlegen: Duplikat (200)', () => {
+      it('200 mit dem vorhandenen Eintrag: Hinweis-Toast mit dem Namen, kein zweiter Eintrag', () => {
+        const instant = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
+
+        service.addItemToShoppingList(itemDto({ name: 'milch', shoppingListId: 10, groupId: 1 }));
+        http.expectOne(`${api}/shopping-list/add-item`)
+          .flush(itemDto({ id: 11, name: 'Milch', shoppingListId: 10, groupId: 1 }), { status: 200, statusText: 'OK' });
+
+        expect(itemsOf(10)).toEqual([11, 12, 13]);
+        expect(alerts.showToast).toHaveBeenCalledOnceWith('alerts.shoppinglist.item.duplicate');
+        expect(instant).toHaveBeenCalledWith('alerts.shoppinglist.item.duplicate', { itemName: 'Milch' });
+      });
+
+      it('201: Eintrag angehängt, kein Toast', () => {
+        service.addItemToShoppingList(itemDto({ shoppingListId: 10, groupId: 1 }));
+        http.expectOne(`${api}/shopping-list/add-item`).flush(itemDto({ id: 14, shoppingListId: 10, groupId: 1 }), created);
+
+        expect(itemsOf(10)).toEqual([11, 12, 13, 14]);
+        expect(alerts.showToast).not.toHaveBeenCalled();
+      });
+
+      it('200 nach einem Gruppenwechsel: kein Toast, keine Änderung', () => {
+        service.addItemToShoppingList(itemDto({ shoppingListId: 10, groupId: 1 }));
+        const req = http.expectOne(`${api}/shopping-list/add-item`);
+
+        switchTo(andereGruppe);
+        req.flush(itemDto({ id: 11, shoppingListId: 10, groupId: 1 }), { status: 200, statusText: 'OK' });
+
+        expect(alerts.showToast).not.toHaveBeenCalled();
+        expect(service.getShoppingLists()()).toBe(existing);
+      });
+    });
+
+    it('lädt die Vorschläge einer Liste per GET', () => {
+      const vorschlaege = { groupId: 1, shoppingListId: 10, defaultSuggestions: false, names: ['Brot', 'Kaffee'] };
+      let geliefert: unknown;
+
+      service.getSuggestions(1, 10).subscribe(result => geliefert = result);
+      const req = http.expectOne(`${api}/shopping-list/suggestions/1/10`);
+      expect(req.request.method).toBe('GET');
+      req.flush(vorschlaege);
+
+      expect(geliefert).toEqual(vorschlaege);
+    });
+
+    describe('mehrere Einträge anlegen', () => {
+      const dto = { groupId: 1, shoppingListId: 20, names: ['Milch', 'Brot', 'Eier'] };
+      const angelegt = (id: number, name: string) => itemDto({ id, name, shoppingListId: 20, groupId: 1 });
+
+      it('POST mit den ausgewählten Namen; nur die gelieferten Einträge werden in Antwortreihenfolge angehängt', () => {
+        service.addItemsToShoppingList(dto);
+        const req = http.expectOne(addItemsUrl);
+        expect(req.request.method).toBe('POST');
+        expect(req.request.body).toEqual(dto);
+        req.flush([angelegt(23, 'Brot'), angelegt(22, 'Eier')], created);
+
+        expect(itemsOf(20)).toEqual([21, 23, 22]);
+        expect(service.getShoppingLists()()[1].shoppingItems.slice(1)).toEqual([
+          { id: 23, name: 'Brot', completed: false }, { id: 22, name: 'Eier', completed: false },
+        ]);
+        expect(service.getShoppingLists()()[0]).toBe(existing[0]);
+        expect(alerts.showToast).not.toHaveBeenCalled();
+      });
+
+      it('Fehler: Listen unverändert, auch mit inzwischen eingetroffenen Änderungen, und Toast', () => {
+        service.addItemsToShoppingList(dto);
+        const req = http.expectOne(addItemsUrl);
+        service.onItemAdded(itemDto({ id: 30, name: 'Kaffee', shoppingListId: 20, groupId: 1 }));
+        const zwischenstand = service.getShoppingLists()();
+
+        req.flush(forbiddenBody, forbidden);
+
+        expect(service.getShoppingLists()()).toBe(zwischenstand);
+        expect(itemsOf(20)).toEqual([21, 30]);
+        expect(alerts.showToast).toHaveBeenCalledOnceWith('alerts.shoppinglist.save.error');
+      });
+
+      it('Antwort nach einem Gruppenwechsel wird verworfen', () => {
+        service.addItemsToShoppingList(dto);
+        const req = http.expectOne(addItemsUrl);
+
+        switchTo(andereGruppe);
+        const listenDerNeuenGruppe = [aShoppingList({ id: 50 })];
+        service.getShoppingLists().set(listenDerNeuenGruppe);
+        req.flush([angelegt(23, 'Brot')], created);
+
+        expect(service.getShoppingLists()()).toBe(listenDerNeuenGruppe);
+      });
+
+      it('Antwort während eines Drags wird zurückgestellt und beim Release angewandt', () => {
+        service.addItemsToShoppingList(dto);
+        const req = http.expectOne(addItemsUrl);
+
+        service.holdUpdates();
+        req.flush([angelegt(23, 'Brot')], created);
+        expect(itemsOf(20)).toEqual([21]);
+
+        service.releaseUpdates();
+        expect(itemsOf(20)).toEqual([21, 23]);
+      });
+    });
+
+    describe('Kontext des Vorschlagsdialogs', () => {
+      it('gilt, solange Gruppe, Sitzung und Liste unverändert sind', () => {
+        const inContext = service.captureSuggestionContext(10);
+
+        expect(inContext()).toBeTrue();
+      });
+
+      it('ungültig nach einem Gruppenwechsel, auch zurück zur ersten Gruppe', () => {
+        const inContext = service.captureSuggestionContext(10);
+
+        switchTo(andereGruppe);
+        expect(inContext()).toBeFalse();
+        switchTo(wg);
+        expect(inContext()).toBeFalse();
+      });
+
+      it('ungültig nach Logout und Login mit derselben Gruppe', () => {
+        const inContext = service.captureSuggestionContext(10);
+
+        user$.next(null);
+        user$.next(aLoggedInUser());
+        switchTo(wg);
+
+        expect(inContext()).toBeFalse();
+      });
+
+      it('ungültig, wenn die Liste inzwischen gelöscht wurde', () => {
+        const inContext = service.captureSuggestionContext(10);
+
+        service.getShoppingLists().set([existing[1]]);
+
+        expect(inContext()).toBeFalse();
       });
     });
   });

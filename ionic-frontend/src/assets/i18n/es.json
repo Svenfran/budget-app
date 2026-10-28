@@ -92,7 +92,8 @@
             "title": "Listas de compra",
             "no_shoppinglists": "No hay listas de compra",
             "delete_completed": "Eliminar completados",
-            "item_placeholder": "Agregar a la lista"
+            "item_placeholder": "Agregar a la lista",
+            "suggestions": "Sugerencias"
         }
     },
     "alerts": {
@@ -235,7 +236,8 @@
                     "cancel": "Cancelar",
                     "ok": "OK",
                     "loading": "Actualizando elemento..."
-                }
+                },
+                "duplicate": "«{{itemName}}» ya está en la lista."
             },
             "move": {
                 "error": "No se pudo mover el elemento."
@@ -245,6 +247,15 @@
             },
             "save": {
                 "error": "No se pudo guardar el cambio."
+            },
+            "suggestions": {
+                "header": "Sugerencias de compra:",
+                "defaults_hint": "Todavía no hay compras en esta lista – sugerencias generales:",
+                "empty": "No hay sugerencias – todas las compras anteriores ya están en la lista.",
+                "cancel": "Cancelar",
+                "ok": "Añadir",
+                "loading": "Cargando sugerencias...",
+                "error": "No se pudieron cargar las sugerencias."
             }
         },
         "user_profile": {

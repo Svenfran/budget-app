@@ -92,7 +92,8 @@
             "title": "Shopping Lists",
             "no_shoppinglists": "No shopping lists available!",
             "delete_completed": "Delete completed",
-            "item_placeholder": "Add a new item"
+            "item_placeholder": "Add a new item",
+            "suggestions": "Suggestions"
         }
     },
     "alerts": {
@@ -235,7 +236,8 @@
                     "cancel": "Cancel",
                     "ok": "OK",
                     "loading": "Update list item..."
-                }
+                },
+                "duplicate": "\"{{itemName}}\" is already on the list."
             },
             "move": {
                 "error": "The item could not be moved."
@@ -245,6 +247,15 @@
             },
             "save": {
                 "error": "The change could not be saved."
+            },
+            "suggestions": {
+                "header": "Shopping suggestions:",
+                "defaults_hint": "No purchases in this list yet – general suggestions:",
+                "empty": "No suggestions – all previous purchases are already on the list.",
+                "cancel": "Cancel",
+                "ok": "Add",
+                "loading": "Loading suggestions...",
+                "error": "The suggestions could not be loaded."
             }
         },
         "user_profile": {

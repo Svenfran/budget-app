@@ -92,7 +92,8 @@
             "title": "Einkaufslisten",
             "no_shoppinglists": "Keine Einkaufslisten vorhanden!",
             "delete_completed": "Erledigte löschen",
-            "item_placeholder": "Eintrag hinzufügen"
+            "item_placeholder": "Eintrag hinzufügen",
+            "suggestions": "Vorschläge"
         }
     },
     "alerts": {
@@ -235,7 +236,8 @@
                     "cancel": "Abbrechen",
                     "ok": "OK",
                     "loading": "Aktualisiere Eintrag..."
-                }
+                },
+                "duplicate": "„{{itemName}}“ steht bereits auf der Liste."
             },
             "move": {
                 "error": "Der Eintrag konnte nicht verschoben werden."
@@ -245,6 +247,15 @@
             },
             "save": {
                 "error": "Die Änderung konnte nicht gespeichert werden."
+            },
+            "suggestions": {
+                "header": "Einkaufsvorschläge:",
+                "defaults_hint": "Noch keine Einkäufe in dieser Liste – allgemeine Vorschläge:",
+                "empty": "Keine Vorschläge – alle bisherigen Einkäufe stehen schon auf der Liste.",
+                "cancel": "Abbrechen",
+                "ok": "Hinzufügen",
+                "loading": "Lade Vorschläge...",
+                "error": "Die Vorschläge konnten nicht geladen werden."
             }
         },
         "user_profile": {
