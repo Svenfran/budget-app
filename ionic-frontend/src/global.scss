@@ -88,6 +88,13 @@ ion-modal {
   --border-radius: 8px;
 }
 
+// Alerts im von der Tastatur freien Bereich zentrieren; --keyboard-offset setzt AppComponent.initKeyboardOffset().
+// `:root` hebt die Spezifität über Ionics `.sc-ion-alert-*-h` (Host ist absolut mit top/bottom 0 positioniert).
+:root ion-alert {
+  bottom: var(--keyboard-offset, 0px);
+  transition: bottom 250ms ease-out; // etwa die Dauer der Tastatur-Animation
+}
+
 .pw-item {
   align-items: center;
 }
