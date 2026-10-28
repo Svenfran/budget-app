@@ -324,10 +324,10 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
   }
 
   /**
-   * Item-Drag (DIV-2, Codex-Review F-001): Das CDK lässt den Platzhalter in der zuletzt betretenen Liste, auch wenn der
-   * Zeiger sie wieder verlässt; ein Drop dort verschiebt aber nicht. Liegt der Platzhalter in einer fremden Liste und
-   * der Zeiger nicht über ihr, wird er als inaktiv dargestellt. Läuft bei jeder Bewegung (das CDK meldet sie innerhalb
-   * der Angular-Zone).
+   * Item-Drag (DIV-2, Codex-Review F-001): Das CDK lässt den Platzhalter in der zuletzt betretenen Liste bzw. in der
+   * Ursprungsliste, auch wenn der Zeiger sie wieder verlässt; ein Drop dort ändert aber nichts (siehe `onItemDropped`).
+   * Liegt der Zeiger nicht über der Liste mit dem Platzhalter, wird er deshalb als inaktiv dargestellt. Läuft bei jeder
+   * Bewegung (das CDK meldet sie innerhalb der Angular-Zone).
    *
    * Geprüft wird die tatsächliche Zeigerposition wie beim Drop (`isPointerOverContainer`), nicht `pointerPosition`:
    * die ist wegen `cdkDropListLockAxis="y"` auf die x-Koordinate beim Aufnehmen festgelegt (Codex-Review 2, F-001).
@@ -338,8 +338,7 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
     const pointer = 'touches' in event.event ? event.event.touches[0] ?? event.event.changedTouches[0] : event.event;
     const x = pointer?.clientX ?? event.pointerPosition.x;
     const y = pointer?.clientY ?? event.pointerPosition.y;
-    const outside = !!container && !!rect && container !== event.source.dropContainer.element.nativeElement
-      && !(x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom);
+    const outside = !!container && !!rect && !(x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom);
     if (outside) {
       this.renderer.addClass(this.scrollHost.nativeElement, 'item-drop-outside');
     } else {
@@ -367,12 +366,14 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
   /**
    * Drop eines Eintrags: innerhalb seiner Liste nur umsortieren (Liste und Eintrag werden im aktuellen Zustand neu
    * aufgelöst), aus einer anderen Liste verschieben (DIV-2; Quelle/Ziel aus den Container-Daten, der Service verwirft
-   * den Move, wenn Eintrag oder Liste inzwischen fehlen). Das CDK meldet als Ziel den zuletzt betretenen Container,
-   * auch wenn außerhalb losgelassen wurde; verschoben wird nur, wenn der Zeiger über ihm liegt (Codex-Review F-001).
+   * den Move, wenn Eintrag oder Liste inzwischen fehlen). Das CDK meldet als Ziel den zuletzt betretenen Container
+   * bzw. die Ursprungsliste, auch wenn außerhalb losgelassen wurde: dann gilt der Drop als Abbruch, der Eintrag bleibt
+   * an seiner Ausgangsposition (Codex-Review F-001; für die Ursprungsliste Benutzerentscheidung nach PR #46).
    */
   onItemDropped(list: ShoppinglistDto, event: CdkDragDrop<number, number, number>) {
     const itemId = event.item.data;
-    if (event.previousContainer === event.container) {
+    const sameList = event.previousContainer === event.container;
+    if (event.isPointerOverContainer && sameList) {
       const current = this.shoppingLists().find(l => l.id === list.id);
       if (current?.shoppingItems.some(item => item.id === itemId)) {
         this.shoppinglistService.moveShoppingItem(this.activeGroup, list.id, itemId, event.currentIndex);

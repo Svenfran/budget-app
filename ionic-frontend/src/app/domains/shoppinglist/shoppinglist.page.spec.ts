@@ -134,9 +134,9 @@ describe('ShoppinglistPage – Drag & Drop', () => {
   const wg = aGroup({ id: 1, name: 'WG' });
   const urlaub = aGroup({ id: 2, name: 'Urlaub' });
 
-  // Containertyp aus dem Aufruf: Listen-Drops (unknown) und Item-Drops (number)
+  // Containertyp aus dem Aufruf: Listen-Drops (unknown) und Item-Drops (number); losgelassen über dem Container
   const drop = <T = unknown>(data: number, currentIndex: number) =>
-    ({ item: { data }, currentIndex }) as unknown as CdkDragDrop<T, T, number>;
+    ({ item: { data }, currentIndex, isPointerOverContainer: true }) as unknown as CdkDragDrop<T, T, number>;
   const listIds = () => service.getShoppingLists()().map(list => list.id);
   const listA = () => service.getShoppingLists()().find(list => list.id === 1)!;
   const itemIdsOfA = () => listA().shoppingItems.map(item => item.id);
@@ -263,7 +263,7 @@ describe('ShoppinglistPage – Drag & Drop', () => {
 
       it('Drop in dieselbe Liste (gleicher Container): weiterhin reorder-items, kein move-item (AC8)', () => {
         const container = { data: 1 };
-        const sameList = { item: { data: 13 }, previousContainer: container, container, currentIndex: 0 } as
+        const sameList = { item: { data: 13 }, previousContainer: container, container, currentIndex: 0, isPointerOverContainer: true } as
           unknown as CdkDragDrop<number, number, number>;
 
         page.onItemDropped(listA(), sameList);
@@ -271,6 +271,21 @@ describe('ShoppinglistPage – Drag & Drop', () => {
         http.expectNone(moveUrl);
         http.expectOne(`${api}/shopping-list/reorder-items`).flush({ groupId: 1, shoppingListId: 1, revision: 3, shoppingItemIds: [13, 11, 12] });
         expect(itemIdsOfA()).toEqual([13, 11, 12]);
+      });
+
+      it('in derselben Liste, aber außerhalb losgelassen: Abbruch ohne reorder-items, der Puffer wird freigegeben', () => {
+        const move = spyOn(service, 'moveShoppingItem').and.callThrough();
+        const release = spyOn(service, 'releaseUpdates').and.callThrough();
+        const container = { data: 1 };
+        const outside = { item: { data: 11 }, previousContainer: container, container, currentIndex: 2, isPointerOverContainer: false } as
+          unknown as CdkDragDrop<number, number, number>;
+
+        page.onItemDropped(listA(), outside);
+
+        expect(move).not.toHaveBeenCalled();
+        expect(release).toHaveBeenCalled();
+        http.expectNone(`${api}/shopping-list/reorder-items`);
+        expect(itemIdsOfA()).toEqual([11, 12, 13]);
       });
 
       it('Ziel inzwischen gelöscht bzw. Eintrag entfernt: kein Request, der Puffer wird trotzdem freigegeben', () => {
@@ -689,23 +704,47 @@ describe('ShoppinglistPage – Drag & Drop mit echter Geste', () => {
   });
 
   it('eingeklappte Liste D wird nicht betreten: Drop auf ihrer Position verschiebt nichts', async () => {
-    // B und C eingeklappt: der Weg von A nach D führt über keinen anderen aufgeklappten Container (das CDK ließe den
-    // Eintrag sonst im zuletzt betretenen); gezogen wird der letzte Eintrag, damit A selbst nicht umsortiert
+    // B und C eingeklappt: der Weg von A nach D führt über keinen anderen aufgeklappten Container
     page.toggleLists = { 1: true };
     fixture.detectChanges();
 
-    let inaktiv = true;
+    let inaktiv = false;
 
     await drag(items(1)[1], () => center(listHeader(3)), () => {
       inaktiv = el('.ion-content-scroll-host').classList.contains('item-drop-outside');
     });
 
-    // der Platzhalter steht in der Quelle A: dort gilt er auch außerhalb (Umsortieren wie DIV-1), bleibt also aktiv
-    expect(inaktiv).toBeFalse();
+    // der Platzhalter steht in der Quelle A, der Zeiger über D: Abbruch, deshalb inaktiv dargestellt
+    expect(inaktiv).toBeTrue();
     http.expectNone(moveUrl);
     http.expectNone(`${api}/shopping-list/reorder-items`);
     expect(items(1).length).toBe(2);
     expect(items(4).length).toBe(1);
+  });
+
+  it('PR #46: erster Eintrag über den zweiten hinweg aus A heraus gezogen: Abbruch, er bleibt an Position 1', async () => {
+    // das CDK sortiert den Platzhalter beim Überqueren von 12 hinter 12 und lässt ihn beim Verlassen von A dort; ohne
+    // Abbruchregel würde 11 beim Loslassen ans Ende von A gespeichert
+    page.toggleLists = { 1: true };
+    fixture.detectChanges();
+    // vor dem Start messen: während des Drags hängt das gezogene Element nicht mehr im Container
+    const position12 = center(items(1)[1]);
+    const ueber12 = () => position12;
+    const nebenA = () => {
+      const rect = el('#item-list-1').getBoundingClientRect();
+      return { x: rect.right + 10, y: rect.bottom + 60 };
+    };
+    let inaktiv = false;
+
+    await drag(items(1)[0], nebenA, () => {
+      inaktiv = el('.ion-content-scroll-host').classList.contains('item-drop-outside');
+    }, ueber12);
+
+    expect(inaktiv).toBeTrue();
+    http.expectNone(`${api}/shopping-list/reorder-items`);
+    http.expectNone(moveUrl);
+    expect(TestBed.inject(ShoppinglistService).getShoppingLists()()[0].shoppingItems.map(item => item.id)).toEqual([11, 12]);
+    expect(items(1)[0].textContent).toContain('Artikel 11');
   });
 
   it('Codex F-001: Weg über die aufgeklappte Liste B, losgelassen auf der eingeklappten Liste D: kein Move', async () => {
