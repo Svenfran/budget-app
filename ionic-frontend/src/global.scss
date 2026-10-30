@@ -114,3 +114,10 @@ ion-modal {
 .pw-item {
   align-items: center;
 }
+
+// Der Inhalts-Wrapper des CDK-Viewports ist absolut positioniert und hat nur min-width: ein nicht umbrechbares Item
+// würde ihn (und damit alle gerenderten Items) breiter als den Viewport machen. Global, weil der Wrapper im Template
+// des CDK liegt und von Komponenten-Styles nicht erreicht wird.
+.cart-scroll .cdk-virtual-scroll-content-wrapper {
+  width: 100%;
+}

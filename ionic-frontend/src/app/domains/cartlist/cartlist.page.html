@@ -98,7 +98,7 @@
                     <h2 (click)="toggleDescriptionVisibility(i)" class="titlestyle ion-text-wrap">{{ cart.title }}</h2>
                     <h2>{{ cart.amount | scientificCurrency }}</h2>
                   </div>
-                  <p *ngIf="isDescriptionVisible(i)" class="ion-text-wrap">{{cart.description}}</p>
+                  <p *ngIf="isDescriptionVisible(i)" class="ion-text-wrap description">{{cart.description}}</p>
                   <div class="cart-details">
                     <div class="cart-repeat">
                       <ion-text *ngIf="cart.userDto.userName !== user?.name && cart.deleted === false" (click)="onFilter('user', cart.userDto.userName)" color="medium" >
