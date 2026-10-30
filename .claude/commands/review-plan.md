@@ -65,7 +65,15 @@ Use:
 - No dangerous sandbox bypass
 - No application code modifications
 
-Use a separate review prompt containing the following instructions:
+Construct a separate, self-contained review prompt containing the following instructions. Pass it to Codex via standard input; do not rely on Claude's own assessment as the review. A portable shell example (adapt quoting for the actual shell, including PowerShell) is:
+
+```sh
+codex exec --sandbox read-only --output-last-message "<TEMP_REVIEW_OUTPUT>" - < "<TEMP_PROMPT_FILE>"
+```
+
+Create temporary prompt/output files outside the repository when possible. Check the CLI exit code and the review content before copying the result to `codex-review-1.md`. The Codex sandbox must remain read-only; Claude may write **only the review artifact** after Codex returns. Do not run an automatic second reviewer or automatic repair cycle.
+
+Use the following review instructions:
 
 ### Codex review instructions
 
@@ -103,7 +111,13 @@ Evaluate:
     - Are unnecessary refactorings proposed?
     - Are simpler alternatives available?
 
-6. Open decisions
+6. Phase boundaries and approval gates
+     - Are phases small, cohesive, testable, and independently reviewable?
+     - Does every phase include completion criteria, tests and a user review checkpoint?
+     - Are dependencies and deferred work clear?
+     - Does the plan explicitly require a hard stop and explicit user approval after every phase?
+
+7. Open decisions
     - Identify questions requiring human approval.
     - Recommend a solution where sufficient evidence exists.
     - Never invent missing business requirements.
@@ -174,7 +188,7 @@ Evaluate the planned tests and verification commands.
 
 State whether the plan is ready for human approval.
 
-Use APPROVED only if there are no unresolved blockers, major findings or required human decisions.
+Use APPROVED only if there are no unresolved blockers, major findings or required human decisions **and** the plan includes mandatory per-phase user approval gates.
 
 Use DECISION_REQUIRED when a blocking human decision is necessary.
 
@@ -188,7 +202,9 @@ Execute Codex and capture its final response in:
 
 Prefer a temporary output file first, then move it to the final destination only after successful execution and validation.
 
-Do not overwrite an existing review without approval.
+Do not overwrite an existing review. If a previous review already exists save the new review in:
+
+`docs/plans/<IDENTIFIER>/codex-review-<NUMBER>.md`
 
 If Codex fails, times out or produces an empty result:
 
@@ -225,7 +241,7 @@ Do not automatically revise the implementation plan.
 
 Do not automatically invoke `/implement`.
 
-Do not claim that a plan has been approved unless the user explicitly approves it.
+Do not claim that a plan has been approved unless the user explicitly approves the **current version** of it. If the plan changes after this review, note that the prior review may be stale and recommend rerunning `/review-plan` before renewed approval. Never automatically start `/implement`.
 
 ## 8. Restrictions
 

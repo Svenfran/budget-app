@@ -1,75 +1,60 @@
 ---
-description: Review Jira features, Git changes or existing Divvy architecture
+description: Independently review Divvy implementation changes using OpenAI Codex CLI
 argument-hint: "[DIV-123 | git diff | feature | subsystem | review instructions]"
 disable-model-invocation: true
 ---
 
-# Review — Divvy
+# Review — Divvy (Codex)
 
-Perform a focused, evidence-based, read-only review of:
+Conduct an independent, evidence-based review with **Codex CLI** of:
 
 $ARGUMENTS
 
-Work from the `budget-app` monorepo root. Respond in German.
+Work from the `budget-app` monorepo root. Report in German. Claude orchestrates and summarizes; **Codex performs the substantive review**. Do not silently substitute a Claude-only review.
 
-## 1. Resolve review target
+## 1. Resolve target and review baseline
 
-Choose the mode that best matches the request. If ambiguous, state the assumption and ask only if it materially changes the review. Apply additional instructions in `$ARGUMENTS` within the chosen scope.
+### 1.1 Jira issue (`DIV-[0-9]+`)
 
-### 1.1 Jira issue review
+1. Normalize the issue key to uppercase and read `docs/plans/<ISSUE-KEY>/implementierungs-plan.md` if present.
+2. Read `docs/plans/<ISSUE-KEY>/implementation-progress.md` if present. Treat its statuses as context, **not independent proof of user approval**.
+3. If available, retrieve the Jira Story and relevant parent/Epic via configured Atlassian MCP (`.ai/jira-integration.md`). Story requirements define scope; Epic provides context only.
+4. Compare implementation against the applicable approved plan, acceptance criteria, project conventions, and actual repository code. State when plan approval cannot be established.
+5. Determine the feature branch baseline from the configured base branch (prefer `develop` if appropriate), using the merge-base, and include committed changes since that baseline **plus staged, unstaged, and untracked changes**. Never assume `git diff` alone captures the full implementation.
+6. If frontend and backend are separate Git repositories, identify and review the relevant changes in each; do not assume a single Git history.
+7. If the comparison baseline is ambiguous or unsafe to infer, ask the user rather than reviewing an arbitrary diff.
 
-If the input starts with a Jira issue key matching `DIV-[0-9]+` (case-insensitive):
+### 1.2 Git diff or explicit comparison
 
-1. Normalize the key to uppercase.
-2. Read `docs/plans/<ISSUE-KEY>/implementierungs-plan.md` if it exists. Treat it as approved only when approval is established; existence alone is not approval.
-3. Retrieve the issue using the configured Atlassian MCP integration when available. Read its summary, description, acceptance criteria, status, and relevant links or dependencies.
-4. Identify and, when accessible, read the parent issue or Epic: its objectives, relevant requirements, and technical context.
-5. Determine the scope from the requested issue and the applicable approved plan. The parent/Epic provides context, not additional Story scope. Do not import sibling Story requirements.
-6. Inspect relevant implementation, surrounding code, tests, and Git changes where useful.
-7. Compare against the issue requirements, approved plan, applicable approved architecture decisions, and project conventions.
+Use the specified commit/branch comparison if provided. Otherwise review staged, unstaged and untracked changes against HEAD. Explain the exact scope and note any untracked files that could not be inspected. Do not require Jira for this mode.
 
-If the plan is missing, say so and ask whether to continue without it. If Jira is unavailable, report the limitation and use an existing plan only if it contains sufficient requirements; otherwise ask for the missing information. If only the parent/Epic is inaccessible, report that and proceed when the issue can still be reviewed meaningfully.
+### 1.3 Feature or subsystem
 
-Report conflicts among Jira, the plan, and architecture concepts explicitly; do not silently resolve them. Do not invent requirements or acceptance criteria.
+For a named feature or architecture subsystem without a Jira key, review relevant implementation and tests. Establish scope and limitations explicitly; do not invent binding requirements. Retain the specialized review checks below where applicable.
 
-### 1.2 Git diff review
+## 2. Codex availability and safe execution
 
-Use this mode for current changes, `git diff`, staged/unstaged/untracked files, or branch/commit comparisons.
+1. Verify `codex --version`. If unavailable, stop with a clear error; do not perform a Claude-only substitute.
+2. Inspect repository/working-tree status and establish the review scope **before** launching Codex.
+3. Build a self-contained prompt that includes the resolved target, plan path, baseline, relevant repository paths, project constraints, and the detailed review rubric below.
+4. Invoke Codex non-interactively with `codex exec --sandbox read-only --output-last-message <TEMP_OUTPUT> -` and pass the prompt on stdin. Adapt shell quoting for the environment (e.g. PowerShell). Do not use sandbox bypasses, `--full-auto`, or automatic approval flags.
+5. Use temporary prompt and output files outside the repository where practical. Validate exit status and nonempty output. If Codex fails, report the error and **do not** fabricate a review.
+6. Codex must not edit project files, tests, migrations, Jira, or Git history. Claude may write the review report artifact only after successful Codex execution and with overwrite approval where required.
+7. No automatic fix, re-review, commit, or implementation step.
 
-1. Use the specified comparison target; if none is provided, review staged, unstaged, and untracked changes against HEAD.
-2. Inspect the diff, relevant surrounding code, and affected tests.
-3. Evaluate correctness, regressions, security, compatibility, and applicable architecture decisions.
-4. Report findings supported by evidence in the changes or their consequences.
+## 3. Independent Codex review prompt
 
-Do not require a Jira issue or implementation plan.
+Instruct Codex:
 
-### 1.3 Feature review
+> You are an independent senior engineer reviewing Divvy code. Inspect the actual repository, the relevant `CLAUDE.md` files, approved architecture decisions, tests, and the supplied implementation plan where applicable. Independently verify claims; do not trust the plan or Claude's implementation summary as evidence. Use the exact supplied review baseline and include uncommitted and untracked changes where accessible. Apply the priorities and specialized checks below. Identify actionable defects and test gaps with concrete file/line evidence, impact, reproduction scenario where possible, and minimal recommended fixes. Distinguish verified defects, plausible risks, and optional improvements. Do not invent requirements. Do not modify files. Write the complete report in German.
 
-Use this mode for an implemented feature without a Jira key.
+Pass the following review rubric (sections 4–9) in the Codex prompt, **not merely in Claude's private instructions**.
 
-1. Identify the relevant frontend and/or backend code and tests.
-2. Evaluate behavior, edge cases, error handling, authorization where relevant, state consistency, cross-repository contracts, test quality, and maintainability.
-3. Check applicable project conventions and approved architecture decisions.
-
-Do not require Jira or a plan. Do not present undocumented assumptions as binding feature requirements.
-
-### 1.4 Architecture review
-
-Use this mode for an existing subsystem or architectural concern, such as WebSocket synchronization, authentication, Angular state management, REST APIs, persistence, or testing infrastructure.
-
-1. Define the subsystem boundaries and inspect actual code, configuration, and tests.
-2. Read relevant project conventions and architecture documentation.
-3. Evaluate correctness, reliability, security and data integrity where applicable, maintainability, duplication, extensibility, testability, and technical risks.
-4. Identify deviations from approved decisions and propose concrete, proportionate improvements.
-5. For a requested target architecture, explain the recommended design and incremental migration path.
-
-Distinguish confirmed defects, architecture violations, plausible risks, and optional design alternatives. An architecture review may recommend changing an approved concept but must not silently redefine it.
-
-## 2. Project context and architecture alignment
+## 4. Project context and architecture alignment
 
 For every review mode:
 
-1. Read the root `../../CLAUDE.md` and relevant subproject `CLAUDE.md` files.
+1. Read the root `CLAUDE.md` and relevant subproject `CLAUDE.md` files.
 2. Inspect actual source code rather than relying solely on documentation.
 3. Consider potential frontend/backend effects, but inspect only areas relevant to the request.
 4. Identify applicable concepts under `architecture` and read them before judging architecture compliance.
@@ -79,7 +64,7 @@ For every review mode:
 
 For tests, test infrastructure or test data, the binding conventions are the Testing sections of the root, `spring-backend` and `ionic-frontend` CLAUDE.md files (approved and implemented with Epic DIV-3). The background concept `docs/architecture/testarchitektur-konzept.md` is local only and may be missing; use it for rationale, not as the rule set.
 
-## 3. Review priorities
+## 5. Review priorities
 
 Prioritize findings by severity, impact, likelihood, and relevance:
 
@@ -95,7 +80,7 @@ Prioritize findings by severity, impact, likelihood, and relevance:
 
 Do not report subjective style preferences as defects. Prefer a few well-supported findings over speculative lists.
 
-## 4. Cross-repository checks
+## 6. Cross-repository checks
 
 When relevant, examine:
 
@@ -105,7 +90,7 @@ When relevant, examine:
 
 Check contract consistency across repositories when changes cross the boundary. State when a repository is unaffected only if that conclusion is supported by the inspected scope.
 
-## 5. Specialized reviews
+## 7. Specialized reviews
 
 Apply these additional checks **only** when relevant to the requested target.
 
@@ -123,7 +108,7 @@ For a testing **architecture review**, propose a pragmatic frontend/backend targ
 
 For ordinary feature or diff reviews, assess only the relevant tests; do not require a full testing architecture proposal.
 
-## 6. Findings and recommendations
+## 8. Findings and recommendations
 
 For each material finding, provide:
 
@@ -142,32 +127,38 @@ Classify the **recommended action** separately from severity:
 
 Do not automatically label every architectural preference as Must Fix. Rank findings by impact and likelihood. Do not invent issues to fill a report; distinguish verified behavior from hypotheses.
 
-## 7. Testing assessment
+## 9. Testing assessment
 
 Evaluate tests relevant to the review: important behavior and regression coverage, reliability, isolation, integration boundaries, and reusable test infrastructure. Check in particular: a regression test for bugfixes, correct suffix/file name (a wrong one silently doesn't run — compare test counts), and adherence to the Testing conventions in the CLAUDE.md files.
 
 Distinguish tests that are missing, tests that exist but could not be run, and tests that ran and failed. If tests are executed, report the command and observed result; never claim execution without running them. Do not demand new frameworks without justification.
 
-## 8. Review output
+## 10. Codex output requirements
 
-Respond in German. Scale detail to the scope and findings; avoid empty or repetitive sections.
+Require these sections in the **Codex-generated** German review:
 
-For all review modes, include:
+1. **Review-Scope:** baseline, repositories, changed files, plan/Jira sources, limitations.
+2. **Gesamtbewertung:** `APPROVED` | `CHANGES_REQUESTED` | `DECISION_REQUIRED`; `APPROVED` means no material findings in the reviewed scope, **not** user approval.
+3. **Findings:** IDs `F-001` etc.; severity `Critical`/`High`/`Medium`/`Low`; category (confirmed defect / architecture violation / plausible risk / optional improvement); `Must Fix`/`Should Fix`/`Optional`; evidence with file and line; impact; specific fix; estimated effort if feasible.
+4. **Acceptance Criteria:** each applicable criterion `Erfüllt` / `Teilweise` / `Nicht erfüllt` / `Nicht verifiziert`, with evidence.
+5. **Tests und Verifikation:** coverage gaps; commands actually run and results; distinguish not run, failed, and passed.
+6. **Offene Entscheidungen und Risiken:** separate user decisions from technical findings.
+7. **Empfohlene nächste Schritte:** prioritize minimal fixes, avoid unrelated refactorings.
 
-1. **Zusammenfassung:** Scope, overall assessment, and important limitations.
-2. **Findings:** Prioritized, evidence-based findings; explicitly state if none are significant.
-3. **Empfohlene Maßnahmen:** Must Fix / Should Fix / Optional where applicable.
-4. **Testqualität und Testlücken:** Relevant observations, including test execution status if checked.
-5. **Gesamtbewertung:** Main risks, strengths, and recommended next steps.
+Do not claim tests passed without running them. Do not invent findings to populate the report. For Jira mode, flag any incomplete or unapproved phases and explain how that limits final review confidence.
 
-Add **Frontend-/Backend-Auswirkungen** when the review crosses repositories or contract boundaries.
+## 11. Save and present results
 
-For architecture reviews, additionally include **Zielarchitektur** and **Migrationsstrategie** when the request calls for recommendations or redesign. For focused diff reviews, keep the report concise and omit irrelevant sections.
+- For Jira mode save to `docs/plans/<ISSUE-KEY>/codex-implementation-review.md` after a successful Codex run. Do not overwrite an existing report without explicit user approval. For other modes, present the Codex output in the conversation unless the user specifies a report path.
+- Include in the saved report the review baseline (branch, base/merge-base where applicable), review date, plan reference, and note that the findings are Codex-generated. Preserve Codex findings faithfully; label any extra Claude observations separately.
+- Summarize findings in German, prioritizing Must Fix and open decisions. Do not automatically implement recommendations or invoke `/implement`.
+- Ask the user how to proceed. If fixes are approved, changes must follow the existing implementation phase approval rules or a separately approved corrective phase; do not silently reopen completed phases.
+- A changed implementation requires a new review before treating the prior result as current.
+- Do not overwrite an existing review. If a previous review exists, save the new review to `docs/plans/<ISSUE-KEY>/codex-implementation-review-<NUMBER>.md`.
 
-## 9. Restrictions
+## 12. Restrictions
 
-- This is a read-only review: do not modify files, implement fixes, create commits, or introduce dependencies.
-- Do not modify Jira issues, implementation plans, or architecture concepts.
-- Do not expand the requested scope unnecessarily or recommend major refactorings without concrete justification.
-- Do not present speculative risks as confirmed defects.
-- Wait for explicit approval before implementing recommendations.
+- Review only; no application code changes, dependency installation, migrations, Jira edits, commits, pushes, resets, or destructive Git operations.
+- Do not modify plans, `CLAUDE.md`, or architecture documents.
+- Do not replace Codex with Claude when Codex fails.
+- Do not interpret `APPROVED` as a human approval or a permission to merge.
