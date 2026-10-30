@@ -122,12 +122,12 @@ If the file does not exist, stop and tell the user to run `/plan` first.
 
 - Read the complete plan.
 - Read the root and relevant sub-project CLAUDE.md files.
-- Confirm the user has approved the plan.
+- Confirm the user explicitly approved the current version of the plan after reviewing any Codex plan findings.
 - Check for unresolved blocking questions.
 - Inspect the current Git working tree.
 - Preserve unrelated existing changes.
 
-Do not infer approval solely from the existence of a plan file.
+Do not infer approval solely from the existence of a plan file, `codex-review-1.md`, or a positive Codex verdict.
 
 If the plan is still a draft and approval is unclear, ask before implementing.
 
@@ -171,7 +171,46 @@ Classify changes as:
 
 Ask for approval before significant deviations.
 
-## 5. Frontend implementation
+## 5. Phased implementation — mandatory user approval after every phase
+
+**Hard stop rule:** Implement **exactly one pending phase per approval cycle**. After that phase, stop all implementation work, present the changes and verification, and wait for an explicit user message approving that specific phase. Never continue automatically, even if tests pass, the plan was approved, or the user originally asked to implement the entire plan. Do not interpret silence or lack of objections as approval.
+
+### 5.1 Initialize or resume
+
+1. Read the numbered phases in the approved plan. Do not silently regroup, merge, or reorder approved phases.
+2. Use `docs/plans/<IDENTIFIER>/implementation-progress.md` as a **status log** (create it when starting implementation). Record plan path, a SHA-256 digest of the approved plan when tooling permits, branch/repository context, and each phase as `NOT_STARTED`, `IN_PROGRESS`, `AWAITING_APPROVAL`, `APPROVED`, or `BLOCKED`.
+3. The progress log is **not proof of approval by itself**. On a new session, verify approval against available user conversation or ask the user to confirm the last approved phase. Never infer approval from a status file alone.
+4. If the plan changed since the recorded digest, stop and request approval of the revised plan and its phase boundaries. Do not resume against a different plan silently.
+5. Inspect the working tree and existing changes. Never overwrite or discard user changes. If previous work cannot be confidently attributed to phases, stop and ask how to proceed.
+6. Before the first application change, capture baseline test counts as required by the Testing section.
+
+### 5.2 Execute only the current phase
+
+1. Announce the current phase number, objective, scope, and completion criteria.
+2. Implement only tasks belonging to this phase, following the frontend/backend rules below.
+3. Run phase-relevant tests and checks. Fix failures introduced by this phase, but do not implement tasks belonging to a later phase.
+4. Check the phase's completion criteria and relevant acceptance criteria. Record failed or unexecuted checks accurately.
+5. Update the progress log to `AWAITING_APPROVAL` (or `BLOCKED`) with a concise list of modified files, verification commands/results, deviations, and open issues. Do not set `APPROVED` yourself.
+6. Present a **Phase review checkpoint** in German: phase status, what changed and why, changed files, tests executed/results, how the user can inspect the diff, outstanding risks, and the exact next phase.
+7. **END THE RESPONSE AND WAIT.** Do not run any tool or modify any application file for the next phase before the user's explicit approval.
+
+### 5.3 Approval and requested changes
+
+- Only an explicit user message approving the **specific completed phase** permits progress. Plan approval, Codex status, tool permissions, or prior generic instructions are not phase approval.
+- If the user requests corrections, remain in the same phase, apply only the requested/in-scope corrections, reverify, and present the phase again. Wait for approval again.
+- On approval, record the phase as `APPROVED` in the progress log with the user's approval reference/date when available. Then start **only the next pending phase**. The next phase must end at its own approval gate.
+- If the user approves the final phase, proceed to final verification, acceptance-criteria verification, and final self-review; report the results. If final verification requires additional application changes, request approval before modifying previously approved scope.
+- Never create commits or push changes without explicit request.
+
+### 5.4 Missing phase structure and blockers
+
+If an older approved plan lacks explicit phases, propose a small phase breakdown and **ask for approval of that breakdown before implementing**. Do not silently invent phases.
+
+Stop and ask the user before proceeding if there is a blocker, a business/architecture decision, a significant deviation, scope expansion, an unexpected repository state, or uncertainty about prior approval.
+
+The Testing and Acceptance criteria verification sections remain binding. Run targeted tests per phase; run the complete verification suite for affected repositories after the last approved phase, subject to the documented environment prerequisites.
+
+## 6. Frontend implementation
 
 Follow existing Angular/Ionic conventions:
 
@@ -186,7 +225,7 @@ Follow existing Angular/Ionic conventions:
 
 Do not introduce new state-management libraries without approval.
 
-## 6. Backend implementation
+## 7. Backend implementation
 
 Follow existing Spring Boot conventions:
 
@@ -204,7 +243,7 @@ For shared group data, evaluate WebSocket notifications.
 
 Ensure notifications reflect successfully committed changes.
 
-## 7. Cross-repository verification
+## 8. Cross-repository verification
 
 Verify:
 - REST contracts match
@@ -217,7 +256,7 @@ Verify:
 
 Only modify repositories where necessary.
 
-## 8. Testing
+## 9. Testing
 
 Follow the Testing sections of the root, `spring-backend` and `ionic-frontend` CLAUDE.md files (test level, suffix, `TestData`/`Fixtures`, `src/testing/`).
 
@@ -236,7 +275,7 @@ Do not rebuild the test infrastructure.
 
 Never claim tests passed unless actually executed.
 
-## 9. Acceptance criteria verification
+## 10. Acceptance criteria verification
 
 Read every acceptance criterion from the plan.
 
@@ -250,7 +289,7 @@ Explain remaining gaps.
 
 Do not silently omit acceptance criteria.
 
-## 10. Final self-review
+## 11. Final self-review
 
 Before finishing:
 - Compare the diff against the approved plan.
@@ -261,7 +300,7 @@ Before finishing:
 - Check for unnecessary complexity.
 - Check for accidentally exposed secrets.
 
-## 11. Restrictions
+## 12. Restrictions
 
 - Do not modify CLAUDE.md files.
 - Do not update Jira automatically.
@@ -270,14 +309,19 @@ Before finishing:
 - Do not add offline functionality unless requested.
 - Do not discard existing user changes.
 
-## 12. Final response
+## 13. Final response
 
 Respond in German.
 
 Include:
 
 ### Implementierte Änderungen
-Summarize changes and affected files.
+For intermediate responses, report only the current phase and end with a request for explicit approval. The final response after all approved phases must report the implementation status of each planned phase:
+- Completed
+- Partially completed
+- Not started
+
+Summarize the changes and verification results per phase.
 
 ### Acceptance Criteria
 Report fulfillment status for every criterion.

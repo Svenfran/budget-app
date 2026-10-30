@@ -105,6 +105,7 @@ Before writing any implementation plan:
 2. If it exists, read it before proceeding.
 3. Do not overwrite or replace an existing plan without explicit user approval.
 4. Preserve previously approved decisions unless the user explicitly requests changes.
+
 ## 2. Project context
 
 - Work from the budget-app monorepo root.
@@ -225,6 +226,37 @@ Describe real-time updates and state consistency.
 ## 8. Implementierungsschritte
 Provide ordered, actionable steps.
 
+Structure the implementation into small, manageable phases.
+
+Each phase must:
+- Have a clear objective and a logically cohesive scope.
+- Be independently implementable and verifiable where practical.
+- Specify the concrete changes to be made.
+- Include relevant tests or verification steps.
+- Define clear completion criteria.
+- Build on previous phases without introducing unnecessary dependencies.
+
+Prefer incremental, vertical slices over large, cross-cutting changes.
+
+Keep phases small enough to be implemented and reviewed independently. Avoid unnecessary fragmentation for simple changes.
+
+Identify dependencies between phases and ensure that the application remains in a consistent, working state after each phase whenever practical.
+
+### Mandatory phase approval design
+
+The implementation is interactive: `/implement` must stop after **every** phase and wait for explicit user approval before starting the next phase. Plan approval does not approve individual phases.
+
+For every phase include a numbered heading and:
+- Objective, in-scope tasks, affected files or components, and dependencies.
+- Tests and verification commands appropriate to that phase.
+- Concrete completion criteria mapped to relevant acceptance criteria.
+- A short **Review checkpoint** describing what the user can inspect (changed files, behavior, test results).
+- A clear boundary: which work is deferred to the next phase.
+
+Prefer small, independently reviewable vertical slices. Do not create phases consisting only of unrelated housekeeping; do not fragment trivial changes artificially. Explicitly state in the generated plan: **Nach jeder Phase: Implementierung stoppen, Änderungen und Testergebnisse vorlegen und ausdrückliche Freigabe abwarten. Keine automatische Fortsetzung.**
+
+If the plan is revised after Codex review, preserve or update these phase boundaries and require renewed approval of the revised plan before implementation.
+
 ## 9. Risiken und Edge Cases
 Include concurrency, authorization and error scenarios.
 
@@ -275,4 +307,4 @@ Summarize:
 6. Optional improvements
 7. Saved plan path
 
-Wait for approval before implementation.
+Recommend running `/review-plan <IDENTIFIER>` before requesting final plan approval. Wait for explicit user approval of the reviewed plan before implementation. A successful Codex review is not itself user approval.

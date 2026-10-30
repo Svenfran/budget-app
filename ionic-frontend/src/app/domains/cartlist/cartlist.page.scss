@@ -49,12 +49,22 @@ ion-popover {
     margin-right: 1rem;
 }
 
+// Lange Wörter ohne Leerzeichen (z. B. Links) umbrechen statt abschneiden
+.titlestyle,
+.description {
+    overflow-wrap: anywhere;
+}
+
 .toggle-arrow {
     display: flex;
     align-items: center;
 }
 
+// Nur vertikal scrollen: sonst lässt sich der Inhalt seitlich unter dem Viewport verschieben, wenn er minimal breiter
+// ist (Wrapper des CDK hat nur min-width) und keine Swipe-Geste die horizontale Bewegung übernimmt (fremde Carts)
 .cart-scroll {
   height: calc(100vh - 150px);
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-x: none;
 }
