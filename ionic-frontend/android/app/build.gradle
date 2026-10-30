@@ -51,12 +51,10 @@ android {
             dimension "environment"
             applicationIdSuffix ".dev"
             versionNameSuffix "-dev"
-            resValue "string", "app_name", "Divvy-Dev"
         }
         prod {
             dimension "environment"
             applicationId "de.svenfran.divvyapp"
-            resValue "string", "app_name", "Divvy"
         }
     }
 }
