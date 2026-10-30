@@ -36,6 +36,10 @@
             "edit": "Editar categorías",
             "create": "Agregar categoría"
         },
+        "statistics": {
+            "header": "ESTADÍSTICAS",
+            "open": "Estadísticas"
+        },
         "settings": {
             "header": "AJUSTES",
             "edit_profile": "Editar perfil",
@@ -417,6 +421,36 @@
             "yearly": "Anual",
             "none": "Sin repetición"
         }
+    },
+    "statistics": {
+        "title": "Estadísticas",
+        "filter": {
+            "group": "Grupo",
+            "all_groups": "Todos los grupos",
+            "period_month": "Mes",
+            "period_year": "Año",
+            "period_all": "Todo",
+            "month": "Mes",
+            "year": "Año"
+        },
+        "kpi": {
+            "total_spent": "Gastos totales",
+            "paid_by_user": "Pagado por ti",
+            "current_balance": "Saldo actual",
+            "current_balance_hint": "Independiente del periodo"
+        },
+        "timeline": {
+            "title": "Pagado por ti",
+            "week": "Sem. {{week}}"
+        },
+        "categories": {
+            "title": "Por categoría",
+            "settlement": "Repagos (neto)",
+            "other": "Otros"
+        },
+        "empty": "No hay gastos propios en el periodo seleccionado.",
+        "error": "No se pudieron cargar las estadísticas.",
+        "retry": "Volver a cargar"
     },
     "error_pages": {
         "no_group": {

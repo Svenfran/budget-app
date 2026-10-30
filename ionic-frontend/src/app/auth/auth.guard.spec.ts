@@ -79,4 +79,13 @@ describe('AuthGuard', () => {
     expect(authRoute?.canLoad).toBeUndefined();
     expect(authRoute?.canActivate).toBeUndefined();
   });
+
+  it('schützt die Statistikseite per canLoad und canActivate (DIV-63)', () => {
+    // Der generische Test oben sieht nur Routen mit canLoad; ein Fehlen beider Guards fiele dort nicht auf.
+    const statistics = routes.find(route => route.path === 'statistics');
+
+    expect(statistics).withContext('Route statistics').toBeDefined();
+    expect(statistics?.canLoad ?? []).toContain(AuthGuard);
+    expect(statistics?.canActivate ?? []).toContain(AuthGuard);
+  });
 });

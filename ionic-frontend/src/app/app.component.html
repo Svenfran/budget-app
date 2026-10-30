@@ -73,6 +73,16 @@
         </ion-menu-toggle>
 
         <ion-list-header>
+          <ion-label color="medium">{{ 'navigation.statistics.header' | translate }}</ion-label>
+        </ion-list-header>
+        <ion-menu-toggle menu="m1">
+          <ion-item lines="none" routerLink="/statistics" button>
+            <ion-icon name="stats-chart-outline" slot="start"></ion-icon>
+            <ion-label>{{ 'navigation.statistics.open' | translate }}</ion-label>
+          </ion-item>
+        </ion-menu-toggle>
+
+        <ion-list-header>
           <ion-label color="medium">{{ 'navigation.settings.header' | translate }}</ion-label>
         </ion-list-header>
         <ion-menu-toggle menu="m1">

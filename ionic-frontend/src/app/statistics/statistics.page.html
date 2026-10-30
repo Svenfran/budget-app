@@ -1,0 +1,119 @@
+<ion-header class="ion-no-border">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/domains/tabs/overview"></ion-back-button>
+    </ion-buttons>
+    <ion-title>{{ 'statistics.title' | translate }}</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <ion-refresher slot="fixed" (ionRefresh)="refresh($event)">
+    <ion-refresher-content></ion-refresher-content>
+  </ion-refresher>
+
+  <ion-grid class="ion-padding">
+    <!-- Filter -->
+    <ion-row>
+      <ion-col size-md="6" offset-md="3">
+        <ion-list lines="none">
+          <ion-item>
+            <ion-select [label]="'statistics.filter.group' | translate" interface="popover"
+                        [value]="selectedGroup()" (ionChange)="onGroupChange($event.detail.value)">
+              <ion-select-option [value]="allGroups">{{ 'statistics.filter.all_groups' | translate }}</ion-select-option>
+              <ion-select-option *ngFor="let group of groups()" [value]="group.id">{{ group.name }}</ion-select-option>
+            </ion-select>
+          </ion-item>
+        </ion-list>
+
+        <ion-segment [value]="filter().period" (ionChange)="onPeriodChange($any($event.detail.value))">
+          <ion-segment-button value="MONTH">
+            <ion-label>{{ 'statistics.filter.period_month' | translate }}</ion-label>
+          </ion-segment-button>
+          <ion-segment-button value="YEAR">
+            <ion-label>{{ 'statistics.filter.period_year' | translate }}</ion-label>
+          </ion-segment-button>
+          <ion-segment-button value="ALL">
+            <ion-label>{{ 'statistics.filter.period_all' | translate }}</ion-label>
+          </ion-segment-button>
+        </ion-segment>
+
+        <ion-list lines="none" *ngIf="filter().period !== 'ALL'">
+          <ion-item *ngIf="filter().period === 'MONTH'">
+            <ion-select [label]="'statistics.filter.month' | translate" interface="popover"
+                        [value]="filter().month" (ionChange)="onMonthChange($event.detail.value)">
+              <ion-select-option *ngFor="let month of months" [value]="month">{{ month | monthName }}</ion-select-option>
+            </ion-select>
+          </ion-item>
+          <ion-item>
+            <ion-select [label]="'statistics.filter.year' | translate" interface="popover"
+                        [value]="filter().year" (ionChange)="onYearChange($event.detail.value)">
+              <ion-select-option *ngFor="let year of years()" [value]="year">{{ year }}</ion-select-option>
+            </ion-select>
+          </ion-item>
+        </ion-list>
+      </ion-col>
+    </ion-row>
+
+    <!-- Laden / Fehler -->
+    <ion-row *ngIf="isLoading() || hasError()">
+      <ion-col class="ion-text-center" size-md="6" offset-md="3">
+        <ion-spinner *ngIf="isLoading()" color="primary"></ion-spinner>
+        <ng-container *ngIf="hasError()">
+          <p>{{ 'statistics.error' | translate }}</p>
+          <ion-button fill="outline" (click)="reload()">{{ 'statistics.retry' | translate }}</ion-button>
+        </ng-container>
+      </ion-col>
+    </ion-row>
+
+    <ng-container *ngIf="statistics() as stats">
+      <!-- Kennzahlen -->
+      <ion-row>
+        <ion-col size-md="6" offset-md="3">
+          <div class="kpis">
+            <div class="kpi">
+              <ion-text color="medium"><small>{{ 'statistics.kpi.total_spent' | translate }}</small></ion-text>
+              <strong>{{ stats.totalSpent | scientificCurrency }}</strong>
+            </div>
+            <div class="kpi">
+              <ion-text color="medium"><small>{{ 'statistics.kpi.paid_by_user' | translate }}</small></ion-text>
+              <strong>{{ stats.paidByUser | scientificCurrency }}</strong>
+            </div>
+            <div class="kpi">
+              <ion-text color="medium"><small>{{ 'statistics.kpi.current_balance' | translate }}</small></ion-text>
+              <ion-text [color]="stats.currentBalance >= 0 ? 'primary' : 'danger'">
+                <strong>{{ stats.currentBalance | scientificCurrency }}</strong>
+              </ion-text>
+              <ion-text color="medium"><small>{{ 'statistics.kpi.current_balance_hint' | translate }}</small></ion-text>
+            </div>
+          </div>
+        </ion-col>
+      </ion-row>
+
+      <!-- Kategorien -->
+      <ion-row>
+        <ion-col size-md="6" offset-md="3">
+          <ion-list>
+            <ion-list-header>
+              <ion-label color="medium">{{ 'statistics.categories.title' | translate }}</ion-label>
+            </ion-list-header>
+            <ion-item *ngIf="!hasPersonalSpendings()" lines="none">
+              <ion-label class="ion-text-wrap" color="medium">{{ 'statistics.empty' | translate }}</ion-label>
+            </ion-item>
+            <ng-container *ngIf="hasPersonalSpendings()">
+              <ion-item *ngFor="let row of categoryRows(); let last = last" [lines]="last ? 'none' : 'inset'">
+                <ion-label class="ion-text-wrap">
+                  {{ row.settlement ? ('statistics.categories.settlement' | translate) : row.name }}
+                </ion-label>
+                <ion-text slot="end" class="amount">
+                  <small *ngIf="row.percent !== null" class="percent">{{ formatPercent(row.percent) }}</small>
+                  {{ row.amount | scientificCurrency }}
+                </ion-text>
+              </ion-item>
+            </ng-container>
+          </ion-list>
+        </ion-col>
+      </ion-row>
+    </ng-container>
+  </ion-grid>
+</ion-content>

@@ -36,6 +36,10 @@
             "edit": "Edit Categories",
             "create": "Add Category"
         },
+        "statistics": {
+            "header": "STATISTICS",
+            "open": "Statistics"
+        },
         "settings": {
             "header": "SETTINGS",
             "edit_profile": "Edit User Profil",
@@ -417,6 +421,36 @@
             "yearly": "Yearly",
             "none": "No repetition"
         }
+    },
+    "statistics": {
+        "title": "Statistics",
+        "filter": {
+            "group": "Group",
+            "all_groups": "All groups",
+            "period_month": "Month",
+            "period_year": "Year",
+            "period_all": "All",
+            "month": "Month",
+            "year": "Year"
+        },
+        "kpi": {
+            "total_spent": "Total spending",
+            "paid_by_user": "Paid by you",
+            "current_balance": "Current balance",
+            "current_balance_hint": "Independent of the period"
+        },
+        "timeline": {
+            "title": "Paid by you",
+            "week": "CW {{week}}"
+        },
+        "categories": {
+            "title": "By category",
+            "settlement": "Repayments (net)",
+            "other": "Other"
+        },
+        "empty": "No spending of your own in the selected period.",
+        "error": "The statistics could not be loaded.",
+        "retry": "Reload"
     },
     "error_pages": {
         "no_group": {
