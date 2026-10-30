@@ -90,6 +90,16 @@
         </ion-col>
       </ion-row>
 
+      <!-- Zeitreihe -->
+      <ion-row *ngIf="hasPersonalSpendings()">
+        <ion-col size-md="6" offset-md="3">
+          <ion-list-header>
+            <ion-label color="medium">{{ 'statistics.timeline.title' | translate }}</ion-label>
+          </ion-list-header>
+          <app-bar-chart [labels]="barLabels()" [values]="barValues()"></app-bar-chart>
+        </ion-col>
+      </ion-row>
+
       <!-- Kategorien -->
       <ion-row>
         <ion-col size-md="6" offset-md="3">
@@ -101,7 +111,12 @@
               <ion-label class="ion-text-wrap" color="medium">{{ 'statistics.empty' | translate }}</ion-label>
             </ion-item>
             <ng-container *ngIf="hasPersonalSpendings()">
+              <app-donut-chart *ngIf="donutSegments().length > 0" [segments]="donutSegments()" [labels]="donutLabels()"></app-donut-chart>
+              <ion-item *ngIf="donutSegments().length === 0" lines="none">
+                <ion-label class="ion-text-wrap" color="medium">{{ 'statistics.categories.no_chart' | translate }}</ion-label>
+              </ion-item>
               <ion-item *ngFor="let row of categoryRows(); let last = last" [lines]="last ? 'none' : 'inset'">
+                <span slot="start" class="dot" [style.background]="row.colorIndex !== null ? palette()[row.colorIndex] : 'transparent'"></span>
                 <ion-label class="ion-text-wrap">
                   {{ row.settlement ? ('statistics.categories.settlement' | translate) : row.name }}
                 </ion-label>

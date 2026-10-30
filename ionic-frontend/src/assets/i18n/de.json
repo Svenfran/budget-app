@@ -446,7 +446,8 @@
         "categories": {
             "title": "Nach Kategorien",
             "settlement": "Ausgleichszahlungen (netto)",
-            "other": "Sonstige"
+            "other": "Sonstige",
+            "no_chart": "Keine Kategorie mit positivem Betrag für das Diagramm."
         },
         "empty": "Keine eigenen Ausgaben im gewählten Zeitraum.",
         "error": "Die Statistik konnte nicht geladen werden.",

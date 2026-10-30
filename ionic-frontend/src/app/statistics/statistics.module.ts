@@ -10,6 +10,8 @@ import { StatisticsPage } from './statistics.page';
 import { TranslateModule } from '@ngx-translate/core';
 import { ScientificCurrencyPipe } from 'src/app/pipe/scientific.pipe';
 import { MonthNamePipe } from 'src/app/pipe/month-name.pipe';
+import { BarChartComponent } from './components/bar-chart/bar-chart.component';
+import { DonutChartComponent } from './components/donut-chart/donut-chart.component';
 
 @NgModule({
   imports: [
@@ -21,6 +23,6 @@ import { MonthNamePipe } from 'src/app/pipe/month-name.pipe';
     ScientificCurrencyPipe,
     MonthNamePipe
   ],
-  declarations: [StatisticsPage]
+  declarations: [StatisticsPage, BarChartComponent, DonutChartComponent]
 })
 export class StatisticsPageModule {}

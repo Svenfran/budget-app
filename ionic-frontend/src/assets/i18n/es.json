@@ -446,7 +446,8 @@
         "categories": {
             "title": "Por categoría",
             "settlement": "Repagos (neto)",
-            "other": "Otros"
+            "other": "Otros",
+            "no_chart": "Ninguna categoría con importe positivo para el gráfico."
         },
         "empty": "No hay gastos propios en el periodo seleccionado.",
         "error": "No se pudieron cargar las estadísticas.",

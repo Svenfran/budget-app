@@ -446,7 +446,8 @@
         "categories": {
             "title": "By category",
             "settlement": "Repayments (net)",
-            "other": "Other"
+            "other": "Other",
+            "no_chart": "No category with a positive amount for the chart."
         },
         "empty": "No spending of your own in the selected period.",
         "error": "The statistics could not be loaded.",

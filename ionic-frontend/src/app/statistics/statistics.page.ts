@@ -1,8 +1,11 @@
 import { Component, computed, effect, signal, untracked } from '@angular/core';
+import { TranslateService } from '@ngx-translate/core';
 import { GroupService } from 'src/app/service/group.service';
+import { LanguageService } from 'src/app/service/language.service';
 import { StatisticsPeriod } from './model/statistics-dto';
+import { ChartThemeService } from './service/chart-theme.service';
 import { StatisticsService } from './service/statistics.service';
-import { categoryRows, hasPersonalSpendings, yearOptions } from './statistics-calc';
+import { categoryRows, donutSegments, hasPersonalSpendings, timelineLabels, yearOptions } from './statistics-calc';
 
 /** Wert der Gruppenauswahl für „Alle Gruppen“ (ion-select kommt mit null als Wert nicht zurecht). */
 const ALL_GROUPS = 'all';
@@ -29,13 +32,30 @@ export class StatisticsPage {
   public selectedGroup = computed(() => this.filter().groupId ?? ALL_GROUPS);
   public categoryRows = computed(() => categoryRows(this.statistics()?.categories ?? []));
   public hasPersonalSpendings = computed(() => hasPersonalSpendings(this.statistics()));
+  public palette = computed(() => this.chartThemeService.theme().palette);
+  public barLabels = computed(() => {
+    const statistics = this.statistics();
+    const lang = this.languageService.currentLang();
+    if (!statistics) return [];
+    return timelineLabels(statistics.period, statistics.timeline, lang,
+      week => this.translate.instant('statistics.timeline.week', { week }));
+  });
+  public barValues = computed(() => this.statistics()?.timeline.map(entry => entry.amount) ?? []);
+  public donutSegments = computed(() => donutSegments(this.statistics()?.categories ?? []));
+  public donutLabels = computed(() => {
+    this.languageService.currentLang();
+    return this.donutSegments().map(segment => segment.name ?? this.translate.instant('statistics.categories.other'));
+  });
   /** Jahre der letzten Antwort, damit die Auswahl während des Ladens nicht schrumpft */
   private knownYears = signal<number[]>([]);
   public years = computed(() => yearOptions(this.knownYears(), new Date().getFullYear(), this.filter().year));
 
   constructor(
     private statisticsService: StatisticsService,
-    private groupService: GroupService
+    private groupService: GroupService,
+    private chartThemeService: ChartThemeService,
+    private translate: TranslateService,
+    private languageService: LanguageService
   ) {
     effect(() => {
       const statistics = this.statistics();

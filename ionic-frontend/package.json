@@ -45,6 +45,7 @@
     "@ngx-translate/http-loader": "^17.0.0",
     "@stomp/stompjs": "^7.0.0",
     "@types/moment": "^2.11.29",
+    "chart.js": "4.6.1",
     "cross-env": "^10.0.0",
     "date-fns": "^4.1.0",
     "ionicons": "^7.0.0",
