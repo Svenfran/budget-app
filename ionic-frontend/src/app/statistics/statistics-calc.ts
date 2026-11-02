@@ -47,13 +47,15 @@ export function donutSegments(categories: StatisticsCategoryDto[]): DonutSegment
 
 /**
  * Liste unter dem Donut: alle Zeilen in Backend-Reihenfolge, auch Ausgleichszahlungen und negative Kategorien. Die
- * Summe der Liste ist „Von dir bezahlt“. Prozent und Farbe nur für Kategorien, die im Donut stecken (gebündelte mit
- * der Farbe von „Sonstige“).
+ * Ausgleichszahlungen stehen unabhängig vom Betrag am Ende (die Seite trennt sie per Linie ab), da sie keine Ausgaben
+ * sind. Die Summe der Liste ist „Von dir bezahlt“. Prozent und Farbe nur für Kategorien, die im Donut stecken
+ * (gebündelte mit der Farbe von „Sonstige“).
  */
 export function categoryRows(categories: StatisticsCategoryDto[]): CategoryRow[] {
   const positive = donutCategories(categories);
   const total = sumCents(positive) / 100;
-  return categories.map(category => {
+  const ordered = [...categories.filter(c => !c.settlement), ...categories.filter(c => c.settlement)];
+  return ordered.map(category => {
     const index = positive.indexOf(category);
     if (index < 0) {
       return { ...category, percent: null, colorIndex: null };

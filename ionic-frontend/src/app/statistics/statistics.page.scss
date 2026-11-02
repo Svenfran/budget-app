@@ -18,7 +18,9 @@ ion-segment {
     gap: 0.25rem;
     padding: 0.75rem;
     border-radius: 8px;
-    background: var(--ion-color-step-50);
+    // Karten-Hintergrund ist in beiden Themes gesetzt (hell: weiß auf grau, dunkel: heller als der Hintergrund);
+    // die --ion-color-step-* gibt es nur im Dark-Theme
+    background: var(--ion-card-background);
 }
 
 .amount {
@@ -28,6 +30,12 @@ ion-segment {
         color: var(--ion-color-medium);
         padding-right: 0.5rem;
     }
+}
+
+// Grenzt die Ausgleichszahlungen (immer letzte Zeile, nicht im Donut) von den Kategorien ab
+.settlement-separator {
+    // Fallback wie Ionics Item-Linie: im hellen Theme ist --ion-color-step-250 nicht definiert
+    border-top: 1px solid var(--ion-color-step-250, #c8c7cc);
 }
 
 .dot {

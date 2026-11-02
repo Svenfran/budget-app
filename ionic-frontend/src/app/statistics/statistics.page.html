@@ -115,7 +115,9 @@
               <ion-item *ngIf="donutSegments().length === 0" lines="none">
                 <ion-label class="ion-text-wrap" color="medium">{{ 'statistics.categories.no_chart' | translate }}</ion-label>
               </ion-item>
-              <ion-item *ngFor="let row of categoryRows(); let last = last" [lines]="last ? 'none' : 'inset'">
+              <ion-item *ngFor="let row of categoryRows(); let i = index; let first = first; let last = last"
+                        [lines]="last || categoryRows()[i + 1].settlement ? 'none' : 'inset'"
+                        [class.settlement-separator]="row.settlement && !first">
                 <span slot="start" class="dot" [style.background]="row.colorIndex !== null ? palette()[row.colorIndex] : 'transparent'"></span>
                 <ion-label class="ion-text-wrap">
                   {{ row.settlement ? ('statistics.categories.settlement' | translate) : row.name }}

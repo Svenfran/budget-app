@@ -29,16 +29,26 @@ describe('statistics-calc', () => {
       ]);
     });
 
-    it('Liste zeigt alle Zeilen in Backend-Reihenfolge; Ausgleichszahlungen und negative Zeilen ohne Prozent und Farbe', () => {
+    it('Liste zeigt alle Zeilen, Ausgleichszahlungen am Ende; Ausgleichszahlungen und negative Zeilen ohne Prozent und Farbe', () => {
       const rows = categoryRows(mixed);
 
       expect(rows.map(r => [r.name, r.amount, r.settlement, r.percent, r.colorIndex])).toEqual([
         ['Lebensmittel', 60, false, 75, 0],
         ['Haushalt', 20, false, 25, 1],
-        ['Ausgleichszahlung', -30, true, null, null],
         ['Erstattung', -10, false, null, null],
+        ['Ausgleichszahlung', -30, true, null, null],
       ]);
       expect(cents(rows.map(r => r.amount))).withContext('Summe der Liste = Von dir bezahlt').toBe(4000);
+    });
+
+    it('Ausgleichszahlungen stehen auch mit dem größten Betrag am Ende, sonst bleibt die Backend-Reihenfolge', () => {
+      const backendOrder = [category('Ausgleichszahlung', 500, true), category('Lebensmittel', 60),
+        category('Haushalt', 20), category('Erstattung', -10)];
+
+      const rows = categoryRows(backendOrder);
+
+      expect(rows.map(r => r.name)).toEqual(['Lebensmittel', 'Haushalt', 'Erstattung', 'Ausgleichszahlung']);
+      expect(rows.map(r => [r.percent, r.colorIndex])).toEqual([[75, 0], [25, 1], [null, null], [null, null]]);
     });
 
     it('rundet Prozente auf eine Nachkommastelle; die Summe ist ungefähr 100', () => {
