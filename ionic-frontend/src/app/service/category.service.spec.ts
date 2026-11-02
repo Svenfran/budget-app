@@ -162,4 +162,23 @@ describe('CategoryService', () => {
       expect(alerts.showErrorAlert).not.toHaveBeenCalled();
     });
   });
+
+  describe('isSettlementpayment', () => {
+    // Regression DIV-63: Die Liste enthielt 'Settlement payment'/'Pago de ajuste', das Backend legt die Kategorie
+    // aber als 'Repayment'/'Repago' an (categories.default.settlement) – in en/es wurde sie nicht erkannt.
+    const useLanguage = (lang: string, settlement: string) => {
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation(lang, { domains: { spendings: { settlement } } });
+      translate.use(lang);
+    };
+
+    [['de', 'Ausgleichszahlung'], ['en', 'Repayment'], ['es', 'Repago']].forEach(([lang, settlement]) => {
+      it(`erkennt die Ausgleichszahlungs-Kategorie des Backends in ${lang} ('${settlement}')`, () => {
+        useLanguage(lang, settlement);
+
+        expect(service.isSettlementpayment(settlement)).toBeTrue();
+        expect(service.isSettlementpayment('Lebensmittel')).toBeFalse();
+      });
+    });
+  });
 });

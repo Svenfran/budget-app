@@ -25,4 +25,4 @@ export enum INIT_NUMBERS {
     HEALTH_CHECK_TIMEOUT_MS = 10000
 }
 
-export const SETTLEMENTPAYMENT_CATEGORIES = ['Ausgleichszahlung', 'Settlement payment', 'Pago de ajuste'];
+export const SETTLEMENTPAYMENT_CATEGORIES = ['Ausgleichszahlung', 'Repayment', 'Repago'];
