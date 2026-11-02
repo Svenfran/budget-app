@@ -78,6 +78,20 @@ public class SpendingsOverviewService {
         return spendingsOverviewTotalYearDto;
     }
 
+    /**
+     * Aktueller offener Saldo des Nutzers in der Gruppe in Cent, identisch zum {@code diff} der Gesamtübersicht
+     * ({@link #getSpendingsForGroupAndAllYears}); 0, wenn die Gruppe keine Carts hat oder der Nutzer nicht in der
+     * Historie steht (Statistikseite, DIV-63). Prüft keine Berechtigung – der Aufrufer muss das vorher tun, deshalb
+     * paket-intern.
+     */
+    long currentBalanceCents(Long groupId, Long userId) throws UserNotFoundException {
+        return getSpendingsOverviewTotalAllYears(loadOverviewData(groupId)).getSpendingsTotalUser().stream()
+                .filter(userDto -> userDto.getUserId().equals(userId))
+                .findFirst()
+                .map(userDto -> toCents(userDto.getDiff()))
+                .orElse(0L);
+    }
+
     private List<SpendingsOverviewPerYearDto> getSpendingsOverviewPerYear(OverviewData data, List<Integer> availableYears) throws UserNotFoundException {
         var spendingsOverviewPerYearDtoList = new ArrayList<SpendingsOverviewPerYearDto>();
 

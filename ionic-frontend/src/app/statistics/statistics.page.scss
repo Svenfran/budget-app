@@ -1,0 +1,38 @@
+ion-segment {
+    margin: 0.5rem 0;
+
+    ion-label {
+        font-size: smaller;
+    }
+}
+
+.kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    gap: 0.5rem;
+}
+
+.kpi {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.75rem;
+    border-radius: 8px;
+    background: var(--ion-color-step-50);
+}
+
+.amount {
+    white-space: nowrap;
+
+    .percent {
+        color: var(--ion-color-medium);
+        padding-right: 0.5rem;
+    }
+}
+
+.dot {
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 50%;
+    margin-inline-end: 0.75rem;
+}

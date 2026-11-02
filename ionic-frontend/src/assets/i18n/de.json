@@ -36,6 +36,10 @@
             "edit": "Kategorien bearbeiten",
             "create": "Kategorie hinzufügen"
         },
+        "statistics": {
+            "header": "STATISTIK",
+            "open": "Statistik"
+        },
         "settings": {
             "header": "EINSTELLUNGEN",
             "edit_profile": "Profil bearbeiten",
@@ -417,6 +421,37 @@
             "yearly": "Jährlich",
             "none": "Kein Wiederholung"
         }
+    },
+    "statistics": {
+        "title": "Statistik",
+        "filter": {
+            "group": "Gruppe",
+            "all_groups": "Alle Gruppen",
+            "period_month": "Monat",
+            "period_year": "Jahr",
+            "period_all": "Alle",
+            "month": "Monat",
+            "year": "Jahr"
+        },
+        "kpi": {
+            "total_spent": "Gesamtausgaben",
+            "paid_by_user": "Von dir bezahlt",
+            "current_balance": "Aktueller Saldo",
+            "current_balance_hint": "Unabhängig vom Zeitraum"
+        },
+        "timeline": {
+            "title": "Von dir bezahlt",
+            "week": "KW {{week}}"
+        },
+        "categories": {
+            "title": "Nach Kategorien",
+            "settlement": "Ausgleichszahlungen (netto)",
+            "other": "Sonstige",
+            "no_chart": "Keine Kategorie mit positivem Betrag für das Diagramm."
+        },
+        "empty": "Keine eigenen Ausgaben im gewählten Zeitraum.",
+        "error": "Die Statistik konnte nicht geladen werden.",
+        "retry": "Erneut laden"
     },
     "error_pages": {
         "no_group": {

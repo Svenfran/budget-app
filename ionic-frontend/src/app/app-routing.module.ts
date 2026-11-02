@@ -55,6 +55,12 @@ export const routes: Routes = [
     canActivate: [AuthGuard]
   },
   {
+    path: 'statistics',
+    loadChildren: () => import('./statistics/statistics.module').then( m => m.StatisticsPageModule),
+    canLoad: [AuthGuard],
+    canActivate: [AuthGuard]
+  },
+  {
     path: 'settlement-payment',
     loadChildren: () => import('./settlement-payment/settlement-payment.module').then( m => m.SettlementPaymentPageModule),
     canLoad: [AuthGuard],
