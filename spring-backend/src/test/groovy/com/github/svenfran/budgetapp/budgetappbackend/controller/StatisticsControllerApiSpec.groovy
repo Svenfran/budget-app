@@ -44,19 +44,21 @@ class StatisticsControllerApiSpec extends IntegrationSpec implements ApiRequests
         when:
         def response = send(statistics(groupId: groupId, period: 'MONTH', year: 2025, month: 3), user: owner)
         def body = json(response)
-        LOG.info('Antwort: Felder {}, totalSpent {}, paidByUser {}, currentBalance {}, Wochen {}, Kategorien {}',
-                body.keySet(), body.totalSpent, body.paidByUser, body.currentBalance, body.timeline*.week, body.categories)
+        LOG.info('Antwort: Felder {}, totalSpent {}, paidByUser {}, paidCartCount {}, currentBalance {}, Wochen {}, Kategorien {}',
+                body.keySet(), body.totalSpent, body.paidByUser, body.paidCartCount, body.currentBalance, body.timeline*.week,
+                body.categories)
 
         then:
         response.status == 200
-        body.keySet() == ['groupId', 'period', 'year', 'month', 'totalSpent', 'paidByUser', 'currentBalance',
-                          'availableYears', 'timeline', 'categories'] as Set
+        body.keySet() == ['groupId', 'period', 'year', 'month', 'totalSpent', 'paidByUser', 'paidCartCount',
+                          'currentBalance', 'availableYears', 'timeline', 'categories'] as Set
         body.groupId == groupId
         body.period == 'MONTH'
         body.year == 2025
         body.month == 3
         body.totalSpent == 20.0
         body.paidByUser == 12.5
+        body.paidCartCount == 1
         body.currentBalance == 2.5
         body.availableYears == [2025]
 

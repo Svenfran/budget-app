@@ -19,7 +19,8 @@ import static com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils.to
  * Definitionen wie in der Übersicht ({@code SpendingsOverviewService}): Gesamtausgaben = Summe aller Carts im Zeitraum,
  * Von dir bezahlt = Summe der Carts mit dem Nutzer als Zahler, jeweils je Cart auf Cent gerundet und inklusive
  * Ausgleichszahlungen und gelöschter Carts. Zeitreihe und Kategorien zeigen nur die persönlich bezahlten Carts; ihre
- * Summe ist jeweils gleich {@link StatisticsResult#paidCents()}.
+ * Summe ist jeweils gleich {@link StatisticsResult#paidCents()}. Bezahlte Einkäufe = Anzahl derselben Carts ohne
+ * Ausgleichszahlungen (keine Einkäufe).
  */
 public final class StatisticsCalculator {
 
@@ -58,12 +59,15 @@ public final class StatisticsCalculator {
 
         long totalCents = periodCarts.stream().mapToLong(cart -> toCents(cart.getAmount())).sum();
         long paidCents = paidCarts.stream().mapToLong(cart -> toCents(cart.getAmount())).sum();
+        long paidCartCount = paidCarts.stream()
+                .filter(cart -> !settlementNames.contains(normalize(cart.getCategory().getName())))
+                .count();
         var timeline = switch (period) {
             case MONTH -> weeklyTimeline(paidCarts, year, month);
             case YEAR -> monthlyTimeline(paidCarts, year);
             case ALL -> yearlyTimeline(paidCarts, availableYears);
         };
-        return new StatisticsResult(totalCents, paidCents, timeline, categories(paidCarts, settlementNames));
+        return new StatisticsResult(totalCents, paidCents, paidCartCount, timeline, categories(paidCarts, settlementNames));
     }
 
     /** Vergleichsschlüssel für Kategorienamen: getrimmt, ohne Groß-/Kleinschreibung. */
@@ -142,7 +146,7 @@ public final class StatisticsCalculator {
                 .sum();
     }
 
-    public record StatisticsResult(long totalCents, long paidCents, List<TimelineEntry> timeline,
+    public record StatisticsResult(long totalCents, long paidCents, long paidCartCount, List<TimelineEntry> timeline,
                                    List<CategoryEntry> categories) {
     }
 

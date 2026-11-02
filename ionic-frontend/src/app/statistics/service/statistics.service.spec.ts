@@ -24,7 +24,7 @@ describe('StatisticsService', () => {
   const defaultFilter: StatisticsFilter = { groupId: null, period: 'YEAR', year: 2025, month: 6 };
 
   const statisticsDto = (overrides: Partial<StatisticsDto> = {}): StatisticsDto => ({
-    groupId: null, period: 'YEAR', year: 2025, month: null, totalSpent: 100, paidByUser: 60, currentBalance: 10,
+    groupId: null, period: 'YEAR', year: 2025, month: null, totalSpent: 100, paidByUser: 60, paidCartCount: 3, currentBalance: 10,
     availableYears: [2025], timeline: [], categories: [], ...overrides,
   });
   const isStatisticsRequest = (request: HttpRequest<unknown>) => request.url === api;
