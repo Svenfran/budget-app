@@ -88,6 +88,7 @@ public class StatisticsService {
         dto.setMonth(effectiveMonth);
         dto.setTotalSpent(toEuro(result.totalCents()));
         dto.setPaidByUser(toEuro(result.paidCents()));
+        dto.setPaidCartCount(result.paidCartCount());
         dto.setCurrentBalance(toEuro(balanceCents));
         dto.setAvailableYears(List.copyOf(availableYears));
         dto.setTimeline(result.timeline().stream()

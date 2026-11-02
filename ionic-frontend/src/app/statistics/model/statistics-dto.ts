@@ -31,6 +31,8 @@ export interface StatisticsDto {
   month: number | null;
   totalSpent: number;
   paidByUser: number;
+  /** Carts mit dir als Zahler im Zeitraum, ohne Ausgleichszahlungen */
+  paidCartCount: number;
   /** unabhängig vom Zeitraum */
   currentBalance: number;
   /** absteigend */

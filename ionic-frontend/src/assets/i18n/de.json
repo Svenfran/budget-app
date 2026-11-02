@@ -437,7 +437,8 @@
             "total_spent": "Gesamtausgaben",
             "paid_by_user": "Von dir bezahlt",
             "current_balance": "Aktueller Saldo",
-            "current_balance_hint": "Unabhängig vom Zeitraum"
+            "current_balance_hint": "Unabhängig vom Zeitraum",
+            "paid_cart_count": "Bezahlte Einkäufe"
         },
         "timeline": {
             "title": "Von dir bezahlt",

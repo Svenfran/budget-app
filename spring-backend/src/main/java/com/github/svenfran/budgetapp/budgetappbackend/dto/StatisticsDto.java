@@ -13,6 +13,8 @@ public class StatisticsDto {
     private Integer month;
     private double totalSpent;
     private double paidByUser;
+    // Carts mit dem Nutzer als Zahler im Zeitraum, ohne Ausgleichszahlungen
+    private long paidCartCount;
     // Summe der offenen Salden der gewählten Gruppen, unabhängig vom Zeitraum
     private double currentBalance;
     // absteigend, Jahre mit Carts in den gewählten Gruppen
@@ -70,6 +72,14 @@ public class StatisticsDto {
 
     public void setPaidByUser(double paidByUser) {
         this.paidByUser = paidByUser;
+    }
+
+    public long getPaidCartCount() {
+        return paidCartCount;
+    }
+
+    public void setPaidCartCount(long paidCartCount) {
+        this.paidCartCount = paidCartCount;
     }
 
     public double getCurrentBalance() {

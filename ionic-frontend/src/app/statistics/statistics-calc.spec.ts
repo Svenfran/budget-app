@@ -11,7 +11,7 @@ describe('statistics-calc', () => {
   const entry = (overrides: Partial<StatisticsTimelineEntryDto>): StatisticsTimelineEntryDto =>
     ({ year: 2025, month: null, week: null, from: null, to: null, amount: 0, ...overrides });
   const dto = (overrides: Partial<StatisticsDto>): StatisticsDto => ({
-    groupId: null, period: 'YEAR', year: 2025, month: null, totalSpent: 0, paidByUser: 0, currentBalance: 0,
+    groupId: null, period: 'YEAR', year: 2025, month: null, totalSpent: 0, paidByUser: 0, paidCartCount: 0, currentBalance: 0,
     availableYears: [], timeline: [], categories: [], ...overrides,
   });
 

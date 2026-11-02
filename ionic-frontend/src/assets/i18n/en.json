@@ -437,7 +437,8 @@
             "total_spent": "Total spending",
             "paid_by_user": "Paid by you",
             "current_balance": "Current balance",
-            "current_balance_hint": "Independent of the period"
+            "current_balance_hint": "Independent of the period",
+            "paid_cart_count": "Paid purchases"
         },
         "timeline": {
             "title": "Paid by you",

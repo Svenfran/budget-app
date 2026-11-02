@@ -437,7 +437,8 @@
             "total_spent": "Gastos totales",
             "paid_by_user": "Pagado por ti",
             "current_balance": "Saldo actual",
-            "current_balance_hint": "Independiente del periodo"
+            "current_balance_hint": "Independiente del periodo",
+            "paid_cart_count": "Compras pagadas"
         },
         "timeline": {
             "title": "Pagado por ti",

@@ -57,6 +57,7 @@ class StatisticsServiceIntegrationSpec extends IntegrationSpec {
         dto.groupId == haushalt.group.id
         dto.totalSpent == 100d
         dto.paidByUser == 60d
+        dto.paidCartCount == 1L
         dto.currentBalance == 10d   // Anteil 50, bezahlt 60
         dto.availableYears == [2025]
     }
@@ -86,6 +87,7 @@ class StatisticsServiceIntegrationSpec extends IntegrationSpec {
         jahr.groupId == null
         jahr.totalSpent == 110d
         jahr.paidByUser == 60d
+        jahr.paidCartCount == 1L
         // Haushalt: bezahlt 60, Anteil 50 → +10; Urlaub: bezahlt 30, Anteil 20 → +10
         jahr.currentBalance == 20d
         jahr.availableYears == [2025, 2024]
@@ -93,6 +95,7 @@ class StatisticsServiceIntegrationSpec extends IntegrationSpec {
         and: "ALL: jeder Cart genau einmal"
         alle.totalSpent == 140d
         alle.paidByUser == 90d
+        alle.paidCartCount == 2L
         alle.currentBalance == 20d
         alle.timeline*.year == [2024, 2025]
         alle.timeline*.amount == [30d, 60d]
@@ -121,6 +124,7 @@ class StatisticsServiceIntegrationSpec extends IntegrationSpec {
         and:
         dto.totalSpent == 50d
         dto.paidByUser == 50d
+        dto.paidCartCount == 1L
         dto.currentBalance == uebersicht
         dto.currentBalance == 25d
     }
@@ -191,14 +195,16 @@ class StatisticsServiceIntegrationSpec extends IntegrationSpec {
         jahr.currentBalance == saldo
         maerz.currentBalance == saldo
 
-        and: "die Ausgleichszahlung erscheint als eigene Kategoriezeile"
+        and: "die Ausgleichszahlung erscheint als eigene Kategoriezeile, zählt aber nicht als bezahlter Einkauf"
         jahr.categories.findAll { it.settlement }*.amount == ausgleich
+        jahr.paidCartCount == einkaeufeJahr
+        maerz.paidCartCount == einkaeufeMaerz
 
         where:
-        nutzer || ausgleich
-        'Anna' || [-20d]
-        'Ben'  || [20d]
-        'Cleo' || []
+        nutzer || ausgleich | einkaeufeJahr | einkaeufeMaerz
+        'Anna' || [-20d]    | 1L            | 0L
+        'Ben'  || [20d]     | 1L            | 1L
+        'Cleo' || []        | 1L            | 1L
     }
 
     def "AC15: #fall erhält für die Gruppe NotOwnerOrMemberOfGroupException"() {
@@ -242,6 +248,7 @@ class StatisticsServiceIntegrationSpec extends IntegrationSpec {
         then:
         dto.totalSpent == 80d
         dto.paidByUser == 0d
+        dto.paidCartCount == 0L
         dto.timeline.size() == 12
         dto.timeline*.amount.unique() == [0d]
         dto.categories == []
@@ -266,6 +273,7 @@ class StatisticsServiceIntegrationSpec extends IntegrationSpec {
         then:
         leer.totalSpent == 0d
         leer.paidByUser == 0d
+        leer.paidCartCount == 0L
         leer.timeline*.month == (1..12).toList()
         leer.timeline*.amount.unique() == [0d]
         leer.categories == []
@@ -276,9 +284,9 @@ class StatisticsServiceIntegrationSpec extends IntegrationSpec {
 
     private StatisticsDto statistik(Long groupId, period, Integer year, Integer month = null) {
         def dto = statisticsService.getStatistics(groupId, period, year, month)
-        LOG.info('statisticsService.getStatistics(Gruppe {}, {} {}/{}) -> totalSpent {}, paidByUser {}, currentBalance {}, ' +
-                'timeline {}, categories {}', groupId ?: 'alle', period, year, month, dto.totalSpent, dto.paidByUser,
-                dto.currentBalance, dto.timeline*.amount, dto.categories.collect { "${it.name}=${it.amount}" })
+        LOG.info('statisticsService.getStatistics(Gruppe {}, {} {}/{}) -> totalSpent {}, paidByUser {}, paidCartCount {}, ' +
+                'currentBalance {}, timeline {}, categories {}', groupId ?: 'alle', period, year, month, dto.totalSpent,
+                dto.paidByUser, dto.paidCartCount, dto.currentBalance, dto.timeline*.amount, dto.categories.collect { "${it.name}=${it.amount}" })
         dto
     }
 

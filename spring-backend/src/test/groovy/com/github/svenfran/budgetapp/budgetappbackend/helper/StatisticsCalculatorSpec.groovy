@@ -126,6 +126,7 @@ class StatisticsCalculatorSpec extends Specification {
         then:
         result.totalCents() == 0L
         result.paidCents() == 0L
+        result.paidCartCount() == 0L
         result.timeline() == []
         result.categories() == []
     }
@@ -187,6 +188,34 @@ class StatisticsCalculatorSpec extends Specification {
                                 new CategoryEntry('Erstattung', -1000L, false)]
         result.categories()*.amountCents().sum() == result.paidCents()
         result.timeline()*.amountCents().sum() == result.paidCents()
+    }
+
+    def "Bezahlte Einkäufe #period: eigene Carts im Zeitraum aus allen übergebenen Gruppen, ohne Ausgleichszahlungen"() {
+        given: "Anna: 3 Einkäufe im März 2025 (davon einer in Urlaub, einer negativ), je einer im Juli 2025 und 2024, Ausgleichszahlungen in allen Sprachen"
+        def ausgleich = TestData.category(name: 'Ausgleichszahlung', group: haushalt)
+        def repayment = TestData.category(name: ' Repayment', group: urlaub)
+        def carts = [einkauf(anna, 10.0, LocalDate.of(2025, 3, 1)),
+                     einkauf(anna, 4.0, LocalDate.of(2025, 3, 2), TestData.category(name: 'Lebensmittel', group: urlaub), urlaub),
+                     einkauf(anna, -5.0, LocalDate.of(2025, 3, 31), TestData.category(name: 'Erstattung', group: haushalt)),
+                     einkauf(anna, 20.0, LocalDate.of(2025, 7, 1)),
+                     einkauf(anna, 30.0, LocalDate.of(2024, 12, 31)),
+                     einkauf(anna, 50.0, LocalDate.of(2025, 3, 15), ausgleich),
+                     einkauf(ben, -50.0, LocalDate.of(2025, 3, 15), ausgleich),
+                     einkauf(anna, -20.0, LocalDate.of(2025, 8, 1), repayment, urlaub),
+                     einkauf(ben, 99.0, LocalDate.of(2025, 3, 10))]
+
+        when:
+        def result = StatisticsCalculator.calculate(carts, anna.id, period, year, month, [2025, 2024], SETTLEMENT)
+
+        then:
+        result.paidCartCount() == anzahl
+        result.paidCents() == bezahlt
+
+        where: "Von dir bezahlt enthält die Ausgleichszahlungen weiterhin"
+        period | year | month || anzahl | bezahlt
+        MONTH  | 2025 | 3     || 3L     | 5900L
+        YEAR   | 2025 | null  || 4L     | 5900L
+        ALL    | null | null  || 5L     | 8900L
     }
 
     def "Rundung je Cart auf Cent (HALF_UP): #betraege ergeben #cent Cent"() {
