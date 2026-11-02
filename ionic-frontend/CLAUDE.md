@@ -91,11 +91,12 @@ Karma + Jasmine. `npm run test:ci` (needs a local Chrome/Chromium and `src/confi
 
 **No generated stubs.** There are no "should create" specs, and `angular.json` `schematics` keep `ng generate` from creating any (`skipTests: true` for the Angular schematics, `spec: false` for the Ionic `page`/`component`). Every spec is written on purpose.
 
-**Helpers live only in `src/testing/`**
+**Shared helpers live only in `src/testing/`**
 - `test-providers.ts`: `provideServiceTesting()` (mocked HTTP, empty router, `TranslateService` without loader — `instant()` returns the key, so alerts are asserted by key), `alertServiceSpy()` (`showErrorAlert`, `showToast`), `storageServiceFake()` (in-memory `StorageService`, stores JSON like the original — never let tests touch Capacitor Preferences) and `authServiceStub(user)` (`user`/`token`/`userIsAuthenticated` observables plus `logout`/`setUserData`/`login`/`register`/`getDeviceId`/`autoLogin` spies; `autoLogin` returns `false` by default).
 - `test-data.ts`: factories `aUser`, `aGroup`, `aCategory`, `aCart`, `aShoppingList`, `aShoppingItem` with `Partial<T>` overrides, unique ids and the fixed `REFERENCE_DATE` (2025-06-15); `aLoggedInUser()` returns a `User` whose token expires one hour after `REFERENCE_DATE` — combine it with `jasmine.clock().mockDate(REFERENCE_DATE)` (and `uninstall()` in `afterEach`), since `User.token` checks the current time. Never use the current date in tests.
 - Because the loader-less `TranslateService` doesn't interpolate, alert parameters (e.g. `{userName}`) are asserted on the call: `spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough()`, then `toHaveBeenCalledWith(key, params)`.
 - Add a factory or helper only when a story needs it.
+- Spec-local factories or consts used by a single spec file are fine (e.g. `listDto`/`itemDto` in `shoppinglist.service.spec.ts`, `statisticsDto` in `statistics.service.spec.ts`); once a second spec needs one, move it to `src/testing/`.
 
 **What to assert**
 - The request (URL, method, body), the signal state after success **and** after an error, the `triggerUpdate()` counters, and alert keys.

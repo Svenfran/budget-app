@@ -115,7 +115,7 @@ Layout: the package mirrors `main` (`controller/`, `service/`, `service/mapper/`
 - `Fixtures` — Spring component, **persisted**, consistent scenarios: `fixtures.group(members: [ben])` returns a `GroupScenario` (`group`, `owner`, `members`, `category`) with membership history; plus `user`, `category`, `cart`, `template`, `token`.
 - Defaults are valid, names/e-mails unique, dates fixed (`TestData.REFERENCE_DATE` = 2025-06-15; memberships start one year before, `memberSince:` overrides). Values the test asserts on are set in the test, not hidden in defaults.
 - Groovy named args go into the first (`Map`) parameter: `fixtures.cart(wg, title: 'Pizza')`.
-- No real tokens or personal data. New `TestData`/`Fixtures` methods only with the first test that needs them; no other helpers or private builders.
+- No real tokens or personal data. New `TestData`/`Fixtures` methods only with the first test that needs them. Other shared helpers or builders don't exist; a spec may have small private helpers that only shorten its own setup on top of `TestData`/`Fixtures` (e.g. `kauf(...)` in `ShoppingSuggestionRankerSpec`, `zahlung(...)` in `SpendingsOverviewServiceIntegrationSpec`). Anything a second spec needs goes into `TestData`/`Fixtures`.
 
 ### Isolation
 

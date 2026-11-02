@@ -18,8 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.DateTimeException;
-import java.time.temporal.ChronoField;
+import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -109,9 +108,9 @@ public class StatisticsService {
         if (year == null) {
             throw new InvalidStatisticsRequestException(String.format("Year is required for period %s", period));
         }
-        try {
-            ChronoField.YEAR.checkValidIntValue(year);
-        } catch (DateTimeException e) {
+        // Technische, keine fachliche Grenze: Am Rand des LocalDate-Bereichs reichen die Kalenderwochen über
+        // LocalDate.MIN/MAX hinaus (Codex-Review F-001), daher sind die beiden Randjahre ausgeschlossen.
+        if (year <= LocalDate.MIN.getYear() || year >= LocalDate.MAX.getYear()) {
             throw new InvalidStatisticsRequestException(String.format("Year %s is not valid", year));
         }
         if (period == StatisticsPeriod.MONTH && (month == null || month < 1 || month > 12)) {

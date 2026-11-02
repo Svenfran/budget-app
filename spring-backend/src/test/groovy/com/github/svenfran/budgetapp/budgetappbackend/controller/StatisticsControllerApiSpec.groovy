@@ -144,6 +144,8 @@ class StatisticsControllerApiSpec extends IntegrationSpec implements ApiRequests
         'period fehlt'                | [year: 2025]
         'year nicht darstellbar YEAR' | [period: 'YEAR', year: Integer.MAX_VALUE]
         'year nicht darstellbar MONTH'| [period: 'MONTH', year: Integer.MAX_VALUE, month: 1]
+        'year am LocalDate-Rand MONTH'| [period: 'MONTH', year: 999_999_999, month: 12]
+        'year am LocalDate-Rand YEAR' | [period: 'YEAR', year: -999_999_999]
     }
 
     private static MockHttpServletRequestBuilder statistics(Map parameter) {
