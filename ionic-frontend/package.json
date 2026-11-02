@@ -11,6 +11,8 @@
     "test": "ng test",
     "test:ci": "ng test --watch=false --browsers=ChromeHeadless",
     "lint": "ng lint",
+    "divvy:dev": "ionic serve",
+    "divvy:prod": "ionic serve --configuration production --port=80",
     "build:dev": "cross-env APP_ENV=dev ionic build --configuration development",
     "build:prod": "cross-env APP_ENV=prod ionic build --configuration production",
     "check-device": "powershell -Command \"if ((adb devices | Select-String '\\s*device$')) { Write-Host '✅ Gerät gefunden' } else { Write-Error '❌ Gerät nicht erkannt!'; exit 1 }\"",
