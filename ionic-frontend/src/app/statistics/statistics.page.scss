@@ -30,6 +30,11 @@ ion-segment {
     }
 }
 
+// Grenzt die Ausgleichszahlungen (immer letzte Zeile, nicht im Donut) von den Kategorien ab
+.settlement-separator {
+    border-top: 1px solid var(--ion-color-step-250);
+}
+
 .dot {
     width: 0.75rem;
     height: 0.75rem;
