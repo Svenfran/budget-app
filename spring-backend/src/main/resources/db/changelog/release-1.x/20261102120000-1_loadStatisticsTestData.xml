@@ -1,0 +1,206 @@
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Testdaten für die Statistikseite (DIV-63), nur Kontext dev.
+        Legt 6 Gruppen an, in denen Sven (sven@test.com) Owner oder Mitglied ist, je 3-5 Mitglieder,
+        je 60 Carts (56 Ausgaben reihum über die Mitglieder + 2 Ausgleichszahlungs-Paare), verteilt
+        vom Gruppenstart bis 2026-10-31. Nutzer werden per E-Mail gesucht (IDs sind in der Dev-DB nicht stabil).
+        setseed macht die Zufallswerte reproduzierbar. Kategorien mit weight 0 existieren, werden aber nicht genutzt.
+    -->
+    <changeSet author="sven (generated)" id="20261102120000-1" context="dev">
+        <sql splitStatements="false"><![CDATA[
+DO $$
+DECLARE
+    spec jsonb := '[
+      {"name": "WG Lindenstraße", "start": "2024-01-08", "owner": "sven@test.com",
+       "members": ["basti@test.com", "sabine@dev.com", "montse@example.com"],
+       "categories": [
+         {"name": "Lebensmittel", "weight": 30, "min": 8, "max": 120, "titles": ["Supermarkt", "Wochenmarkt", "Bäckerei", "Getränkemarkt"], "descriptions": ["Wocheneinkauf", "Getränke", "Obst & Gemüse", "Frühstück"]},
+         {"name": "Wohnung", "weight": 12, "min": 10, "max": 180, "titles": ["Baumarkt", "IKEA", "Reparatur"], "descriptions": ["Regal", "Glühbirnen", "Duschkopf", "Farbe Flur"]},
+         {"name": "Drogerie", "weight": 12, "min": 5, "max": 45, "titles": ["dm", "Rossmann"], "descriptions": ["Putzmittel", "Klopapier", "Waschmittel"]},
+         {"name": "Nebenkosten", "weight": 6, "min": 18, "max": 95, "titles": ["Strom", "Internet", "Rundfunkbeitrag"], "descriptions": ["Abschlag", "Monatsrechnung"]},
+         {"name": "Ausgehen", "weight": 6, "min": 20, "max": 90, "titles": ["WG-Party", "Bar", "Kino"], "descriptions": ["Getränke", "Tickets"]},
+         {"name": "Restaurant", "weight": 5, "min": 15, "max": 70, "titles": ["Pizza-Lieferung", "Döner", "Sushi"], "descriptions": ["Abendessen", "Lieferando"]},
+         {"name": "Geschenke", "weight": 2, "min": 10, "max": 40, "titles": ["Geburtstag Nachbarin", "Einweihung"], "descriptions": ["Blumen", "Wein"]},
+         {"name": "Sonstiges", "weight": 3, "min": 3, "max": 30, "titles": ["Post", "Schlüsseldienst"], "descriptions": ["Porto", "Ersatzschlüssel"]}
+       ]},
+      {"name": "Reisekasse", "start": "2024-03-01", "owner": "sascha@dev.com",
+       "members": ["sven@test.com", "tina@test.com", "martin@dev.com"],
+       "categories": [
+         {"name": "Unterkunft", "weight": 10, "min": 120, "max": 650, "titles": ["Ferienwohnung Mallorca", "Hotel Lissabon", "Hütte Allgäu", "Airbnb Amsterdam"], "descriptions": ["Anzahlung", "Restzahlung", "Kurtaxe"]},
+         {"name": "Transport", "weight": 12, "min": 25, "max": 420, "titles": ["Flüge", "Mietwagen", "Tanken", "Zugtickets", "Fähre"], "descriptions": ["Hinreise", "Rückreise", "vor Ort"]},
+         {"name": "Restaurant", "weight": 15, "min": 40, "max": 180, "titles": ["Tapas-Bar", "Fischrestaurant", "Pizzeria", "Brauhaus"], "descriptions": ["Abendessen", "Mittagessen"]},
+         {"name": "Lebensmittel", "weight": 10, "min": 15, "max": 90, "titles": ["Supermarkt", "Markthalle", "Bäckerei"], "descriptions": ["Frühstück", "Vorräte", "Grillen"]},
+         {"name": "Ausgehen", "weight": 8, "min": 20, "max": 120, "titles": ["Cocktailbar", "Club", "Strandbar"], "descriptions": ["Getränke", "Eintritt"]},
+         {"name": "Aktivitäten", "weight": 8, "min": 15, "max": 160, "titles": ["Bootstour", "Museum", "Kletterpark", "Surfkurs"], "descriptions": ["Tickets", "Kurs"]},
+         {"name": "Geschenke", "weight": 1, "min": 5, "max": 30, "titles": ["Souvenirs"], "descriptions": ["Mitbringsel"]},
+         {"name": "Sonstiges", "weight": 2, "min": 5, "max": 40, "titles": ["Apotheke", "Sonnencreme"], "descriptions": ["Reiseapotheke"]}
+       ]},
+      {"name": "Familie", "start": "2024-06-01", "owner": "sven@test.com",
+       "members": ["tina@test.com", "martin@dev.com"],
+       "categories": [
+         {"name": "Geschenke", "weight": 14, "min": 20, "max": 150, "titles": ["Geburtstag Mama", "Weihnachten", "Hochzeitstag Eltern", "Muttertag"], "descriptions": ["Geschenk", "Gutschein", "Blumen"]},
+         {"name": "Restaurant", "weight": 12, "min": 40, "max": 220, "titles": ["Familienessen", "Sonntagsbrunch", "Griechisch"], "descriptions": ["Abendessen", "Brunch"]},
+         {"name": "Ausflüge", "weight": 10, "min": 25, "max": 140, "titles": ["Zoo", "Freizeitpark", "Therme"], "descriptions": ["Eintritt", "Parken & Eintritt"]},
+         {"name": "Lebensmittel", "weight": 10, "min": 15, "max": 110, "titles": ["Grillen", "Weihnachtsessen", "Einkauf"], "descriptions": ["Fleisch & Salate", "Getränke"]},
+         {"name": "Wohnung", "weight": 4, "min": 20, "max": 200, "titles": ["Gartenarbeit Eltern", "Umzugshelfer"], "descriptions": ["Pflanzen", "Transporter"]},
+         {"name": "Ausgehen", "weight": 3, "min": 20, "max": 80, "titles": ["Weinfest", "Kino"], "descriptions": ["Getränke", "Tickets"]},
+         {"name": "Sonstiges", "weight": 3, "min": 5, "max": 50, "titles": ["Fotobuch", "Porto"], "descriptions": ["Familienfotos"]}
+       ]},
+      {"name": "Fußball Montagsrunde", "start": "2023-09-04", "owner": "basti@test.com",
+       "members": ["sven@test.com", "martin@dev.com", "sascha@dev.com", "montse@example.com"],
+       "categories": [
+         {"name": "Platzmiete", "weight": 20, "min": 40, "max": 90, "titles": ["Hallenmiete", "Kunstrasenplatz"], "descriptions": ["Montag", "Monatsmiete"]},
+         {"name": "Ausrüstung", "weight": 8, "min": 15, "max": 160, "titles": ["Bälle", "Trikots", "Leibchen", "Ballpumpe"], "descriptions": ["Sportgeschäft", "online bestellt"]},
+         {"name": "Ausgehen", "weight": 14, "min": 20, "max": 140, "titles": ["Bier nach dem Spiel", "Saisonabschluss"], "descriptions": ["Vereinsheim", "Kneipe"]},
+         {"name": "Restaurant", "weight": 6, "min": 30, "max": 120, "titles": ["Schnitzelabend", "Burger"], "descriptions": ["Teamessen"]},
+         {"name": "Lebensmittel", "weight": 5, "min": 8, "max": 35, "titles": ["Getränke", "Wasserkisten"], "descriptions": ["für die Halle"]},
+         {"name": "Turniere", "weight": 4, "min": 30, "max": 120, "titles": ["Startgebühr Turnier", "Hobbyliga"], "descriptions": ["Anmeldung"]},
+         {"name": "Geschenke", "weight": 2, "min": 20, "max": 80, "titles": ["Geschenk Trainer", "Hochzeit Mitspieler"], "descriptions": ["Gutschein"]},
+         {"name": "Sonstiges", "weight": 3, "min": 5, "max": 40, "titles": ["Erste-Hilfe-Set", "Tape"], "descriptions": ["Nachschub"]}
+       ]},
+      {"name": "Kaffeekasse Büro", "start": "2025-01-07", "owner": "sabine@dev.com",
+       "members": ["sven@test.com", "basti@test.com", "tina@test.com"],
+       "categories": [
+         {"name": "Kaffee", "weight": 25, "min": 3, "max": 35, "titles": ["Kaffeebohnen", "Milch", "Hafermilch", "Entkalker"], "descriptions": ["Rösterei", "Supermarkt"]},
+         {"name": "Snacks", "weight": 12, "min": 3, "max": 25, "titles": ["Kekse", "Obstkorb", "Brezeln"], "descriptions": ["Teamküche"]},
+         {"name": "Feiern", "weight": 6, "min": 15, "max": 120, "titles": ["Geburtstagskuchen", "Sommerfest", "Weihnachtsfeier"], "descriptions": ["Deko & Essen", "Kuchen"]},
+         {"name": "Lebensmittel", "weight": 5, "min": 5, "max": 40, "titles": ["Wasser", "Tee"], "descriptions": ["Vorrat"]},
+         {"name": "Geschenke", "weight": 4, "min": 20, "max": 90, "titles": ["Abschiedsgeschenk", "Geburtstag Chefin"], "descriptions": ["Sammelgeschenk"]},
+         {"name": "Ausgehen", "weight": 3, "min": 20, "max": 80, "titles": ["Feierabendbier"], "descriptions": ["Runde"]},
+         {"name": "Restaurant", "weight": 3, "min": 30, "max": 120, "titles": ["Mittagessen Team"], "descriptions": ["Italiener", "Thai"]},
+         {"name": "Sonstiges", "weight": 2, "min": 3, "max": 20, "titles": ["Spülmittel", "Kaffeefilter"], "descriptions": ["Teamküche"]}
+       ]},
+      {"name": "Fahrgemeinschaft", "start": "2024-09-02", "owner": "martin@dev.com",
+       "members": ["sven@test.com", "sascha@dev.com"],
+       "categories": [
+         {"name": "Tanken", "weight": 30, "min": 45, "max": 95, "titles": ["Tanken Aral", "Tanken Shell", "Tanken Jet"], "descriptions": ["Diesel", "Volltanken"]},
+         {"name": "Werkstatt", "weight": 4, "min": 60, "max": 450, "titles": ["Inspektion", "Reifenwechsel", "Ölwechsel"], "descriptions": ["Werkstatt Müller", "ATU"]},
+         {"name": "Parken", "weight": 8, "min": 3, "max": 25, "titles": ["Parkhaus", "Parkticket"], "descriptions": ["Innenstadt", "Bahnhof"]},
+         {"name": "Maut & Vignette", "weight": 3, "min": 10, "max": 40, "titles": ["Vignette Österreich", "Maut Brenner"], "descriptions": ["Urlaubsfahrt"]},
+         {"name": "Autopflege", "weight": 5, "min": 8, "max": 35, "titles": ["Waschanlage", "Scheibenwischer"], "descriptions": ["Premiumwäsche", "Ersatz"]},
+         {"name": "Versicherung", "weight": 2, "min": 120, "max": 300, "titles": ["Kfz-Versicherung"], "descriptions": ["Quartal"]},
+         {"name": "Sonstiges", "weight": 2, "min": 5, "max": 30, "titles": ["Frostschutz", "Warnweste"], "descriptions": ["Zubehör"]}
+       ]}
+    ]';
+    -- Wie GroupService.createDefaultCategories (de); fehlende werden ungenutzt angelegt
+    default_categories text[] := ARRAY['Ausgehen', 'Ausgleichszahlung', 'Geschenke', 'Lebensmittel', 'Restaurant', 'Wohnung', 'Sonstiges'];
+    end_date date := DATE '2026-10-31';
+    regular_carts int := 56;
+    settlement_pairs int := 2;
+    g jsonb;
+    c jsonb;
+    group_id bigint;
+    owner_id bigint;
+    member_ids bigint[];
+    all_ids bigint[];
+    member_count int;
+    start_date date;
+    cats jsonb[];
+    cat_ids bigint[];
+    total_weight int;
+    settlement_cat_id bigint;
+    pick int;
+    k int;
+    cat_id bigint;
+    i int;
+    user_id bigint;
+    receiver_id bigint;
+    amount numeric;
+    purchased date;
+    created timestamp;
+BEGIN
+    PERFORM setseed(0.2026);
+
+    FOR g IN SELECT value FROM jsonb_array_elements(spec) LOOP
+        start_date := (g->>'start')::date;
+        SELECT u.id INTO owner_id FROM user_details u WHERE u.email = g->>'owner';
+        member_ids := ARRAY(
+            SELECT u.id FROM jsonb_array_elements_text(g->'members') WITH ORDINALITY AS m(email, ord)
+            JOIN user_details u ON u.email = m.email ORDER BY m.ord);
+        IF owner_id IS NULL OR cardinality(member_ids) <> jsonb_array_length(g->'members') THEN
+            RAISE EXCEPTION 'Testdaten: Nutzer für Gruppe "%" nicht gefunden', g->>'name';
+        END IF;
+        all_ids := owner_id || member_ids;
+        member_count := cardinality(all_ids);
+
+        INSERT INTO group_details (name, owner_id, date_created, last_update)
+        VALUES (g->>'name', owner_id, start_date, now())
+        RETURNING id INTO group_id;
+
+        -- Owner steht nur in der Historie, nicht in group_members (wie GroupService)
+        INSERT INTO group_members (user_id, group_id) SELECT unnest(member_ids), group_id;
+        INSERT INTO group_membership_history (membership_start, type, user_id, group_id)
+        VALUES (start_date, 'OWNER', owner_id, group_id);
+        INSERT INTO group_membership_history (membership_start, type, user_id, group_id)
+        SELECT start_date, 'MEMBER', unnest(member_ids), group_id;
+
+        cats := ARRAY[]::jsonb[];
+        cat_ids := ARRAY[]::bigint[];
+        total_weight := 0;
+        FOR c IN SELECT value FROM jsonb_array_elements(g->'categories') LOOP
+            INSERT INTO category (name, group_id) VALUES (c->>'name', group_id) RETURNING id INTO cat_id;
+            cats := cats || c;
+            cat_ids := cat_ids || cat_id;
+            total_weight := total_weight + (c->>'weight')::int;
+        END LOOP;
+        INSERT INTO category (name, group_id)
+        SELECT d, group_id FROM unnest(default_categories) AS d
+        WHERE d <> 'Ausgleichszahlung'
+          AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(g->'categories') x WHERE x->>'name' = d);
+        INSERT INTO category (name, group_id) VALUES ('Ausgleichszahlung', group_id) RETURNING id INTO settlement_cat_id;
+
+        -- Ausgaben reihum über alle Mitglieder => gleichmäßige Verteilung
+        FOR i IN 0 .. regular_carts - 1 LOOP
+            user_id := all_ids[(i % member_count) + 1];
+
+            pick := floor(random() * total_weight)::int;
+            k := 1;
+            WHILE pick >= (cats[k]->>'weight')::int LOOP
+                pick := pick - (cats[k]->>'weight')::int;
+                k := k + 1;
+            END LOOP;
+            c := cats[k];
+
+            amount := round(((c->>'min')::numeric + random()::numeric * ((c->>'max')::numeric - (c->>'min')::numeric)), 2);
+            purchased := start_date + floor(random() * (end_date - start_date + 1))::int;
+            created := purchased + make_interval(hours => 8 + floor(random() * 14)::int, mins => floor(random() * 60)::int);
+
+            INSERT INTO cart (title, description, amount, average_per_member, date_purchased, date_created, last_update,
+                              user_id, category_id, group_id, is_deleted)
+            VALUES (c->'titles'->>floor(random() * jsonb_array_length(c->'titles'))::int,
+                    c->'descriptions'->>floor(random() * jsonb_array_length(c->'descriptions'))::int,
+                    amount, amount / member_count, purchased, created, created,
+                    user_id, cat_ids[k], group_id, false);
+        END LOOP;
+
+        -- Ausgleichszahlungen wie CartService.createSettlementPaymentCarts: +Betrag beim Sender, -Betrag beim Empfänger
+        FOR i IN 1 .. settlement_pairs LOOP
+            user_id := all_ids[1 + floor(random() * member_count)::int];
+            receiver_id := all_ids[1 + ((array_position(all_ids, user_id) + floor(random() * (member_count - 1))::int) % member_count)];
+            amount := round((20 + random() * 130)::numeric, 2);
+            purchased := start_date + floor(random() * (end_date - start_date + 1))::int;
+            created := purchased + INTERVAL '19 hours';
+
+            INSERT INTO cart (title, description, amount, average_per_member, date_purchased, date_created, last_update,
+                              user_id, category_id, group_id, is_deleted)
+            SELECT 'Ausgleichszahlung an ' || left(r.user_name, 10) || CASE WHEN length(r.user_name) > 10 THEN '...' ELSE '' END,
+                   '', amount, amount / member_count, purchased, created, created, user_id, settlement_cat_id, group_id, false
+            FROM user_details r WHERE r.id = receiver_id;
+
+            INSERT INTO cart (title, description, amount, average_per_member, date_purchased, date_created, last_update,
+                              user_id, category_id, group_id, is_deleted)
+            SELECT 'Ausgleichszahlung von ' || left(s.user_name, 10) || CASE WHEN length(s.user_name) > 10 THEN '...' ELSE '' END,
+                   '', -amount, -amount / member_count, purchased, created, created, receiver_id, settlement_cat_id, group_id, false
+            FROM user_details s WHERE s.id = user_id;
+        END LOOP;
+    END LOOP;
+END $$;
+        ]]></sql>
+    </changeSet>
+
+</databaseChangeLog>

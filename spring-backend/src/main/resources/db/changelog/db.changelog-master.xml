@@ -65,4 +65,6 @@
 
     <include context="dev,test,prod" file="db/changelog/release-1.x/20261028120000-1_createShoppingPurchaseTable.xml" relativeToChangelogFile="false"/>
 
+    <include context="dev" file="db/changelog/release-1.x/20261102120000-1_loadStatisticsTestData.xml" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>
