@@ -190,6 +190,12 @@
 
     --ion-item-background: #000000;
 
+    // ohne diese Werte greift im iOS-Modus das helle #fff aus :root (weiße Toolbar/Tab-Bar, unsichtbarer Titel);
+    // gleiche Werte wie im Material-Design-Dark-Theme
+    --ion-toolbar-background: #1f1f1f;
+
+    --ion-tab-bar-background: #1f1f1f;
+
     --ion-card-background: #1c1c1d;
   }
 
