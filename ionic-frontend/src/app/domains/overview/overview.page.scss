@@ -75,11 +75,206 @@ ion-segment {
     font-weight: bold;
 }
 
-.positive {
-    color: #5da7d5;
+// ---------------------------------------------------------------------------
+// DIV-67: Karten-Layout der Übersicht.
+// Kompatibilität (Browserslist Chrome >= 79, Safari >= 14): kein Flexbox-gap und keine logischen
+// Kurzformen (margin-block/-inline), Abstände über physische margins; overflow-wrap: anywhere nur
+// mit word-break-Fallback. Umbrüche entstehen intrinsisch über flex-wrap (keine Media/Container Queries,
+// die die Android-Schriftskalierung nicht erkennen). Größen in em, damit sie mit der Systemschrift skalieren.
+// ---------------------------------------------------------------------------
+
+.overview-grid {
+    // knappere Seitenränder als ion-padding, damit drei Spalten bei ~360 dp in eine Zeile passen
+    --ion-grid-padding: 8px;
+    --ion-grid-column-padding: 0;
 }
 
-.negative {
-    color: #8e5ea2;
+.overview-card {
+    margin: 0 0 12px 0;
+    padding: 12px 14px;
+    border-radius: 12px;
+    // ion-card (md) setzt eine gedämpfte Textfarbe; Karten-Hintergrund ist in beiden Themes gesetzt
+    --background: var(--ion-card-background);
+    --color: var(--ion-text-color);
+}
+
+.card-icon {
+    flex: 0 0 auto;
+    font-size: 1.5em;
+    margin-right: 0.6em;
+}
+
+// Gesamtkarte: hervorgehoben über Typografie und Icon, kein Farbverlauf (Nutzerentscheidung)
+.total-card {
+    .total-head {
+        display: flex;
+        align-items: center;
+    }
+
+    .total-text {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .period {
+        font-weight: bold;
+        font-size: 1.1em;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    .subtitle {
+        display: block;
+        font-size: 0.9em;
+    }
+
+    .total-amount {
+        margin-top: 0.3em;
+        font-size: 1.6em;
+        font-weight: bold;
+        font-variant-numeric: tabular-nums;
+        // sehr große Beträge bei großer Schrift: umbrechen statt abschneiden
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+}
+
+.card-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 0.4em;
+
+    .title-text {
+        font-weight: bold;
+        margin-right: 0.4em;
+    }
+}
+
+// Mitgliederzeile: Avatar | Name | Ausgaben | Saldo
+.member-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    padding-top: 0.4em;
+    padding-bottom: 0.4em;
+    // Trennlinie wie Ionics Item-Linie; --ion-color-step-* gibt es nur im Dark-Theme
+    border-top: 1px solid var(--ion-color-step-150, #e3e3e6);
+
+    .avatar {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.5em;
+        height: 2.5em;
+        margin-right: 0.6em;
+        border-radius: 50%;
+        font-size: 0.8em;
+        font-weight: bold;
+        color: var(--ion-color-primary);
+        background: rgba(var(--ion-color-primary-rgb), 0.18);
+
+        ion-icon {
+            font-size: 1.3em;
+        }
+    }
+
+    .name {
+        flex: 1 1 5em;
+        min-width: 0;
+        margin-right: 0.5em;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+
+        &.own {
+            color: var(--ion-color-primary);
+        }
+    }
+
+    // Betragsblock: rutscht bei Platzmangel als Ganzes unter den Namen, ist nie breiter als die Zeile
+    // und bricht notfalls intern um (Saldo unter die Ausgaben). Ein einzelner Betrag bleibt zusammen.
+    .amounts {
+        flex: 0 1 auto;
+        max-width: 100%;
+        min-width: 0;
+        margin-left: auto;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .amount,
+    .saldo {
+        flex: 0 0 auto;
+        min-width: min(5.5em, 100%);
+        text-align: right;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .saldo {
+        margin-left: 0.75em;
+        font-weight: bold;
+
+        &.positive {
+            color: var(--ion-color-primary);
+        }
+
+        &.negative {
+            color: var(--ion-color-danger);
+        }
+    }
+
+    // gelöschte/entfernte Mitglieder: grau und kursiv (wie bisher)
+    &.inactive {
+        .avatar {
+            color: var(--ion-color-medium);
+            background: rgba(var(--ion-color-medium-rgb), 0.2);
+        }
+
+        .name,
+        .amount,
+        .saldo {
+            color: var(--ion-color-medium);
+            font-style: italic;
+        }
+    }
+
+    // Einzelmitglied-Gruppe: fett wie bisher
+    &.single {
+        .name,
+        .amount {
+            font-weight: bold;
+        }
+    }
+}
+
+.column-header {
+    border-top: none;
+    padding-top: 0;
+    font-size: 0.85em;
+    color: var(--ion-color-medium);
+
+    .saldo {
+        font-weight: normal;
+    }
+}
+
+.total-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-top: 0.2em;
+    padding-top: 0.5em;
+    border-top: 1px solid var(--ion-color-step-250, #c8c7cc);
+    font-weight: bold;
+
+    .money {
+        margin-left: auto;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
 }
 
