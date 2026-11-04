@@ -55,16 +55,21 @@
     <ion-row *ngIf="!isLoading && spendingsUsers.length > 0">
       <ion-col size-md="6" offset-md="3">
         <ion-card class="overview-card total-card">
-          <div class="total-head">
-            <ion-icon name="people-outline" color="primary" class="card-icon" aria-hidden="true"></ion-icon>
-            <div class="total-text">
-              <div class="period" *ngIf="periodRange as range">
-                <ng-container *ngTemplateOutlet="periodText; context: { $implicit: range }"></ng-container>
+          <div class="total-main">
+            <div class="total-head">
+              <ion-icon name="people-outline" color="primary" class="card-icon" aria-hidden="true"></ion-icon>
+              <div class="total-text">
+                <div class="period" *ngIf="periodRange as range">
+                  <ng-container *ngTemplateOutlet="periodText; context: { $implicit: range }"></ng-container>
+                </div>
+                <ion-text color="medium" class="subtitle">{{ 'domains.overview.total_all_members' | translate }}</ion-text>
               </div>
-              <ion-text color="medium" class="subtitle">{{ 'domains.overview.total_all_members' | translate }}</ion-text>
             </div>
+            <div class="total-amount">{{ spendingsTotal.sumTotalYear | scientificCurrency }}</div>
           </div>
-          <div class="total-amount">{{ spendingsTotal.sumTotalYear | scientificCurrency }}</div>
+          <span class="total-badge" aria-hidden="true">
+            <ion-icon name="stats-chart-outline"></ion-icon>
+          </span>
         </ion-card>
 
         <ion-card class="overview-card person-card">
@@ -157,12 +162,13 @@
 <ng-template #memberRow let-userSpendings>
   <div class="member-row"
        [class.inactive]="isDeletedUser(userSpendings.userName)"
+       [class.own]="!isDeletedUser(userSpendings.userName) && userSpendings.userName === user?.name"
        [class.single]="spendingsUsers.length <= 1">
     <span class="avatar" aria-hidden="true">
       <ion-icon *ngIf="isDeletedMarker(userSpendings.userName); else initials" name="person-outline"></ion-icon>
       <ng-template #initials>{{ getInitials(userSpendings.userName) }}</ng-template>
     </span>
-    <span class="name" [class.own]="!isDeletedUser(userSpendings.userName) && userSpendings.userName === user?.name">
+    <span class="name">
       {{ getUserDisplayName(userSpendings.userName) }}
     </span>
     <div class="amounts">

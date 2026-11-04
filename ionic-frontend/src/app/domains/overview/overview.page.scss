@@ -34,6 +34,8 @@ ion-segment {
     margin: 0 0 12px 0;
     padding: 12px 14px;
     border-radius: 12px;
+    // flach wie die Kacheln der Statistikseite: ohne den Material-Schatten von ion-card
+    box-shadow: none;
     // ion-card (md) setzt eine gedämpfte Textfarbe; Karten-Hintergrund ist in beiden Themes gesetzt
     --background: var(--ion-card-background);
     --color: var(--ion-text-color);
@@ -47,14 +49,42 @@ ion-segment {
 
 // Gesamtkarte: hervorgehoben über Typografie und Icon, kein Farbverlauf (Nutzerentscheidung)
 .total-card {
+    // links Zeitraum + Betrag, rechts das Statistik-Icon auf getönter Kachel
+    display: flex;
+    align-items: center;
+
+    .total-main {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
     .total-head {
         display: flex;
         align-items: center;
     }
 
+    // Trennstrich zwischen Personen-Icon und Text
     .total-text {
         flex: 1 1 auto;
         min-width: 0;
+        padding-left: 0.6em;
+        border-left: 1px solid var(--ion-color-step-250, #c8c7cc);
+    }
+
+    .total-badge {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        // Maße relativ zur Icon-Größe (font-size 1.75em): 2em = 3.5em der Karte
+        width: 2em;
+        height: 2em;
+        margin-left: 0.45em;
+        border-radius: 0.5em;
+        color: var(--ion-color-primary);
+        background: rgba(var(--ion-color-primary-rgb), 0.2);
+        border: 1px solid rgba(var(--ion-color-primary-rgb), 0.45);
+        font-size: 1.75em;
     }
 
     .period {
@@ -107,14 +137,20 @@ ion-segment {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 2.5em;
-        height: 2.5em;
+        // Größe aus Inhalt + Padding statt fester width/height: Die Android-WebView skaliert bei großer
+        // Systemschrift nur die Schrift, nicht em-Längen – ein fester Kreis würde die Initialen abschneiden.
+        box-sizing: border-box;
+        min-width: 2.5em;
+        min-height: 2.5em;
+        padding: 0.55em 0.45em;
+        line-height: 1;
         margin-right: 0.6em;
-        border-radius: 50%;
+        border-radius: 999px;
         font-size: 0.8em;
         font-weight: bold;
-        color: var(--ion-color-primary);
-        background: rgba(var(--ion-color-primary-rgb), 0.18);
+        // neutral für alle Mitglieder; nur der angemeldete Nutzer (.own) in Primärfarbe
+        color: var(--ion-text-color);
+        background: rgba(var(--ion-color-medium-rgb), 0.2);
 
         ion-icon {
             font-size: 1.3em;
@@ -122,13 +158,21 @@ ion-segment {
     }
 
     .name {
-        flex: 1 1 4em;
+        flex: 1 1 3em;
         min-width: 0;
         margin-right: 0.5em;
         overflow-wrap: anywhere;
         word-break: break-word;
+    }
 
-        &.own {
+    // angemeldeter Nutzer: Avatar und Name in Primärfarbe
+    &.own {
+        .avatar {
+            color: var(--ion-color-primary);
+            background: rgba(var(--ion-color-primary-rgb), 0.18);
+        }
+
+        .name {
             color: var(--ion-color-primary);
         }
     }
@@ -150,7 +194,7 @@ ion-segment {
         flex: 0 0 auto;
         // feste em-Mindestbreite (kein Prozentwert: der wäre beim Intrinsic Sizing von .amounts zyklisch
         // und ließ jeden Betrag die volle Blockbreite einnehmen -> Saldo stand immer unter den Ausgaben)
-        min-width: 5em;
+        min-width: 5.5em;
         text-align: right;
         white-space: nowrap;
         font-variant-numeric: tabular-nums;
@@ -198,6 +242,13 @@ ion-segment {
     padding-top: 0;
     font-size: 0.85em;
     color: var(--ion-color-medium);
+
+    // Überschrift „Person“ nie mitten im Wort trennen; reicht der Platz nicht, rutschen die Spaltentitel darunter
+    .name {
+        flex: 1 0 auto;
+        overflow-wrap: normal;
+        word-break: normal;
+    }
 
     .saldo {
         font-weight: normal;
@@ -254,18 +305,15 @@ ion-segment {
     }
 
     .period-section {
-        margin-top: 0.75em;
-        padding: 0.5em 0.6em;
-        border-left: 4px solid var(--ion-color-primary);
+        margin-top: 1.5em;
         border-radius: 8px;
-        background: rgba(var(--ion-color-medium-rgb), 0.08);
     }
 
     .period-header {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
-        margin-bottom: 0.3em;
+        margin-bottom: 1.0em;
     }
 
     .period-icon {
@@ -283,9 +331,8 @@ ion-segment {
     // Gesamt-Chip: darf zwischen Label und Betrag umbrechen, der Betrag selbst bleibt zusammen
     .period-total {
         margin-left: auto;
-        padding: 0.15em 0.6em;
+        padding: 0.3em 0.6em;
         border-radius: 1em;
-        font-size: 0.9em;
         background: rgba(var(--ion-color-medium-rgb), 0.15);
 
         .money {
