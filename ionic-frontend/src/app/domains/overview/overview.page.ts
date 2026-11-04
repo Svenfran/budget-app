@@ -98,6 +98,15 @@ export class OverviewPage implements OnInit {
     return this.spendingsTotal.spendingsTotalUser;
   }
 
+  // Einzelmitglied-Gruppe: Personen-Icon statt Gruppen-Icon, Zeilen fett
+  get isSingleMember(): boolean {
+    return this.spendingsUsers.length <= 1;
+  }
+
+  get membersIcon(): string {
+    return this.isSingleMember ? 'person-outline' : 'people-outline';
+  }
+
   
   private loadTranslations() {
     this.translate.get(['global.user.removed']).subscribe(translations => {

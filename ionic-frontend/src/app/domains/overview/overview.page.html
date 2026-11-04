@@ -57,7 +57,7 @@
         <ion-card class="overview-card total-card">
           <div class="total-main">
             <div class="total-head">
-              <ion-icon name="people-outline" color="primary" class="card-icon" aria-hidden="true"></ion-icon>
+              <ion-icon [name]="membersIcon" color="primary" class="card-icon" aria-hidden="true"></ion-icon>
               <div class="total-text">
                 <div class="period" *ngIf="periodRange as range">
                   <ng-container *ngTemplateOutlet="periodText; context: { $implicit: range }"></ng-container>
@@ -74,7 +74,7 @@
 
         <ion-card class="overview-card person-card">
           <div class="card-title">
-            <ion-icon name="people-outline" class="card-icon" aria-hidden="true"></ion-icon>
+            <ion-icon [name]="membersIcon" class="card-icon" aria-hidden="true"></ion-icon>
             <span class="title-text">{{ 'domains.overview.per_person' | translate }}</span>
             <ion-text color="medium" class="title-period" *ngIf="periodRange as range">
               (<ng-container *ngTemplateOutlet="periodText; context: { $implicit: range }"></ng-container>)
@@ -163,7 +163,7 @@
   <div class="member-row"
        [class.inactive]="isDeletedUser(userSpendings.userName)"
        [class.own]="!isDeletedUser(userSpendings.userName) && userSpendings.userName === user?.name"
-       [class.single]="spendingsUsers.length <= 1">
+       [class.single]="isSingleMember">
     <span class="avatar" aria-hidden="true">
       <ion-icon *ngIf="isDeletedMarker(userSpendings.userName); else initials" name="person-outline"></ion-icon>
       <ng-template #initials>{{ getInitials(userSpendings.userName) }}</ng-template>
