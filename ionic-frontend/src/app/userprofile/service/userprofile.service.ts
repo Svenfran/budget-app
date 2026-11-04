@@ -5,6 +5,7 @@ import { AuthService } from 'src/app/auth/auth.service';
 import { User } from 'src/app/auth/user';
 import { UserDto } from 'src/app/model/user-dto';
 import { AlertService } from 'src/app/service/alert.service';
+import { GroupService } from 'src/app/service/group.service';
 import { environment } from 'src/environments/environment';
 import { PasswordChangeDto } from '../model/password-change-dto';
 import { ResetPasswordDto } from '../model/reset-password-dto';
@@ -29,7 +30,8 @@ export class UserprofileService {
     private alertService: AlertService,
     private authService: AuthService,
     private router: Router,
-    private translate: TranslateService
+    private translate: TranslateService,
+    private groupService: GroupService
   ) { 
     this.authService.user.pipe().subscribe(user => {
       if (user) this.user = user;
@@ -63,6 +65,9 @@ export class UserprofileService {
             expirationDate: this.user.expirationDate,
             token: this.user.token ? this.user.token.slice(7) : ""
           })
+          // Übersicht und Ausgaben zeigen Namen aus Server-Daten: neu laden, damit der neue Name ohne
+          // manuelles Aktualisieren erscheint
+          this.groupService.triggerUpdate();
         },
         error: (err) => {
           console.error("Error changing user name:", err);
