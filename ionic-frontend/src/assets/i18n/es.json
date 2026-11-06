@@ -51,6 +51,13 @@
         "overview": {
             "title": "Resumen",
             "total": "Total:",
+            "total_all_members": "Gasto total de todos los miembros",
+            "per_person": "Resumen por persona",
+            "column": {
+                "person": "Persona",
+                "spendings": "Gastos",
+                "balance": "Saldo"
+            },
             "segment": {
                 "yearly": "Anual",
                 "monthly": "Mensual",

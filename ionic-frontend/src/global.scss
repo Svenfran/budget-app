@@ -111,6 +111,12 @@ ion-modal {
   }
 }
 
+// Ionic fokussiert nach dem Öffnen den Wrapper (tabindex 0, bei Alerts mit Inputs oder mehreren Buttons); ohne das
+// zeigt Chromium im Dark Mode beim ersten Öffnen einen dicken weißen Fokusring um den Alert
+:root ion-alert .alert-wrapper:focus {
+  outline: none;
+}
+
 .pw-item {
   align-items: center;
 }

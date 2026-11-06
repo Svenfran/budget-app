@@ -51,6 +51,13 @@
         "overview": {
             "title": "Overview",
             "total": "Total:",
+            "total_all_members": "Total spending of all members",
+            "per_person": "Overview per person",
+            "column": {
+                "person": "Person",
+                "spendings": "Spending",
+                "balance": "Balance"
+            },
             "segment": {
                 "yearly": "Yearly",
                 "monthly": "Monthly",

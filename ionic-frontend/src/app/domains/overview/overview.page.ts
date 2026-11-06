@@ -1,4 +1,5 @@
 import { Component, effect, OnInit, untracked } from '@angular/core';
+import { Router } from '@angular/router';
 import { GroupService } from 'src/app/service/group.service';
 import { OverviewService } from './service/overview.service';
 import { CartService } from '../cartlist/service/cart.service';
@@ -6,10 +7,18 @@ import { User } from 'src/app/auth/user';
 import { AuthService } from 'src/app/auth/auth.service';
 import { INIT_VALUES } from 'src/app/constants/default-values';
 import { SpendingsOverviewUserDto } from './model/spendings-overview-user-dto';
+import { SpendingsOverviewTotalYearDto } from './model/spendings-overview-total-year-dto';
 import { TranslateService } from '@ngx-translate/core';
+import { isDeletedMarker, isInactiveMember, userDisplayName, userInitials } from './overview-display';
+import { StatisticsService } from 'src/app/statistics/service/statistics.service';
+import { statisticsFilterForOverview } from 'src/app/statistics/model/statistics-filter';
 
-const DELETED = 'DELETED';
-const REMOVED = 'REMOVED';
+/** Zeitraum der Gesamt- und Personenkarte als Rohwerte; Monatsnamen formatiert das Template (monthName-Pipe). */
+export interface PeriodRange {
+  from: number;
+  to: number;
+  year?: number;
+}
 
 @Component({
   selector: 'app-overview',
@@ -43,7 +52,9 @@ export class OverviewPage implements OnInit {
     private overviewService: OverviewService,
     private cartService: CartService,
     private authService: AuthService,
-    private translate: TranslateService
+    private translate: TranslateService,
+    private statisticsService: StatisticsService,
+    private router: Router
   ) { 
     // Anzeige: hält den Gruppennamen aktuell (auch bei Umbenennung), ohne neu zu laden
     effect(() => {
@@ -83,8 +94,22 @@ export class OverviewPage implements OnInit {
     this.translate.onLangChange.subscribe(() => this.loadTranslations());
   }
 
+  /** Gesamtwerte (Summe + Mitglieder) des aktiven Segments. */
+  get spendingsTotal(): SpendingsOverviewTotalYearDto {
+    return this.segment === 'year' ? this.spendingsTotalYearYearly() : this.spendingsTotalYearMonthly();
+  }
+
   get spendingsUsers(): SpendingsOverviewUserDto[] {
-    return this.segment === 'year' ? this.spendingsTotalYearYearly().spendingsTotalUser : this.spendingsTotalYearMonthly().spendingsTotalUser;
+    return this.spendingsTotal.spendingsTotalUser;
+  }
+
+  // Einzelmitglied-Gruppe: Personen-Icon statt Gruppen-Icon, Zeilen fett
+  get isSingleMember(): boolean {
+    return this.spendingsUsers.length <= 1;
+  }
+
+  get membersIcon(): string {
+    return this.isSingleMember ? 'person-outline' : 'people-outline';
   }
 
   
@@ -94,20 +119,30 @@ export class OverviewPage implements OnInit {
     });
   }
 
-  isDeletedUser(userName: string): boolean {
-    return userName.includes(DELETED) || userName.includes(REMOVED);
+  /** Zeitraum (ältester – neuester Eintrag) des aktiven Segments; null ohne Daten. */
+  get periodRange(): PeriodRange | null {
+    if (this.segment === 'year') {
+      const years = this.spendingsPerYear();
+      return years?.length ? { from: years[years.length - 1].year, to: years[0].year } : null;
+    }
+    const months = this.spendingsPerMonth();
+    return months?.length ? { from: months[months.length - 1].month, to: months[0].month, year: this.year() } : null;
   }
 
-  getShortUserName(userName: string): string {
-    if (userName.includes(DELETED)) {
-        const userDeleted = this.translate.instant('global.user.deleted');
-        return userDeleted.length > 10 ? `${userDeleted.slice(0, 10)}...` : userDeleted;
-    } else if (userName.includes(REMOVED)) {
-        const userRemoved = userName.split(' ')[0]
-        return userRemoved.length > 10 ? `${userRemoved.slice(0, 10)}...` : userRemoved;
-    } else {
-        return userName.length > 10 ? `${userName.slice(0, 10)}...` : userName;
-    }
+  isDeletedUser(userName: string): boolean {
+    return isInactiveMember(userName);
+  }
+
+  isDeletedMarker(userName: string): boolean {
+    return isDeletedMarker(userName);
+  }
+
+  getUserDisplayName(userName: string): string {
+    return userDisplayName(userName, this.translate.instant('global.user.deleted'));
+  }
+
+  getInitials(userName: string): string {
+    return userInitials(this.getUserDisplayName(userName));
   }
 
   getShortGroupName(groupName: string): string {
@@ -130,6 +165,14 @@ export class OverviewPage implements OnInit {
 
   ionViewWillEnter() {
     this.segment = 'year';
+  }
+
+  /** Statistik mit Gruppe und Zeitraum der aktuellen Ansicht öffnen (DIV-67). */
+  openStatistics() {
+    this.statisticsService.presetFilter(statisticsFilterForOverview(
+      this.statisticsService.filter(), this.activeGroup.id, this.segment, this.year()
+    ));
+    this.router.navigateByUrl('/statistics');
   }
 
   hide() {
