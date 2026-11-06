@@ -67,9 +67,10 @@
             </div>
             <div class="total-amount">{{ spendingsTotal.sumTotalYear | scientificCurrency }}</div>
           </div>
-          <span class="total-badge" aria-hidden="true">
-            <ion-icon name="stats-chart-outline"></ion-icon>
-          </span>
+          <button type="button" class="total-badge" (click)="openStatistics()"
+                  [attr.aria-label]="'navigation.statistics.open' | translate">
+            <ion-icon name="stats-chart-outline" aria-hidden="true"></ion-icon>
+          </button>
         </ion-card>
 
         <ion-card class="overview-card person-card">

@@ -182,6 +182,28 @@ describe('StatisticsService', () => {
 
       expect(service.filter()).toEqual(filter);
     });
+
+    it('belegt den Filter von der Übersicht vor, ohne zu laden; die Seite lädt danach mit diesem Filter (DIV-67)', () => {
+      const filter: StatisticsFilter = { groupId: 4, period: 'YEAR', year: 2024, month: 6 };
+      service.presetFilter(filter);
+
+      http.expectNone(isStatisticsRequest);
+      expect(service.filter()).toEqual(filter);
+
+      service.load();
+      expect(params(http.expectOne(isStatisticsRequest))).toEqual({ period: 'YEAR', groupId: '4', year: '2024' });
+    });
+
+    it('behält einen vorbelegten Filter, auch wenn die Sitzung vorher gewechselt hat (DIV-67)', () => {
+      const filter: StatisticsFilter = { groupId: 4, period: 'ALL', year: 2025, month: 6 };
+      user$.next(null);
+      user$.next(aLoggedInUser());
+
+      service.presetFilter(filter);
+      TestBed.flushEffects();
+
+      expect(service.filter()).toEqual(filter);
+    });
   });
 
   describe('Gruppenänderungen (Codex F-003)', () => {

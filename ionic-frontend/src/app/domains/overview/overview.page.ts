@@ -1,4 +1,5 @@
 import { Component, effect, OnInit, untracked } from '@angular/core';
+import { Router } from '@angular/router';
 import { GroupService } from 'src/app/service/group.service';
 import { OverviewService } from './service/overview.service';
 import { CartService } from '../cartlist/service/cart.service';
@@ -9,6 +10,8 @@ import { SpendingsOverviewUserDto } from './model/spendings-overview-user-dto';
 import { SpendingsOverviewTotalYearDto } from './model/spendings-overview-total-year-dto';
 import { TranslateService } from '@ngx-translate/core';
 import { isDeletedMarker, isInactiveMember, userDisplayName, userInitials } from './overview-display';
+import { StatisticsService } from 'src/app/statistics/service/statistics.service';
+import { statisticsFilterForOverview } from 'src/app/statistics/model/statistics-filter';
 
 /** Zeitraum der Gesamt- und Personenkarte als Rohwerte; Monatsnamen formatiert das Template (monthName-Pipe). */
 export interface PeriodRange {
@@ -49,7 +52,9 @@ export class OverviewPage implements OnInit {
     private overviewService: OverviewService,
     private cartService: CartService,
     private authService: AuthService,
-    private translate: TranslateService
+    private translate: TranslateService,
+    private statisticsService: StatisticsService,
+    private router: Router
   ) { 
     // Anzeige: hält den Gruppennamen aktuell (auch bei Umbenennung), ohne neu zu laden
     effect(() => {
@@ -160,6 +165,14 @@ export class OverviewPage implements OnInit {
 
   ionViewWillEnter() {
     this.segment = 'year';
+  }
+
+  /** Statistik mit Gruppe und Zeitraum der aktuellen Ansicht öffnen (DIV-67). */
+  openStatistics() {
+    this.statisticsService.presetFilter(statisticsFilterForOverview(
+      this.statisticsService.filter(), this.activeGroup.id, this.segment, this.year()
+    ));
+    this.router.navigateByUrl('/statistics');
   }
 
   hide() {
