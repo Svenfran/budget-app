@@ -5,6 +5,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { AuthService } from 'src/app/auth/auth.service';
 import { User } from 'src/app/auth/user';
 import { AlertService } from 'src/app/service/alert.service';
+import { GroupService } from 'src/app/service/group.service';
 import { environment } from 'src/environments/environment';
 import { aLoggedInUser, REFERENCE_DATE } from 'src/testing/test-data';
 import { alertServiceSpy, authServiceStub, provideServiceTesting } from 'src/testing/test-providers';
@@ -17,6 +18,7 @@ describe('UserprofileService', () => {
   let auth: jasmine.SpyObj<AuthService>;
   let navigate: jasmine.Spy;
   let instant: jasmine.Spy;
+  let groups: GroupService;
   let user: User;
   const api = `${environment.apiBaseUrl}/api/userprofile`;
   const badRequest = { status: 400, statusText: 'Bad Request' };
@@ -39,6 +41,7 @@ describe('UserprofileService', () => {
     });
     service = TestBed.inject(UserprofileService);
     http = TestBed.inject(HttpTestingController);
+    groups = TestBed.inject(GroupService);
     navigate = spyOn(TestBed.inject(Router), 'navigateByUrl').and.resolveTo(true);
     // TranslateService ohne Loader setzt keine Parameter ein – Platzhalter werden am Aufruf von instant() geprüft.
     instant = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
@@ -96,6 +99,15 @@ describe('UserprofileService', () => {
       });
     });
 
+    it('stößt nach dem Ändern das Neuladen von Übersicht und Ausgaben an', () => {
+      const before = groups.memberUpdated();
+
+      service.changeUserName({ id: 5, userName: 'Annika' });
+      http.expectOne(`${api}/update-username`).flush({ id: 5, userName: 'Annika', userEmail: 'anna@example.com' });
+
+      expect(groups.memberUpdated()).toBe(before + 1);
+    });
+
     [
       { name: 'Name vergeben', userName: 'Annika', body: 'User with name Annika already exists', key: 'exists' },
       { name: 'Name nicht erlaubt', userName: 'DELETED', body: 'User name is not allowed', key: 'not_allowed' },
@@ -117,6 +129,15 @@ describe('UserprofileService', () => {
 
       expect(alerts.showErrorAlert).not.toHaveBeenCalled();
       expect(auth.setUserData).not.toHaveBeenCalled();
+    });
+
+    it('lädt bei einem Fehler nichts neu', () => {
+      const before = groups.memberUpdated();
+
+      service.changeUserName({ id: 5, userName: 'Annika' });
+      http.expectOne(`${api}/update-username`).flush('Server error', serverError);
+
+      expect(groups.memberUpdated()).toBe(before);
     });
   });
 

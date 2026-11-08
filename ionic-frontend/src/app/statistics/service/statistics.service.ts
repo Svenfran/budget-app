@@ -46,6 +46,15 @@ export class StatisticsService {
     this.load();
   }
 
+  /**
+   * Filter vorbelegen, ohne zu laden – für die Navigation von der Übersicht (DIV-67); die Statistikseite lädt beim
+   * Betreten. Sitzung zuerst abgleichen, damit ein späterer Abgleich den vorbelegten Filter nicht zurücksetzt.
+   */
+  presetFilter(filter: StatisticsFilter): void {
+    this.syncSession();
+    this.filter.set(filter);
+  }
+
   /** Daten zum aktuellen Filter laden; `onComplete` läuft immer (auch bei verworfener Antwort), z. B. für den Refresher. */
   load(onComplete?: () => void): void {
     this.syncSession();
