@@ -1,12 +1,15 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
+import com.github.svenfran.budgetapp.budgetappbackend.constants.ExportFormat;
 import com.github.svenfran.budgetapp.budgetappbackend.constants.UserEnum;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.GroupMembershipHistory;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.GroupNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOrMemberOfGroupException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException;
+import com.github.svenfran.budgetapp.budgetappbackend.helper.CsvZipWriter;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils;
+import com.github.svenfran.budgetapp.budgetappbackend.helper.ExcelWriter;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.Translator;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.export.CartExportRow;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.export.GroupExport;
@@ -15,6 +18,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -38,6 +43,31 @@ public class ExportService {
         this.verificationService = verificationService;
         this.groupService = groupService;
         this.translator = translator;
+    }
+
+    static final String CONTENT_TYPE_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    static final String CONTENT_TYPE_ZIP = "application/zip";
+
+    /**
+     * Schreibt den Export in die Response. Laden und Berechtigungsprüfung laufen vollständig, bevor Header gesetzt
+     * oder Bytes geschrieben werden; Fehler werden dadurch normal gemappt (403/404). Eigene Transaktion, weil der
+     * Aufruf von loadExportData ein Selbstaufruf ist (am Proxy vorbei).
+     *
+     * @param groupId mit Angabe nur diese Gruppe, ohne Angabe alle Gruppen des Nutzers (siehe loadExportData)
+     */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public void export(ExportFormat format, Long groupId, HttpServletResponse response)
+            throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, IOException {
+        var groups = loadExportData(groupId);
+        boolean allGroups = groupId == null;
+        response.setContentType(format == ExportFormat.XLSX ? CONTENT_TYPE_XLSX : CONTENT_TYPE_ZIP);
+        response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        response.setHeader("Expires", "0");
+        if (format == ExportFormat.XLSX) {
+            new ExcelWriter(groups, allGroups, translator).write(response.getOutputStream());
+        } else {
+            new CsvZipWriter(groups, allGroups, translator).write(response.getOutputStream());
+        }
     }
 
     /**

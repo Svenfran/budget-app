@@ -1,9 +1,11 @@
 package com.github.svenfran.budgetapp.budgetappbackend.controller;
 
+import com.github.svenfran.budgetapp.budgetappbackend.constants.ExportFormat;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto;
 import com.github.svenfran.budgetapp.budgetappbackend.service.CartService;
+import com.github.svenfran.budgetapp.budgetappbackend.service.ExportService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -18,8 +20,11 @@ public class CartController {
 
     private final CartService cartService;
 
-    public CartController(CartService cartService) {
+    private final ExportService exportService;
+
+    public CartController(CartService cartService, ExportService exportService) {
         this.cartService = cartService;
+        this.exportService = exportService;
     }
 
     @GetMapping("/carts/carts-by-groupid/{groupId}")
@@ -61,5 +66,13 @@ public class CartController {
     @GetMapping("/carts/download/{groupId}")
     public void getExcelFile(@PathVariable("groupId") Long groupId, HttpServletResponse response) throws IOException, UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, IllegalAccessException {
         cartService.getExcelFile(response, groupId);
+    }
+
+    /** Ausgabenexport (DIV-68): ohne groupId alle Gruppen des Nutzers; XLSX bzw. ZIP mit CSV-Dateien. */
+    @GetMapping("/carts/export")
+    public void exportCarts(@RequestParam("format") ExportFormat format,
+                            @RequestParam(value = "groupId", required = false) Long groupId,
+                            HttpServletResponse response) throws IOException, UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
+        exportService.export(format, groupId, response);
     }
 }

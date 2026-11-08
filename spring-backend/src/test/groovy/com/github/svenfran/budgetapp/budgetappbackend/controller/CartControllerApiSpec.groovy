@@ -8,12 +8,16 @@ import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
+import org.apache.poi.xssf.usermodel.XSSFWorkbook
 import org.springframework.mock.web.MockHttpServletResponse
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
+
+import java.nio.charset.StandardCharsets
+import java.util.zip.ZipInputStream
 
 /**
  * Referenz-API-Spec (MockMvc): HTTP-Status, Exception-Mapping von {@link RestResponseEntityExceptionHandler},
@@ -46,6 +50,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
 
     private static final Logger LOG = LoggerFactory.getLogger(CartControllerApiSpec)
+
+    private static final String XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    private static final String ZIP_TYPE = 'application/zip'
 
     @Autowired ObjectMapper objectMapper
 
@@ -217,6 +224,142 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
         endpoint << ['PUT /api/carts/update', 'POST /api/carts/settlement-payment/add']
     }
 
+    // ----- DIV-68: Ausgabenexport GET /api/carts/export -----
+
+    def "Export #format #umfang: 200 mit Content-Type und erwarteter Datei-Struktur, ohne fremde Gruppe"() {
+        given:
+        def anna = fixtures.user(name: 'Anna')
+        def haushalt = fixtures.group(owner: anna)
+        def urlaub = fixtures.group(members: [anna])
+        def fremd = fixtures.group()
+        fremd.group.name = 'Fremdgruppe'
+        fixtures.cart(haushalt, title: 'Pizza')
+        fixtures.cart(fremd, title: 'Geheim')
+        flushAndClear()
+        def (haushaltName, urlaubName) = [haushalt.group.name, urlaub.group.name]
+        def params = umfang == 'aktuelle Gruppe' ? [format: format, groupId: haushalt.group.id] : [format: format]
+        LOG.info('Szenario: Anna {} Owner von Gruppe {} "{}", Mitglied von Gruppe {} "{}"; Gruppe {} "Fremdgruppe" ohne Anna',
+                anna.id, haushalt.group.id, haushaltName, urlaub.group.id, urlaubName, fremd.group.id)
+
+        when:
+        def response = exportieren(anna, params)
+        def namen = format == 'XLSX' ? blattNamen(response) : zipEintraege(response).keySet().toList()
+        LOG.info('Antwort: {} {}, Namen {}', response.status, response.contentType, namen)
+
+        then:
+        response.status == 200
+        response.contentType == contentType
+        response.getHeader('Cache-Control') == 'no-cache, no-store, must-revalidate'
+        namen == erwartet(haushaltName, urlaubName)
+        !namen.any { it.contains('Fremdgruppe') }
+
+        where:
+        format | umfang            || contentType | erwartet
+        'XLSX' | 'aktuelle Gruppe' || XLSX_TYPE   | { h, u -> ['Ausgaben', 'Mitgliedszeitraum'] }
+        'CSV'  | 'aktuelle Gruppe' || ZIP_TYPE    | { h, u -> ['ausgaben.csv', 'mitgliederhistorie.csv'] }
+        'XLSX' | 'alle Gruppen'    || XLSX_TYPE   | { h, u -> ["$h Ausgaben", "$h Mitglieder", "$u Ausgaben", "$u Mitglieder"]*.toString() }
+        'CSV'  | 'alle Gruppen'    || ZIP_TYPE    | { h, u -> ["$h/ausgaben.csv", "$h/mitgliederhistorie.csv", "$u/ausgaben.csv", "$u/mitgliederhistorie.csv"]*.toString() }
+    }
+
+    def "Export enthält die Daten der Gruppe: Cart im XLSX und in der CSV"() {
+        given:
+        def anna = fixtures.user(name: 'Anna')
+        def wg = fixtures.group(owner: anna)
+        fixtures.cart(wg, title: 'Pizza', amount: 12.5d)
+        flushAndClear()
+        def gid = wg.group.id
+        LOG.info('Szenario: Gruppe {}, Owner Anna {}, Cart Pizza 12.50', gid, anna.id)
+
+        when:
+        def xlsx = new XSSFWorkbook(new ByteArrayInputStream(exportieren(anna, [format: 'XLSX', groupId: gid]).contentAsByteArray))
+        def csvZeile = zipEintraege(exportieren(anna, [format: 'CSV', groupId: gid]))['ausgaben.csv'].readLines()[1]
+        def zeile = xlsx.getSheet('Ausgaben').getRow(1)
+        def (titel, betrag) = [zeile.getCell(1).stringCellValue, zeile.getCell(4).numericCellValue]
+        LOG.info('Antwort: XLSX Titel {} Betrag {}, CSV-Zeile {}', titel, betrag, csvZeile)
+
+        then:
+        titel == 'Pizza'
+        betrag == 12.5d
+        csvZeile.startsWith('Anna;Pizza;')
+        csvZeile.contains(';12.50;')
+    }
+
+    def "Export mit manipulierter groupId einer fremden Gruppe (#format): 403"() {
+        given:
+        def anna = fixtures.user(name: 'Anna')
+        def fremd = fixtures.group()
+        LOG.info('Szenario: Anna {} ist nicht in Gruppe {} (Owner {})', anna.id, fremd.group.id, fremd.owner.id)
+
+        when:
+        def response = exportieren(anna, [format: format, groupId: fremd.group.id])
+        LOG.info('Antwort: {} {}', response.status, response.contentAsString)
+
+        then:
+        response.status == 403
+        response.contentType != XLSX_TYPE && response.contentType != ZIP_TYPE
+
+        where:
+        format << ['XLSX', 'CSV']
+    }
+
+    def "Export einer unbekannten Gruppe: 404"() {
+        given:
+        def anna = fixtures.user(name: 'Anna')
+        LOG.info('Szenario: Anna {}, Gruppe {} existiert nicht', anna.id, Long.MAX_VALUE)
+
+        when:
+        def response = exportieren(anna, [format: 'XLSX', groupId: Long.MAX_VALUE])
+        LOG.info('Antwort: {} {}', response.status, response.contentAsString)
+
+        then:
+        response.status == 404
+    }
+
+    def "Export ohne Anmeldung: 403"() {
+        given:
+        LOG.info('Szenario: kein angemeldeter Nutzer')
+
+        expect:
+        send(get('/api/carts/export').param('format', 'XLSX')).status == 403
+    }
+
+    def "Export mit ungültigen Parametern (#fall): 400"() {
+        given:
+        def anna = fixtures.user(name: 'Anna')
+        LOG.info('Szenario: Anna {}, Parameter {}', anna.id, params)
+
+        expect:
+        exportieren(anna, params).status == 400
+
+        where:
+        fall                 | params
+        'format fehlt'       | [:]
+        'format unbekannt'   | [format: 'PDF']
+        'groupId keine Zahl' | [format: 'CSV', groupId: 'abc']
+    }
+
+    def "Export-Dateinamen und Kopfzeilen folgen Accept-Language (#sprache)"() {
+        given:
+        def anna = fixtures.user(name: 'Anna')
+        def wg = fixtures.group(owner: anna)
+        flushAndClear()
+        LOG.info('Szenario: Gruppe {}, Owner Anna {}, Accept-Language {}', wg.group.id, anna.id, sprache)
+
+        when:
+        def dateien = zipEintraege(exportieren(anna, [format: 'CSV', groupId: wg.group.id], sprache))
+        LOG.info('Antwort: Einträge {}', dateien.keySet())
+
+        then:
+        dateien.keySet().toList() == namen
+        dateien[namen[0]].startsWith('﻿' + kopf)
+
+        where:
+        sprache || namen                                      | kopf
+        'en'    || ['expenses.csv', 'membership-history.csv'] | 'Username;Title;'
+        'es'    || ['gastos.csv', 'historial-miembros.csv']   | 'Nombre de usuario;Título;'
+        null    || ['ausgaben.csv', 'mitgliederhistorie.csv'] | 'Benutzername;Titel;'
+    }
+
     private MockHttpServletResponse deleteCart(User user, Long cartId) {
         send(delete('/api/carts/delete/{id}', cartId), user: user)
     }
@@ -224,5 +367,30 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
     /** Accept-Language de: Titel und Kategoriename der Ausgleichszahlung sind lokalisiert. */
     private MockHttpServletResponse addSettlement(User user, Map body) {
         send(post('/api/carts/settlement-payment/add').header('Accept-Language', 'de'), user: user, body: body)
+    }
+
+    /** GET /api/carts/export mit Query-Parametern; sprache null = ohne Accept-Language (Standard de). */
+    private MockHttpServletResponse exportieren(User user, Map params, String sprache = null) {
+        def request = get('/api/carts/export')
+        params.each { key, value -> request.param(key as String, value as String) }
+        if (sprache) {
+            request.header('Accept-Language', sprache)
+        }
+        send(request, user: user)
+    }
+
+    private static List<String> blattNamen(MockHttpServletResponse response) {
+        new XSSFWorkbook(new ByteArrayInputStream(response.contentAsByteArray)).collect { it.sheetName }
+    }
+
+    /** ZIP-Eintrag → Inhalt (UTF-8 inkl. BOM), in der Reihenfolge des Archivs. */
+    private static Map<String, String> zipEintraege(MockHttpServletResponse response) {
+        def result = [:] as LinkedHashMap<String, String>
+        new ZipInputStream(new ByteArrayInputStream(response.contentAsByteArray), StandardCharsets.UTF_8).withCloseable { zip ->
+            for (def entry = zip.nextEntry; entry != null; entry = zip.nextEntry) {
+                result[entry.name] = new String(zip.readAllBytes(), StandardCharsets.UTF_8)
+            }
+        }
+        result
     }
 }
