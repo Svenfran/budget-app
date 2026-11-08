@@ -8,7 +8,6 @@ import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.*;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils;
-import com.github.svenfran.budgetapp.budgetappbackend.helper.ExcelWriter;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.RecurrenceCalculator;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.Translator;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository;
@@ -22,8 +21,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
-import javax.servlet.http.HttpServletResponse;
-import java.io.IOException;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.Arrays;
@@ -52,14 +49,12 @@ public class CartService {
 
     private final Clock clock;
 
-    private final ExportService exportService;
-
     private static final String SETTLEMENT_CATEGORY_NAME = "categories.default.settlement";
 
     public CartService(CartRepository cartRepository, CategoryRepository categoryRepository,
                        CartDtoMapper cartDtoMapper, DataLoaderService dataLoaderService,
                        VerificationService verificationService, CartTemplateRepository templateRepository,
-                       Translator translator, Clock clock, ExportService exportService) {
+                       Translator translator, Clock clock) {
         this.cartRepository = cartRepository;
         this.categoryRepository = categoryRepository;
         this.cartDtoMapper = cartDtoMapper;
@@ -68,7 +63,6 @@ public class CartService {
         this.templateRepository = templateRepository;
         this.translator = translator;
         this.clock = clock;
-        this.exportService = exportService;
     }
 
     public List<CartDto> getCartsByGroupId(Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
@@ -140,15 +134,6 @@ public class CartService {
         var category = dataLoaderService.loadCategoryByGroupAndName(group, translator.translate(SETTLEMENT_CATEGORY_NAME));
         var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(settlementPaymentDto.getDatePurchased(), group.getId());
         return createSettlementPaymentCarts(category, user, member, group, settlementPaymentDto.getAmount(), groupMemberCount, settlementPaymentDto.getDatePurchased());
-    }
-
-    public void getExcelFile(HttpServletResponse response, Long groupId) throws IOException, GroupNotFoundException, UserNotFoundException, NotOwnerOrMemberOfGroupException {
-        // lädt in eigener Transaktion und prüft die Berechtigung, bevor Header oder Bytes geschrieben werden
-        var groups = exportService.loadExportData(groupId);
-        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-        response.setHeader("Expires", "0");
-        new ExcelWriter(groups, false, translator).write(response.getOutputStream());
     }
 
     private List<CartDto> createSettlementPaymentCarts(Category category, User user, User member, Group group, Double amount, int groupMemberCount, Date datePurchased) {

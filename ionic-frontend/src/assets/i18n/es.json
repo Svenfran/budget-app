@@ -77,6 +77,10 @@
             "toast": {
                 "message": "Archivo descargado con éxito."
             },
+            "export": {
+                "toast_saved_not_opened": "Archivo guardado en «Documentos», pero no se pudo abrir.",
+                "filename_all_groups": "Todos-los-grupos"
+            },
             "overlay": {
                 "settlementpayment": {
                     "title": "Repago",
@@ -342,6 +346,10 @@
             "message": "El servidor no está disponible en este momento. Por favor, inténtelo de nuevo en unos minutos.",
             "btn_cancel": "Cancelar",
             "btn_ok": "OK"
+        },
+        "export": {
+            "header": "Error al exportar",
+            "message": "No se pudo exportar el archivo. Por favor, inténtelo de nuevo."
         }
     },
     "login": {

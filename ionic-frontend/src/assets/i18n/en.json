@@ -77,6 +77,10 @@
             "toast": {
                 "message": "Download successfull."
             },
+            "export": {
+                "toast_saved_not_opened": "File saved to \"Documents\" but could not be opened.",
+                "filename_all_groups": "All-Groups"
+            },
             "overlay": {
                 "settlementpayment": {
                     "title": "Repayment",
@@ -342,6 +346,10 @@
             "message": "The server is currently not available. Please try again in a few minutes.",
             "btn_cancel": "Cancel",
             "btn_ok": "OK"
+        },
+        "export": {
+            "header": "Export failed",
+            "message": "The file could not be exported. Please try again."
         }
     },
     "login": {

@@ -63,11 +63,6 @@ public class CartController {
         return new ResponseEntity<>(payment, HttpStatus.OK);
     }
 
-    @GetMapping("/carts/download/{groupId}")
-    public void getExcelFile(@PathVariable("groupId") Long groupId, HttpServletResponse response) throws IOException, UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, IllegalAccessException {
-        cartService.getExcelFile(response, groupId);
-    }
-
     /** Ausgabenexport (DIV-68): ohne groupId alle Gruppen des Nutzers; XLSX bzw. ZIP mit CSV-Dateien. */
     @GetMapping("/carts/export")
     public void exportCarts(@RequestParam("format") ExportFormat format,

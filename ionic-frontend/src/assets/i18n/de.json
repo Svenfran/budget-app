@@ -77,6 +77,10 @@
             "toast": {
                 "message": "Datei erfolgreich heruntergeladen."
             },
+            "export": {
+                "toast_saved_not_opened": "Datei in „Dokumente“ gespeichert, konnte aber nicht geöffnet werden.",
+                "filename_all_groups": "Alle-Gruppen"
+            },
             "overlay": {
                 "settlementpayment": {
                     "title": "Ausgleichszahlung",
@@ -342,6 +346,10 @@
             "message": "Der Server ist momentan nicht erreichbar. Bitte versuche es in ein paar Minuten noch einmal.",
             "btn_cancel": "Abbrechen",
             "btn_ok": "OK"
+        },
+        "export": {
+            "header": "Export fehlgeschlagen",
+            "message": "Die Datei konnte nicht exportiert werden. Bitte versuche es erneut."
         }
     },
     "login": {

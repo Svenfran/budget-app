@@ -1,29 +1,29 @@
-import { HttpClient, HttpEventType } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
 import { computed, Injectable, signal, WritableSignal } from '@angular/core';
-import { Directory, Filesystem } from '@capacitor/filesystem';
 import { environment } from 'src/environments/environment';
 import { Cart } from '../model/cart';
 import { Group } from 'src/app/model/group';
 import { INIT_VALUES } from 'src/app/constants/default-values';
 import { AlertService } from 'src/app/service/alert.service';
-import { FileOpener, FileOpenerOptions } from '@capacitor-community/file-opener';
 import { SettlementPaymentDto } from 'src/app/settlement-payment/model/settlement-payment-dto';
 import { RECURRENCE_TYPE } from 'src/app/constants/recurrence-type';
 import { TranslateService } from '@ngx-translate/core';
+import { firstValueFrom } from 'rxjs';
+import { FileExportService } from 'src/app/service/file-export.service';
+import { ExportOptions } from '../model/export-options';
+import { exportFileName, exportMimeType } from './export-file';
 
 @Injectable({
   providedIn: 'root'
 })
 export class CartService {
 
-  downloadProgress = 0;
-
   private apiBaseUrl = environment.apiBaseUrl;
   private cartlistUrl = `${this.apiBaseUrl}/api/carts/carts-by-groupid`;
   private deleteCartUrl = `${this.apiBaseUrl}/api/carts/delete`;
   private addCartUrl = `${this.apiBaseUrl}/api/carts/add`;
   private updateCartUrl = `${this.apiBaseUrl}/api/carts/update`;
-  private excelFileUrl = `${this.apiBaseUrl}/api/carts/download`;
+  private exportUrl = `${this.apiBaseUrl}/api/carts/export`;
   private settlementPaymentUrl = `${this.apiBaseUrl}/api/carts/settlement-payment/add`;
   
   public cartList: WritableSignal<Cart[]> = signal<Cart[]>([]);
@@ -36,7 +36,8 @@ export class CartService {
   constructor(
     private http: HttpClient,
     private alertService: AlertService,
-    private translate: TranslateService
+    private translate: TranslateService,
+    private fileExportService: FileExportService
   ) {}
 
   triggerUpdate() {
@@ -250,64 +251,38 @@ export class CartService {
       })
   }
 
-  getExcelFile(group: Group, fileName: string) {
-    this.http
-      .get<any>(`${this.excelFileUrl}/${group.id}`, {
-        responseType: 'blob' as 'json',
-        reportProgress: true,
-        observe: 'events'
-      })
-      .subscribe({
-        next: async (event) => {
-          if (event.type === HttpEventType.DownloadProgress) {
-            this.downloadProgress = event.total ? Math.round((100 * event.loaded) / event.total) : 0;
-          } else if (event.type === HttpEventType.Response) {
-            this.downloadProgress = 0;
-            const base64 = await this.convertBlobToBase64(event.body) as string;
-    
-            const savedFile = await Filesystem.writeFile({
-              path: fileName,
-              data: base64,
-              directory: Directory.Documents,
-            });
-            const path = savedFile.uri;
-            const mimeType = this.getMimeType(fileName);
-            let message = this.translate.instant('domains.spendings.toast.message');
-            this.alertService.showToast(message);
-            
-            try {
-              const fileOpenerOptions: FileOpenerOptions = {
-                filePath: path,
-                contentType: mimeType,
-                openWithDefault: true,
-              };
-              await FileOpener.open(fileOpenerOptions);
-            } catch (e) {
-              console.log('Error opening file', e);
-            }
-          }
-        },
-        error: (err) => {
-          console.error("Error downloading excel file:", err);
-        }
-      })
-  }
-
-  private convertBlobToBase64(blob: Blob) {
-    return new Promise ((resolve, reject) => {
-      const reader = new FileReader;
-      reader.onerror = reject;
-      reader.onload = () => {
-        resolve(reader.result);
-      };
-      reader.readAsDataURL(blob);
-    })
-  };
-
-  private getMimeType(name: string): string {
-    if (name.indexOf('xlsx') >= 0) {
-      return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  /**
+   * Ausgabenexport (DIV-68): lädt die Datei, speichert sie in „Dokumente“ und öffnet sie. Reiner Lesevorgang, ändert
+   * keinen Signal-State. Fehler (HTTP oder Speichern) zeigen einen Alert.
+   *
+   * @returns true, wenn die Datei gespeichert wurde (auch wenn sie nicht geöffnet werden konnte)
+   */
+  async exportCarts(options: ExportOptions, group: Group): Promise<boolean> {
+    if (options.scope === 'GROUP' && group.flag?.includes(INIT_VALUES.DEFAULT)) {
+      return false;
     }
-    return 'application/octet-stream'; // default MIME type
+    const params: Record<string, string> = { format: options.format };
+    if (options.scope === 'GROUP') {
+      params['groupId'] = String(group.id);
+    }
+    const fileName = exportFileName(options, group.name, {
+      prefix: this.translate.instant('domains.spendings.title'),
+      allGroups: this.translate.instant('domains.spendings.export.filename_all_groups'),
+    }, new Date());
+
+    try {
+      const blob = await firstValueFrom(this.http.get(this.exportUrl, { params, responseType: 'blob' }));
+      const result = await this.fileExportService.saveAndOpen(blob, fileName, exportMimeType(options.format));
+      this.alertService.showToast(this.translate.instant(result === 'opened'
+        ? 'domains.spendings.toast.message'
+        : 'domains.spendings.export.toast_saved_not_opened'));
+      return true;
+    } catch (err) {
+      console.error('Error exporting carts:', err);
+      this.alertService.showErrorAlert(
+        this.translate.instant('alerts.export.header'),
+        this.translate.instant('alerts.export.message'));
+      return false;
+    }
   }
 }

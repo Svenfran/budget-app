@@ -8,7 +8,6 @@ import { Cart } from './model/cart';
 import { Router } from '@angular/router';
 import { OverviewService } from '../overview/service/overview.service';
 import { CategoryService } from 'src/app/service/category.service';
-import moment from 'moment';
 import { SettlementPaymentPage } from 'src/app/settlement-payment/settlement-payment.page';
 import { INIT_VALUES } from 'src/app/constants/default-values';
 import { FilterModalPage } from 'src/app/filter-modal/filter-modal.page';
@@ -186,9 +185,8 @@ export class CartlistPage implements OnInit {
   }
 
   download() {
-    let suffix = `${this.translate.instant('domains.spendings.title')}_`
-    let filename = suffix + this.activeGroup.name.replace(/ /g, "-") + "_" + moment().format('YYYYMMDDHHmmss') + ".xlsx";
-    this.cartService.getExcelFile(this.activeGroup, filename);
+    // DIV-68 Phase 4: vorübergehend fest „aktuelle Gruppe, XLSX“; der Export-Dialog folgt in Phase 5
+    this.cartService.exportCarts({ scope: 'GROUP', format: 'XLSX' }, this.activeGroup);
   }
 
   onFilter(action: string, filterTerm: string) {
