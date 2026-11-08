@@ -52,12 +52,14 @@ public class CartService {
 
     private final Clock clock;
 
+    private final ExportService exportService;
+
     private static final String SETTLEMENT_CATEGORY_NAME = "categories.default.settlement";
 
     public CartService(CartRepository cartRepository, CategoryRepository categoryRepository,
                        CartDtoMapper cartDtoMapper, DataLoaderService dataLoaderService,
                        VerificationService verificationService, CartTemplateRepository templateRepository,
-                       Translator translator, Clock clock) {
+                       Translator translator, Clock clock, ExportService exportService) {
         this.cartRepository = cartRepository;
         this.categoryRepository = categoryRepository;
         this.cartDtoMapper = cartDtoMapper;
@@ -66,6 +68,7 @@ public class CartService {
         this.templateRepository = templateRepository;
         this.translator = translator;
         this.clock = clock;
+        this.exportService = exportService;
     }
 
     public List<CartDto> getCartsByGroupId(Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
@@ -140,16 +143,12 @@ public class CartService {
     }
 
     public void getExcelFile(HttpServletResponse response, Long groupId) throws IOException, GroupNotFoundException, UserNotFoundException, NotOwnerOrMemberOfGroupException {
-        var user = dataLoaderService.getAuthenticatedUser();
-        var group = dataLoaderService.loadGroup(groupId);
-        verificationService.verifyIsPartOfGroup(user, group);
+        // lädt in eigener Transaktion und prüft die Berechtigung, bevor Header oder Bytes geschrieben werden
+        var groups = exportService.loadExportData(groupId);
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
         response.setHeader("Expires", "0");
-        var cartlist = dataLoaderService.loadCartListForGroup(groupId);
-        var membershipHistoryList = dataLoaderService.loadMembershipHistoryForGroup(groupId);
-        var excelWriter = new ExcelWriter(cartlist, membershipHistoryList, dataLoaderService, translator);
-        excelWriter.generateExcelFile(response);
+        new ExcelWriter(groups, false, translator).write(response.getOutputStream());
     }
 
     private List<CartDto> createSettlementPaymentCarts(Category category, User user, User member, Group group, Double amount, int groupMemberCount, Date datePurchased) {
