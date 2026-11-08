@@ -14,6 +14,7 @@ import { FilterModalPage } from 'src/app/filter-modal/filter-modal.page';
 import { CartFilter } from 'src/app/filter-modal/model/CartFilter';
 import { TranslateService } from '@ngx-translate/core';
 import { CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
+import { exportDialogModalOptions } from './export-dialog/export-dialog-options';
 
 @Component({
   selector: 'app-cartlist',
@@ -184,9 +185,11 @@ export class CartlistPage implements OnInit {
     this.router.navigate(['domains', 'tabs', 'cartlist', 'new-edit', cart.id?.toString()]);
   }
 
-  download() {
-    // DIV-68 Phase 4: vorübergehend fest „aktuelle Gruppe, XLSX“; der Export-Dialog folgt in Phase 5
-    this.cartService.exportCarts({ scope: 'GROUP', format: 'XLSX' }, this.activeGroup);
+  /** Menüpunkt „Download“: Export-Dialog als Bottom Sheet (DIV-68). */
+  async openExportDialog() {
+    const exporting = signal(false);
+    const modal = await this.modalCtrl.create(exportDialogModalOptions(this.activeGroup, exporting));
+    await modal.present();
   }
 
   onFilter(action: string, filterTerm: string) {

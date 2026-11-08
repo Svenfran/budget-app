@@ -70,7 +70,7 @@
         "spendings": {
             "title": "Ausgaben",
             "total": "Gesamt",
-            "download": "Download",
+            "download": "Exportieren",
             "settlement": "Ausgleichszahlung",
             "filter": "Filter",
             "no_spendings": "Keine Ausgaben vorhanden!",
@@ -78,6 +78,21 @@
                 "message": "Datei erfolgreich heruntergeladen."
             },
             "export": {
+                "title": "Ausgaben exportieren",
+                "subtitle": "Wähle den Umfang und das Dateiformat für den Export.",
+                "scope_label": "Exportumfang",
+                "scope_group": "Aktuelle Gruppe",
+                "scope_all": "Alle Gruppen",
+                "scope_all_description": "Alle Gruppen, in denen du Mitglied bist",
+                "format_label": "Dateiformat",
+                "format_xlsx": "Excel (.xlsx)",
+                "format_csv": "CSV (.zip)",
+                "format_xlsx_desc_group": "Eine Datei mit zwei Tabellenblättern: Ausgaben und Mitgliedszeitraum",
+                "format_xlsx_desc_all": "Eine Datei mit je zwei Tabellenblättern pro Gruppe",
+                "format_csv_desc_group": "ZIP-Archiv mit ausgaben.csv und mitgliederhistorie.csv",
+                "format_csv_desc_all": "ZIP-Archiv mit einem Ordner pro Gruppe, je ausgaben.csv und mitgliederhistorie.csv",
+                "btn_export": "Exportieren",
+                "btn_cancel": "Abbrechen",
                 "toast_saved_not_opened": "Datei in „Dokumente“ gespeichert, konnte aber nicht geöffnet werden.",
                 "filename_all_groups": "Alle-Gruppen"
             },

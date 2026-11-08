@@ -1,0 +1,105 @@
+// Nur Ionic-Theme-Variablen: Dark/Light folgt dem color-theme automatisch.
+// Höhe und Hintergrund des Modals selbst: ion-modal.export-sheet in global.scss.
+
+.export-dialog {
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 8px 20px 0;
+}
+
+.export-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+
+  ion-icon {
+    font-size: 1.8em;
+    flex-shrink: 0;
+  }
+
+  h2 {
+    margin: 0;
+    font-size: 1.3em;
+    font-weight: 600;
+  }
+}
+
+.export-subtitle {
+  margin: 8px 0 4px;
+  color: var(--ion-color-medium);
+}
+
+.export-section {
+  background: transparent;
+  padding: 0;
+
+  ion-list-header {
+    padding-inline-start: 0;
+    min-height: 32px;
+    text-transform: uppercase;
+    font-size: 0.85em;
+    color: var(--ion-color-medium);
+  }
+
+  ion-item {
+    --background: transparent;
+    --padding-start: 0;
+    --inner-padding-end: 0;
+  }
+
+  ion-radio {
+    margin-inline-end: 16px;
+  }
+}
+
+.option-title {
+  display: block;
+  font-weight: 500;
+}
+
+.option-description {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.9em;
+  color: var(--ion-color-medium);
+  overflow-wrap: anywhere;
+}
+
+.format-badge {
+  flex-shrink: 0;
+  margin-inline-end: 12px;
+  min-width: 3.2em;
+  padding: 0.5em 0.4em;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 0.75em;
+  font-weight: 700;
+
+  &.xlsx {
+    background: var(--ion-color-success);
+    color: var(--ion-color-success-contrast);
+  }
+
+  &.zip {
+    background: var(--ion-color-tertiary);
+    color: var(--ion-color-tertiary-contrast);
+  }
+}
+
+.export-divider {
+  height: 1px;
+  margin: 8px 0;
+  background: var(--ion-color-step-150, var(--ion-color-light-shade));
+}
+
+.export-actions {
+  margin-top: 24px;
+  padding-bottom: calc(8px + var(--ion-safe-area-bottom, 0px));
+
+  ion-spinner {
+    width: 1.2em;
+    height: 1.2em;
+    margin-inline-end: 8px;
+  }
+}
