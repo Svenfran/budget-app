@@ -102,6 +102,23 @@ class ExcelWriterSpec extends Specification {
         blattNamen(alle) == ['Home Expenses', 'Home Members']
     }
 
+    // Gesamttest (Phase 10): POI akzeptiert alle erzeugten Blattnamen, jede Gruppe behält ihre Daten
+    def "Alle schwierigen Gruppennamen zusammen ergeben eine gültige Arbeitsmappe mit zwei Blättern je Gruppe"() {
+        given:
+        def groups = TestData.TRICKY_GROUP_NAMES.withIndex().collect { name, i ->
+            TestData.groupExport(groupName: name, carts: [TestData.cartExportRow(title: "Marker-$i")])
+        }
+
+        when:
+        def workbook = schreiben(groups, true)
+        def titelJeBlatt = workbook.findAll { it.lastRowNum >= 1 && it.getRow(1).getCell(1).cellType == CellType.STRING }
+                .collect { it.getRow(1).getCell(1).stringCellValue }
+
+        then:
+        workbook.numberOfSheets == 2 * groups.size()
+        titelJeBlatt.toSet() == (0..<groups.size()).collect { "Marker-$it".toString() }.toSet()
+    }
+
     def "Einzelgruppen-Export mit mehreren Gruppen wird abgelehnt"() {
         when:
         new ExcelWriter([TestData.groupExport(), TestData.groupExport()], false, TestData.translator())

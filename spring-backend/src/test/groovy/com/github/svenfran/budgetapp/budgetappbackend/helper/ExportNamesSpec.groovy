@@ -2,6 +2,7 @@ package com.github.svenfran.budgetapp.budgetappbackend.helper
 
 import com.github.svenfran.budgetapp.budgetappbackend.helper.ExportNames.GroupNames
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
+import org.apache.poi.ss.util.WorkbookUtil
 import spock.lang.Specification
 
 /**
@@ -139,6 +140,100 @@ class ExportNamesSpec extends Specification {
         result.every { !(it.cartSheet() + it.membershipSheet() + it.folder()).contains('471') }
         sheets.every { it.length() <= 31 && !(it =~ INVALID_SHEET_CHARS) && !it.startsWith("'") && !it.endsWith("'") }
         sheets*.toLowerCase().unique().size() == sheets.size()
+    }
+
+    // Regression (Codex-Review 4, F-001): „' 'X“ wurde zu „'X Ausgaben“, POI lehnt Blattnamen mit ' am Rand ab
+    def "Apostrophe und Leerraum am Rand werden gemeinsam entfernt (#name.inspect())"() {
+        expect:
+        names(name)[0] == erwartet
+
+        where:
+        name    || erwartet
+        "' 'X"  || new GroupNames('X Ausgaben', 'X Mitglieder', 'X')
+        "X' '"  || new GroupNames('X Ausgaben', 'X Mitglieder', 'X')
+        "' ' '" || new GroupNames('Gruppe Ausgaben', 'Gruppe Mitglieder', 'Gruppe')
+    }
+
+    // F-002 (Codex-Review 4): reservierte Windows-Gerätenamen als ZIP-Ordner bekommen ein Präfix
+    def "Reservierter Windows-Name '#name' wird als Ordner zu '#ordner', die Blätter bleiben"() {
+        when:
+        def result = names(name)[0]
+
+        then:
+        result.folder() == ordner
+        result.cartSheet() == "$name Ausgaben".toString().trim().replace('  ', ' ')
+
+        where:
+        name      || ordner
+        'CON'     || '_CON'
+        'con'     || '_con'
+        'NUL.txt' || '_NUL.txt'
+        'COM1'    || '_COM1'
+        'LPT9'    || '_LPT9'
+        'AUX '    || '_AUX'
+        'CONSOLE' || 'CONSOLE'
+        'COM10'   || 'COM10'
+    }
+
+    def "Zweiter reservierter Name bekommt den Zähler, das Präfix nur, wo der Name reserviert ist"() {
+        expect:
+        names('CON', 'con')*.folder() == ['_CON', 'con (2)']
+    }
+
+    // Gesamttest (Phase 10): jeder schwierige Name einzeln ergibt gültige, nichtleere Namen
+    def "Schwieriger Gruppenname #anzeige ergibt gültige Blatt- und Ordnernamen"() {
+        expect:
+        pruefeGueltig(names(name))
+
+        where:
+        name << TestData.TRICKY_GROUP_NAMES
+        anzeige = String.valueOf(name?.inspect())
+    }
+
+    def "Alle schwierigen Gruppennamen zusammen ergeben gültige, eindeutige Namen (#locale)"() {
+        given:
+        def translator = TestData.translator(locale)
+        def groups = TestData.TRICKY_GROUP_NAMES.collect { TestData.groupExport(groupName: it) }
+
+        when:
+        def result = ExportNames.assign(groups, translator.translate('download.cart.sheetname'),
+                translator.translate('download.membership.sheetname.short'),
+                translator.translate('download.group.fallback')).values().toList()
+
+        then:
+        result.size() == groups.size()
+        pruefeGueltig(result)
+
+        where:
+        locale << [Locale.GERMAN, Locale.ENGLISH, Locale.forLanguageTag('es')]
+    }
+
+    /**
+     * Blattnamen bestehen POIs eigene Prüfung (Länge, verbotene Zeichen, ' am Rand); Ordner sind nicht leer, höchstens
+     * 40 Zeichen, nur erlaubte Zeichen, ohne Leerraum/Punkt am Ende und nicht reserviert; beides eindeutig wie POI bzw.
+     * Windows vergleichen (ohne Groß-/Kleinschreibung).
+     */
+    private static boolean pruefeGueltig(List<GroupNames> result) {
+        def sheets = result*.cartSheet() + result*.membershipSheet()
+        sheets.each { sheet ->
+            WorkbookUtil.validateSheetName(sheet)
+            assert sheet.length() <= ExportNames.MAX_SHEET_NAME
+        }
+        result*.folder().each { folder ->
+            assert folder && folder.length() <= ExportNames.MAX_FOLDER_NAME
+            assert folder ==~ /[\p{L}\p{Nd} ._()\-]+/
+            assert !folder.startsWith(' ') && !folder.endsWith(' ') && !folder.endsWith('.')
+            assert !(folder ==~ /(?i)(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])\s*(\..*)?/)
+        }
+        assert eindeutig(sheets)
+        assert eindeutig(result*.folder())
+        true
+    }
+
+    private static boolean eindeutig(List<String> namen) {
+        def set = new TreeSet<String>(String.CASE_INSENSITIVE_ORDER)
+        set.addAll(namen)
+        set.size() == namen.size()
     }
 
     private static List<GroupNames> names(String... groupNames) {

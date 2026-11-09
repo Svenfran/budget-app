@@ -34,6 +34,20 @@ import java.util.zip.ZipInputStream
 class TestData {
 
     static final LocalDate REFERENCE_DATE = LocalDate.of(2025, 6, 15)
+
+    /**
+     * Gruppennamen, die die Namensbereinigung des Exports herausfordern (DIV-68, ExportNames): Apostrophe und Punkte am
+     * Rand, nur Sonderzeichen, Überlänge, Emoji an der Kürzungsgrenze, Unicode-Groß-/Kleinschreibung, reservierte
+     * Windows-Namen, Kollisionen mit Fallback und Zähler.
+     */
+    static final List<String> TRICKY_GROUP_NAMES = [
+            null, '', '   ', "'", "''", "' '", "' 'X", "X' '", "' ' '", "'Bob's Bude'",
+            '.', '....', '.' * 40 + 'X', '.' * 45, ' .X. ',
+            'A' * 60, 'x' * 31, 'A' * 21 + '🏠' * 5, '🏠' * 40, '🏠',
+            '[*]', '???', 'A:B', 'A<B', 'A B', 'A/B\\C', 'Tab\tName', 'Zeile\nUmbruch',
+            'Haushalt', 'haushalt', 'HAUSHALT', 'İstanbul', 'istanbul', 'ı', 'I',
+            'CON', 'con', 'NUL.txt', 'COM1', 'LPT9', 'AUX ', 'CONSOLE',
+            'Gruppe', 'Gruppe (2)', '-', '_', 'Período de afiliación compartido'].asImmutable()
     private static final AtomicLong SEQUENCE = new AtomicLong()
 
     static long nextId() { SEQUENCE.incrementAndGet() }

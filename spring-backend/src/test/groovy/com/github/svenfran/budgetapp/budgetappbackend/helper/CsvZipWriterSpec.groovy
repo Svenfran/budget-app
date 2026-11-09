@@ -117,6 +117,27 @@ class CsvZipWriterSpec extends Specification {
         Locale.forLanguageTag('es')|| ['gastos.csv', 'historial-miembros.csv']         | 'Nombre de usuario;Título;'
     }
 
+    // Gesamttest (Phase 10): ein eigener, relativer Ordner je Gruppe, eindeutig auch ohne Groß-/Kleinschreibung
+    def "Alle schwierigen Gruppennamen zusammen ergeben je Gruppe einen eigenen relativen Ordner"() {
+        given:
+        def groups = TestData.TRICKY_GROUP_NAMES.withIndex().collect { name, i ->
+            TestData.groupExport(groupName: name, carts: [TestData.cartExportRow(title: "Marker-$i")])
+        }
+
+        when:
+        def dateien = schreiben(groups, true)
+        def ordner = dateien.keySet().collect { it.substring(0, it.lastIndexOf('/')) }.unique()
+        def eindeutig = new TreeSet<String>(String.CASE_INSENSITIVE_ORDER)
+        eindeutig.addAll(ordner)
+
+        then:
+        dateien.size() == 2 * groups.size()
+        dateien.keySet().every { !it.startsWith('/') && it.count('/') == 1 }
+        ordner.size() == groups.size()
+        eindeutig.size() == groups.size()
+        groups.indices.every { i -> dateien.count { it.key.endsWith('/ausgaben.csv') && it.value.contains(";Marker-$i;") } == 1 }
+    }
+
     def "Einzelgruppen-Export mit mehreren Gruppen wird abgelehnt"() {
         when:
         new CsvZipWriter([TestData.groupExport(), TestData.groupExport()], false, TestData.translator())

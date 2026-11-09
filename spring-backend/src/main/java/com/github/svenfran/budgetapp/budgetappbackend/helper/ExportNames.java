@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.regex.Pattern;
 
 /**
  * Blatt- und Ordnernamen des Exports „Alle Gruppen“ (DIV-68), ohne technische ID:
@@ -19,6 +20,10 @@ public final class ExportNames {
     /** Excel-Grenze für Blattnamen. */
     static final int MAX_SHEET_NAME = 31;
     static final int MAX_FOLDER_NAME = 40;
+
+    /** Unter Windows reservierte Gerätenamen, auch mit Endung (z. B. {@code NUL.txt}), ohne Groß-/Kleinschreibung. */
+    private static final Pattern WINDOWS_RESERVED =
+            Pattern.compile("(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])\\s*(\\..*)?", Pattern.CASE_INSENSITIVE);
 
     public record GroupNames(String cartSheet, String membershipSheet, String folder) {
     }
@@ -78,6 +83,10 @@ public final class ExportNames {
         if (name.isEmpty()) {
             name = stripTrailingDots(truncate(fallback, maxBase));
         }
+        if (WINDOWS_RESERVED.matcher(name + suffix).matches()) {
+            // Gerätenamen wie CON oder COM1 lehnen Windows-Entpacker ab; Präfix, Längengrenze bleibt
+            name = "_" + stripTrailingDots(truncate(name, maxBase - 1));
+        }
         return name + suffix;
     }
 
@@ -87,8 +96,8 @@ public final class ExportNames {
             return "";
         }
         String cleaned = collapse(name.replaceAll("[\\\\/?*\\[\\]:]", " ").replaceAll("\\p{Cntrl}", " "));
-        cleaned = cleaned.replaceAll("^'+|'+$", "");
-        return cleaned.trim();
+        // Apostrophe und Leerraum am Rand gemeinsam entfernen: nacheinander konnte „' 'X“ zu „'X“ werden
+        return cleaned.replaceAll("^[\\s']+|[\\s']+$", "");
     }
 
     /** Nur Buchstaben, Ziffern, Leerzeichen und {@code . _ -}; kein abschließender Punkt (Windows). */
