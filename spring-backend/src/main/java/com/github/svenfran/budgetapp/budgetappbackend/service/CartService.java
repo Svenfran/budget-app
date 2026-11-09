@@ -8,7 +8,6 @@ import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.*;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils;
-import com.github.svenfran.budgetapp.budgetappbackend.helper.ExcelWriter;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.RecurrenceCalculator;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.Translator;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository;
@@ -22,8 +21,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
-import javax.servlet.http.HttpServletResponse;
-import java.io.IOException;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.Arrays;
@@ -137,19 +134,6 @@ public class CartService {
         var category = dataLoaderService.loadCategoryByGroupAndName(group, translator.translate(SETTLEMENT_CATEGORY_NAME));
         var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(settlementPaymentDto.getDatePurchased(), group.getId());
         return createSettlementPaymentCarts(category, user, member, group, settlementPaymentDto.getAmount(), groupMemberCount, settlementPaymentDto.getDatePurchased());
-    }
-
-    public void getExcelFile(HttpServletResponse response, Long groupId) throws IOException, GroupNotFoundException, UserNotFoundException, NotOwnerOrMemberOfGroupException {
-        var user = dataLoaderService.getAuthenticatedUser();
-        var group = dataLoaderService.loadGroup(groupId);
-        verificationService.verifyIsPartOfGroup(user, group);
-        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-        response.setHeader("Expires", "0");
-        var cartlist = dataLoaderService.loadCartListForGroup(groupId);
-        var membershipHistoryList = dataLoaderService.loadMembershipHistoryForGroup(groupId);
-        var excelWriter = new ExcelWriter(cartlist, membershipHistoryList, dataLoaderService, translator);
-        excelWriter.generateExcelFile(response);
     }
 
     private List<CartDto> createSettlementPaymentCarts(Category category, User user, User member, Group group, Double amount, int groupMemberCount, Date datePurchased) {

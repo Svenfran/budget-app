@@ -7,13 +7,21 @@ import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CategoryDto
 import com.github.svenfran.budgetapp.budgetappbackend.entity.*
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
+import com.github.svenfran.budgetapp.budgetappbackend.helper.Translator
+import com.github.svenfran.budgetapp.budgetappbackend.helper.export.CartExportRow
+import com.github.svenfran.budgetapp.budgetappbackend.helper.export.GroupExport
+import com.github.svenfran.budgetapp.budgetappbackend.helper.export.MembershipExportRow
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.SignatureAlgorithm
 import io.jsonwebtoken.io.Decoders
 import io.jsonwebtoken.security.Keys
+import org.apache.poi.xssf.usermodel.XSSFWorkbook
+import org.springframework.context.support.ResourceBundleMessageSource
 
+import java.nio.charset.StandardCharsets
 import java.time.LocalDate
 import java.util.concurrent.atomic.AtomicLong
+import java.util.zip.ZipInputStream
 
 /**
  * Nicht persistierte, fachlich gültige Testobjekte (Unit-Specs und Bausteine für {@link Fixtures}).
@@ -26,6 +34,20 @@ import java.util.concurrent.atomic.AtomicLong
 class TestData {
 
     static final LocalDate REFERENCE_DATE = LocalDate.of(2025, 6, 15)
+
+    /**
+     * Gruppennamen, die die Namensbereinigung des Exports herausfordern (DIV-68, ExportNames): Apostrophe und Punkte am
+     * Rand, nur Sonderzeichen, Überlänge, Emoji an der Kürzungsgrenze, Unicode-Groß-/Kleinschreibung, reservierte
+     * Windows-Namen, Kollisionen mit Fallback und Zähler.
+     */
+    static final List<String> TRICKY_GROUP_NAMES = [
+            null, '', '   ', "'", "''", "' '", "' 'X", "X' '", "' ' '", "'Bob's Bude'",
+            '.', '....', '.' * 40 + 'X', '.' * 45, ' .X. ',
+            'A' * 60, 'x' * 31, 'A' * 21 + '🏠' * 5, '🏠' * 40, '🏠',
+            '[*]', '???', 'A:B', 'A<B', 'A B', 'A/B\\C', 'Tab\tName', 'Zeile\nUmbruch',
+            'Haushalt', 'haushalt', 'HAUSHALT', 'İstanbul', 'istanbul', 'ı', 'I',
+            'CON', 'con', 'NUL.txt', 'COM1', 'LPT9', 'AUX ', 'CONSOLE',
+            'Gruppe', 'Gruppe (2)', '-', '_', 'Período de afiliación compartido'].asImmutable()
     private static final AtomicLong SEQUENCE = new AtomicLong()
 
     static long nextId() { SEQUENCE.incrementAndGet() }
@@ -109,5 +131,56 @@ class TestData {
 
     static CategoryDto categoryDto(Category category) {
         new CategoryDto(id: category.id, name: category.name)
+    }
+
+    /** Formatneutrale Exportdaten einer Gruppe (DIV-68); Named args: groupId, groupName, carts, memberships. */
+    static GroupExport groupExport(Map overrides = [:]) {
+        long n = nextId()
+        def values = [groupId: n, groupName: "Gruppe $n", carts: [], memberships: []] + overrides
+        new GroupExport(values.groupId as Long, values.groupName as String, values.carts as List, values.memberships as List)
+    }
+
+    static CartExportRow cartExportRow(Map overrides = [:]) {
+        def values = [userName: 'Anna', title: 'Einkauf', description: 'Wocheneinkauf', datePurchased: REFERENCE_DATE,
+                      amount: 40.0d, category: 'Lebensmittel', groupName: 'Haushalt'] + overrides
+        new CartExportRow(values.userName as String, values.title as String, values.description as String,
+                values.datePurchased as LocalDate, values.amount as double, values.category as String, values.groupName as String)
+    }
+
+    /** Mitgliedschaft ab einem Jahr vor REFERENCE_DATE, offen (end null). */
+    static MembershipExportRow membershipExportRow(Map overrides = [:]) {
+        def values = [userName: 'Anna', start: REFERENCE_DATE.minusYears(1), end: null, type: TypeEnum.MEMBER.toString()] + overrides
+        new MembershipExportRow(values.userName as String, values.start as LocalDate, values.end as LocalDate, values.type as String)
+    }
+
+    /** Export-ZIP zurücklesen (DIV-68): Eintragsname → Inhalt (UTF-8 inkl. BOM), in der Reihenfolge des Archivs. */
+    static Map<String, String> unzip(byte[] bytes) {
+        def result = [:] as LinkedHashMap<String, String>
+        new ZipInputStream(new ByteArrayInputStream(bytes), StandardCharsets.UTF_8).withCloseable { zip ->
+            for (def entry = zip.nextEntry; entry != null; entry = zip.nextEntry) {
+                result[entry.name] = new String(zip.readAllBytes(), StandardCharsets.UTF_8)
+            }
+        }
+        result
+    }
+
+    /** Export-XLSX zurücklesen (DIV-68). */
+    static XSSFWorkbook workbook(byte[] bytes) {
+        new XSSFWorkbook(new ByteArrayInputStream(bytes))
+    }
+
+    /**
+     * Translator auf den echten messages*.properties mit fester Sprache (Unit-Specs ohne Spring und ohne
+     * LocaleContextHolder). Fehlende Schlüssel werfen eine Exception statt den Schlüssel zurückzugeben.
+     */
+    static Translator translator(Locale locale = Locale.GERMAN) {
+        def source = new ResourceBundleMessageSource(basenames: ['messages'] as String[], defaultEncoding: 'UTF-8',
+                fallbackToSystemLocale: false)
+        new Translator(source) {
+            @Override
+            String translate(String key, Object... args) {
+                source.getMessage(key, args, locale)
+            }
+        }
     }
 }

@@ -70,12 +70,31 @@
         "spendings": {
             "title": "Gastos",
             "total": "Total",
-            "download": "Descargar",
+            "export_menu": "Exportar",
             "settlement": "Repago",
             "filter": "Filtro",
             "no_spendings": "No hay gastos registrados",
             "toast": {
                 "message": "Archivo descargado con éxito."
+            },
+            "export": {
+                "title": "Exportar gastos",
+                "subtitle": "Elige el alcance y el formato de archivo para la exportación.",
+                "scope_label": "Alcance de la exportación",
+                "scope_group": "Grupo actual",
+                "scope_all": "Todos los grupos",
+                "scope_all_description": "Todos los grupos de los que eres miembro",
+                "format_label": "Formato de archivo",
+                "format_xlsx": "Excel (.xlsx)",
+                "format_csv": "CSV (.zip)",
+                "format_xlsx_desc_group": "Un archivo con dos hojas: Gastos y Período de afiliación",
+                "format_xlsx_desc_all": "Un archivo con dos hojas por grupo",
+                "format_csv_desc_group": "Archivo ZIP con gastos.csv e historial-miembros.csv",
+                "format_csv_desc_all": "Archivo ZIP con una carpeta por grupo, cada una con gastos.csv e historial-miembros.csv",
+                "btn_export": "Exportar",
+                "btn_cancel": "Cancelar",
+                "toast_saved_not_opened": "Archivo guardado en «Documentos», pero no se pudo abrir.",
+                "filename_all_groups": "Todos-los-grupos"
             },
             "overlay": {
                 "settlementpayment": {
@@ -342,6 +361,10 @@
             "message": "El servidor no está disponible en este momento. Por favor, inténtelo de nuevo en unos minutos.",
             "btn_cancel": "Cancelar",
             "btn_ok": "OK"
+        },
+        "export": {
+            "header": "Error al exportar",
+            "message": "No se pudo exportar el archivo. Por favor, inténtalo de nuevo."
         }
     },
     "login": {

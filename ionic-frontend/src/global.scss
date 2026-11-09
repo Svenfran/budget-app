@@ -37,8 +37,11 @@
 // @import "@ionic/angular/css/palettes/dark.system.css";
 
 @font-face {
-  font-family: 'Roboto';
-  src: url('assets/fonts/Roboto-Regular.ttf');
+  font-family: 'Inter';
+  src: url('/assets/fonts/Inter-Variable.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
 }
   
 [hidden] {
@@ -77,6 +80,21 @@ ion-modal {
       border-bottom-left-radius: 8px;
       border-bottom-right-radius: 8px;
     }
+  }
+}
+
+// Export-Dialog der Ausgaben-Seite (DIV-68): Ausnahme von der transparenten Overlay-Regel oben. Unten angedockt,
+// deckend und so hoch wie der Inhalt (der Inhalt begrenzt sich selbst auf 90vh und scrollt darüber).
+ion-modal.export-sheet {
+  --background: var(--ion-background-color, #fff);
+  --height: auto;
+  --border-radius: 16px 16px 0 0;
+  align-items: flex-end;
+
+  .ion-page {
+    position: relative;
+    display: block;
+    contain: content;
   }
 }
 

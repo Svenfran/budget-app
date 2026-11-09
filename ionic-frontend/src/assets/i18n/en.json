@@ -70,12 +70,31 @@
         "spendings": {
             "title": "Expenses",
             "total": "Total",
-            "download": "Download",
+            "export_menu": "Export",
             "settlement": "Repayment",
             "filter": "Filter",
             "no_spendings": "No expenses available!",
             "toast": {
                 "message": "Download successfull."
+            },
+            "export": {
+                "title": "Export expenses",
+                "subtitle": "Choose the scope and file format for the export.",
+                "scope_label": "Export scope",
+                "scope_group": "Current group",
+                "scope_all": "All groups",
+                "scope_all_description": "All groups you are a member of",
+                "format_label": "File format",
+                "format_xlsx": "Excel (.xlsx)",
+                "format_csv": "CSV (.zip)",
+                "format_xlsx_desc_group": "One file with two sheets: Expenses and Membership period",
+                "format_xlsx_desc_all": "One file with two sheets per group",
+                "format_csv_desc_group": "ZIP archive with expenses.csv and membership-history.csv",
+                "format_csv_desc_all": "ZIP archive with one folder per group, each with expenses.csv and membership-history.csv",
+                "btn_export": "Export",
+                "btn_cancel": "Cancel",
+                "toast_saved_not_opened": "File saved to \"Documents\" but could not be opened.",
+                "filename_all_groups": "All-Groups"
             },
             "overlay": {
                 "settlementpayment": {
@@ -342,6 +361,10 @@
             "message": "The server is currently not available. Please try again in a few minutes.",
             "btn_cancel": "Cancel",
             "btn_ok": "OK"
+        },
+        "export": {
+            "header": "Export failed",
+            "message": "The file could not be exported. Please try again."
         }
     },
     "login": {

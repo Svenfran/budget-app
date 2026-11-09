@@ -10,6 +10,7 @@ import { CartlistPageRoutingModule } from './cartlist-routing.module';
 import { CartlistPage } from './cartlist.page';
 import { ScientificCurrencyPipe } from 'src/app/pipe/scientific.pipe';
 import { TranslateModule } from '@ngx-translate/core';
+import { ExportDialogComponent } from './export-dialog/export-dialog.component';
 
 @NgModule({
   imports: [
@@ -21,6 +22,6 @@ import { TranslateModule } from '@ngx-translate/core';
     TranslateModule,
     ScientificCurrencyPipe
   ],
-  declarations: [CartlistPage]
+  declarations: [CartlistPage, ExportDialogComponent]
 })
 export class CartlistPageModule {}

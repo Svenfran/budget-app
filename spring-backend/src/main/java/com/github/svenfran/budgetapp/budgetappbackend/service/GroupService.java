@@ -14,6 +14,8 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 @Service
@@ -82,6 +84,13 @@ public class GroupService {
         var groupsMember = groupRepository.findGroupsByMembersInOrderById(member);
         var groupsOwner = groupRepository.findGroupsByOwnerOrderById(user);
         return Stream.concat(groupsOwner.stream(), groupsMember.stream()).sorted((a,b) -> (int) (a.getId() - b.getId()));
+    }
+
+    /** Wie getGroupsByMemberOrOwner, aber jede Gruppe genau einmal (der Owner kann zugleich in members stehen), nach ID sortiert. */
+    public List<Group> getDistinctGroupsByMemberOrOwner() throws UserNotFoundException {
+        return getGroupsByMemberOrOwner()
+                .collect(Collectors.toMap(Group::getId, group -> group, (first, duplicate) -> first, TreeMap::new))
+                .values().stream().toList();
     }
 
     public List<GroupSideNavDto> getGroupsForSideNav() throws UserNotFoundException {

@@ -8,13 +8,13 @@ import { Cart } from './model/cart';
 import { Router } from '@angular/router';
 import { OverviewService } from '../overview/service/overview.service';
 import { CategoryService } from 'src/app/service/category.service';
-import moment from 'moment';
 import { SettlementPaymentPage } from 'src/app/settlement-payment/settlement-payment.page';
 import { INIT_VALUES } from 'src/app/constants/default-values';
 import { FilterModalPage } from 'src/app/filter-modal/filter-modal.page';
 import { CartFilter } from 'src/app/filter-modal/model/CartFilter';
 import { TranslateService } from '@ngx-translate/core';
 import { CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
+import { exportDialogModalOptions } from './export-dialog/export-dialog-options';
 
 @Component({
   selector: 'app-cartlist',
@@ -185,10 +185,11 @@ export class CartlistPage implements OnInit {
     this.router.navigate(['domains', 'tabs', 'cartlist', 'new-edit', cart.id?.toString()]);
   }
 
-  download() {
-    let suffix = `${this.translate.instant('domains.spendings.title')}_`
-    let filename = suffix + this.activeGroup.name.replace(/ /g, "-") + "_" + moment().format('YYYYMMDDHHmmss') + ".xlsx";
-    this.cartService.getExcelFile(this.activeGroup, filename);
+  /** Menüpunkt „Download“: Export-Dialog als Bottom Sheet (DIV-68). */
+  async openExportDialog() {
+    const exporting = signal(false);
+    const modal = await this.modalCtrl.create(exportDialogModalOptions(this.activeGroup, exporting));
+    await modal.present();
   }
 
   onFilter(action: string, filterTerm: string) {

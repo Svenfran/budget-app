@@ -8,6 +8,7 @@ import { SettlementPaymentDto } from 'src/app/settlement-payment/model/settlemen
 import { environment } from 'src/environments/environment';
 import { aCart, aGroup, aUser } from 'src/testing/test-data';
 import { alertServiceSpy, provideServiceTesting } from 'src/testing/test-providers';
+import { FileExportService } from 'src/app/service/file-export.service';
 import { Cart } from '../model/cart';
 import { CartService } from './cart.service';
 
@@ -15,14 +16,21 @@ describe('CartService', () => {
   let service: CartService;
   let http: HttpTestingController;
   let alerts: jasmine.SpyObj<AlertService>;
+  let fileExport: jasmine.SpyObj<FileExportService>;
   const api = `${environment.apiBaseUrl}/api/carts`;
   const notWithinMembership = 'Date purchased is not within membership period';
   const ids = (carts: Cart[]) => carts.map(c => c.id);
 
   beforeEach(() => {
     alerts = alertServiceSpy();
+    fileExport = jasmine.createSpyObj<FileExportService>('FileExportService', ['saveAndOpen']);
+    fileExport.saveAndOpen.and.resolveTo('opened');
     TestBed.configureTestingModule({
-      providers: [...provideServiceTesting(), { provide: AlertService, useValue: alerts }],
+      providers: [
+        ...provideServiceTesting(),
+        { provide: AlertService, useValue: alerts },
+        { provide: FileExportService, useValue: fileExport },
+      ],
     });
     service = TestBed.inject(CartService);
     http = TestBed.inject(HttpTestingController);
@@ -329,6 +337,91 @@ describe('CartService', () => {
         { status: 403, statusText: 'Forbidden' });
 
       expect(alerts.showErrorAlert).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('exportCarts (DIV-68)', () => {
+    const xlsxMime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    const exportRequest = () => http.expectOne(req => req.url === `${api}/export`);
+    const file = new Blob(['PK'], { type: 'application/octet-stream' });
+
+    beforeEach(() => {
+      jasmine.clock().install();
+      jasmine.clock().mockDate(new Date(2026, 10, 8, 15, 30, 5));
+    });
+
+    afterEach(() => jasmine.clock().uninstall());
+
+    it('lädt die aktuelle Gruppe als XLSX, speichert sie unter dem Exportnamen und meldet den Erfolg', async () => {
+      const carts = [aCart()];
+      service.cartList.set(carts);
+      const updatesBefore = service.cartUpdated();
+
+      const result = service.exportCarts({ scope: 'GROUP', format: 'XLSX' }, aGroup({ id: 7, name: 'WG Haushalt' }));
+      const req = exportRequest();
+      expect(req.request.method).toBe('GET');
+      expect(req.request.responseType).toBe('blob');
+      expect(req.request.params.get('format')).toBe('XLSX');
+      expect(req.request.params.get('groupId')).toBe('7');
+      req.flush(file);
+
+      expect(await result).toBeTrue();
+      expect(fileExport.saveAndOpen).toHaveBeenCalledOnceWith(
+        jasmine.any(Blob), 'domains.spendings.title_WG-Haushalt_20261108153005.xlsx', xlsxMime);
+      expect(alerts.showToast).toHaveBeenCalledOnceWith('domains.spendings.toast.message');
+      expect(alerts.showErrorAlert).not.toHaveBeenCalled();
+      expect(service.cartList()).toBe(carts);
+      expect(service.cartUpdated()).toBe(updatesBefore);
+    });
+
+    it('lädt alle Gruppen als CSV ohne groupId und speichert ein ZIP', async () => {
+      const result = service.exportCarts({ scope: 'ALL', format: 'CSV' }, aGroup({ id: 7 }));
+      const req = exportRequest();
+      expect(req.request.params.keys()).toEqual(['format']);
+      expect(req.request.params.get('format')).toBe('CSV');
+      req.flush(file);
+
+      expect(await result).toBeTrue();
+      expect(fileExport.saveAndOpen).toHaveBeenCalledOnceWith(jasmine.any(Blob),
+        'domains.spendings.title_domains.spendings.export.filename_all_groups_20261108153005.zip', 'application/zip');
+    });
+
+    it('meldet „gespeichert, aber nicht geöffnet“, wenn keine App die Datei öffnen kann', async () => {
+      fileExport.saveAndOpen.and.resolveTo('saved');
+
+      const result = service.exportCarts({ scope: 'GROUP', format: 'CSV' }, aGroup());
+      exportRequest().flush(file);
+
+      expect(await result).toBeTrue();
+      expect(alerts.showToast).toHaveBeenCalledOnceWith('domains.spendings.export.toast_saved_not_opened');
+      expect(alerts.showErrorAlert).not.toHaveBeenCalled();
+    });
+
+    it('zeigt bei einem HTTP-Fehler den Export-Alert und speichert nichts', async () => {
+      const result = service.exportCarts({ scope: 'GROUP', format: 'XLSX' }, aGroup());
+      exportRequest().flush(new Blob(['User with ID 5 is either a member nor the owner of the group']),
+        { status: 403, statusText: 'Forbidden' });
+
+      expect(await result).toBeFalse();
+      expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith('alerts.export.header', 'alerts.export.message');
+      expect(fileExport.saveAndOpen).not.toHaveBeenCalled();
+      expect(alerts.showToast).not.toHaveBeenCalled();
+    });
+
+    it('zeigt den Export-Alert, wenn das Speichern fehlschlägt', async () => {
+      fileExport.saveAndOpen.and.rejectWith(new Error('disk full'));
+
+      const result = service.exportCarts({ scope: 'GROUP', format: 'XLSX' }, aGroup());
+      exportRequest().flush(file);
+
+      expect(await result).toBeFalse();
+      expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith('alerts.export.header', 'alerts.export.message');
+      expect(alerts.showToast).not.toHaveBeenCalled();
+    });
+
+    it('sendet für die Platzhalter-Gruppe keinen Request', async () => {
+      expect(await service.exportCarts({ scope: 'GROUP', format: 'XLSX' }, Init.DEFAULT_GROUP)).toBeFalse();
+      expect(fileExport.saveAndOpen).not.toHaveBeenCalled();
     });
   });
 });
