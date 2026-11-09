@@ -127,10 +127,7 @@ public class StatisticsService {
             verificationService.verifyIsPartOfGroup(user, group);
             return List.of(group);
         }
-        // getGroupsByMemberOrOwner liefert eine Gruppe doppelt, wenn der Owner zugleich in members steht
-        return groupService.getGroupsByMemberOrOwner()
-                .collect(Collectors.toMap(Group::getId, group -> group, (first, duplicate) -> first, TreeMap::new))
-                .values().stream().toList();
+        return groupService.getDistinctGroupsByMemberOrOwner();
     }
 
     private Set<String> settlementNames() {

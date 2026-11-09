@@ -70,7 +70,7 @@
         "spendings": {
             "title": "Gastos",
             "total": "Total",
-            "download": "Exportar",
+            "export_menu": "Exportar",
             "settlement": "Repago",
             "filter": "Filtro",
             "no_spendings": "No hay gastos registrados",

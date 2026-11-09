@@ -8,16 +8,12 @@ import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
-import org.apache.poi.xssf.usermodel.XSSFWorkbook
 import org.springframework.mock.web.MockHttpServletResponse
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
-
-import java.nio.charset.StandardCharsets
-import java.util.zip.ZipInputStream
 
 /**
  * Referenz-API-Spec (MockMvc): HTTP-Status, Exception-Mapping von {@link RestResponseEntityExceptionHandler},
@@ -243,7 +239,9 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
 
         when:
         def response = exportieren(anna, params)
-        def namen = format == 'XLSX' ? blattNamen(response) : zipEintraege(response).keySet().toList()
+        def namen = format == 'XLSX'
+                ? TestData.workbook(response.contentAsByteArray).collect { it.sheetName }
+                : TestData.unzip(response.contentAsByteArray).keySet().toList()
         LOG.info('Antwort: {} {}, Namen {}', response.status, response.contentType, namen)
 
         then:
@@ -271,8 +269,8 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
         LOG.info('Szenario: Gruppe {}, Owner Anna {}, Cart Pizza 12.50', gid, anna.id)
 
         when:
-        def xlsx = new XSSFWorkbook(new ByteArrayInputStream(exportieren(anna, [format: 'XLSX', groupId: gid]).contentAsByteArray))
-        def csvZeile = zipEintraege(exportieren(anna, [format: 'CSV', groupId: gid]))['ausgaben.csv'].readLines()[1]
+        def xlsx = TestData.workbook(exportieren(anna, [format: 'XLSX', groupId: gid]).contentAsByteArray)
+        def csvZeile = TestData.unzip(exportieren(anna, [format: 'CSV', groupId: gid]).contentAsByteArray)['ausgaben.csv'].readLines()[1]
         def zeile = xlsx.getSheet('Ausgaben').getRow(1)
         def (titel, betrag) = [zeile.getCell(1).stringCellValue, zeile.getCell(4).numericCellValue]
         LOG.info('Antwort: XLSX Titel {} Betrag {}, CSV-Zeile {}', titel, betrag, csvZeile)
@@ -346,7 +344,7 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
         LOG.info('Szenario: Gruppe {}, Owner Anna {}, Accept-Language {}', wg.group.id, anna.id, sprache)
 
         when:
-        def dateien = zipEintraege(exportieren(anna, [format: 'CSV', groupId: wg.group.id], sprache))
+        def dateien = TestData.unzip(exportieren(anna, [format: 'CSV', groupId: wg.group.id], sprache).contentAsByteArray)
         LOG.info('Antwort: Einträge {}', dateien.keySet())
 
         then:
@@ -377,20 +375,5 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
             request.header('Accept-Language', sprache)
         }
         send(request, user: user)
-    }
-
-    private static List<String> blattNamen(MockHttpServletResponse response) {
-        new XSSFWorkbook(new ByteArrayInputStream(response.contentAsByteArray)).collect { it.sheetName }
-    }
-
-    /** ZIP-Eintrag → Inhalt (UTF-8 inkl. BOM), in der Reihenfolge des Archivs. */
-    private static Map<String, String> zipEintraege(MockHttpServletResponse response) {
-        def result = [:] as LinkedHashMap<String, String>
-        new ZipInputStream(new ByteArrayInputStream(response.contentAsByteArray), StandardCharsets.UTF_8).withCloseable { zip ->
-            for (def entry = zip.nextEntry; entry != null; entry = zip.nextEntry) {
-                result[entry.name] = new String(zip.readAllBytes(), StandardCharsets.UTF_8)
-            }
-        }
-        result
     }
 }

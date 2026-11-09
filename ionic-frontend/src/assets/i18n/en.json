@@ -70,7 +70,7 @@
         "spendings": {
             "title": "Expenses",
             "total": "Total",
-            "download": "Export",
+            "export_menu": "Export",
             "settlement": "Repayment",
             "filter": "Filter",
             "no_spendings": "No expenses available!",

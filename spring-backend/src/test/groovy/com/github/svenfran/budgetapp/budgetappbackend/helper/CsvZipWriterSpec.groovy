@@ -4,9 +4,6 @@ import com.github.svenfran.budgetapp.budgetappbackend.helper.export.GroupExport
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
 import spock.lang.Specification
 
-import java.nio.charset.StandardCharsets
-import java.util.zip.ZipInputStream
-
 import static java.time.LocalDate.of
 
 /**
@@ -111,16 +108,68 @@ class CsvZipWriterSpec extends Specification {
         thrown(IllegalArgumentException)
     }
 
+    // F-001 (Codex-Implementierungsreview): Der Writer schließt seinen ZipOutputStream (Deflater-Freigabe), der
+    // Response-Stream gehört aber dem Aufrufer und bleibt offen. Die Deflater-Freigabe selbst ist ohne Reflection nicht
+    // beobachtbar; abgesichert wird der Vertrag zum Aufrufer.
+    def "Der Ausgabestream bleibt nach dem Schreiben offen und enthält ein vollständiges ZIP"() {
+        given:
+        def stream = new AufzeichnenderStream()
+
+        when:
+        new CsvZipWriter([TestData.groupExport(carts: [TestData.cartExportRow(title: 'Pizza')])], false,
+                TestData.translator()).write(stream)
+
+        then:
+        !stream.geschlossen
+        TestData.unzip(stream.toByteArray()).keySet().toList() == ['ausgaben.csv', 'mitgliederhistorie.csv']
+    }
+
+    def "Ein Schreibfehler des Ausgabestreams wird weitergegeben, der Stream wird nicht geschlossen"() {
+        given: "Verbindungsabbruch nach den ersten 10 Bytes"
+        def stream = new AufzeichnenderStream(abbruchNachBytes: 10)
+
+        when:
+        new CsvZipWriter([TestData.groupExport()], false, TestData.translator()).write(stream)
+
+        then:
+        def fehler = thrown(IOException)
+        fehler.message == 'Verbindung abgebrochen'
+        !stream.geschlossen
+    }
+
+    /** Merkt sich close(); wirft optional ab einer Byte-Grenze eine IOException wie eine abgebrochene Verbindung. */
+    private static class AufzeichnenderStream extends ByteArrayOutputStream {
+        boolean geschlossen
+        int abbruchNachBytes = -1
+
+        @Override
+        void write(int b) {
+            pruefeAbbruch(1)
+            super.write(b)
+        }
+
+        @Override
+        void write(byte[] bytes, int offset, int length) {
+            pruefeAbbruch(length)
+            super.write(bytes, offset, length)
+        }
+
+        @Override
+        void close() {
+            geschlossen = true
+        }
+
+        private void pruefeAbbruch(int length) {
+            if (abbruchNachBytes >= 0 && size() + length > abbruchNachBytes) {
+                throw new IOException('Verbindung abgebrochen')
+            }
+        }
+    }
+
     /** Dateiname → Inhalt (UTF-8 inkl. BOM), in der Reihenfolge der ZIP-Einträge. */
     private static Map<String, String> schreiben(List<GroupExport> groups, boolean allGroups, Locale locale = Locale.GERMAN) {
         def buffer = new ByteArrayOutputStream()
         new CsvZipWriter(groups, allGroups, TestData.translator(locale)).write(buffer)
-        def result = [:] as LinkedHashMap<String, String>
-        new ZipInputStream(new ByteArrayInputStream(buffer.toByteArray()), StandardCharsets.UTF_8).withCloseable { zip ->
-            for (def entry = zip.nextEntry; entry != null; entry = zip.nextEntry) {
-                result[entry.name] = new String(zip.readAllBytes(), StandardCharsets.UTF_8)
-            }
-        }
-        result
+        TestData.unzip(buffer.toByteArray())
     }
 }

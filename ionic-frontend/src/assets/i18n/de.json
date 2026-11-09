@@ -70,7 +70,7 @@
         "spendings": {
             "title": "Ausgaben",
             "total": "Gesamt",
-            "download": "Exportieren",
+            "export_menu": "Exportieren",
             "settlement": "Ausgleichszahlung",
             "filter": "Filter",
             "no_spendings": "Keine Ausgaben vorhanden!",

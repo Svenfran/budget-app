@@ -15,10 +15,13 @@ import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.SignatureAlgorithm
 import io.jsonwebtoken.io.Decoders
 import io.jsonwebtoken.security.Keys
+import org.apache.poi.xssf.usermodel.XSSFWorkbook
 import org.springframework.context.support.ResourceBundleMessageSource
 
+import java.nio.charset.StandardCharsets
 import java.time.LocalDate
 import java.util.concurrent.atomic.AtomicLong
+import java.util.zip.ZipInputStream
 
 /**
  * Nicht persistierte, fachlich gültige Testobjekte (Unit-Specs und Bausteine für {@link Fixtures}).
@@ -134,6 +137,22 @@ class TestData {
     static MembershipExportRow membershipExportRow(Map overrides = [:]) {
         def values = [userName: 'Anna', start: REFERENCE_DATE.minusYears(1), end: null, type: TypeEnum.MEMBER.toString()] + overrides
         new MembershipExportRow(values.userName as String, values.start as LocalDate, values.end as LocalDate, values.type as String)
+    }
+
+    /** Export-ZIP zurücklesen (DIV-68): Eintragsname → Inhalt (UTF-8 inkl. BOM), in der Reihenfolge des Archivs. */
+    static Map<String, String> unzip(byte[] bytes) {
+        def result = [:] as LinkedHashMap<String, String>
+        new ZipInputStream(new ByteArrayInputStream(bytes), StandardCharsets.UTF_8).withCloseable { zip ->
+            for (def entry = zip.nextEntry; entry != null; entry = zip.nextEntry) {
+                result[entry.name] = new String(zip.readAllBytes(), StandardCharsets.UTF_8)
+            }
+        }
+        result
+    }
+
+    /** Export-XLSX zurücklesen (DIV-68). */
+    static XSSFWorkbook workbook(byte[] bytes) {
+        new XSSFWorkbook(new ByteArrayInputStream(bytes))
     }
 
     /**

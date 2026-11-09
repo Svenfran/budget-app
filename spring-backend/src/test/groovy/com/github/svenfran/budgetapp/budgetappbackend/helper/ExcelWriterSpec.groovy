@@ -113,7 +113,7 @@ class ExcelWriterSpec extends Specification {
     private static XSSFWorkbook schreiben(List<GroupExport> groups, boolean allGroups, Locale locale = Locale.GERMAN) {
         def buffer = new ByteArrayOutputStream()
         new ExcelWriter(groups, allGroups, TestData.translator(locale)).write(buffer)
-        new XSSFWorkbook(new ByteArrayInputStream(buffer.toByteArray()))
+        TestData.workbook(buffer.toByteArray())
     }
 
     private static List<String> blattNamen(XSSFWorkbook workbook) {

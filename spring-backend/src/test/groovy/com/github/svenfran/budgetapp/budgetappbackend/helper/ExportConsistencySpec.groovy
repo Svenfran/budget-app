@@ -9,9 +9,6 @@ import org.apache.poi.ss.usermodel.Sheet
 import org.apache.poi.xssf.usermodel.XSSFWorkbook
 import spock.lang.Specification
 
-import java.nio.charset.StandardCharsets
-import java.util.zip.ZipInputStream
-
 import static java.time.LocalDate.of
 
 /**
@@ -112,19 +109,13 @@ class ExportConsistencySpec extends Specification {
     private static XSSFWorkbook xlsx(List<GroupExport> groups, boolean allGroups = true) {
         def buffer = new ByteArrayOutputStream()
         new ExcelWriter(groups, allGroups, TestData.translator()).write(buffer)
-        new XSSFWorkbook(new ByteArrayInputStream(buffer.toByteArray()))
+        TestData.workbook(buffer.toByteArray())
     }
 
     private static Map<String, String> csvZip(List<GroupExport> groups, boolean allGroups = true) {
         def buffer = new ByteArrayOutputStream()
         new CsvZipWriter(groups, allGroups, TestData.translator()).write(buffer)
-        def result = [:] as LinkedHashMap<String, String>
-        new ZipInputStream(new ByteArrayInputStream(buffer.toByteArray()), StandardCharsets.UTF_8).withCloseable { zip ->
-            for (def entry = zip.nextEntry; entry != null; entry = zip.nextEntry) {
-                result[entry.name] = new String(zip.readAllBytes(), StandardCharsets.UTF_8)
-            }
-        }
-        result
+        TestData.unzip(buffer.toByteArray())
     }
 
     /** Alle Zeilen inkl. Kopfzeile, normalisiert. */

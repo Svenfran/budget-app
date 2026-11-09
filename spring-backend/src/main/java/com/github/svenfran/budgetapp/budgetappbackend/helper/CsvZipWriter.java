@@ -4,6 +4,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.helper.export.CartExportRo
 import com.github.svenfran.budgetapp.budgetappbackend.helper.export.GroupExport;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.export.MembershipExportRow;
 
+import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -36,30 +37,32 @@ public class CsvZipWriter {
         this.translator = translator;
     }
 
-    /** Schließt den Stream nicht (gehört dem Aufrufer), schreibt aber das ZIP vollständig ab. */
+    /**
+     * Schreibt das ZIP vollständig in den Stream. Der ZipOutputStream wird geschlossen (gibt den internen Deflater
+     * sofort frei, auch bei einem Schreibfehler), der übergebene Stream bleibt offen – er gehört dem Aufrufer.
+     */
     public void write(OutputStream outputStream) throws IOException {
         String cartFile = translator.translate("download.cart.filename") + ".csv";
         String membershipFile = translator.translate("download.membership.filename") + ".csv";
-        var zip = new ZipOutputStream(outputStream, StandardCharsets.UTF_8);
 
-        if (groups.isEmpty()) {
-            writeEntry(zip, cartFile, cartCsv(List.of()));
-            writeEntry(zip, membershipFile, membershipCsv(List.of()));
-        } else if (!allGroups) {
-            writeEntry(zip, cartFile, cartCsv(groups.get(0).carts()));
-            writeEntry(zip, membershipFile, membershipCsv(groups.get(0).memberships()));
-        } else {
-            var names = ExportNames.assign(groups, translator.translate("download.cart.sheetname"),
-                    translator.translate("download.membership.sheetname.short"),
-                    translator.translate("download.group.fallback"));
-            for (GroupExport group : groups) {
-                String folder = names.get(group.groupId()).folder() + "/";
-                writeEntry(zip, folder + cartFile, cartCsv(group.carts()));
-                writeEntry(zip, folder + membershipFile, membershipCsv(group.memberships()));
+        try (var zip = new ZipOutputStream(new NonClosingOutputStream(outputStream), StandardCharsets.UTF_8)) {
+            if (groups.isEmpty()) {
+                writeEntry(zip, cartFile, cartCsv(List.of()));
+                writeEntry(zip, membershipFile, membershipCsv(List.of()));
+            } else if (!allGroups) {
+                writeEntry(zip, cartFile, cartCsv(groups.get(0).carts()));
+                writeEntry(zip, membershipFile, membershipCsv(groups.get(0).memberships()));
+            } else {
+                var names = ExportNames.assign(groups, translator.translate("download.cart.sheetname"),
+                        translator.translate("download.membership.sheetname.short"),
+                        translator.translate("download.group.fallback"));
+                for (GroupExport group : groups) {
+                    String folder = names.get(group.groupId()).folder() + "/";
+                    writeEntry(zip, folder + cartFile, cartCsv(group.carts()));
+                    writeEntry(zip, folder + membershipFile, membershipCsv(group.memberships()));
+                }
             }
         }
-        zip.finish();
-        zip.flush();
     }
 
     private String cartCsv(List<CartExportRow> rows) {
@@ -88,5 +91,23 @@ public class CsvZipWriter {
         zip.write(BOM);
         zip.write(content.getBytes(StandardCharsets.UTF_8));
         zip.closeEntry();
+    }
+
+    /** Reicht alles an den Aufrufer-Stream durch, schließt ihn aber nicht (close() = flush()). */
+    private static final class NonClosingOutputStream extends FilterOutputStream {
+
+        NonClosingOutputStream(OutputStream out) {
+            super(out);
+        }
+
+        @Override
+        public void write(byte[] bytes, int offset, int length) throws IOException {
+            out.write(bytes, offset, length); // FilterOutputStream schriebe sonst Byte für Byte
+        }
+
+        @Override
+        public void close() throws IOException {
+            flush();
+        }
     }
 }
