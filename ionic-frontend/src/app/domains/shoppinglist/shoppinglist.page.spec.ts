@@ -801,6 +801,40 @@ describe('ShoppinglistPage – Drag & Drop', () => {
         http.expectNone(clearUrl);
         expect(service.deleteAllShoppingItems).not.toHaveBeenCalled();
       });
+
+      it('Gruppenwechsel, während der Dialog noch erzeugt wird: er wird nicht angezeigt, kein Request (Codex-Review F-001)', async () => {
+        const alertEl = jasmine.createSpyObj<HTMLIonAlertElement>('alert', ['present', 'remove']);
+        alertEl.present.and.resolveTo();
+        let erzeugt!: (el: HTMLIonAlertElement) => void;
+        (TestBed.inject(AlertController).create as jasmine.Spy).and.callFake((options?: AlertOptions) => {
+          dialoge.push(options!);
+          return new Promise<HTMLIonAlertElement>(resolve => erzeugt = resolve);
+        });
+
+        const geoeffnet = page.onDeleteAllItems(1);
+        groupService.setActiveGroup(urlaub);
+        fixture.detectChanges();
+        http.expectOne(loadUrl(2)).flush(loadedLists());
+        erzeugt(alertEl);
+        await geoeffnet;
+
+        expect(alertEl.present).not.toHaveBeenCalled();
+        expect(alertEl.remove).toHaveBeenCalled();
+        bestaetigen();
+        http.expectNone(clearUrl);
+        expect(service.deleteAllShoppingItems).not.toHaveBeenCalled();
+      });
+
+      it('ohne Kontextwechsel wird der erzeugte Dialog angezeigt', async () => {
+        const alertEl = jasmine.createSpyObj<HTMLIonAlertElement>('alert', ['present', 'remove']);
+        alertEl.present.and.resolveTo();
+        (TestBed.inject(AlertController).create as jasmine.Spy).and.resolveTo(alertEl);
+
+        await page.onDeleteAllItems(1);
+
+        expect(alertEl.present).toHaveBeenCalledTimes(1);
+        expect(alertEl.remove).not.toHaveBeenCalled();
+      });
     });
 
     describe('Menü-Button und Popover', () => {

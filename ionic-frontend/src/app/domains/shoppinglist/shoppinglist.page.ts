@@ -13,7 +13,8 @@ import { WebSocketService } from 'src/app/service/websocket.service';
 import { GroupService } from 'src/app/service/group.service';
 import { INIT_NUMBERS, INIT_VALUES } from 'src/app/constants/default-values';
 import { TranslateService } from '@ngx-translate/core';
-import { deleteAllItems, deleteItem, deleteList, itemsToDelete, updateItem, updateList } from './shoppinglist-events';import { ShoppinglistOrderDto } from './model/shoppinglist-order-dto';
+import { deleteAllItems, deleteItem, deleteList, itemsToDelete, updateItem, updateList } from './shoppinglist-events';
+import { ShoppinglistOrderDto } from './model/shoppinglist-order-dto';
 import { ShoppingitemOrderDto } from './model/shoppingitem-order-dto';
 import { ShoppingitemMovedDto } from './model/shoppingitem-moved-dto';
 import { ShoppingSuggestionsDto } from './model/shopping-suggestions-dto';
@@ -408,7 +409,14 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
           this.shoppinglistService.deleteAllShoppingItems(itemsToDelete(current, groupId, false));
         }
       }]
-    }).then(alertEl => alertEl.present());
+    }).then(alertEl => {
+      // create() ist asynchron: ist der Kontext inzwischen weg, den Dialog gar nicht erst zeigen
+      if (!inContext()) {
+        alertEl.remove();
+        return;
+      }
+      return alertEl.present();
+    });
   }
 
   // Drag & Drop (DIV-1). Das CDK löst synchron erst `ended`, dann `dropped` aus; der Move wird deshalb im Drop-Handler
