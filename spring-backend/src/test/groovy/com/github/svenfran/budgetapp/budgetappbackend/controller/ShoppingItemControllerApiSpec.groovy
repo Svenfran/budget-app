@@ -452,6 +452,99 @@ class ShoppingItemControllerApiSpec extends IntegrationSpec implements ApiReques
         send(put('/api/groups/shopping-list/move-item'), user: angemeldet, body: body)
     }
 
+    // Alle Einträge löschen (Overflow-Menü)
+
+    def "Alle Einträge löschen: 200 ohne Body, gesendete offene und erledigte Einträge sind weg, die Liste bleibt"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg)
+        def milch = fixtures.shoppingItem(liste, completed: false)
+        def brot = fixtures.shoppingItem(liste, completed: true)
+        def (groupId, listId, milchId, brotId) = [wg.group.id, liste.id, milch.id, brot.id]
+        flushAndClear()
+        LOG.info('Szenario: Gruppe {}, Mitglied {}, Liste {}, offener Eintrag {} und erledigter Eintrag {}', groupId, ben.id, listId, milchId, brotId)
+
+        when:
+        def response = clearItems(ben, [[id: milchId, completed: false, shoppingListId: listId, groupId: groupId],
+                                        [id: brotId, completed: true, shoppingListId: listId, groupId: groupId]])
+        flushAndClear()
+        def listen = json(send(get('/api/groups/shopping-lists-with-items/{groupId}', groupId), user: ben))
+        LOG.info('Antwort: "{}"; Listen {} mit Einträgen {}', response.contentAsString, listen*.id, listen*.shoppingItems*.id)
+
+        then:
+        response.status == 200
+        response.contentAsString.isEmpty()
+        listen*.id == [listId]
+        listen[0].shoppingItems.isEmpty()
+        1 * notificationService.sendShoppingItemDeleteAllNotification(groupId, { it*.id == [milchId, brotId] })
+    }
+
+    def "Alle Einträge löschen als Nicht-Mitglied: 403, nichts wird gelöscht"() {
+        given:
+        def wg = fixtures.group()
+        def liste = fixtures.shoppingList(wg)
+        def milch = fixtures.shoppingItem(liste, completed: false)
+        def fremder = fixtures.user()
+        def (groupId, listId, milchId) = [wg.group.id, liste.id, milch.id]
+        flushAndClear()
+        LOG.info('Szenario: Gruppe {}, Owner {}, Liste {} mit Eintrag {}; anfragender User {} ist kein Mitglied',
+                groupId, wg.owner.id, listId, milchId, fremder.id)
+
+        when:
+        def response = clearItems(fremder, [[id: milchId, completed: false, shoppingListId: listId, groupId: groupId]])
+        flushAndClear()
+        def eintraege = json(send(get('/api/groups/shopping-lists-with-items/{groupId}', groupId), user: wg.owner))[0].shoppingItems
+        LOG.info('Antwort: {}; Einträge der Liste {}: {}', response.contentAsString, listId, eintraege*.id)
+
+        then:
+        response.status == 403
+        eintraege*.id == [milchId]
+        0 * notificationService._
+    }
+
+    def "Ohne Anmeldung wird Alle Einträge löschen mit 403 abgelehnt"() {
+        given:
+        def wg = fixtures.group()
+        def liste = fixtures.shoppingList(wg)
+        def milch = fixtures.shoppingItem(liste, completed: false)
+        LOG.info('Szenario: Gruppe {}, Liste {} mit Eintrag {}, Request ohne Anmeldung', wg.group.id, liste.id, milch.id)
+
+        expect: 'Ist-Verhalten: Spring Security antwortet ohne Authentifizierung mit 403, nicht 401'
+        send(post('/api/groups/shopping-list/clear-items'),
+                body: [[id: milch.id, completed: false, shoppingListId: liste.id, groupId: wg.group.id]]).status == 403
+    }
+
+    def "Alle Einträge löschen mit unbekannter ID an zweiter Stelle: 404, nichts wird gelöscht"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def liste = fixtures.shoppingList(wg)
+        def milch = fixtures.shoppingItem(liste, completed: false)
+        def (groupId, listId, milchId) = [wg.group.id, liste.id, milch.id]
+        flushAndClear()
+        LOG.info('Szenario: Gruppe {}, Mitglied {}, Liste {} mit offenem Eintrag {}; gesendet: {}, dann unbekannte ID {}',
+                groupId, ben.id, listId, milchId, milchId, Long.MAX_VALUE)
+
+        when: 'Long.MAX_VALUE statt einer kleinen ID, die Restdaten aus Commit-Specs treffen könnte'
+        def response = clearItems(ben, [milchId, Long.MAX_VALUE].collect {
+            [id: it, completed: false, shoppingListId: listId, groupId: groupId]
+        })
+        flushAndClear()
+        def eintraege = json(send(get('/api/groups/shopping-lists-with-items/{groupId}', groupId), user: ben))[0].shoppingItems
+        LOG.info('Antwort: {}; Einträge der Liste {}: {}', response.contentAsString, listId, eintraege*.id)
+
+        then:
+        response.status == 404
+        response.contentAsString.contains('not found')
+        eintraege*.id == [milchId]
+        0 * notificationService._
+    }
+
+    private MockHttpServletResponse clearItems(User angemeldet, List<Map> items) {
+        send(post('/api/groups/shopping-list/clear-items'), user: angemeldet, body: items)
+    }
+
     private MockHttpServletResponse deleteAllItems(User angemeldet, List<Map> items) {
         send(post('/api/groups/shopping-list/delete-all-items'), user: angemeldet, body: items)
     }

@@ -189,8 +189,23 @@ public class ShoppingItemService {
         );
     }
 
+    /** Löscht die als erledigt gesendeten Einträge einer Liste („Erledigte löschen“). */
     @Transactional
     public void deleteAllCompletedShoppingItems(List<AddEditShoppingItemDto> dtos) throws GroupNotFoundException, UserNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingListNotFoundException, ShoppingListDoesNotBelongToGroupException, ShoppingItemNotFoundException, ShoppingItemDoesNotBelongToShoppingListException {
+        deleteShoppingItems(dtos, true);
+    }
+
+    /**
+     * Löscht alle gesendeten Einträge einer Liste, offene wie erledigte („Alle Einträge löschen“); die Liste bleibt.
+     * Gelöscht wird nur, was der Client gesendet (also angezeigt) hat, nicht serverseitig die ganze Liste.
+     */
+    @Transactional
+    public void deleteAllShoppingItems(List<AddEditShoppingItemDto> dtos) throws GroupNotFoundException, UserNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingListNotFoundException, ShoppingListDoesNotBelongToGroupException, ShoppingItemNotFoundException, ShoppingItemDoesNotBelongToShoppingListException {
+        deleteShoppingItems(dtos, false);
+    }
+
+    /** Gemeinsamer Löschpfad; läuft in der Transaktion des öffentlichen Aufrufers. */
+    private void deleteShoppingItems(List<AddEditShoppingItemDto> dtos, boolean onlyCompleted) throws GroupNotFoundException, UserNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingListNotFoundException, ShoppingListDoesNotBelongToGroupException, ShoppingItemNotFoundException, ShoppingItemDoesNotBelongToShoppingListException {
         if (dtos.isEmpty()) { return; }
         verificationService.verifyAllShoppingItemsBelongToSameShoppingListAndGroup(dtos);
         var user = dataLoaderService.getAuthenticatedUser();
@@ -208,21 +223,22 @@ public class ShoppingItemService {
             verificationService.verifyShoppingItemIsPartOfShoppingList(shoppingList, shoppingItem);
             shoppingItems.add(shoppingItem);
         }
-        // Nur als erledigt gesendete Einträge werden gelöscht und gemeldet: Empfänger entfernen alle übermittelten IDs
-        var completedDtos = dtos.stream()
-                .filter(AddEditShoppingItemDto::isCompleted)
+        // Bei „Erledigte löschen“ werden nur als erledigt gesendete Einträge gelöscht und gemeldet: Empfänger entfernen
+        // alle übermittelten IDs
+        var deletedDtos = dtos.stream()
+                .filter(dto -> !onlyCompleted || dto.isCompleted())
                 .toList();
-        var itemIds = new ArrayList<>(completedDtos.stream()
+        var itemIds = new ArrayList<>(deletedDtos.stream()
                 .map(AddEditShoppingItemDto::getId)
                 .toList());
-        // Als Kauf zählt davon nur, was auch serverseitig erledigt ist
+        // Als Kauf zählt davon nur, was auch serverseitig erledigt ist (offene Einträge nie)
         shoppingPurchaseService.recordPurchases(shoppingList, shoppingItems.stream()
                 .filter(item -> itemIds.contains(item.getId()))
                 .toList());
         shoppingItemRepository.deleteAllById(itemIds);
         notificationService.sendShoppingItemDeleteAllNotification(
                 group.getId(),
-                completedDtos
+                deletedDtos
         );
     }
 

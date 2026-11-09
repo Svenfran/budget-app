@@ -74,9 +74,12 @@ class ShoppingPurchaseServiceIntegrationSpec extends IntegrationSpec {
 
         when:
         LOG.info('shoppingItemService {} (Eintrag {}), erwartet IllegalStateException aus der Benachrichtigung', aktion, milchId)
-        aktion == 'Einzel-Löschen'
-                ? shoppingItemService.deleteShoppingItem(dto)
-                : shoppingItemService.deleteAllCompletedShoppingItems([dto])
+        switch (aktion) {
+            case 'Einzel-Löschen': shoppingItemService.deleteShoppingItem(dto); break
+            case 'Erledigte löschen': shoppingItemService.deleteAllCompletedShoppingItems([dto]); break
+            case 'Alle löschen': shoppingItemService.deleteAllShoppingItems([dto]); break
+            default: throw new IllegalArgumentException("Unbekannte Aktion $aktion")
+        }
 
         then:
         notificationService.sendShoppingItemNotification(*_) >> { throw new IllegalStateException('Testfehler') }
@@ -86,7 +89,7 @@ class ShoppingPurchaseServiceIntegrationSpec extends IntegrationSpec {
         kaufIds(listId).isEmpty()
 
         where:
-        aktion << ['Einzel-Löschen', 'Erledigte löschen']
+        aktion << ['Einzel-Löschen', 'Erledigte löschen', 'Alle löschen']
     }
 
     private List<Long> kaufIds(Long listId) {

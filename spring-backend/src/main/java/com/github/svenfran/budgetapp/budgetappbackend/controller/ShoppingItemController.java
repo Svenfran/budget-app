@@ -66,4 +66,10 @@ public class ShoppingItemController {
         shoppingItemService.deleteAllCompletedShoppingItems(shoppingItems);
         return new ResponseEntity<>(HttpStatus.OK);
     }
+
+    @PostMapping("/groups/shopping-list/clear-items")
+    public ResponseEntity<Void> deleteAllShoppingItems(@RequestBody List<AddEditShoppingItemDto> shoppingItems) throws UserNotFoundException, GroupNotFoundException, ShoppingListNotFoundException, NotOwnerOrMemberOfGroupException, ShoppingItemNotFoundException, ShoppingListDoesNotBelongToGroupException, ShoppingItemDoesNotBelongToShoppingListException {
+        shoppingItemService.deleteAllShoppingItems(shoppingItems);
+        return new ResponseEntity<>(HttpStatus.OK);
+    }
 }
