@@ -87,6 +87,22 @@ class ExportNamesSpec extends Specification {
         name << ['', '   ', '???', '[*]', null]
     }
 
+    // Regression (Codex-Review 3, F-001): 40 Punkte + „X“ übersteht die Bereinigung, nach Kürzung auf 40 Zeichen und
+    // Entfernen der abschließenden Punkte war der Ordnername leer (ZIP-Einträge „/ausgaben.csv“)
+    def "Ordnername, der erst durch die Kürzung leer wird, erhält den Fallback samt Zähler"() {
+        given:
+        def punkte = '.' * 40 + 'X'
+
+        when:
+        def allein = names(punkte)
+        def mitGruppe = names('Gruppe', punkte)
+
+        then:
+        allein[0].folder() == 'Gruppe'
+        mitGruppe[0] == new GroupNames('Gruppe Ausgaben', 'Gruppe Mitglieder', 'Gruppe')
+        mitGruppe[1] == new GroupNames('.' * 18 + ' (2) Ausgaben', '.' * 16 + ' (2) Mitglieder', 'Gruppe (2)')
+    }
+
     def "Apostroph am Rand des Blattnamens wird entfernt, im Inneren bleibt er"() {
         expect:
         names("'Bob's Bude'")[0].cartSheet() == "Bob's Bude Ausgaben"

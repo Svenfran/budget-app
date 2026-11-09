@@ -49,7 +49,7 @@ public final class ExportNames {
                 names = new GroupNames(
                         sheetName(sheetBase, suffix, cartLabel),
                         sheetName(sheetBase, suffix, membershipLabel),
-                        folderName(folderBase, suffix));
+                        folderName(folderBase, suffix, fallback));
                 counter++;
             } while (usedSheets.contains(names.cartSheet()) || usedSheets.contains(names.membershipSheet())
                     || usedFolders.contains(names.folder()));
@@ -67,9 +67,17 @@ public final class ExportNames {
         return truncate(base, maxBase) + suffix + " " + label;
     }
 
-    /** {@code <Name><Zähler>}, auf 40 Zeichen nur der Name gekürzt; kein abschließender Punkt. */
-    private static String folderName(String base, String suffix) {
-        String name = stripTrailingDots(truncate(base, MAX_FOLDER_NAME - suffix.length()));
+    /**
+     * {@code <Name><Zähler>}, auf 40 Zeichen nur der Name gekürzt; kein abschließender Punkt. Bleibt nach dem Kürzen
+     * nichts übrig (z. B. 40 Punkte + „X“), gilt wie bei einem leeren Namen der Fallback – sonst entstünden ZIP-Einträge
+     * ohne Gruppenordner ({@code /ausgaben.csv}). Läuft vor der Kollisionsprüfung, der Zähler greift also auch hier.
+     */
+    private static String folderName(String base, String suffix, String fallback) {
+        int maxBase = MAX_FOLDER_NAME - suffix.length();
+        String name = stripTrailingDots(truncate(base, maxBase));
+        if (name.isEmpty()) {
+            name = stripTrailingDots(truncate(fallback, maxBase));
+        }
         return name + suffix;
     }
 

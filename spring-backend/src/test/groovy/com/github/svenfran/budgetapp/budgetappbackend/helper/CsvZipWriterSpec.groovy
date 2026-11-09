@@ -71,6 +71,23 @@ class CsvZipWriterSpec extends Specification {
         dateien['Haushalt (2)/mitgliederhistorie.csv'] == BOM + 'Benutzername;Startdatum;Enddatum;Status\r\n'
     }
 
+    // Regression (Codex-Review 3, F-001): kein ZIP-Eintrag ohne Gruppenordner, wenn die Kürzung den Namen leert
+    def "Alle Gruppen: ein durch Kürzung leerer Ordnername wird zum Fallback-Ordner mit Zähler, kein Eintrag beginnt mit /"() {
+        given:
+        def gruppe = TestData.groupExport(groupId: 1L, groupName: 'Gruppe', carts: [TestData.cartExportRow(title: 'Brot')])
+        def punkte = TestData.groupExport(groupId: 2L, groupName: '.' * 40 + 'X', carts: [TestData.cartExportRow(title: 'Kino')])
+
+        when:
+        def dateien = schreiben([gruppe, punkte], true)
+
+        then:
+        dateien.keySet().toList() == ['Gruppe/ausgaben.csv', 'Gruppe/mitgliederhistorie.csv',
+                                      'Gruppe (2)/ausgaben.csv', 'Gruppe (2)/mitgliederhistorie.csv']
+        dateien.keySet().every { !it.startsWith('/') }
+        dateien['Gruppe/ausgaben.csv'].contains(';Brot;')
+        dateien['Gruppe (2)/ausgaben.csv'].contains(';Kino;')
+    }
+
     def "Ohne Gruppen (#umfang): beide Dateien nur mit Kopfzeile im Root"() {
         when:
         def dateien = schreiben([], allGroups)
