@@ -12,8 +12,45 @@ ion-chip {
 
 .chip {
     display: flex;
-    flex-flow: row-reverse;
+    // wrap: bei großer Schrift/schmalem Display umbrechen statt überlaufen; der Menü-Button bleibt rechts
+    flex-flow: row-reverse wrap;
+    align-items: center;
     padding-top: 1rem;
+}
+
+// Overflow-Button der Listenaktionen: rund und so hoch wie die Chips, neutraler Hintergrund wie diese
+.list-menu-button {
+    --background: var(--ion-color-light);
+    --background-activated: var(--ion-color-light-shade);
+    --background-hover: var(--ion-color-light-shade);
+    --color: var(--ion-color-medium);
+    --border-radius: 50%;
+    --padding-start: 0;
+    --padding-end: 0;
+    --box-shadow: none;
+    position: relative;
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
+    margin: 4px;
+
+    // Touch-Fläche 48 × 48 px, ohne die sichtbare Größe oder die Zeilenhöhe zu ändern
+    &::after {
+        content: '';
+        position: absolute;
+        inset: -8px;
+    }
+}
+
+// Overflow-Menü wie auf der Ausgaben-Seite (cartlist), aber ohne den MD-Standardschatten des Popovers
+ion-popover.list-menu {
+    --width: 14rem;
+    --box-shadow: none;
+}
+
+.pop-icon {
+    margin-right: 1rem;
 }
 
 ion-item-sliding {

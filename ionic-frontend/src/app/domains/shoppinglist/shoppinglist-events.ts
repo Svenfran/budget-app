@@ -48,6 +48,16 @@ export function deleteAllItems(lists: ShoppinglistDto[], data: AddEditShoppingIt
   return removeItems(lists, new Set(data.map(item => item.id!)));
 }
 
+/**
+ * Zu löschende Einträge einer Liste als DTOs für „Erledigte löschen“ (`onlyCompleted`) bzw. „Alle Einträge löschen“:
+ * genau die Einträge des übergebenen (angezeigten) Stands, in ihrer Reihenfolge.
+ */
+export function itemsToDelete(list: ShoppinglistDto, groupId: number, onlyCompleted: boolean): AddEditShoppingItemDto[] {
+  return list.shoppingItems
+    .filter(item => !onlyCompleted || item.completed)
+    .map(item => ({ id: item.id, name: item.name, completed: item.completed, shoppingListId: list.id, groupId }));
+}
+
 /** Liste, in der der Eintrag steht, oder `undefined`. */
 export function locateItem(lists: ShoppinglistDto[], itemId: number): number | undefined {
   return lists.find(list => list.shoppingItems.some(item => item.id === itemId))?.id;

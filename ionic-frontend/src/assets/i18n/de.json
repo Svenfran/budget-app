@@ -122,6 +122,8 @@
             "title": "Einkaufslisten",
             "no_shoppinglists": "Keine Einkaufslisten vorhanden!",
             "delete_completed": "Erledigte löschen",
+            "delete_all_items": "Alle Einträge löschen",
+            "more_actions": "Weitere Aktionen",
             "item_placeholder": "Eintrag hinzufügen",
             "suggestions": "Vorschläge"
         }
@@ -246,6 +248,12 @@
                 "ok": "OK",
                 "loading": "Erstelle Einkaufsliste...",
                 "placeholder": "Name der Einkaufsliste"
+            },
+            "delete_all_items": {
+                "header": "Alle Einträge löschen:",
+                "message": "Möchtest du wirklich alle Einträge der Einkaufsliste \"{{listName}}\" löschen? Auch offene, noch nicht erledigte Einträge werden gelöscht. Die Liste selbst bleibt erhalten.",
+                "cancel": "Abbrechen",
+                "ok": "Löschen"
             },
             "delete": {
                 "header": "Einkaufsliste löschen:",

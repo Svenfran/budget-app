@@ -122,6 +122,8 @@
             "title": "Listas de compra",
             "no_shoppinglists": "No hay listas de compra",
             "delete_completed": "Eliminar completados",
+            "delete_all_items": "Eliminar todos los elementos",
+            "more_actions": "Más acciones",
             "item_placeholder": "Agregar a la lista",
             "suggestions": "Sugerencias"
         }
@@ -246,6 +248,12 @@
                 "ok": "OK",
                 "loading": "Creando lista de compra...",
                 "placeholder": "Nombre de la lista de compra"
+            },
+            "delete_all_items": {
+                "header": "Eliminar todos los elementos:",
+                "message": "¿Realmente quieres eliminar todos los elementos de la lista de compras \"{{listName}}\"? También se eliminarán los elementos abiertos que aún no están completados. La lista en sí se conserva.",
+                "cancel": "Cancelar",
+                "ok": "Eliminar"
             },
             "delete": {
                 "header": "Eliminar lista de compra:",

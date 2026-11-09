@@ -305,6 +305,66 @@ describe('ShoppinglistService', () => {
       expect(alerts.showToast).toHaveBeenCalledOnceWith('alerts.shoppinglist.save.error');
     });
 
+    describe('Alle Einträge löschen (clear-items)', () => {
+      const clearUrl = `${api}/shopping-list/clear-items`;
+      const alleVonSupermarkt = () => [
+        itemDto({ id: 11, completed: false, shoppingListId: 10 }),
+        itemDto({ id: 12, completed: true, shoppingListId: 10 }),
+        itemDto({ id: 13, completed: true, shoppingListId: 10 }),
+      ];
+
+      it('POST mit allen gesendeten Einträgen; danach ist die Liste leer, die andere Liste bleibt', () => {
+        const dtos = alleVonSupermarkt();
+
+        service.deleteAllShoppingItems(dtos);
+        const req = http.expectOne(clearUrl);
+        expect(req.request.method).toBe('POST');
+        expect(req.request.body).toEqual(dtos);
+        req.flush(null);
+
+        expect(service.getShoppingLists()()).toEqual([{ ...existing[0], shoppingItems: [] }, existing[1]]);
+      });
+
+      it('ein während des Requests hinzugekommener Eintrag derselben Liste bleibt nach der Antwort erhalten', () => {
+        service.deleteAllShoppingItems(alleVonSupermarkt());
+        const req = http.expectOne(clearUrl);
+        const neu = aShoppingItem({ id: 14, name: 'Kaffee' });
+        service.getShoppingLists().update(lists =>
+          lists.map(list => list.id === 10 ? { ...list, shoppingItems: [...list.shoppingItems, neu] } : list));
+
+        req.flush(null);
+
+        expect(service.getShoppingLists()()).toEqual([{ ...existing[0], shoppingItems: [neu] }, existing[1]]);
+      });
+
+      it('Fehler: Listen unverändert (auch eine zwischenzeitliche Änderung bleibt), Toast', () => {
+        service.deleteAllShoppingItems(alleVonSupermarkt());
+        const req = http.expectOne(clearUrl);
+        const neu = aShoppingItem({ id: 14 });
+        service.getShoppingLists().update(lists =>
+          lists.map(list => list.id === 10 ? { ...list, shoppingItems: [...list.shoppingItems, neu] } : list));
+        const vorDerAntwort = service.getShoppingLists()();
+
+        req.flush(forbiddenBody, forbidden);
+
+        expect(service.getShoppingLists()()).toEqual(vorDerAntwort);
+        expect(alerts.showToast).toHaveBeenCalledOnceWith('alerts.shoppinglist.save.error');
+      });
+
+      it('Antwort während eines Drags wird zurückgestellt und erst beim Release angewandt', () => {
+        service.deleteAllShoppingItems(alleVonSupermarkt());
+        const req = http.expectOne(clearUrl);
+
+        service.holdUpdates();
+        req.flush(null);
+        expect(service.getShoppingLists()()).toEqual(existing);
+
+        service.releaseUpdates();
+
+        expect(service.getShoppingLists()()).toEqual([{ ...existing[0], shoppingItems: [] }, existing[1]]);
+      });
+    });
+
     // Einträge können die Liste wechseln (DIV-2): Antworten und Events mit veralteter shoppingListId
     describe('nach einem Listenwechsel', () => {
       it('Anlegen: steht der Eintrag bei der POST-Antwort schon in einer anderen Liste, entsteht kein Duplikat', () => {

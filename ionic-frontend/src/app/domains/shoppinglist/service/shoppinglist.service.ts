@@ -44,6 +44,7 @@ export class ShoppinglistService {
   private updateItemOfShoppingListUrl = `${this.apiBaseUrl}/api/groups/shopping-list/update-item`;
   private deleteItemFromShoppingListUrl = `${this.apiBaseUrl}/api/groups/shopping-list/delete-item`;
   private deleteAllItemsFromShoppingListUrl = `${this.apiBaseUrl}/api/groups/shopping-list/delete-all-items`;
+  private clearItemsOfShoppingListUrl = `${this.apiBaseUrl}/api/groups/shopping-list/clear-items`;
   private reorderShoppingItemsUrl = `${this.apiBaseUrl}/api/groups/shopping-list/reorder-items`;
   private moveItemUrl = `${this.apiBaseUrl}/api/groups/shopping-list/move-item`;
 
@@ -381,15 +382,26 @@ export class ShoppinglistService {
         })
     }
 
+    /** „Erledigte löschen“: der Server löscht nur die als erledigt gesendeten Einträge. */
     deleteAllCompletedShoppingItems(deleteShoppingItems: AddEditShoppingItemDto[]): void {
+      this.deleteShoppingItems(this.deleteAllItemsFromShoppingListUrl, deleteShoppingItems);
+    }
+
+    /** „Alle Einträge löschen“: der Server löscht alle gesendeten Einträge, offene wie erledigte; die Liste bleibt. */
+    deleteAllShoppingItems(deleteShoppingItems: AddEditShoppingItemDto[]): void {
+      this.deleteShoppingItems(this.clearItemsOfShoppingListUrl, deleteShoppingItems);
+    }
+
+    /** Gemeinsamer Löschpfad: nach Erfolg nur die gesendeten Einträge entfernen, bei Fehler State unverändert + Toast. */
+    private deleteShoppingItems(url: string, deleteShoppingItems: AddEditShoppingItemDto[]): void {
       this.http
-        .post<void>(this.deleteAllItemsFromShoppingListUrl, deleteShoppingItems)
+        .post<void>(url, deleteShoppingItems)
         .subscribe({
           next: () => {
             this.applyOrDefer(() => this.shoppingLists.update(lists => deleteAllItems(lists, deleteShoppingItems)));
           },
           error: (err) => {
-            console.error("Error deleting completed items:", err);
+            console.error("Error deleting shopping items:", err);
             this.alertService.showToast(this.translate.instant('alerts.shoppinglist.save.error'));
           }
         })

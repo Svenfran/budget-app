@@ -4,7 +4,7 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormsModule } from '@angular/forms';
 import { AlertButton, AlertController, AlertOptions, IonicModule, LoadingController } from '@ionic/angular';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { BehaviorSubject } from 'rxjs';
 import { AuthService } from 'src/app/auth/auth.service';
 import { User } from 'src/app/auth/user';
@@ -678,6 +678,241 @@ describe('ShoppinglistPage – Drag & Drop', () => {
 
       http.expectNone(addItemsUrl);
       expect(service.addItemsToShoppingList).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Alle Einträge löschen (Overflow-Menü)', () => {
+    const clearUrl = `${api}/shopping-list/clear-items`;
+    let dialoge: AlertOptions[];
+    let translate: TranslateService;
+
+    const dialog = () => dialoge[dialoge.length - 1];
+    const okButton = () => (dialog().buttons as AlertButton[]).find(button => button.role !== 'cancel')!;
+    const bestaetigen = () => (okButton().handler as () => void)();
+    const listB = () => service.getShoppingLists()().find(list => list.id === 2)!;
+    const host = () => fixture.nativeElement as HTMLElement;
+    /** Aktionszeile der Liste (alle Listen sind im DOM, eingeklappte nur per [hidden]). */
+    const aktionszeile = (index: number) => host().querySelectorAll('.chip')[index] as HTMLElement;
+
+    beforeEach(() => {
+      dialoge = [];
+      translate = TestBed.inject(TranslateService);
+      spyOn(translate, 'instant').and.callThrough();
+      spyOn(service, 'deleteAllShoppingItems').and.callThrough();
+      spyOn(TestBed.inject(AlertController), 'create').and.callFake((options?: AlertOptions) => {
+        dialoge.push(options!);
+        return Promise.resolve({ present: () => Promise.resolve() } as unknown as HTMLIonAlertElement);
+      });
+    });
+
+    it('Dialog: Hinweis auf offene Einträge mit Listenname, Abbrechen und roter Löschen-Button', async () => {
+      await page.onDeleteAllItems(1);
+
+      expect(dialoge.length).toBe(1);
+      expect(dialog().header).toBe('alerts.shoppinglist.delete_all_items.header');
+      expect(translate.instant).toHaveBeenCalledWith('alerts.shoppinglist.delete_all_items.message', { listName: 'Liste 1' });
+      expect((dialog().buttons as AlertButton[]).map(button => button.role)).toEqual(['cancel', 'destructive']);
+      expect(okButton().cssClass).toBe('alert-button-danger');
+    });
+
+    it('Bestätigen: genau ein POST clear-items mit allen Einträgen der Liste, danach ist sie leer, die anderen bleiben', async () => {
+      await page.onDeleteAllItems(1);
+
+      bestaetigen();
+      const req = http.expectOne(clearUrl);
+      expect(req.request.body).toEqual([11, 12, 13].map(id => jasmine.objectContaining({ id, shoppingListId: 1, groupId: 1 })));
+      req.flush(null);
+
+      expect(itemIdsOfA()).toEqual([]);
+      expect(listIds()).toEqual([1, 2, 3]);
+    });
+
+    it('Änderungen zwischen Öffnen und Bestätigen: gesendet wird der aktuelle Stand', async () => {
+      await page.onDeleteAllItems(1);
+
+      event('add-item', { id: 14, name: 'Kaffee', completed: false, shoppingListId: 1, groupId: 1 });
+      event('delete-item', { id: 11, name: 'x', completed: false, shoppingListId: 1, groupId: 1 });
+      bestaetigen();
+
+      const req = http.expectOne(clearUrl);
+      expect(req.request.body.map((item: { id: number }) => item.id)).toEqual([12, 13, 14]);
+      req.flush(null);
+    });
+
+    it('Abbrechen: der Abbrechen-Button hat keine Aktion, es geht kein Request raus', async () => {
+      await page.onDeleteAllItems(1);
+
+      const cancel = (dialog().buttons as AlertButton[]).find(button => button.role === 'cancel')!;
+      expect(cancel.handler).toBeUndefined();
+      http.expectNone(clearUrl);
+      expect(service.deleteAllShoppingItems).not.toHaveBeenCalled();
+    });
+
+    it('leere Liste: kein Dialog, kein Request', async () => {
+      await page.onDeleteAllItems(2);
+
+      expect(dialoge).toEqual([]);
+      http.expectNone(clearUrl);
+    });
+
+    describe('veralteter Dialog (Kontextschutz)', () => {
+      it('Gruppenwechsel vor dem Bestätigen: kein Request', async () => {
+        await page.onDeleteAllItems(1);
+
+        groupService.setActiveGroup(urlaub);
+        fixture.detectChanges();
+        http.expectOne(loadUrl(2)).flush(loadedLists());
+        bestaetigen();
+
+        http.expectNone(clearUrl);
+        expect(service.deleteAllShoppingItems).not.toHaveBeenCalled();
+      });
+
+      it('Logout und Login mit derselben Gruppe vor dem Bestätigen: kein Request', async () => {
+        await page.onDeleteAllItems(1);
+
+        session.next(null);
+        session.next(aLoggedInUser({ id: 7 }));
+        groupService.setActiveGroup(wg);
+        fixture.detectChanges();
+        http.expectOne(loadUrl(1)).flush(loadedLists());
+        bestaetigen();
+
+        http.expectNone(clearUrl);
+        expect(service.deleteAllShoppingItems).not.toHaveBeenCalled();
+      });
+
+      it('Liste inzwischen gelöscht (delete-list): kein Request', async () => {
+        await page.onDeleteAllItems(1);
+
+        event('delete-list', { id: 1, name: 'Liste 1', groupId: 1 });
+        bestaetigen();
+
+        http.expectNone(clearUrl);
+        expect(service.deleteAllShoppingItems).not.toHaveBeenCalled();
+      });
+
+      it('Liste bei offenem Dialog vollständig geleert (delete-all-items): kein Request', async () => {
+        await page.onDeleteAllItems(1);
+
+        event('delete-all-items', [11, 12, 13].map(id => ({ id, name: 'x', completed: true, shoppingListId: 1, groupId: 1 })));
+        bestaetigen();
+
+        http.expectNone(clearUrl);
+        expect(service.deleteAllShoppingItems).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('Menü-Button und Popover', () => {
+      it('Klick auf den Menü-Button öffnet das Menü für diese Liste, klappt aber nichts auf oder zu', () => {
+        const toggle = spyOn(page, 'toggleList').and.callThrough();
+        fixture.detectChanges();
+
+        (aktionszeile(0).querySelector('.list-menu-button') as HTMLElement).click();
+
+        expect(page.listMenuOpen).toBeTrue();
+        expect(page.listMenuListId).toBe(1);
+        expect(toggle).not.toHaveBeenCalled();
+        expect(page.toggleLists[1]).toBeFalsy();
+      });
+
+      it('Menüpunkt löscht über denselben Dialog die Liste des Menüs', async () => {
+        page.openListMenu(new MouseEvent('click'), listA());
+        page.onDeleteAllItemsFromMenu();
+        await Promise.resolve();
+
+        expect(dialoge.length).toBe(1);
+        bestaetigen();
+        http.expectOne(clearUrl).flush(null);
+        expect(itemIdsOfA()).toEqual([]);
+      });
+
+      it('die Menüliste kommt aus dem aktuellen State: leer bzw. gelöscht wird erkannt', () => {
+        page.openListMenu(new MouseEvent('click'), listB());
+        expect(page.menuList()?.shoppingItems.length).toBe(0);
+
+        page.openListMenu(new MouseEvent('click'), listA());
+        event('delete-list', { id: 1, name: 'Liste 1', groupId: 1 });
+        expect(page.menuList()).toBeUndefined();
+      });
+    });
+
+    it('Aktionszeile: Vorschläge und Menü-Button, kein eigener Chip „Erledigte löschen“ mehr', () => {
+      fixture.detectChanges();
+
+      for (const zeile of [aktionszeile(0), aktionszeile(1)]) {
+        expect(zeile.querySelector('.list-menu-button')).not.toBeNull();
+        expect(zeile.textContent).toContain('domains.shoppinglists.suggestions');
+        expect(zeile.textContent).not.toContain('domains.shoppinglists.delete_completed');
+      }
+    });
+  });
+
+  // Gerendertes Popover: Menüpunkte und ihr Disabled-Zustand
+  describe('Overflow-Menü gerendert', () => {
+    const host = () => fixture.nativeElement as HTMLElement;
+    const aktionszeile = (index: number) => host().querySelectorAll('.chip')[index] as HTMLElement;
+    const popover = () => document.querySelector('ion-popover.list-menu') as HTMLIonPopoverElement;
+    const menuepunkte = () => Array.from(popover().querySelectorAll('ion-item')) as HTMLIonItemElement[];
+    const punkt = (cls: string) => popover().querySelector(`ion-item.${cls}`) as HTMLIonItemElement | null;
+
+    /** Klickt den Menü-Button der Liste und wartet, bis Ionic das Popover samt Inhalt dargestellt hat. */
+    const menuOeffnen = async (index: number) => {
+      fixture.detectChanges();
+      (aktionszeile(index).querySelector('.list-menu-button') as HTMLElement).click();
+      fixture.detectChanges();
+      for (let i = 0; i < 100 && menuepunkte().length === 0; i++) {
+        await new Promise(resolve => setTimeout(resolve, 20));
+        fixture.detectChanges();
+      }
+      expect(menuepunkte().length).toBeGreaterThan(0);
+    };
+
+    // Ionic hängt das dargestellte Popover außerhalb der Fixture ein: schließen und entfernen, sonst verdeckt sein
+    // Backdrop die Geste-Tests und spätere Tests fänden das alte Popover
+    const aufraeumen = async () => {
+      for (const el of Array.from(document.querySelectorAll('ion-popover.list-menu')) as HTMLIonPopoverElement[]) {
+        await el.dismiss().catch(() => undefined);
+        el.remove();
+      }
+    };
+
+    afterEach(aufraeumen);
+
+    it('Menü mit beiden Löschaktionen; „Alle Einträge löschen“ ist bei Einträgen aktiv', async () => {
+      await menuOeffnen(0);
+
+      expect(menuepunkte().map(item => item.textContent!.trim())).toEqual([
+        'domains.shoppinglists.delete_completed', 'domains.shoppinglists.delete_all_items',
+      ]);
+      expect(punkt('list-menu-delete-all')!.disabled).toBeFalse();
+    });
+
+    it('leere Liste: beide Löschaktionen ausgegraut', async () => {
+      await menuOeffnen(1);
+
+      expect(punkt('list-menu-delete-completed')!.disabled).toBeTrue();
+      expect(punkt('list-menu-delete-all')!.disabled).toBeTrue();
+    });
+
+    it('nur offene Einträge → „Erledigte löschen“ ausgegraut und ohne Request; nach dem Erledigen aktiv und löscht nur Erledigte', async () => {
+      spyOn(service, 'deleteAllCompletedShoppingItems').and.callThrough();
+
+      await menuOeffnen(0);
+      expect(punkt('list-menu-delete-completed')!.disabled).toBeTrue();
+      page.onDeleteCompletedFromMenu();
+      http.expectNone(`${api}/shopping-list/delete-all-items`);
+
+      event('update-item', { id: 12, name: 'Brot', completed: true, shoppingListId: 1, groupId: 1 });
+      fixture.detectChanges();
+      expect(punkt('list-menu-delete-completed')!.disabled).toBeFalse();
+
+      punkt('list-menu-delete-completed')!.click();
+      const req = http.expectOne(`${api}/shopping-list/delete-all-items`);
+      expect(req.request.body).toEqual([{ id: 12, name: 'Brot', completed: true, shoppingListId: 1, groupId: 1 }]);
+      req.flush(null);
+      expect(service.deleteAllCompletedShoppingItems).toHaveBeenCalledTimes(1);
+      expect(itemIdsOfA()).toEqual([11, 13]);
     });
   });
 });

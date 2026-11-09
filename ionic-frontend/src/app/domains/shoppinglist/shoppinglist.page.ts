@@ -13,8 +13,7 @@ import { WebSocketService } from 'src/app/service/websocket.service';
 import { GroupService } from 'src/app/service/group.service';
 import { INIT_NUMBERS, INIT_VALUES } from 'src/app/constants/default-values';
 import { TranslateService } from '@ngx-translate/core';
-import { deleteAllItems, deleteItem, deleteList, updateItem, updateList } from './shoppinglist-events';
-import { ShoppinglistOrderDto } from './model/shoppinglist-order-dto';
+import { deleteAllItems, deleteItem, deleteList, itemsToDelete, updateItem, updateList } from './shoppinglist-events';import { ShoppinglistOrderDto } from './model/shoppinglist-order-dto';
 import { ShoppingitemOrderDto } from './model/shoppingitem-order-dto';
 import { ShoppingitemMovedDto } from './model/shoppingitem-moved-dto';
 import { ShoppingSuggestionsDto } from './model/shopping-suggestions-dto';
@@ -41,6 +40,11 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
   private static readonly CLICK_AFTER_DRAG_MS = 400;
   /** IDs aller Item-Container: jeder ist mit den übrigen verbunden (das CDK lässt den eigenen aus), DIV-2. */
   public connectedItemLists = computed(() => this.shoppingLists().map(list => this.itemDropListId(list.id)));
+  /** Overflow-Menü der Listenaktionen: ein Popover für alle Listen; gemerkt wird nur die Listen-ID, die Einträge
+   *  werden zur Aktionszeit aus dem aktuellen State gelesen. */
+  public listMenuOpen = false;
+  public listMenuListId: number | null = null;
+  public listMenuEvent: Event | undefined;
 
 
   constructor(
@@ -340,20 +344,71 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
   }
 
   deleteListOfItems(list: ShoppinglistDto) {
-    let items: AddEditShoppingItemDto[] = [];
-    list.shoppingItems.forEach(item => {
-      if (item.completed) {
-        items.push({
-          id: item.id,
-          name: item.name,
-          completed: item.completed,
-          shoppingListId: list.id,
-          groupId: this.activeGroup.id
-        });
-      }
-    })
+    const items = itemsToDelete(list, this.activeGroup.id, true);
     if (items.length === 0) return;
     this.shoppinglistService.deleteAllCompletedShoppingItems(items);
+  }
+
+  /** Öffnet das Overflow-Menü einer Liste; der Klick erreicht weder Auf-/Zuklappen noch Sliding. */
+  openListMenu(event: Event, list: ShoppinglistDto) {
+    event.stopPropagation();
+    this.listMenuListId = list.id;
+    this.listMenuEvent = event;
+    this.listMenuOpen = true;
+  }
+
+  closeListMenu() {
+    this.listMenuOpen = false;
+  }
+
+  /** Aktueller Stand der Liste des Menüs (nicht der beim Öffnen gesehene), `undefined` wenn inzwischen gelöscht. */
+  menuList(): ShoppinglistDto | undefined {
+    return this.shoppingLists().find(list => list.id === this.listMenuListId);
+  }
+
+  hasCompletedItems(list: ShoppinglistDto | undefined): boolean {
+    return !!list?.shoppingItems.some(item => item.completed);
+  }
+
+  /** „Erledigte löschen“ aus dem Menü, mit dem aktuellen Stand der Liste. */
+  onDeleteCompletedFromMenu() {
+    const list = this.menuList();
+    if (list) this.deleteListOfItems(list);
+  }
+
+  onDeleteAllItemsFromMenu() {
+    if (this.listMenuListId !== null) this.onDeleteAllItems(this.listMenuListId);
+  }
+
+  /**
+   * „Alle Einträge löschen“: Bestätigungsdialog, dann alle beim Bestätigen angezeigten Einträge der Liste löschen
+   * (offene wie erledigte). Der Kontext (Gruppe, Sitzung, Liste) wird wie bei den Vorschlägen beim Öffnen festgehalten:
+   * ein noch offener Dialog sendet nach einem Wechsel oder nach dem Löschen der Liste nichts.
+   */
+  onDeleteAllItems(listId: number): Promise<void> {
+    const inContext = this.shoppinglistService.captureSuggestionContext(listId);
+    const groupId = this.activeGroup.id;
+    const list = this.shoppingLists().find(l => l.id === listId);
+    if (!inContext() || !list || list.shoppingItems.length === 0) return Promise.resolve();
+    return this.alertCtrl.create({
+      header: this.translate.instant('alerts.shoppinglist.delete_all_items.header'),
+      message: this.translate.instant('alerts.shoppinglist.delete_all_items.message', { listName: list.name }),
+      buttons: [{
+        text: this.translate.instant('alerts.shoppinglist.delete_all_items.cancel'),
+        role: 'cancel'
+      }, {
+        text: this.translate.instant('alerts.shoppinglist.delete_all_items.ok'),
+        role: 'destructive',
+        // Ionic färbt `destructive` nur im iOS-Stil; die Danger-Farbe kommt aus global.scss
+        cssClass: 'alert-button-danger',
+        handler: () => {
+          if (!inContext()) return;
+          const current = this.shoppingLists().find(l => l.id === listId);
+          if (!current || current.shoppingItems.length === 0) return;
+          this.shoppinglistService.deleteAllShoppingItems(itemsToDelete(current, groupId, false));
+        }
+      }]
+    }).then(alertEl => alertEl.present());
   }
 
   // Drag & Drop (DIV-1). Das CDK löst synchron erst `ended`, dann `dropped` aus; der Move wird deshalb im Drop-Handler

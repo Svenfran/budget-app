@@ -3,8 +3,8 @@ import { AddEditShoppingItemDto } from './model/add-edit-shopping-item-dto';
 import { AddEditShoppinglistDto } from './model/add-edit-shoppinglist-dto';
 import { ShoppinglistDto } from './model/shoppinglist-dto';
 import {
-  addItem, addList, deleteAllItems, deleteItem, deleteList, locateItem, moveItem, reorderItems, reorderLists, updateItem,
-  updateList
+  addItem, addList, deleteAllItems, deleteItem, deleteList, itemsToDelete, locateItem, moveItem, reorderItems, reorderLists,
+  updateItem, updateList
 } from './shoppinglist-events';
 
 describe('shoppinglist-events', () => {
@@ -203,6 +203,39 @@ describe('shoppinglist-events', () => {
 
       expect(reorderItems(lists, 99, [12, 11])).toBe(lists);
       expect(reorderItems(lists, 10, [11, 12])).toBe(lists);
+    });
+  });
+
+  // Overflow-Menü: Grundlage für „Erledigte löschen“ und „Alle Einträge löschen“
+  describe('itemsToDelete', () => {
+    const liste = () => aShoppingList({
+      id: 10,
+      shoppingItems: [
+        aShoppingItem({ id: 11, name: 'Milch', completed: false }),
+        aShoppingItem({ id: 12, name: 'Brot', completed: true }),
+        aShoppingItem({ id: 13, name: 'Eier', completed: false }),
+      ],
+    });
+
+    it('alle Einträge: offene und erledigte in Listenreihenfolge, mit Liste und Gruppe', () => {
+      expect(itemsToDelete(liste(), GROUP_ID, false)).toEqual([
+        { id: 11, name: 'Milch', completed: false, shoppingListId: 10, groupId: GROUP_ID },
+        { id: 12, name: 'Brot', completed: true, shoppingListId: 10, groupId: GROUP_ID },
+        { id: 13, name: 'Eier', completed: false, shoppingListId: 10, groupId: GROUP_ID },
+      ]);
+    });
+
+    it('nur erledigte: die offenen Einträge fehlen', () => {
+      expect(itemsToDelete(liste(), GROUP_ID, true)).toEqual([
+        { id: 12, name: 'Brot', completed: true, shoppingListId: 10, groupId: GROUP_ID },
+      ]);
+    });
+
+    it('leere Liste bzw. nichts erledigt: leeres Ergebnis', () => {
+      const offen = aShoppingList({ shoppingItems: [aShoppingItem({ completed: false })] });
+
+      expect(itemsToDelete(aShoppingList({ shoppingItems: [] }), GROUP_ID, false)).toEqual([]);
+      expect(itemsToDelete(offen, GROUP_ID, true)).toEqual([]);
     });
   });
 });
