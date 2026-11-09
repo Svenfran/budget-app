@@ -122,6 +122,8 @@
             "title": "Shopping Lists",
             "no_shoppinglists": "No shopping lists available!",
             "delete_completed": "Delete completed",
+            "delete_all_items": "Delete all items",
+            "more_actions": "More actions",
             "item_placeholder": "Add a new item",
             "suggestions": "Suggestions"
         }
@@ -246,6 +248,12 @@
                 "ok": "OK",
                 "loading": "Create shopping list...",
                 "placeholder": "Shopping list name"
+            },
+            "delete_all_items": {
+                "header": "Delete all items:",
+                "message": "Do you really want to delete all items of the shopping list \"{{listName}}\"? Open items that are not yet completed will be deleted as well. The list itself is kept.",
+                "cancel": "Cancel",
+                "ok": "Delete"
             },
             "delete": {
                 "header": "Delete shopping list:",

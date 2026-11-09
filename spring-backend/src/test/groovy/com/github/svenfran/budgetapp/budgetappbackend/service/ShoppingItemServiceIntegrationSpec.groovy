@@ -342,6 +342,83 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
         lastUpdate.time == START.time
     }
 
+    // Alle Einträge löschen (Overflow-Menü): offene wie erledigte, nur die gesendeten
+
+    def "Alle Einträge löschen entfernt die gesendeten offenen und erledigten Einträge, nicht gesendete und andere Listen bleiben"() {
+        given: 'Brot ist serverseitig erledigt, der Client sendet es noch als offen; Kaffee hat der Client nicht gesehen'
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        wg.group.lastUpdateShoppingList = START
+        def liste = fixtures.shoppingList(wg)
+        def milch = fixtures.shoppingItem(liste, name: 'Milch', completed: false)
+        def brot = fixtures.shoppingItem(liste, name: 'Brot', completed: true)
+        def kaffee = fixtures.shoppingItem(liste, name: 'Kaffee', completed: false)
+        def andereListe = fixtures.shoppingList(wg)
+        def eier = fixtures.shoppingItem(andereListe, name: 'Eier', completed: true)
+        def groupId = wg.group.id
+        def listId = liste.id
+        def andereListId = andereListe.id
+        def milchId = milch.id
+        def brotId = brot.id
+        def kaffeeId = kaffee.id
+        def eierId = eier.id
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Mitglied {} (angemeldet), Liste {}: Milch {} offen, Brot {} erledigt (gesendet als offen), Kaffee {} nicht gesendet; Liste {} mit erledigtem Eintrag {}',
+                groupId, ben.id, listId, milchId, brotId, kaffeeId, andereListId, eierId)
+
+        when:
+        shoppingItemService.deleteAllShoppingItems([milchId, brotId].collect {
+            new AddEditShoppingItemDto(id: it, completed: false, shoppingListId: listId, groupId: groupId)
+        })
+        flushAndClear()
+        def eintraegeDerListe = eintragIds(listId)
+        def eintraegeAndererListe = eintragIds(andereListId)
+        def listeVorhanden = shoppingListRepository.existsById(listId)
+        def kaufIds = kaufIds(listId)
+        def lastUpdate = lastUpdateShoppingList(groupId)
+        LOG.info('shoppingItemService.deleteAllShoppingItems(Liste {}, Einträge {}, {}) -> Einträge der Liste {}, andere Liste {}, Liste vorhanden {}, Käufe {}, lastUpdateShoppingList {}',
+                listId, milchId, brotId, eintraegeDerListe, eintraegeAndererListe, listeVorhanden, kaufIds, lastUpdate)
+
+        then: 'gemeldet werden alle gelöschten Einträge in Request-Reihenfolge; als Kauf zählt nur der serverseitig erledigte'
+        1 * notificationService.sendShoppingItemDeleteAllNotification(groupId, { it*.id == [milchId, brotId] })
+        0 * notificationService._
+        eintraegeDerListe == [kaffeeId]
+        eintraegeAndererListe == [eierId]
+        listeVorhanden
+        kaufIds == [brotId]
+        lastUpdate.time == testClock.instant().toEpochMilli()
+    }
+
+    def "Alle Einträge löschen mit leerer Liste ändert nichts und benachrichtigt niemanden"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        wg.group.lastUpdateShoppingList = START
+        def liste = fixtures.shoppingList(wg)
+        def milch = fixtures.shoppingItem(liste, completed: false)
+        def groupId = wg.group.id
+        def listId = liste.id
+        def milchId = milch.id
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Mitglied {} (angemeldet), Liste {} mit offenem Eintrag {}; gesendet wird eine leere Liste',
+                groupId, ben.id, listId, milchId)
+
+        when:
+        shoppingItemService.deleteAllShoppingItems([])
+        flushAndClear()
+        def eintraegeDerListe = eintragIds(listId)
+        def lastUpdate = lastUpdateShoppingList(groupId)
+        LOG.info('shoppingItemService.deleteAllShoppingItems([]) -> Einträge der Liste {}, lastUpdateShoppingList {}',
+                eintraegeDerListe, lastUpdate)
+
+        then:
+        0 * notificationService._
+        eintraegeDerListe == [milchId]
+        lastUpdate.time == START.time
+    }
+
     def "Nicht-Mitglied wird bei #aktion abgewiesen, nichts ändert sich"() {
         given:
         def fremder = fixtures.user()
@@ -373,7 +450,7 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
         lastUpdateShoppingList(groupId).time == START.time
 
         where:
-        aktion << ['add', 'update', 'delete', 'delete-all']
+        aktion << ['add', 'update', 'delete', 'delete-all', 'clear']
     }
 
     def "#aktion mit Liste einer fremden Gruppe wird abgewiesen, die fremde Liste bleibt unverändert"() {
@@ -409,7 +486,7 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
         lastUpdateShoppingList(groupId).time == START.time
 
         where:
-        aktion << ['add', 'update', 'delete', 'delete-all']
+        aktion << ['add', 'update', 'delete', 'delete-all', 'clear']
     }
 
     def "#aktion mit Eintrag einer anderen Liste der Gruppe wird abgewiesen, der Eintrag bleibt unverändert"() {
@@ -452,6 +529,7 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
         'update'     | false
         'delete'     | true
         'delete-all' | true
+        'clear'      | true
     }
 
     def "#aktion mit unbekanntem Eintrag: ShoppingItemNotFoundException"() {
@@ -486,6 +564,7 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
         aktion       | gesperrt
         'update'     | false
         'delete-all' | true
+        'clear'      | true
     }
 
     def "Eintrag in einer unbekannten Liste anlegen: ShoppingListNotFoundException"() {
@@ -650,6 +729,10 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
             case 'delete-all':
                 shoppingItemService.deleteAllCompletedShoppingItems([
                         new AddEditShoppingItemDto(id: itemId, completed: true, shoppingListId: listId, groupId: groupId)])
+                break
+            case 'clear':
+                shoppingItemService.deleteAllShoppingItems([
+                        new AddEditShoppingItemDto(id: itemId, completed: false, shoppingListId: listId, groupId: groupId)])
                 break
             default:
                 throw new IllegalArgumentException("Unbekannte Aktion $aktion")
@@ -1268,7 +1351,7 @@ class ShoppingItemServiceIntegrationSpec extends IntegrationSpec {
         kaeufe[0].itemName == null
 
         where:
-        aktion << ['delete', 'delete-all']
+        aktion << ['delete', 'delete-all', 'clear']
     }
 
     // Mehrere Einträge übernehmen und Duplikatprüfung beim Anlegen (DIV-23)

@@ -106,6 +106,11 @@ ion-modal.export-sheet {
   --border-radius: 8px;
 }
 
+// Destruktiver Alert-Button (z. B. „Alle Einträge löschen“): Ionic färbt role="destructive" nur im iOS-Stil
+:root ion-alert .alert-button.alert-button-danger {
+  color: var(--ion-color-danger);
+}
+
 // Alerts im von der Tastatur freien Bereich zentrieren; --keyboard-offset setzt AppComponent.initKeyboardOffset().
 // `:root` hebt die Spezifität über Ionics `.sc-ion-alert-*-h` (Host ist absolut mit top/bottom 0 positioniert).
 // Padding statt `bottom`: der Backdrop (absolut im Host) deckt so weiter den ganzen Bildschirm ab, nur der Alert wird im
