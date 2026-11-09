@@ -2,12 +2,11 @@ package com.github.svenfran.budgetapp.budgetappbackend.helper;
 
 import com.github.svenfran.budgetapp.budgetappbackend.helper.export.GroupExport;
 
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Blatt- und Ordnernamen des Exports „Alle Gruppen“ (DIV-68), ohne technische ID:
@@ -35,8 +34,10 @@ public final class ExportNames {
      */
     public static Map<Long, GroupNames> assign(List<GroupExport> groups, String cartLabel, String membershipLabel,
                                                String fallback) {
-        Set<String> usedSheets = new HashSet<>();
-        Set<String> usedFolders = new HashSet<>();
+        // Gleichheit wie Apache POI beim Anlegen eines Blatts (String.equalsIgnoreCase); toLowerCase(Locale.ROOT)
+        // wäre bei Unicode nicht gleichwertig (z. B. „İstanbul“/„istanbul“). Ordner ebenso, Windows ist case-insensitiv.
+        Set<String> usedSheets = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        Set<String> usedFolders = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
         Map<Long, GroupNames> result = new LinkedHashMap<>();
         for (GroupExport group : groups) {
             String sheetBase = orFallback(sanitizeSheetName(group.groupName()), fallback);
@@ -50,11 +51,11 @@ public final class ExportNames {
                         sheetName(sheetBase, suffix, membershipLabel),
                         folderName(folderBase, suffix));
                 counter++;
-            } while (usedSheets.contains(key(names.cartSheet())) || usedSheets.contains(key(names.membershipSheet()))
-                    || usedFolders.contains(key(names.folder())));
-            usedSheets.add(key(names.cartSheet()));
-            usedSheets.add(key(names.membershipSheet()));
-            usedFolders.add(key(names.folder()));
+            } while (usedSheets.contains(names.cartSheet()) || usedSheets.contains(names.membershipSheet())
+                    || usedFolders.contains(names.folder()));
+            usedSheets.add(names.cartSheet());
+            usedSheets.add(names.membershipSheet());
+            usedFolders.add(names.folder());
             result.put(group.groupId(), names);
         }
         return result;
@@ -114,9 +115,5 @@ public final class ExportNames {
 
     private static String orFallback(String value, String fallback) {
         return value.isEmpty() ? fallback : value;
-    }
-
-    private static String key(String name) {
-        return name.toLowerCase(Locale.ROOT);
     }
 }

@@ -74,7 +74,9 @@ class ExportConsistencySpec extends Specification {
 
     def "Kollision erst nach Bereinigung oder Kürzung: Blatt- und Ordnername einer Gruppe tragen denselben Zähler"() {
         given: "jede Gruppe mit eindeutigem Cart-Titel und Mitgliedsnamen, um sie in beiden Dateien wiederzufinden"
-        def namen = ['A<B', 'A B', 'A:B', 'Haushalt', 'haushalt', 'Wohngemeinschaft Musterstraße 12', 'Wohngemeinschaft Musterweg 3']
+        // 'İstanbul'/'istanbul': Regression Codex-Review 2, F-001 – POI lehnte das zweite Blatt vorher ab
+        def namen = ['A<B', 'A B', 'A:B', 'Haushalt', 'haushalt', 'Wohngemeinschaft Musterstraße 12', 'Wohngemeinschaft Musterweg 3',
+                     'İstanbul', 'istanbul']
         def groups = namen.withIndex().collect { name, i ->
             TestData.groupExport(groupName: name, carts: [TestData.cartExportRow(title: "Marker-$i")],
                     memberships: [TestData.membershipExportRow(userName: "Mitglied-$i")])
@@ -98,7 +100,7 @@ class ExportConsistencySpec extends Specification {
         zuordnung.every { it.blatt == it.mitglieder && it.blatt == it.ordner && it.ordner == it.ordnerHist }
 
         and: "Vorbedingung: die Namen kollidieren tatsächlich"
-        zuordnung*.blatt == [1, 2, 3, 1, 2, 1, 2]
+        zuordnung*.blatt == [1, 2, 3, 1, 2, 1, 2, 1, 2]
     }
 
     private static int zaehler(String name) {

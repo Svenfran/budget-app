@@ -37,6 +37,9 @@ class ExportNamesSpec extends Specification {
         'Haushalt' | 'haushalt' || new GroupNames('haushalt (2) Ausgaben', 'haushalt (2) Mitglieder', 'haushalt (2)')
         'A:B'      | 'A B'      || new GroupNames('A B (2) Ausgaben', 'A B (2) Mitglieder', 'A B (2)')
         'A[B]'     | 'A B'      || new GroupNames('A B (2) Ausgaben', 'A B (2) Mitglieder', 'A B (2)')
+        // Regression (Codex-Review 2, F-001): POI vergleicht Blattnamen mit equalsIgnoreCase; toLowerCase(Locale.ROOT)
+        // hielt „İ“ (U+0130) und „i“ für verschieden, POI nicht
+        'İstanbul' | 'istanbul' || new GroupNames('istanbul (2) Ausgaben', 'istanbul (2) Mitglieder', 'istanbul (2)')
     }
 
     def "Kollision nur im Ordnernamen (A<B / A B): Zähler gilt auch für die Blätter"() {
