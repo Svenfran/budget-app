@@ -102,21 +102,31 @@ class ExcelWriterSpec extends Specification {
         blattNamen(alle) == ['Home Expenses', 'Home Members']
     }
 
-    // Gesamttest (Phase 10): POI akzeptiert alle erzeugten Blattnamen, jede Gruppe behält ihre Daten
-    def "Alle schwierigen Gruppennamen zusammen ergeben eine gültige Arbeitsmappe mit zwei Blättern je Gruppe"() {
+    // Gesamttest (Phase 10/11): POI akzeptiert alle erzeugten Blattnamen, und jede Gruppe steht in genau den beiden
+    // Blättern, die ExportNames ihr zuweist (Ausgaben-Marker im Ausgaben-Blatt, Mitglied-Marker im Mitglieder-Blatt)
+    def "Alle schwierigen Gruppennamen zusammen ergeben eine gültige Arbeitsmappe, jede Gruppe in ihren beiden Blättern"() {
         given:
         def groups = TestData.TRICKY_GROUP_NAMES.withIndex().collect { name, i ->
-            TestData.groupExport(groupName: name, carts: [TestData.cartExportRow(title: "Marker-$i")])
+            TestData.groupExport(groupName: name, carts: [TestData.cartExportRow(title: "Marker-$i")],
+                    memberships: [TestData.membershipExportRow(userName: "Mitglied-$i")])
         }
+        def zugewiesen = ExportNames.assign(groups, 'Ausgaben', 'Mitglieder', 'Gruppe')
+        def mitgliederBlaetter = zugewiesen.values()*.membershipSheet() as Set
 
         when:
         def workbook = schreiben(groups, true)
-        def titelJeBlatt = workbook.findAll { it.lastRowNum >= 1 && it.getRow(1).getCell(1).cellType == CellType.STRING }
-                .collect { it.getRow(1).getCell(1).stringCellValue }
+        // Ausgaben-Blatt: Titel in Spalte 1; Mitglieder-Blatt: Benutzername in Spalte 0
+        def zelleJeBlatt = workbook.collectEntries { sheet ->
+            def spalte = sheet.sheetName in mitgliederBlaetter ? 0 : 1
+            [(sheet.sheetName): sheet.getRow(1).getCell(spalte).stringCellValue]
+        }
 
         then:
         workbook.numberOfSheets == 2 * groups.size()
-        titelJeBlatt.toSet() == (0..<groups.size()).collect { "Marker-$it".toString() }.toSet()
+        zelleJeBlatt == groups.withIndex().collectEntries { group, i ->
+            def namen = zugewiesen[group.groupId()]
+            [(namen.cartSheet()): "Marker-$i".toString(), (namen.membershipSheet()): "Mitglied-$i".toString()]
+        }
     }
 
     def "Einzelgruppen-Export mit mehreren Gruppen wird abgelehnt"() {
