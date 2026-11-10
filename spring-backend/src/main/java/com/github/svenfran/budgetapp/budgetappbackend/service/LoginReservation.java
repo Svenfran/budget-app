@@ -11,9 +11,11 @@ import java.util.Map;
  * Ergebnis von {@link LoginRateLimiter#acquire}: je Scope der Zählerschlüssel und das Fenster ({@code windowStart}),
  * in dem der Versuch gezählt wurde (DIV-64). Die Freigabe nach erfolgreichem Login ändert nur Zeilen, die noch in
  * genau diesem Fenster sind. Eine leere Reservierung (Modus {@code OFF}, Abweisung im Modus {@code OBSERVE}) gibt
- * nichts frei. Enthält keine Klartext-E-Mail oder -IP, nur Schlüssel-Hashes und Log-Pseudonyme.
+ * nichts frei. Enthält keine Klartext-E-Mail oder -IP, nur Schlüssel-Hashes, Log-Pseudonyme und die IP-Quelle
+ * ({@code header}/{@code remoteAddr}) für das Log.
  */
-public record LoginReservation(String accountPseudonym, String ipPseudonym, Map<LoginAttemptScope, ReservedWindow> windows) {
+public record LoginReservation(String accountPseudonym, String ipPseudonym, String ipSource,
+                               Map<LoginAttemptScope, ReservedWindow> windows) {
 
     /** Zählerschlüssel und Fenster-Kennung eines Scopes. */
     public record ReservedWindow(String keyHash, LocalDateTime windowStart) {
@@ -25,8 +27,8 @@ public record LoginReservation(String accountPseudonym, String ipPseudonym, Map<
                 : Collections.unmodifiableMap(new EnumMap<>(windows));
     }
 
-    static LoginReservation empty(String accountPseudonym, String ipPseudonym) {
-        return new LoginReservation(accountPseudonym, ipPseudonym, Map.of());
+    static LoginReservation empty(String accountPseudonym, String ipPseudonym, String ipSource) {
+        return new LoginReservation(accountPseudonym, ipPseudonym, ipSource, Map.of());
     }
 
     public boolean isEmpty() {

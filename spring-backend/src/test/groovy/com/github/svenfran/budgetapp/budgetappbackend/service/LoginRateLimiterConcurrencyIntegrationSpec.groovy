@@ -4,6 +4,7 @@ import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.Logger as LogbackLogger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
+import com.github.svenfran.budgetapp.budgetappbackend.config.ClientIp
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.TooManyLoginAttemptsException
 import com.github.svenfran.budgetapp.budgetappbackend.helper.LoginAttemptKeys
 import com.github.svenfran.budgetapp.budgetappbackend.repository.LoginAttemptRepository
@@ -70,7 +71,7 @@ class LoginRateLimiterConcurrencyIntegrationSpec extends IntegrationSpec {
         LOG.info('Szenario: {} parallele acquire, {} Account(s), {} IP(s)', anzahl, accounts, ips)
 
         when:
-        def ergebnisse = parallel(versuche.collect { v -> { -> abgewiesen { rateLimiter.acquire(v[0], v[1]) } } })
+        def ergebnisse = parallel(versuche.collect { v -> { -> abgewiesen { rateLimiter.acquire(v[0], header(v[1])) } } })
         def durchgekommen = ergebnisse.count { it instanceof LoginReservation }
         def abgewieseneAnzahl = ergebnisse.count { it instanceof TooManyLoginAttemptsException }
         def stand = zeilenJeScope()
@@ -92,13 +93,13 @@ class LoginRateLimiterConcurrencyIntegrationSpec extends IntegrationSpec {
         given:
         def email = 'lrlc-abweisung@example.org'
         def ip = '203.0.113.2'
-        5.times { rateLimiter.acquire(email, ip) }
+        5.times { rateLimiter.acquire(email, header(ip)) }
         def vorher = zeilen()
         testClock.advance(Duration.ofMinutes(1))
         LOG.info('Szenario: 5 Versuche committet -> {}; Uhr +1 min', vorher)
 
         when:
-        def ergebnisse = (1..3).collect { abgewiesen { rateLimiter.acquire(email, ip) } }
+        def ergebnisse = (1..3).collect { abgewiesen { rateLimiter.acquire(email, header(ip)) } }
         def nachher = zeilen()
         LOG.info('3x acquire -> {}; Zeilen {}', ergebnisse*.class*.simpleName, nachher)
 
@@ -121,7 +122,7 @@ class LoginRateLimiterConcurrencyIntegrationSpec extends IntegrationSpec {
         limiterLogger.addAppender(appender)
         List<LoginReservation> reservierungen
         try {
-            reservierungen = (1..7).collect { observe.acquire(email, ip) }
+            reservierungen = (1..7).collect { observe.acquire(email, header(ip)) }
         } finally {
             limiterLogger.detachAppender(appender)
         }
@@ -140,8 +141,8 @@ class LoginRateLimiterConcurrencyIntegrationSpec extends IntegrationSpec {
         given:
         def email = 'lrlc-overlap@example.org'
         def ip = '203.0.113.4'
-        def r0 = rateLimiter.acquire(email, ip)
-        def aufrufe = [acquire: { rateLimiter.acquire(email, ip) }, recordSuccess: { rateLimiter.recordSuccess(r0) }]
+        def r0 = rateLimiter.acquire(email, header(ip))
+        def aufrufe = [acquire: { rateLimiter.acquire(email, header(ip)) }, recordSuccess: { rateLimiter.recordSuccess(r0) }]
         LOG.info('Szenario: R0 committet ({}), T1 {} hält offen, T2 {}', zeilen(), erster, zweiter)
 
         when:
@@ -288,5 +289,10 @@ class LoginRateLimiterConcurrencyIntegrationSpec extends IntegrationSpec {
         jdbcTemplate.queryForObject(
                 "select count(*) from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'",
                 Integer)
+    }
+
+    /** Client-IP wie vom ClientIpResolver aus dem Edge-Header ermittelt. */
+    private static ClientIp header(String ip) {
+        new ClientIp(ip, ClientIp.Source.HEADER)
     }
 }

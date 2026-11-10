@@ -1,5 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service
 
+import com.github.svenfran.budgetapp.budgetappbackend.config.ClientIp
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.TooManyLoginAttemptsException
 import com.github.svenfran.budgetapp.budgetappbackend.helper.LoginAttemptKeys
 import com.github.svenfran.budgetapp.budgetappbackend.repository.LoginAttemptRepository
@@ -73,7 +74,7 @@ class LoginRateLimiterSpec extends Specification {
         def limiter = limiter(mode: 'OFF')
 
         when:
-        def reservation = limiter.acquire(EMAIL, CLIENT_IP)
+        def reservation = limiter.acquire(EMAIL, header(CLIENT_IP))
         limiter.recordSuccess(reservation)
 
         then:
@@ -88,7 +89,7 @@ class LoginRateLimiterSpec extends Specification {
         def limiter = limiter()
 
         when:
-        def reservation = limiter.acquire(EMAIL, CLIENT_IP)
+        def reservation = limiter.acquire(EMAIL, header(CLIENT_IP))
 
         then:
         1 * repository.increment(IP, keys.keyHash(IP, EMAIL, CLIENT_IP), NOW, NOW - Duration.ofMinutes(15)) >> new AttemptCount(1, NOW)
@@ -111,7 +112,7 @@ class LoginRateLimiterSpec extends Specification {
         def limiter = limiter()
         def fenster = NOW - Duration.ofMinutes(3)
         repository.increment(_, _, _, _) >> new AttemptCount(2, fenster)
-        def reservation = limiter.acquire(EMAIL, CLIENT_IP)
+        def reservation = limiter.acquire(EMAIL, header(CLIENT_IP))
 
         when:
         limiter.recordSuccess(reservation)
@@ -138,7 +139,7 @@ class LoginRateLimiterSpec extends Specification {
         repository.increment(ACCOUNT_IP, _, _, _) >> new AttemptCount(6, NOW - Duration.ofMinutes(5))
 
         when:
-        limiter.acquire(EMAIL, CLIENT_IP)
+        limiter.acquire(EMAIL, header(CLIENT_IP))
 
         then:
         1 * status.setRollbackOnly()
@@ -155,7 +156,7 @@ class LoginRateLimiterSpec extends Specification {
         repository.increment(ACCOUNT_IP, _, _, _) >> new AttemptCount(5, NOW)
 
         when:
-        def reservation = limiter.acquire(EMAIL, CLIENT_IP)
+        def reservation = limiter.acquire(EMAIL, header(CLIENT_IP))
 
         then:
         0 * status.setRollbackOnly()
@@ -170,7 +171,7 @@ class LoginRateLimiterSpec extends Specification {
         repository.increment(ACCOUNT_IP, _, _, _) >> new AttemptCount(6, NOW - Duration.ofMinutes(14) - Duration.ofMillis(500))
 
         when:
-        limiter.acquire(EMAIL, CLIENT_IP)
+        limiter.acquire(EMAIL, header(CLIENT_IP))
 
         then:
         def e = thrown(TooManyLoginAttemptsException)
@@ -185,7 +186,7 @@ class LoginRateLimiterSpec extends Specification {
         repository.increment(ACCOUNT_IP, _, _, _) >> new AttemptCount(6, NOW)
 
         when:
-        def reservation = limiter.acquire(EMAIL, CLIENT_IP)
+        def reservation = limiter.acquire(EMAIL, header(CLIENT_IP))
         limiter.recordSuccess(reservation)
 
         then:
@@ -215,5 +216,10 @@ class LoginRateLimiterSpec extends Specification {
                 args.containsKey('accountLimit') ? args.accountLimit : 20,
                 args.containsKey('ipLimit') ? args.ipLimit : 30,
                 args.batchSize ?: 500)
+    }
+
+    /** Client-IP wie vom ClientIpResolver aus dem Edge-Header ermittelt. */
+    private static ClientIp header(String ip) {
+        new ClientIp(ip, ClientIp.Source.HEADER)
     }
 }

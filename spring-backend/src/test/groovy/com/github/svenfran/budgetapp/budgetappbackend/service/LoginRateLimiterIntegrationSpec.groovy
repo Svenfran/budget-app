@@ -1,5 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service
 
+import com.github.svenfran.budgetapp.budgetappbackend.config.ClientIp
 import com.github.svenfran.budgetapp.budgetappbackend.constants.LoginAttemptScope
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.TooManyLoginAttemptsException
 import com.github.svenfran.budgetapp.budgetappbackend.helper.LoginAttemptKeys
@@ -49,10 +50,10 @@ class LoginRateLimiterIntegrationSpec extends IntegrationSpec {
         LOG.info('Szenario: Account lrl-ac2, IP {}, Uhr {}', ip, jetzt())
 
         when:
-        def reservierungen = (1..5).collect { rateLimiter.acquire(email, ip) }
+        def reservierungen = (1..5).collect { rateLimiter.acquire(email, header(ip)) }
         def zaehler = zaehlerstaende(email, ip)
         LOG.info('5x acquire -> Zähler {}; 6. acquire, erwartet TooManyLoginAttemptsException', zaehler)
-        rateLimiter.acquire(email, ip)
+        rateLimiter.acquire(email, header(ip))
 
         then:
         reservierungen.every { !it.empty }
@@ -68,10 +69,10 @@ class LoginRateLimiterIntegrationSpec extends IntegrationSpec {
         LOG.info('Szenario: Account lrl-verteilt, IPs {}; je 5 Versuche von den ersten 4 IPs', ips)
 
         when:
-        ips.take(4).each { ip -> 5.times { rateLimiter.acquire(email, ip) } }
+        ips.take(4).each { ip -> 5.times { rateLimiter.acquire(email, header(ip)) } }
         def accountZaehler = zaehler(ACCOUNT, email, ips[0])
         LOG.info('20x acquire -> ACCOUNT {}; 21. Versuch von {}, erwartet TooManyLoginAttemptsException', accountZaehler, ips[4])
-        rateLimiter.acquire(email, ips[4])
+        rateLimiter.acquire(email, header(ips[4]))
 
         then:
         accountZaehler == 20
@@ -86,10 +87,10 @@ class LoginRateLimiterIntegrationSpec extends IntegrationSpec {
         LOG.info('Szenario: IP {}, 31 verschiedene Accounts lrl-spray-*', ip)
 
         when:
-        emails.take(30).each { rateLimiter.acquire(it, ip) }
+        emails.take(30).each { rateLimiter.acquire(it, header(ip)) }
         def ipZaehler = zaehler(IP, emails[0], ip)
         LOG.info('30x acquire -> IP {}; 31. Account, erwartet TooManyLoginAttemptsException', ipZaehler)
-        rateLimiter.acquire(emails[30], ip)
+        rateLimiter.acquire(emails[30], header(ip))
 
         then:
         ipZaehler == 30
@@ -102,13 +103,13 @@ class LoginRateLimiterIntegrationSpec extends IntegrationSpec {
         def email = 'lrl-ac3@example.org'
         def ip = '198.51.100.30'
         def start = jetzt()
-        5.times { rateLimiter.acquire(email, ip) }
-        def abweisung = abgewiesen { rateLimiter.acquire(email, ip) }
+        5.times { rateLimiter.acquire(email, header(ip)) }
+        def abweisung = abgewiesen { rateLimiter.acquire(email, header(ip)) }
         LOG.info('Szenario: Account lrl-ac3, IP {}, 5 Versuche um {}, 6. -> {}', ip, start, abweisung?.class?.simpleName)
 
         when:
         testClock.advance(FENSTER)
-        def reservierung = rateLimiter.acquire(email, ip)
+        def reservierung = rateLimiter.acquire(email, header(ip))
         def fenster = fensterstarts(email, ip)
         def accountIpZaehler = zaehler(ACCOUNT_IP, email, ip)
         LOG.info('Uhr +15 min ({}) -> acquire ok, Fenster {}, ACCOUNT_IP {}', jetzt(), fenster, accountIpZaehler)
@@ -124,13 +125,13 @@ class LoginRateLimiterIntegrationSpec extends IntegrationSpec {
         given:
         def email = 'lrl-knapp@example.org'
         def ip = '198.51.100.31'
-        5.times { rateLimiter.acquire(email, ip) }
+        5.times { rateLimiter.acquire(email, header(ip)) }
         testClock.advance(FENSTER - Duration.ofMillis(1))
         LOG.info('Szenario: Account lrl-knapp, IP {}, 5 Versuche, Uhr 1 ms vor Fensterende ({})', ip, jetzt())
 
         when:
         LOG.info('acquire, erwartet TooManyLoginAttemptsException')
-        rateLimiter.acquire(email, ip)
+        rateLimiter.acquire(email, header(ip))
 
         then:
         def e = thrown(TooManyLoginAttemptsException)
@@ -141,7 +142,7 @@ class LoginRateLimiterIntegrationSpec extends IntegrationSpec {
         given:
         def email = 'lrl-erfolg@example.org'
         def ip = '198.51.100.40'
-        def reservierungen = (1..3).collect { rateLimiter.acquire(email, ip) }
+        def reservierungen = (1..3).collect { rateLimiter.acquire(email, header(ip)) }
         LOG.info('Szenario: Account lrl-erfolg, IP {}, 3 Versuche -> Zähler {}', ip, zaehlerstaende(email, ip))
 
         when:
@@ -157,9 +158,9 @@ class LoginRateLimiterIntegrationSpec extends IntegrationSpec {
         given:
         def email = 'lrl-fensterwechsel@example.org'
         def ip = '198.51.100.41'
-        def r1 = rateLimiter.acquire(email, ip)
+        def r1 = rateLimiter.acquire(email, header(ip))
         testClock.advance(FENSTER)
-        rateLimiter.acquire(email, ip)
+        rateLimiter.acquire(email, header(ip))
         def vorher = zaehlerstaende(email, ip)
         def fensterVorher = fensterstarts(email, ip)
         LOG.info('Szenario: R1 um {} reserviert, nach 15 min fremder Fehlversuch im neuen Fenster {} -> Zähler {}',
@@ -198,19 +199,19 @@ class LoginRateLimiterIntegrationSpec extends IntegrationSpec {
         def ip = '198.51.100.60'
         def email = 'lrl-retry@example.org'
         def start = jetzt()
-        (1..25).each { rateLimiter.acquire("lrl-retry-anderer-${it}@example.org", ip) }
+        (1..25).each { rateLimiter.acquire("lrl-retry-anderer-${it}@example.org", header(ip)) }
         testClock.advance(Duration.ofMinutes(5))
-        5.times { rateLimiter.acquire(email, ip) }
+        5.times { rateLimiter.acquire(email, header(ip)) }
         def fenster = fensterstarts(email, ip)
         LOG.info('Szenario: IP {} mit 25 Fehlversuchen anderer Accounts ab {}, dann 5 Versuche lrl-retry -> Zähler {}, Fenster {}',
                 ip, start, zaehlerstaende(email, ip), fenster)
 
         when: 'IP (bis T+15) und Account+IP (bis T+20) sind beide überschritten'
-        def beideGesperrt = abgewiesen { rateLimiter.acquire(email, ip) }
+        def beideGesperrt = abgewiesen { rateLimiter.acquire(email, header(ip)) }
         testClock.advance(Duration.ofMinutes(2))
-        def zweiMinutenSpaeter = abgewiesen { rateLimiter.acquire(email, ip) }
+        def zweiMinutenSpaeter = abgewiesen { rateLimiter.acquire(email, header(ip)) }
         testClock.advance(Duration.ofMinutes(9))
-        def nurAccountIp = abgewiesen { rateLimiter.acquire(email, ip) }
+        def nurAccountIp = abgewiesen { rateLimiter.acquire(email, header(ip)) }
         LOG.info('T+5 -> {}, T+7 -> {}, T+16 (IP-Fenster abgelaufen) -> {}',
                 beideGesperrt?.retryAfterSeconds, zweiMinutenSpaeter?.retryAfterSeconds, nurAccountIp?.retryAfterSeconds)
 
@@ -226,11 +227,11 @@ class LoginRateLimiterIntegrationSpec extends IntegrationSpec {
         def email = 'lrl-nanos@example.org'
         def ip = '198.51.100.70'
         testClock.advance(Duration.ofHours(10).plusNanos(123_456_789))
-        rateLimiter.acquire(email, ip)
+        rateLimiter.acquire(email, header(ip))
         LOG.info('Szenario: Account lrl-nanos, IP {}, Uhr {} (Nanosekunden), 1 Versuch', ip, jetzt())
 
         when:
-        def reservierung = rateLimiter.acquire(email, ip)
+        def reservierung = rateLimiter.acquire(email, header(ip))
         def reserviert = reservierung.windows().collectEntries { scope, w -> [scope.name(), w.windowStart()] }
         def gespeichert = fensterstarts(email, ip)
         rateLimiter.recordSuccess(reservierung)
@@ -267,7 +268,7 @@ class LoginRateLimiterIntegrationSpec extends IntegrationSpec {
     /** Sechs Versuche; je Versuch "ok" oder "429 Retry-After <s>". */
     private List<String> verlauf(String email, String ip) {
         (1..6).collect {
-            def e = abgewiesen { rateLimiter.acquire(email, ip) }
+            def e = abgewiesen { rateLimiter.acquire(email, header(ip)) }
             e ? "429 Retry-After ${e.retryAfterSeconds}".toString() : 'ok'
         }
     }
@@ -309,5 +310,10 @@ class LoginRateLimiterIntegrationSpec extends IntegrationSpec {
     private void zeileAnlegen(String keyHash, LocalDateTime windowStart) {
         jdbcTemplate.update('insert into login_attempt (scope, key_hash, window_start, attempts) values (?, ?, ?, 1)',
                 IP.name(), keyHash, windowStart)
+    }
+
+    /** Client-IP wie vom ClientIpResolver aus dem Edge-Header ermittelt. */
+    private static ClientIp header(String ip) {
+        new ClientIp(ip, ClientIp.Source.HEADER)
     }
 }

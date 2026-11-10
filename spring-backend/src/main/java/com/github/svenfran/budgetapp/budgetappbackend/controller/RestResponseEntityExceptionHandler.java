@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -63,6 +64,17 @@ public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionH
     })
     protected ResponseEntity<Object> handleForbidden(Exception ex, WebRequest request) {
         return buildResponse(ex, HttpStatus.FORBIDDEN);
+    }
+
+    /**
+     * Login-Rate-Limit (DIV-64): 429 mit Retry-After (Sekunden) und festem Text; nennt nicht, welches Limit gegriffen
+     * hat. Das Frontend erkennt den Fall am Status, nicht am Text.
+     */
+    @ExceptionHandler(TooManyLoginAttemptsException.class)
+    protected ResponseEntity<Object> handleTooManyLoginAttempts(TooManyLoginAttemptsException ex, WebRequest request) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getRetryAfterSeconds()))
+                .body(ex.getMessage());
     }
 
     /** Name of the unique constraint on user_details.email (Liquibase changeset 20261015120000-1). */

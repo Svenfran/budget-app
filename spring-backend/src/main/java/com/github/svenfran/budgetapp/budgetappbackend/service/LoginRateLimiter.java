@@ -1,5 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
+import com.github.svenfran.budgetapp.budgetappbackend.config.ClientIp;
 import com.github.svenfran.budgetapp.budgetappbackend.constants.LoginAttemptScope;
 import com.github.svenfran.budgetapp.budgetappbackend.constants.LoginRateLimitMode;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.TooManyLoginAttemptsException;
@@ -96,15 +97,17 @@ public class LoginRateLimiter {
     }
 
     /**
-     * Zählt den Versuch für E-Mail und kanonische Client-IP (in Sperrreihenfolge) und liefert die Reservierung.
+     * Zählt den Versuch für E-Mail und Client-IP (in Sperrreihenfolge) und liefert die Reservierung.
      * Bei Überschreitung wird nichts gezählt; im Modus {@code ENFORCE} folgt die Exception, im Modus {@code OBSERVE}
      * nur ein WARN-Log und eine leere Reservierung. Im Modus {@code OFF} wird nichts gezählt.
      */
-    public LoginReservation acquire(String email, String clientIp) throws TooManyLoginAttemptsException {
+    public LoginReservation acquire(String email, ClientIp client) throws TooManyLoginAttemptsException {
+        var clientIp = client.address();
+        var ipSource = client.source().logValue();
         var accountPseudonym = keys.accountPseudonym(email);
         var ipPseudonym = keys.ipPseudonym(clientIp);
         if (mode == LoginRateLimitMode.OFF) {
-            return LoginReservation.empty(accountPseudonym, ipPseudonym);
+            return LoginReservation.empty(accountPseudonym, ipPseudonym, ipSource);
         }
         var now = now();
         var threshold = now.minus(window);
@@ -128,17 +131,17 @@ public class LoginRateLimiter {
         }));
 
         if (outcome.exceeded().isEmpty()) {
-            return new LoginReservation(accountPseudonym, ipPseudonym, outcome.windows());
+            return new LoginReservation(accountPseudonym, ipPseudonym, ipSource, outcome.windows());
         }
         var retryAfter = outcome.exceeded().values().stream().mapToLong(Long::longValue).max().orElseThrow();
         var scopes = outcome.exceeded().keySet().stream().map(Enum::name).collect(Collectors.joining(","));
         if (mode == LoginRateLimitMode.OBSERVE) {
-            LOG.warn("event=login_rate_limit_would_block scope={} account={} ip={} retryAfter={}",
-                    scopes, accountPseudonym, ipPseudonym, retryAfter);
-            return LoginReservation.empty(accountPseudonym, ipPseudonym);
+            LOG.warn("event=login_rate_limit_would_block scope={} account={} ip={} ipSource={} retryAfter={}",
+                    scopes, accountPseudonym, ipPseudonym, ipSource, retryAfter);
+            return LoginReservation.empty(accountPseudonym, ipPseudonym, ipSource);
         }
-        LOG.warn("event=login_rate_limited scope={} account={} ip={} retryAfter={}",
-                scopes, accountPseudonym, ipPseudonym, retryAfter);
+        LOG.warn("event=login_rate_limited scope={} account={} ip={} ipSource={} retryAfter={}",
+                scopes, accountPseudonym, ipPseudonym, ipSource, retryAfter);
         throw new TooManyLoginAttemptsException(retryAfter);
     }
 
@@ -167,7 +170,8 @@ public class LoginRateLimiter {
 
     /** Loggt einen fehlgeschlagenen Login (die Reservierung bleibt als gezählter Fehlversuch bestehen). */
     public void logFailure(LoginReservation reservation) {
-        LOG.info("event=login_failed account={} ip={}", reservation.accountPseudonym(), reservation.ipPseudonym());
+        LOG.info("event=login_failed account={} ip={} ipSource={}",
+                reservation.accountPseudonym(), reservation.ipPseudonym(), reservation.ipSource());
     }
 
     /** Löscht abgelaufene Fenster in Batches (je Batch eine eigene Transaktion), ohne auf Sperren zu warten. */
