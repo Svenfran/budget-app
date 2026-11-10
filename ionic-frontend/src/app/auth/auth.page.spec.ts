@@ -1,8 +1,8 @@
-import { HttpErrorResponse } from '@angular/common/http';
+import { HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { fakeAsync, flushMicrotasks, TestBed } from '@angular/core/testing';
 import { ReactiveFormsModule } from '@angular/forms';
 import { IonicModule, LoadingController } from '@ionic/angular';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { throwError } from 'rxjs';
 import { alertServiceSpy, authServiceStub, provideServiceTesting, storageServiceFake } from 'src/testing/test-providers';
 import { AlertService } from '../service/alert.service';
@@ -57,5 +57,33 @@ describe('AuthPage – Fehler bei Login', () => {
       'alerts.authenticate.error_messages.header_login',
       'alerts.authenticate.error_messages.message_device_id_missing');
     expect(alerts.showAlertSeverUnavailable).not.toHaveBeenCalled();
+  }));
+
+  it('falsches Passwort (403): Fehler-Alert mit Hinweis auf die vorübergehende Sperre', fakeAsync(() => {
+    loginFailsWith({ status: 403, error: '' });
+
+    expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(
+      'alerts.authenticate.error_messages.header_login',
+      'alerts.authenticate.error_messages.message_invalid_credentials');
+  }));
+
+  // Login-Rate-Limit (DIV-64): Body exakt wie in AuthenticationControllerApiSpec, Retry-After in Sekunden
+  it('429 mit Retry-After: Fehler-Alert mit der Restzeit in Minuten', fakeAsync(() => {
+    const instant = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
+
+    loginFailsWith({ status: 429, error: 'Too many login attempts', headers: new HttpHeaders({ 'Retry-After': '540' }) });
+
+    expect(instant).toHaveBeenCalledWith('alerts.authenticate.error_messages.message_too_many_attempts_wait', { minutes: 9 });
+    expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(
+      'alerts.authenticate.error_messages.header_login',
+      'alerts.authenticate.error_messages.message_too_many_attempts_wait');
+  }));
+
+  it('429 ohne lesbaren Retry-After: allgemeine 429-Meldung', fakeAsync(() => {
+    loginFailsWith({ status: 429, error: 'Too many login attempts', headers: new HttpHeaders() });
+
+    expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(
+      'alerts.authenticate.error_messages.header_login',
+      'alerts.authenticate.error_messages.message_too_many_attempts');
   }));
 });

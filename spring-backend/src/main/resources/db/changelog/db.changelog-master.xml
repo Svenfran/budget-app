@@ -67,4 +67,6 @@
 
     <include context="dev" file="db/changelog/release-1.x/20261102120000-1_loadStatisticsTestData.xml" relativeToChangelogFile="false"/>
 
+    <include context="dev,test,prod" file="db/changelog/release-1.x/20261110120000-1_createLoginAttemptTable.xml" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>
