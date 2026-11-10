@@ -21,6 +21,13 @@ describe('authErrorMessageKey', () => {
       'Forbidden for max', 403, true, EMAIL, NAME, 'message'],
     ['Login mit anderem Fehlertext → allgemeine Meldung statt „Benutzername vergeben“',
       'Invalid Email', 400, false, EMAIL, '', 'message'],
+    // DIV-64: Body exakt wie in AuthenticationControllerApiSpec, erkannt wird aber am Status
+    ['Login 429 (Rate-Limit) → Zu viele Versuche',
+      'Too many login attempts', 429, false, EMAIL, '', 'message_too_many_attempts'],
+    ['Registrierung 429 → Zu viele Versuche',
+      'Too many login attempts', 429, true, EMAIL, NAME, 'message_too_many_attempts'],
+    ['429 mit nicht-textuellem Body → Zu viele Versuche',
+      { status: 429 }, 429, false, EMAIL, '', 'message_too_many_attempts'],
     ['Body ist kein Text → allgemeine Meldung',
       { status: 500, error: 'Internal Server Error' }, 500, true, EMAIL, NAME, 'message'],
   ];

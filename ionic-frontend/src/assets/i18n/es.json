@@ -361,7 +361,8 @@
                 "message": "Contraseña o dirección de email incorrectos.",
                 "message_email_exists": "La dirección de email ya está ocupada.",
                 "message_username_exists": "El nombre de usuario ya está ocupado.",
-                "message_device_id_missing": "No se pudo identificar tu dispositivo. Por favor inténtalo de nuevo."
+                "message_device_id_missing": "No se pudo identificar tu dispositivo. Por favor inténtalo de nuevo.",
+                "message_too_many_attempts": "Demasiados intentos de inicio de sesión fallidos. Espera unos minutos e inténtalo de nuevo."
             }
         },
         "server_unavailable": {

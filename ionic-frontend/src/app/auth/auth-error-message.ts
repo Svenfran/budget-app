@@ -11,6 +11,10 @@ export const DEVICE_ID_REQUIRED = 'DeviceId is required';
  */
 export function authErrorMessageKey(error: unknown, status: number, isRegistration: boolean,
                                     email: string, userName: string): string {
+  // Login-Rate-Limit (DIV-64): Erkennung am Status, nicht am Text – deshalb vor der typeof-Prüfung
+  if (status === 429) {
+    return `${ERROR_MESSAGES}.message_too_many_attempts`;
+  }
   if (typeof error !== 'string') {
     return `${ERROR_MESSAGES}.message`;
   }

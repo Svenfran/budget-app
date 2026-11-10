@@ -69,6 +69,62 @@ describe('AuthService', () => {
     expect(setUserData).toHaveBeenCalledWith(response);
   }));
 
+  describe('Login-Rate-Limit (DIV-64)', () => {
+    // Body exakt wie in AuthenticationControllerApiSpec
+    const tooManyAttempts = { status: 429, statusText: 'Too Many Requests' };
+
+    const loginWith429 = () => {
+      let error: { status: number } | undefined;
+      let succeeded = false;
+      service.login('anna@divvy.test', 'falsch').subscribe({ next: () => succeeded = true, error: e => error = e });
+      resolveDeviceId('device-1');
+      flushMicrotasks();
+      http.expectOne(`${api}/authenticate`).flush('Too many login attempts', tooManyAttempts);
+      return { error, succeeded };
+    };
+
+    it('Login mit 429 liefert den Fehler und setzt keinen Nutzer', fakeAsync(() => {
+      const { error, succeeded } = loginWith429();
+
+      expect(succeeded).toBeFalse();
+      expect(error?.status).toBe(429);
+      expect(setUserData).not.toHaveBeenCalled();
+    }));
+
+    describe('mit echtem setUserData', () => {
+      let previousToken: string | null;
+
+      beforeEach(() => {
+        setUserData.and.callThrough();
+        // setUserData() würde in den echten localStorage des Testbrowsers schreiben
+        previousToken = localStorage.getItem('token');
+        localStorage.removeItem('token');
+      });
+
+      afterEach(() => {
+        if (previousToken === null) {
+          localStorage.removeItem('token');
+        } else {
+          localStorage.setItem('token', previousToken);
+        }
+      });
+
+      it('Login mit 429: nicht angemeldet, keine Anmeldedaten gespeichert', fakeAsync(() => {
+        const { error } = loginWith429();
+        let authenticated: boolean | undefined;
+        service.userIsAuthenticated.subscribe(value => authenticated = value).unsubscribe();
+        let stored: { value: string | null } | undefined;
+        TestBed.inject(StorageService).getData('authData').then(value => stored = value);
+        flushMicrotasks();
+
+        expect(error?.status).toBe(429);
+        expect(authenticated).toBeFalse();
+        expect(stored?.value).toBeNull();
+        expect(localStorage.getItem('token')).toBeNull();
+      }));
+    });
+  });
+
   describe('Auto-Logout', () => {
     const HOUR = 60 * 60 * 1000;
     const expiresInOneHour: AuthResponseData = { ...response, expirationDate: REFERENCE_DATE.getTime() + HOUR };
