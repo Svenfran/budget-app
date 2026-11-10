@@ -15,6 +15,11 @@ export function authErrorMessageKey(error: unknown, status: number, isRegistrati
   if (status === 429) {
     return `${ERROR_MESSAGES}.message_too_many_attempts`;
   }
+  // Falsche Zugangsdaten beim Login (403, leerer Body) – nur diese Versuche zählen, daher hier der Hinweis auf die
+  // vorübergehende Sperre (DIV-64); ohne Zahl, weil die Zähler serverseitig je Account/IP geführt werden
+  if (!isRegistration && status === 403) {
+    return `${ERROR_MESSAGES}.message_invalid_credentials`;
+  }
   if (typeof error !== 'string') {
     return `${ERROR_MESSAGES}.message`;
   }

@@ -359,6 +359,7 @@
                 "header_login": "Login failed",
                 "header_register": "Registration failed",
                 "message": "Password or e-mail incorrect.",
+                "message_invalid_credentials": "Password or e-mail incorrect. After several failed attempts, sign-in is temporarily blocked – use “Forgot Password?” if needed.",
                 "message_email_exists": "The e-mail address is already taken.",
                 "message_username_exists": "The username is already taken.",
                 "message_device_id_missing": "Your device could not be identified. Please try again.",

@@ -15,8 +15,10 @@ describe('authErrorMessageKey', () => {
       'User with email max@example.de already exists', 400, true, EMAIL, NAME, 'message_email_exists'],
     ['Registrierung mit vergebenem Namen → Name vergeben',
       'User with name max already exists', 400, true, 'moritz@example.de', NAME, 'message_username_exists'],
-    ['Login mit falschem Passwort (403) → allgemeine Meldung',
-      '', 403, false, EMAIL, '', 'message'],
+    ['Login mit falschem Passwort (403) → falsche Zugangsdaten mit Hinweis auf vorübergehende Sperre (DIV-64)',
+      '', 403, false, EMAIL, '', 'message_invalid_credentials'],
+    ['Login 403 mit nicht-textuellem Body → falsche Zugangsdaten mit Hinweis',
+      { status: 403 }, 403, false, EMAIL, '', 'message_invalid_credentials'],
     ['Registrierung, 403 mit Namen im Text → allgemeine Meldung',
       'Forbidden for max', 403, true, EMAIL, NAME, 'message'],
     ['Login mit anderem Fehlertext → allgemeine Meldung statt „Benutzername vergeben“',
@@ -69,6 +71,6 @@ describe('authErrorMessage', () => {
 
   it('andere Fehler bleiben unverändert, auch mit Retry-After', () => {
     expect(authErrorMessage('', 403, '900', false, 'max@example.de', ''))
-      .toEqual({ key: key('message') });
+      .toEqual({ key: key('message_invalid_credentials') });
   });
 });

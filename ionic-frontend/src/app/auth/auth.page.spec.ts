@@ -59,6 +59,14 @@ describe('AuthPage – Fehler bei Login', () => {
     expect(alerts.showAlertSeverUnavailable).not.toHaveBeenCalled();
   }));
 
+  it('falsches Passwort (403): Fehler-Alert mit Hinweis auf die vorübergehende Sperre', fakeAsync(() => {
+    loginFailsWith({ status: 403, error: '' });
+
+    expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(
+      'alerts.authenticate.error_messages.header_login',
+      'alerts.authenticate.error_messages.message_invalid_credentials');
+  }));
+
   // Login-Rate-Limit (DIV-64): Body exakt wie in AuthenticationControllerApiSpec, Retry-After in Sekunden
   it('429 mit Retry-After: Fehler-Alert mit der Restzeit in Minuten', fakeAsync(() => {
     const instant = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
