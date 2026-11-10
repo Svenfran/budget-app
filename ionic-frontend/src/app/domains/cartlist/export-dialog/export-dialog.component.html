@@ -1,9 +1,9 @@
 <div class="export-dialog">
-  <div class="export-header">
+  <div class="sheet-header">
     <ion-icon name="download-outline" color="primary" aria-hidden="true"></ion-icon>
     <h2>{{ 'domains.spendings.export.title' | translate }}</h2>
   </div>
-  <p class="export-subtitle">{{ 'domains.spendings.export.subtitle' | translate }}</p>
+  <p class="sheet-subtitle">{{ 'domains.spendings.export.subtitle' | translate }}</p>
 
   <!-- Radios ohne eigenen Label-Inhalt, Text im ion-label: ion-radio prüft nur beim Rendern, ob es Text enthält, und
        blendet sonst den Label-Bereich aus. ion-item leitet nur Klicks auf seinen Innenabstand an das Radio weiter,
@@ -32,7 +32,7 @@
     </ion-radio-group>
   </ion-list>
 
-  <div class="export-divider"></div>
+  <div class="sheet-divider"></div>
 
   <ion-list lines="none" class="export-section">
     <ion-list-header>
@@ -60,7 +60,7 @@
     </ion-radio-group>
   </ion-list>
 
-  <div class="export-actions">
+  <div class="sheet-actions">
     <ion-button expand="block" class="btn-export" (click)="export()" [disabled]="exporting()">
       <ion-spinner *ngIf="exporting()" name="crescent" slot="start"></ion-spinner>
       <ion-icon *ngIf="!exporting()" name="download-outline" slot="start"></ion-icon>

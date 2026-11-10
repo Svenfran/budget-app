@@ -113,7 +113,7 @@ describe('CartlistPage – Export-Dialog', () => {
     const options = modalCtrl.create.calls.mostRecent().args[0];
     expect(options.component).toBe(ExportDialogComponent);
     expect(options.componentProps?.['group']).toEqual(jasmine.objectContaining({ id: 3 }));
-    expect(options.cssClass).toBe('export-sheet');
+    expect(options.cssClass).toEqual(['bottom-sheet', 'bottom-sheet-auto']);
     expect(modal.present).toHaveBeenCalledTimes(1);
   });
 

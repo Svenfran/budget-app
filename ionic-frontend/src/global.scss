@@ -83,20 +83,8 @@ ion-modal {
   }
 }
 
-// Export-Dialog der Ausgaben-Seite (DIV-68): Ausnahme von der transparenten Overlay-Regel oben. Unten angedockt,
-// deckend und so hoch wie der Inhalt (der Inhalt begrenzt sich selbst auf 90vh und scrollt darüber).
-ion-modal.export-sheet {
-  --background: var(--ion-background-color, #fff);
-  --height: auto;
-  --border-radius: 16px 16px 0 0;
-  align-items: flex-end;
-
-  .ion-page {
-    position: relative;
-    display: block;
-    contain: content;
-  }
-}
+// Bottom Sheets (Export DIV-68, Einkaufsvorschläge DIV-69): Ausnahme von der transparenten Overlay-Regel oben
+@import "./theme/bottom-sheet.scss";
 
 .group-name {
   font-weight: 600;

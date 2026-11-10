@@ -5,7 +5,7 @@ import { ExportDialogComponent } from './export-dialog.component';
 
 describe('exportDialogModalOptions', () => {
 
-  it('öffnet den Export-Dialog unten angedockt (export-sheet) mit Gruppe und demselben exporting-Signal', () => {
+  it('öffnet den Export-Dialog unten angedockt (inhaltshohes Bottom Sheet) mit Gruppe und demselben exporting-Signal', () => {
     const group = aGroup({ name: 'WG' });
     const exporting = signal(false);
 
@@ -14,7 +14,7 @@ describe('exportDialogModalOptions', () => {
     expect(options.component).toBe(ExportDialogComponent);
     expect(options.componentProps?.['group']).toBe(group);
     expect(options.componentProps?.['exporting']).toBe(exporting);
-    expect(options.cssClass).toBe('export-sheet');
+    expect(options.cssClass).toEqual(['bottom-sheet', 'bottom-sheet-auto']);
     expect(options.breakpoints).toBeUndefined();
   });
 
