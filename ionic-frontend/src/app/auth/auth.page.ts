@@ -12,7 +12,7 @@ import { INIT_NUMBERS } from '../constants/default-values';
 import { TranslateService } from '@ngx-translate/core';
 import { LanguageService } from '../service/language.service';
 import { StorageService } from '../service/storage.service';
-import { authErrorMessageKey } from './auth-error-message';
+import { authErrorMessage } from './auth-error-message';
 
 @Component({
   selector: 'app-auth',
@@ -169,8 +169,9 @@ export class AuthPage implements OnInit {
           // kein zweiter Alert: Passwort/E-Mail waren nicht das Problem
           return;
         } else {
-          message = this.translate.instant(
-            authErrorMessageKey(errRes.error, errRes.status, !this.isLogin, USER_EMAIL, USER_NAME));
+          const error = authErrorMessage(errRes.error, errRes.status, errRes.headers?.get('Retry-After'),
+            !this.isLogin, USER_EMAIL, USER_NAME);
+          message = this.translate.instant(error.key, error.params);
         }
         loadingEl.dismiss();
         this.alertService.showErrorAlert(header, message);

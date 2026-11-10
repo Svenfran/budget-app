@@ -478,6 +478,27 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
         gueltig == 200
     }
 
+    def "429 aus einer anderen Origin: Retry-After ist per CORS für die App lesbar"() {
+        given: 'Origin aus app.cors.allowed-origins (Basiswert) – die App läuft als WebView auf einer anderen Origin als das Backend'
+        def origin = 'http://localhost:8100'
+        register('max', 'max@example.de')
+        5.times { authenticate('max@example.de', password: FALSCH) }
+        LOG.info('Szenario: registriert max, 5 Fehlversuche, 6. Versuch mit Origin {}', origin)
+
+        when:
+        def response = authenticate('max@example.de', headers: [Origin: origin])
+        def erlaubteOrigin = response.getHeader('Access-Control-Allow-Origin')
+        def lesbar = response.getHeader('Access-Control-Expose-Headers')
+        LOG.info('Antwort: {}, Retry-After {}, Allow-Origin {}, Expose-Headers {}',
+                response.status, response.getHeader('Retry-After'), erlaubteOrigin, lesbar)
+
+        then:
+        response.status == 429
+        response.getHeader('Retry-After') == '900'
+        erlaubteOrigin == origin
+        lesbar.split(',')*.trim().contains('Retry-After')
+    }
+
     def "Kein Log (aller Logger, Security auf DEBUG) enthält Passwort, JWT, E-Mail oder IP im Klartext (AC7)"() {
         given:
         register('max', 'max@example.de')

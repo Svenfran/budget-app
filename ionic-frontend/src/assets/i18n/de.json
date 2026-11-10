@@ -362,7 +362,8 @@
                 "message_email_exists": "Die E-Mail Adresse ist bereits vergeben.",
                 "message_username_exists": "Der Benutzername ist bereits vergeben.",
                 "message_device_id_missing": "Dein Gerät konnte nicht erkannt werden. Bitte versuche es erneut.",
-                "message_too_many_attempts": "Zu viele fehlgeschlagene Anmeldeversuche. Bitte warte einige Minuten und versuche es dann erneut."
+                "message_too_many_attempts": "Zu viele fehlgeschlagene Anmeldeversuche. Bitte warte einige Minuten und versuche es dann erneut.",
+                "message_too_many_attempts_wait": "Zu viele fehlgeschlagene Anmeldeversuche. Bitte versuche es in spätestens {{minutes}} Min. erneut."
             }
         },
         "server_unavailable": {

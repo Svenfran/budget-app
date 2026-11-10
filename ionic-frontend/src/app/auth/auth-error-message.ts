@@ -31,3 +31,35 @@ export function authErrorMessageKey(error: unknown, status: number, isRegistrati
   }
   return `${ERROR_MESSAGES}.message`;
 }
+
+/** i18n-Key und Parameter einer Fehlermeldung. */
+export interface AuthErrorMessage {
+  key: string;
+  params?: { minutes: number };
+}
+
+/**
+ * Wie {@link authErrorMessageKey}, bei 429 (Login-Rate-Limit, DIV-64) zusätzlich mit der Restzeit aus dem
+ * Retry-After-Header (vom Backend per CORS freigegeben). Ohne lesbare Restzeit bleibt es bei der allgemeinen
+ * 429-Meldung.
+ */
+export function authErrorMessage(error: unknown, status: number, retryAfter: string | null | undefined,
+                                 isRegistration: boolean, email: string, userName: string): AuthErrorMessage {
+  const minutes = status === 429 ? retryAfterMinutes(retryAfter) : null;
+  if (minutes !== null) {
+    return { key: `${ERROR_MESSAGES}.message_too_many_attempts_wait`, params: { minutes } };
+  }
+  return { key: authErrorMessageKey(error, status, isRegistration, email, userName) };
+}
+
+/**
+ * Restzeit in ganzen Minuten (aufgerundet, mindestens 1) aus einem Retry-After in Sekunden. Das Backend sendet
+ * immer Sekunden; die HTTP-Datumsform und ungültige Werte ergeben null.
+ */
+export function retryAfterMinutes(retryAfter: string | null | undefined): number | null {
+  const value = retryAfter?.trim();
+  if (!value || !/^\d+$/.test(value)) {
+    return null;
+  }
+  return Math.max(1, Math.ceil(Number(value) / 60));
+}
