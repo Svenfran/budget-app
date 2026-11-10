@@ -316,21 +316,28 @@ export class ShoppinglistService {
       return () => inContext() && this.shoppingLists().some(list => list.id === shoppingListId);
     }
 
-    /** Mehrere Einträge anlegen (DIV-23); die Antwort enthält nur die angelegten, übersprungene Namen fehlen. */
-    addItemsToShoppingList(dto: AddShoppingItemsDto): void {
+    /**
+     * Mehrere Einträge anlegen (DIV-23); die Antwort enthält nur die angelegten, übersprungene Namen fehlen.
+     * Ergebnis für den Aufrufer (DIV-69, Vorschlags-Sheet): `true` nach erfolgreicher Antwort – auch wenn sie wegen
+     * eines Kontextwechsels verworfen oder während eines Drags zurückgestellt wird –, `false` nach einem Fehler.
+     */
+    addItemsToShoppingList(dto: AddShoppingItemsDto): Promise<boolean> {
       const inContext = this.captureContext();
-      this.http
-        .post<AddEditShoppingItemDto[]>(this.addItemsToShoppingListUrl, dto)
-        .subscribe({
-          next: (result) => {
-            if (!inContext()) return;
-            this.applyOrDefer(() => result.forEach(item => this.appendItem(item)));
-          },
-          error: (err) => {
-            console.error("Error adding shopping items:", err);
-            this.alertService.showToast(this.translate.instant('alerts.shoppinglist.save.error'));
-          }
-        })
+      return new Promise(resolve => {
+        this.http
+          .post<AddEditShoppingItemDto[]>(this.addItemsToShoppingListUrl, dto)
+          .subscribe({
+            next: (result) => {
+              if (inContext()) this.applyOrDefer(() => result.forEach(item => this.appendItem(item)));
+              resolve(true);
+            },
+            error: (err) => {
+              console.error("Error adding shopping items:", err);
+              this.alertService.showToast(this.translate.instant('alerts.shoppinglist.save.error'));
+              resolve(false);
+            }
+          });
+      });
     }
 
     /**
