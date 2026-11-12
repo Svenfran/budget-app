@@ -7,14 +7,16 @@
 // - `bottom-sheet bottom-sheet-auto`: ohne Breakpoints, unten angedockt und so hoch wie der Inhalt (Export).
 
 // Ausnahme von der transparenten Overlay-Regel für `ion-modal` in global.scss: deckend, oben abgerundet.
+// Farbe wie die Kacheln (Karten/Listen), nicht wie der Seitenhintergrund: hebt sich im Dark Mode vom schwarzen
+// Hintergrund ab wie im Light Mode (light #fff, dark md #1e1e1e, dark ios #1c1c1d).
 ion-modal.bottom-sheet {
-  --background: var(--ion-background-color, #fff);
+  --background: var(--ion-card-background, #fff);
   --border-radius: 16px 16px 0 0;
 
   // global.scss gibt jedem Modal-ion-content 20vh Abstand oben und einen transparenten Hintergrund
   // (für die zentrierten Dialoge); im Sheet beginnt der Inhalt direkt unter dem Header.
   ion-content {
-    --background: var(--ion-background-color, #fff);
+    --background: var(--ion-card-background, #fff);
     --padding-top: 0;
     --padding-start: 20px;
     --padding-end: 20px;

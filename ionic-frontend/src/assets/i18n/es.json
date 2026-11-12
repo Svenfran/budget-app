@@ -287,11 +287,8 @@
                 "error": "No se pudo guardar el cambio."
             },
             "suggestions": {
-                "header": "Sugerencias de compra:",
-                "defaults_hint": "Todavía no hay compras en esta lista – sugerencias generales:",
+                "header": "Sugerencias de compra",
                 "empty": "No hay sugerencias – todas las compras anteriores ya están en la lista.",
-                "cancel": "Cancelar",
-                "ok": "Añadir",
                 "loading": "Cargando sugerencias...",
                 "error": "No se pudieron cargar las sugerencias.",
                 "subtitle_history": "Artículos comprados con frecuencia",

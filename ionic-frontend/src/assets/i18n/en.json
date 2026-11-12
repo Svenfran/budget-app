@@ -287,11 +287,8 @@
                 "error": "The change could not be saved."
             },
             "suggestions": {
-                "header": "Shopping suggestions:",
-                "defaults_hint": "No purchases in this list yet – general suggestions:",
+                "header": "Shopping suggestions",
                 "empty": "No suggestions – all previous purchases are already on the list.",
-                "cancel": "Cancel",
-                "ok": "Add",
                 "loading": "Loading suggestions...",
                 "error": "The suggestions could not be loaded.",
                 "subtitle_history": "Frequently bought items",

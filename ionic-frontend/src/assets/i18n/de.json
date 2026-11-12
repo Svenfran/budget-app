@@ -287,11 +287,8 @@
                 "error": "Die Änderung konnte nicht gespeichert werden."
             },
             "suggestions": {
-                "header": "Einkaufsvorschläge:",
-                "defaults_hint": "Noch keine Einkäufe in dieser Liste – allgemeine Vorschläge:",
+                "header": "Einkaufsvorschläge",
                 "empty": "Keine Vorschläge – alle bisherigen Einkäufe stehen schon auf der Liste.",
-                "cancel": "Abbrechen",
-                "ok": "Hinzufügen",
                 "loading": "Lade Vorschläge...",
                 "error": "Die Vorschläge konnten nicht geladen werden.",
                 "subtitle_history": "Häufig gekaufte Artikel",

@@ -10,6 +10,21 @@ ion-chip {
     --color: var(--ion-color-medium);
 }
 
+// Vorschläge laden (DIV-69): Spinner in Größe und Abstand des Icons; gesperrt ohne das Ausgrauen von Ionic,
+// damit der Spinner gut sichtbar bleibt
+.suggestions-chip {
+    ion-spinner {
+        width: 18px;
+        height: 18px;
+        margin-inline: -4px 8px;
+        color: var(--ion-color-success);
+    }
+
+    &.chip-disabled {
+        opacity: 1;
+    }
+}
+
 .chip {
     display: flex;
     // wrap: bei großer Schrift/schmalem Display umbrechen statt überlaufen; der Menü-Button bleibt rechts
