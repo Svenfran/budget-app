@@ -1,0 +1,54 @@
+<!-- Header, Untertitel und Aktionsbereich: gemeinsamer Basis-Style (src/theme/bottom-sheet.scss) -->
+<ion-header class="ion-no-border">
+  <div class="sheet-header">
+    <ion-icon name="sparkles-outline" color="success" aria-hidden="true"></ion-icon>
+    <div class="sheet-title">
+      <h2>{{ 'alerts.shoppinglist.suggestions.header' | translate }}</h2>
+      <p class="sheet-subtitle">{{ listName }} · {{ subtitleKey | translate }}</p>
+    </div>
+    <ion-button fill="clear" color="medium" class="btn-close" (click)="close()" [disabled]="adding()"
+                [attr.aria-label]="'alerts.shoppinglist.suggestions.close' | translate">
+      <ion-icon name="close" slot="icon-only"></ion-icon>
+    </ion-button>
+  </div>
+
+  <div class="selection-bar" *ngIf="names.length > 0">
+    <span class="selection-count">
+      {{ 'alerts.shoppinglist.suggestions.selected_count' | translate: { count: selectedCount(), total: names.length } }}
+    </span>
+    <ion-button fill="clear" size="small" class="btn-toggle-all" (click)="toggleAll()" [disabled]="adding()">
+      {{ (allSelected() ? 'alerts.shoppinglist.suggestions.deselect_all' : 'alerts.shoppinglist.suggestions.select_all') | translate }}
+    </ion-button>
+  </div>
+</ion-header>
+
+<ion-content>
+  <!-- Checkboxen ohne eigenen Label-Inhalt, Text im ion-label (wie die Radios im Export-Dialog, DIV-68): ion-checkbox
+       blendet seinen Label-Bereich aus, wenn es beim Rendern noch keinen Text enthält. -->
+  <ion-list lines="none" class="suggestion-list" *ngIf="names.length > 0; else emptyState">
+    <ion-item *ngFor="let name of names">
+      <ion-checkbox slot="start" [checked]="isSelected(name)" [disabled]="adding()" [attr.aria-label]="name"
+                    (ionChange)="setSelected(name, $event.detail.checked)"></ion-checkbox>
+      <ion-label class="ion-text-wrap" (click)="onNameClick($event, name)">
+        <span class="suggestion-name">{{ name }}</span>
+      </ion-label>
+    </ion-item>
+  </ion-list>
+
+  <ng-template #emptyState>
+    <div class="empty-state">
+      <ion-icon name="sparkles-outline" color="medium" aria-hidden="true"></ion-icon>
+      <p>{{ 'alerts.shoppinglist.suggestions.empty' | translate }}</p>
+    </div>
+  </ng-template>
+</ion-content>
+
+<ion-footer class="ion-no-border" *ngIf="names.length > 0">
+  <div class="sheet-actions">
+    <ion-button expand="block" class="btn-add" (click)="add()" [disabled]="selectedCount() === 0 || adding()">
+      <ion-spinner *ngIf="adding()" name="crescent" slot="start"></ion-spinner>
+      <ion-icon *ngIf="!adding()" name="add" slot="start"></ion-icon>
+      {{ addLabelKey() | translate: { count: selectedCount() } }}
+    </ion-button>
+  </div>
+</ion-footer>

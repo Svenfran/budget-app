@@ -293,7 +293,16 @@
                 "cancel": "Cancelar",
                 "ok": "Añadir",
                 "loading": "Cargando sugerencias...",
-                "error": "No se pudieron cargar las sugerencias."
+                "error": "No se pudieron cargar las sugerencias.",
+                "subtitle_history": "Artículos comprados con frecuencia",
+                "subtitle_defaults": "Sugerencias generales",
+                "selected_count": "{{count}} de {{total}} seleccionados",
+                "select_all": "Seleccionar todo",
+                "deselect_all": "Deseleccionar todo",
+                "add_none": "Añadir artículos",
+                "add_one": "Añadir {{count}} artículo",
+                "add_other": "Añadir {{count}} artículos",
+                "close": "Cerrar"
             }
         },
         "user_profile": {

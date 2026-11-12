@@ -293,7 +293,16 @@
                 "cancel": "Cancel",
                 "ok": "Add",
                 "loading": "Loading suggestions...",
-                "error": "The suggestions could not be loaded."
+                "error": "The suggestions could not be loaded.",
+                "subtitle_history": "Frequently bought items",
+                "subtitle_defaults": "General suggestions",
+                "selected_count": "{{count}} of {{total}} selected",
+                "select_all": "Select all",
+                "deselect_all": "Deselect all",
+                "add_none": "Add items",
+                "add_one": "Add {{count}} item",
+                "add_other": "Add {{count}} items",
+                "close": "Close"
             }
         },
         "user_profile": {

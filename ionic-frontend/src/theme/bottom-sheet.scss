@@ -26,7 +26,8 @@ ion-modal.bottom-sheet {
     gap: 12px;
     margin-top: 8px;
 
-    ion-icon {
+    // nur das Titel-Icon, nicht Icons in Buttons des Headers (z. B. Schließen)
+    > ion-icon {
       font-size: 1.8em;
       flex-shrink: 0;
     }
