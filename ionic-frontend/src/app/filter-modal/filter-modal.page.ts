@@ -5,7 +5,7 @@ import { AuthService } from '../auth/auth.service';
 import { CategoryService } from '../service/category.service';
 import { GroupService } from '../service/group.service';
 import { User } from '../auth/user';
-import { CartFilter } from './model/CartFilter';
+import { CartFilter } from '../domains/cartlist/model/cart-filter';
 import { LanguageService } from '../service/language.service';
 
 @Component({

@@ -11,7 +11,7 @@ import { CategoryService } from 'src/app/service/category.service';
 import { SettlementPaymentPage } from 'src/app/settlement-payment/settlement-payment.page';
 import { INIT_VALUES } from 'src/app/constants/default-values';
 import { FilterModalPage } from 'src/app/filter-modal/filter-modal.page';
-import { CartFilter } from 'src/app/filter-modal/model/CartFilter';
+import { CartFilter } from './model/cart-filter';
 import { TranslateService } from '@ngx-translate/core';
 import { CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
 import { exportDialogModalOptions } from './export-dialog/export-dialog-options';

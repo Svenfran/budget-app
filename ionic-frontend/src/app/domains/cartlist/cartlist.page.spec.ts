@@ -8,7 +8,7 @@ import { AlertService } from 'src/app/service/alert.service';
 import { CategoryService } from 'src/app/service/category.service';
 import { GroupService } from 'src/app/service/group.service';
 import { StorageService } from 'src/app/service/storage.service';
-import { aGroup, aLoggedInUser } from 'src/testing/test-data';
+import { aCart, aCategory, aGroup, aLoggedInUser, aUser } from 'src/testing/test-data';
 import { alertServiceSpy, authServiceStub, provideServiceTesting, storageServiceFake } from 'src/testing/test-providers';
 import { OverviewService } from '../overview/service/overview.service';
 import { Cart } from './model/cart';
@@ -128,5 +128,188 @@ describe('CartlistPage – Export-Dialog', () => {
     expect(await canDismiss()).toBeFalse();
     exporting.set(false);
     expect(await canDismiss()).toBeTrue();
+  });
+});
+
+// DIV-71: Charakterisierung der bestehenden Filterlogik vor dem Umbau auf das Filter-Bottom-Sheet. filterCarts, onFilter
+// und deleteFilter bleiben unverändert; Anzahl und Summe rechnet der Fake wie CartService aus cartList.
+describe('CartlistPage – Filter (Bestand)', () => {
+  let page: CartlistPage;
+  let cartList: WritableSignal<Cart[]>;
+  let initCartList: WritableSignal<Cart[]>;
+  let count: () => number;
+  let sum: () => number;
+
+  const sven = aUser({ userName: 'Sven' });
+  const anna = aUser({ userName: 'Anna' });
+  const ben = aUser({ userName: 'Ben' });
+  const lebensmittel = aCategory({ name: 'Lebensmittel' });
+  const drogerie = aCategory({ name: 'Drogerie' });
+  const freizeit = aCategory({ name: 'Freizeit' });
+
+  const edeka = aCart({ title: 'Edeka', description: 'Wocheneinkauf', amount: 40, userDto: sven,
+    categoryDto: lebensmittel, datePurchased: new Date(2025, 5, 1) });
+  const rossmann = aCart({ title: 'Rossmann', description: 'Zahnpasta', amount: 10.5, userDto: anna,
+    categoryDto: drogerie, datePurchased: new Date(2025, 5, 10) });
+  const kino = aCart({ title: 'Kino', description: 'Film mit Edeka-Gutschein', amount: 25, userDto: ben,
+    categoryDto: freizeit, datePurchased: new Date(2025, 5, 20) });
+  const edekaSpaet = aCart({ title: 'EDEKA Markt', description: 'Getränke', amount: 12, userDto: anna,
+    categoryDto: lebensmittel, datePurchased: new Date(2025, 5, 20, 18, 0) });
+  const alle = [edeka, rossmann, kino, edekaSpaet];
+
+  const titles = () => cartList().map(cart => cart.title);
+
+  beforeEach(() => {
+    cartList = signal<Cart[]>([]);
+    initCartList = signal<Cart[]>([]);
+    count = computed(() => cartList().length);
+    sum = computed(() => cartList().reduce((s, c) => s + (+c.amount), 0));
+    TestBed.configureTestingModule({
+      declarations: [CartlistPage],
+      imports: [IonicModule.forRoot()],
+      providers: [
+        ...provideServiceTesting(),
+        {
+          provide: CartService, useValue: {
+            cartList, initCartList, cartUpdated: signal(0), sum, count,
+            getCartListByGroupId: jasmine.createSpy('load'),
+          },
+        },
+        { provide: OverviewService, useValue: { overviewRefresh: signal(0) } },
+        { provide: CategoryService, useValue: { categoryUpdate: signal(0) } },
+        { provide: StorageService, useValue: storageServiceFake() },
+        { provide: AuthService, useValue: authServiceStub(null) },
+        { provide: AlertService, useValue: alertServiceSpy() },
+      ],
+    });
+    TestBed.overrideTemplate(CartlistPage, '');
+    TestBed.inject(GroupService).setActiveGroup(aGroup({ id: 3, name: 'WG' }));
+    const fixture = TestBed.createComponent(CartlistPage);
+    fixture.detectChanges();
+    page = fixture.componentInstance;
+    initCartList.set(alle);
+    cartList.set(alle);
+  });
+
+  it('Titel: Teilstring ohne Beachtung der Groß-/Kleinschreibung', () => {
+    page.filterCarts({ title: 'edeka' });
+
+    expect(titles()).toEqual(['Edeka', 'EDEKA Markt']);
+    expect(count()).toBe(2);
+    expect(sum()).toBe(52);
+  });
+
+  it('Beschreibung: Teilstring ohne Beachtung der Groß-/Kleinschreibung', () => {
+    page.filterCarts({ description: 'EDEKA' });
+
+    expect(titles()).toEqual(['Kino']);
+    expect(count()).toBe(1);
+    expect(sum()).toBe(25);
+  });
+
+  it('mehrere Kategorien: Cart passt zu einer davon', () => {
+    page.filterCarts({ category: ['Drogerie', 'Freizeit'] });
+
+    expect(titles()).toEqual(['Rossmann', 'Kino']);
+    expect(count()).toBe(2);
+    expect(sum()).toBe(35.5);
+  });
+
+  it('mehrere Ersteller: Cart passt zu einem davon', () => {
+    page.filterCarts({ userName: ['Sven', 'Ben'] });
+
+    expect(titles()).toEqual(['Edeka', 'Kino']);
+    expect(count()).toBe(2);
+    expect(sum()).toBe(65);
+  });
+
+  it('Datum von: inklusiv ab lokaler Mitternacht', () => {
+    page.filterCarts({ startDate: new Date(2025, 5, 10) });
+
+    expect(titles()).toEqual(['Rossmann', 'Kino', 'EDEKA Markt']);
+    expect(count()).toBe(3);
+    expect(sum()).toBe(47.5);
+  });
+
+  // Bestehende Semantik (nicht Teil von DIV-71): „bis“ ist lokale Mitternacht, spätere Uhrzeiten am selben Tag fallen heraus
+  it('Datum bis: bis einschließlich lokaler Mitternacht des Tages', () => {
+    page.filterCarts({ endDate: new Date(2025, 5, 20) });
+
+    expect(titles()).toEqual(['Edeka', 'Rossmann', 'Kino']);
+    expect(count()).toBe(3);
+    expect(sum()).toBe(75.5);
+  });
+
+  it('kombiniert mehrere Kriterien mit UND (AC 4)', () => {
+    page.filterCarts({
+      title: 'edeka', category: ['Lebensmittel'], userName: ['Anna'],
+      startDate: new Date(2025, 5, 15), endDate: new Date(2025, 5, 21),
+    });
+
+    expect(titles()).toEqual(['EDEKA Markt']);
+    expect(count()).toBe(1);
+    expect(sum()).toBe(12);
+  });
+
+  it('filtert immer von der vollständigen Liste aus, nicht von der zuvor gefilterten', () => {
+    page.filterCarts({ userName: ['Sven'] });
+    page.filterCarts({ userName: ['Anna'] });
+
+    expect(titles()).toEqual(['Rossmann', 'EDEKA Markt']);
+  });
+
+  it('setzt filterMode (Filter-Chip) und leert das Schnellfilter-Label', () => {
+    page.onFilter('category', 'Drogerie');
+    page.filterCarts({ title: 'Kino' });
+
+    expect(page.filterMode()).toBeTrue();
+    expect(page.filterTerm()).toBe('');
+  });
+
+  it('alle Felder null → Filter aufgehoben, volle Liste', () => {
+    page.filterCarts({ title: 'Kino' });
+
+    page.filterCarts({ title: null, description: null, category: null, startDate: null, endDate: null, userName: null });
+
+    expect(page.filterMode()).toBeFalse();
+    expect(page.cartFilter).toEqual({});
+    expect(titles()).toEqual(['Edeka', 'Rossmann', 'Kino', 'EDEKA Markt']);
+    expect(count()).toBe(4);
+    expect(sum()).toBe(87.5);
+  });
+
+  it('deleteFilter (X am Chip) → volle Liste, Filter leer', () => {
+    page.filterCarts({ userName: ['Sven'] });
+    page.cartFilter = { userName: ['Sven'] };
+
+    page.deleteFilter();
+
+    expect(page.filterMode()).toBeFalse();
+    expect(page.cartFilter).toEqual({});
+    expect(count()).toBe(4);
+    expect(sum()).toBe(87.5);
+  });
+
+  it('Schnellfilter Kategorie: belegt cartFilter.category vor (für das erneute Öffnen des Filters, AC 3)', () => {
+    page.onFilter('category', 'Lebensmittel');
+
+    expect(page.cartFilter).toEqual({ category: ['Lebensmittel'] });
+    expect(page.filterTerm()).toBe('Lebensmittel');
+    expect(page.filterMode()).toBeTrue();
+    expect(titles()).toEqual(['Edeka', 'EDEKA Markt']);
+    expect(sum()).toBe(52);
+  });
+
+  it('Schnellfilter Ersteller: belegt cartFilter.userName vor; erneuter Tipp hebt ihn auf', () => {
+    page.onFilter('user', 'Anna');
+
+    expect(page.cartFilter).toEqual({ userName: ['Anna'] });
+    expect(count()).toBe(2);
+
+    page.onFilter('user', 'Anna');
+
+    expect(page.filterMode()).toBeFalse();
+    expect(page.cartFilter).toEqual({});
+    expect(count()).toBe(4);
   });
 });
