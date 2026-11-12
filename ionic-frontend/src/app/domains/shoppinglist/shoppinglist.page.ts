@@ -49,6 +49,8 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
   public listMenuEvent: Event | undefined;
   /** Listen, deren Einkaufsvorschläge gerade geladen werden: Spinner im Chip statt Overlay, Chip gesperrt (DIV-69). */
   public loadingSuggestions = signal<ReadonlySet<number>>(new Set());
+  /** Zählt Gruppen-/Sitzungswechsel: Antworten älterer Vorschlagsanfragen ändern den Ladezustand nicht mehr. */
+  private suggestionsGeneration = 0;
 
 
   constructor(
@@ -74,6 +76,9 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
       const activeGroup = untracked(() => this.groupService.activeGroup());
       // ein unterbrochener Drag gibt den Puffer frei; Updates der alten Gruppe bzw. Sitzung verwirft der Service
       this.shoppinglistService.releaseUpdates();
+      // Vorschlagsanfragen der alten Gruppe bzw. Sitzung sperren die Chips nicht weiter
+      this.suggestionsGeneration++;
+      this.loadingSuggestions.set(new Set());
       this.isLoading = true;
       if (!activeGroup.flag?.includes(INIT_VALUES.DEFAULT)) {
         this.shoppingLists.set([]);
@@ -311,14 +316,19 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
     if (this.loadingSuggestions().has(list.id)) return;
     const inContext = this.shoppinglistService.captureSuggestionContext(list.id);
     const groupId = this.activeGroup.id;
+    const generation = this.suggestionsGeneration;
+    // nach einem Gruppen-/Sitzungswechsel gehört der Ladezustand bereits einer neuen Anfrage (oder keiner)
+    const done = () => {
+      if (generation === this.suggestionsGeneration) this.setSuggestionsLoading(list.id, false);
+    };
     this.setSuggestionsLoading(list.id, true);
     this.shoppinglistService.getSuggestions(groupId, list.id).subscribe({
       next: (suggestions) => {
-        this.setSuggestionsLoading(list.id, false);
+        done();
         if (inContext()) this.presentSuggestions(groupId, list, suggestions, inContext);
       },
       error: (err) => {
-        this.setSuggestionsLoading(list.id, false);
+        done();
         console.error("Error loading shopping suggestions:", err);
         if (inContext()) this.alertService.showToast(this.translate.instant('alerts.shoppinglist.suggestions.error'));
       }

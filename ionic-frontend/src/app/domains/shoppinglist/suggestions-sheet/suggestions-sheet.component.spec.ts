@@ -17,6 +17,9 @@ describe('SuggestionsSheetComponent (DIV-69)', () => {
   let modalCtrl: jasmine.SpyObj<ModalController>;
   let addingWhenDismissed: boolean | undefined;
 
+  const MODAL_ID = 'suggestions-sheet-42';
+  /** dismiss gezielt für das eigene Modal (Review F-001), nicht für das oberste. */
+  const eigenesModal = [undefined, undefined, MODAL_ID] as const;
   const key = (suffix: string) => `alerts.shoppinglist.suggestions.${suffix}`;
   const vorschlaege = (names: string[], defaultSuggestions = false): ShoppingSuggestionsDto =>
     ({ groupId: 7, shoppingListId: 3, defaultSuggestions, names });
@@ -47,6 +50,7 @@ describe('SuggestionsSheetComponent (DIV-69)', () => {
     component.listId = 3;
     component.inContext = () => kontextGueltig;
     component.adding = adding;
+    component.modalId = MODAL_ID;
     fixture.detectChanges();
   };
 
@@ -215,7 +219,7 @@ describe('SuggestionsSheetComponent (DIV-69)', () => {
 
       await component.add();
 
-      expect(modalCtrl.dismiss).toHaveBeenCalledTimes(1);
+      expect(modalCtrl.dismiss).toHaveBeenCalledOnceWith(...eigenesModal);
       expect(addingWhenDismissed).toBeFalse();
       expect(adding()).toBeFalse();
     });
@@ -268,7 +272,24 @@ describe('SuggestionsSheetComponent (DIV-69)', () => {
       await component.add();
 
       expect(addItems).not.toHaveBeenCalled();
-      expect(modalCtrl.dismiss).toHaveBeenCalledTimes(1);
+      expect(modalCtrl.dismiss).toHaveBeenCalledOnceWith(...eigenesModal);
+    });
+
+    // Review F-001: ohne ID schließt Ionic das oberste Modal. Ist inzwischen ein zweites Sheet darüber geöffnet,
+    // darf der Erfolg dieses Sheets nur dieses schließen, nicht das andere samt seiner Auswahl.
+    it('zweites Sheet darüber geöffnet: Erfolg schließt nur das eigene Sheet', async () => {
+      const offen = [MODAL_ID, 'suggestions-sheet-43']; // 43 liegt oben
+      modalCtrl.dismiss.and.callFake(async (_data?: unknown, _role?: string, id?: string) => {
+        const ziel = id ?? offen[offen.length - 1];
+        offen.splice(offen.indexOf(ziel), 1);
+        return true;
+      });
+      addItems.and.resolveTo(true);
+      ionChange(0, true);
+
+      await component.add();
+
+      expect(offen).toEqual(['suggestions-sheet-43']);
     });
   });
 
@@ -277,7 +298,7 @@ describe('SuggestionsSheetComponent (DIV-69)', () => {
 
     closeButton().click();
 
-    expect(modalCtrl.dismiss).toHaveBeenCalledTimes(1);
+    expect(modalCtrl.dismiss).toHaveBeenCalledOnceWith(...eigenesModal);
     expect(addItems).not.toHaveBeenCalled();
   });
 

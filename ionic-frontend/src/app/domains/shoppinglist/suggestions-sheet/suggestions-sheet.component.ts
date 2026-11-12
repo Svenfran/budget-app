@@ -28,6 +28,8 @@ export class SuggestionsSheetComponent {
   @Input() listId!: number;
   @Input() inContext!: () => boolean;
   @Input() adding!: WritableSignal<boolean>;
+  /** ID des eigenen Modals (suggestionsSheetModalOptions): Schließen trifft nur dieses Sheet, nicht das oberste. */
+  @Input() modalId!: string;
 
   selected = signal<ReadonlySet<string>>(new Set());
   selectedCount = computed(() => this.selected().size);
@@ -81,7 +83,7 @@ export class SuggestionsSheetComponent {
   async add() {
     if (this.adding() || this.selectedCount() === 0) return;
     if (!this.inContext()) {
-      await this.modalCtrl.dismiss();
+      await this.dismiss();
       return;
     }
     // Vorschlagsreihenfolge, nicht Klickreihenfolge
@@ -95,11 +97,15 @@ export class SuggestionsSheetComponent {
       this.adding.set(false);
     }
     if (ok) {
-      await this.modalCtrl.dismiss();
+      await this.dismiss();
     }
   }
 
   close() {
-    this.modalCtrl.dismiss();
+    this.dismiss();
+  }
+
+  private dismiss() {
+    return this.modalCtrl.dismiss(undefined, undefined, this.modalId);
   }
 }

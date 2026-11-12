@@ -17,7 +17,7 @@ describe('suggestionsSheetModalOptions (DIV-69)', () => {
     const options = suggestionsSheetModalOptions(props, adding);
 
     expect(options.component).toBe(SuggestionsSheetComponent);
-    expect(options.componentProps).toEqual({ ...props, adding });
+    expect(options.componentProps).toEqual({ ...props, adding, modalId: options.id });
     expect(options.componentProps?.['adding']).toBe(adding);
     expect(options.componentProps?.['inContext']).toBe(props.inContext);
   });
@@ -31,6 +31,17 @@ describe('suggestionsSheetModalOptions (DIV-69)', () => {
     expect(options.expandToScroll).toBeFalse();
     expect(options.handle).toBeTrue();
     expect(options.cssClass).toBe('bottom-sheet');
+  });
+
+  // Review F-001: die Komponente schließt gezielt ihr eigenes Modal über diese ID
+  it('jedes Sheet bekommt eine eigene Modal-ID, die auch die Komponente erhält', () => {
+    const erstes = suggestionsSheetModalOptions(props, signal(false));
+    const zweites = suggestionsSheetModalOptions(props, signal(false));
+
+    expect(erstes.id).toMatch(/^suggestions-sheet-\d+$/);
+    expect(zweites.id).not.toBe(erstes.id);
+    expect(erstes.componentProps?.['modalId']).toBe(erstes.id);
+    expect(zweites.componentProps?.['modalId']).toBe(zweites.id);
   });
 
   it('canDismiss sperrt das Schließen, solange adding gesetzt ist', async () => {

@@ -674,16 +674,52 @@ describe('ShoppinglistPage – Drag & Drop', () => {
         expect(sheets.length).toBe(1);
       });
 
-      it('Gruppenwechsel während des GET: Ladezustand endet trotzdem', async () => {
+      // Review F-002: der Ladezustand endet mit dem Wechsel, nicht erst mit der Antwort der alten Anfrage
+      it('Gruppenwechsel während des GET: Chip sofort wieder frei, schon vor der alten Antwort', async () => {
         page.onShowSuggestions(listA());
-        const req = http.expectOne(suggestionsUrl);
+        const alt = http.expectOne(suggestionsUrl);
+
         groupService.setActiveGroup(urlaub);
         fixture.detectChanges();
         http.expectOne(loadUrl(2)).flush([aShoppingList({ id: 1 })]);
-        req.flush(vorschlaege(['Milch']));
+        groupService.setActiveGroup(wg);
+        fixture.detectChanges();
+        http.expectOne(loadUrl(1)).flush(loadedLists());
+        page.toggleLists = { 1: true };
+        fixture.detectChanges();
+
+        expect(page.loadingSuggestions().size).toBe(0);
+        expect(chip().disabled).toBeFalse();
+
+        // neue Anfrage möglich; die späte alte Antwort beendet deren Ladezustand nicht
+        page.onShowSuggestions(listA());
+        const neu = http.match(suggestionsUrl).find(req => req !== alt)!;
+        alt.flush(vorschlaege(['Milch']));
+        await mikrotasks();
+
+        expect(page.loadingSuggestions().has(1)).toBeTrue();
+        expect(sheets.length).toBe(0);
+
+        neu.flush(vorschlaege(['Brot']));
         await mikrotasks();
 
         expect(page.loadingSuggestions().size).toBe(0);
+        expect(sheets.length).toBe(1);
+        expect(props().suggestions.names).toEqual(['Brot']);
+      });
+
+      it('Logout und Login während des GET: Chip sofort wieder frei', () => {
+        page.onShowSuggestions(listA());
+        const alt = http.expectOne(suggestionsUrl);
+
+        session.next(null);
+        session.next(aLoggedInUser({ id: 7 }));
+        groupService.setActiveGroup(wg);
+        fixture.detectChanges();
+        http.expectOne(loadUrl(1)).flush(loadedLists());
+
+        expect(page.loadingSuggestions().size).toBe(0);
+        alt.flush(vorschlaege(['Milch']));
       });
     });
 
