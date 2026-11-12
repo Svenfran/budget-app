@@ -1,0 +1,87 @@
+// Nur Ionic-Theme-Variablen: Dark/Light folgt dem color-theme automatisch.
+// Modal, Header, Untertitel und Aktionsbereich: gemeinsamer Basis-Style in src/theme/bottom-sheet.scss.
+// Hier nur, was es nur im Vorschlags-Sheet gibt: Titelblock mit Schließen-Button, Zählerzeile, Liste, Leerzustand.
+
+// Unter ion-header geschachtelt: die globalen Basisregeln (`ion-modal.bottom-sheet .sheet-…`) sind sonst
+// spezifischer als die gekapselten Regeln dieser Komponente.
+ion-header {
+  padding: 8px 20px 0;
+
+  .sheet-header {
+    align-items: flex-start;
+
+    .sheet-title {
+      flex: 1;
+      min-width: 0;
+    }
+
+    > ion-icon {
+      margin-top: 2px;
+    }
+
+    .btn-close {
+      flex-shrink: 0;
+      margin: -6px -12px 0 0;
+    }
+  }
+
+  // Untertitel steht im Titelblock direkt unter der Überschrift
+  .sheet-title .sheet-subtitle {
+    margin: 2px 0 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.selection-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin-top: 12px;
+  color: var(--ion-color-medium);
+  font-size: 0.9em;
+
+  .btn-toggle-all {
+    margin: 0 -8px 0 auto;
+    text-transform: none;
+  }
+}
+
+.suggestion-list {
+  background: transparent;
+  padding: 0;
+
+  ion-item {
+    --background: transparent;
+    --padding-start: 0;
+    --inner-padding-end: 0;
+  }
+
+  ion-checkbox {
+    margin-inline-end: 16px;
+  }
+}
+
+.suggestion-name {
+  overflow-wrap: anywhere;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 0;
+  text-align: center;
+  color: var(--ion-color-medium);
+
+  ion-icon {
+    font-size: 2.4em;
+  }
+}
+
+// Footer bleibt bei jedem Breakpoint sichtbar (expandToScroll: false); Safe-Area kommt aus .sheet-actions
+ion-footer .sheet-actions {
+  margin-top: 0;
+  padding: 8px 20px calc(8px + var(--ion-safe-area-bottom, 0px));
+}

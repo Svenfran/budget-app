@@ -287,13 +287,19 @@
                 "error": "Die Änderung konnte nicht gespeichert werden."
             },
             "suggestions": {
-                "header": "Einkaufsvorschläge:",
-                "defaults_hint": "Noch keine Einkäufe in dieser Liste – allgemeine Vorschläge:",
+                "header": "Einkaufsvorschläge",
                 "empty": "Keine Vorschläge – alle bisherigen Einkäufe stehen schon auf der Liste.",
-                "cancel": "Abbrechen",
-                "ok": "Hinzufügen",
                 "loading": "Lade Vorschläge...",
-                "error": "Die Vorschläge konnten nicht geladen werden."
+                "error": "Die Vorschläge konnten nicht geladen werden.",
+                "subtitle_history": "Häufig gekaufte Artikel",
+                "subtitle_defaults": "Allgemeine Vorschläge",
+                "selected_count": "{{count}} von {{total}} ausgewählt",
+                "select_all": "Alle auswählen",
+                "deselect_all": "Auswahl aufheben",
+                "add_none": "Artikel hinzufügen",
+                "add_one": "{{count}} Artikel hinzufügen",
+                "add_other": "{{count}} Artikel hinzufügen",
+                "close": "Schließen"
             }
         },
         "user_profile": {

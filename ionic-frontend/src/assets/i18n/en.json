@@ -287,13 +287,19 @@
                 "error": "The change could not be saved."
             },
             "suggestions": {
-                "header": "Shopping suggestions:",
-                "defaults_hint": "No purchases in this list yet – general suggestions:",
+                "header": "Shopping suggestions",
                 "empty": "No suggestions – all previous purchases are already on the list.",
-                "cancel": "Cancel",
-                "ok": "Add",
                 "loading": "Loading suggestions...",
-                "error": "The suggestions could not be loaded."
+                "error": "The suggestions could not be loaded.",
+                "subtitle_history": "Frequently bought items",
+                "subtitle_defaults": "General suggestions",
+                "selected_count": "{{count}} of {{total}} selected",
+                "select_all": "Select all",
+                "deselect_all": "Deselect all",
+                "add_none": "Add items",
+                "add_one": "Add {{count}} item",
+                "add_other": "Add {{count}} items",
+                "close": "Close"
             }
         },
         "user_profile": {

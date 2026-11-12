@@ -1,9 +1,11 @@
 import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
 import { HttpTestingController } from '@angular/common/http/testing';
-import { signal } from '@angular/core';
+import { signal, WritableSignal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormsModule } from '@angular/forms';
-import { AlertButton, AlertController, AlertOptions, IonicModule, LoadingController } from '@ionic/angular';
+import {
+  AlertButton, AlertController, AlertOptions, IonicModule, LoadingController, ModalController, ModalOptions
+} from '@ionic/angular';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { BehaviorSubject } from 'rxjs';
 import { AuthService } from 'src/app/auth/auth.service';
@@ -18,6 +20,8 @@ import { alertServiceSpy, authServiceStub, provideServiceTesting, storageService
 import { ShoppinglistDto } from './model/shoppinglist-dto';
 import { ShoppinglistService } from './service/shoppinglist.service';
 import { ShoppinglistPage } from './shoppinglist.page';
+import { SuggestionsSheetProps } from './suggestions-sheet/suggestions-sheet-options';
+import { SuggestionsSheetComponent } from './suggestions-sheet/suggestions-sheet.component';
 
 // DIV-36: Die Seite lädt nur bei einem echten Gruppenwechsel neu; eine Umbenennung (Live-Event oder Resync)
 // aktualisiert nur die angezeigte Überschrift. Overview und Cartlist haben dieselbe Zwei-Effect-Struktur.
@@ -542,142 +546,259 @@ describe('ShoppinglistPage – Drag & Drop', () => {
     });
   });
 
-  // DIV-23: nutzt den Aufbau dieses Blocks (echter ShoppinglistService, HttpTestingController, Gruppen- und
-  // Sitzungswechsel); Loading und Alert sind Fakes, der Dialog wird über seine Optionen bedient.
-  describe('Einkaufsvorschläge (DIV-23)', () => {
+  // DIV-23 / DIV-69: nutzt den Aufbau dieses Blocks (echter ShoppinglistService, HttpTestingController, Gruppen- und
+  // Sitzungswechsel); Loading und Modal sind Fakes. Das Sheet selbst (Auswahl, Hinzufügen, Schließen) testet
+  // suggestions-sheet.component.spec.ts; hier geht es um das Öffnen und den mitgegebenen Kontext.
+  describe('Einkaufsvorschläge (DIV-23, Bottom Sheet DIV-69)', () => {
     const suggestionsUrl = `${api}/shopping-list/suggestions/1/1`;
     const addItemsUrl = `${api}/shopping-list/add-items`;
     const vorschlaege = (names: string[], defaultSuggestions = false) =>
       ({ groupId: 1, shoppingListId: 1, defaultSuggestions, names });
-    let dialoge: AlertOptions[];
+    let sheets: ModalOptions[];
+    let praesentiert: number;
+    let entfernt: number;
     let alerts: jasmine.SpyObj<AlertService>;
+    let alertCreate: jasmine.Spy;
+    let modalCreate: jasmine.Spy;
+    let loadingCreate: jasmine.Spy;
 
-    const dialog = () => dialoge[dialoge.length - 1];
-    const bestaetigen = (selected: string[]) => {
-      const ok = (dialog().buttons as AlertButton[]).find(button => button.role !== 'cancel')!;
-      (ok.handler as (value: string[]) => void)(selected);
-    };
+    const sheet = () => sheets[sheets.length - 1];
+    const props = () => sheet().componentProps as unknown as SuggestionsSheetProps & { adding: WritableSignal<boolean> };
+    const modalEl = () => ({
+      present: () => { praesentiert++; return Promise.resolve(); },
+      remove: () => { entfernt++; },
+    }) as unknown as HTMLIonModalElement;
+    /** create() und present() hängen an Promises; einige Mikrotasks abwarten. */
+    const mikrotasks = async () => { for (let i = 0; i < 5; i++) await Promise.resolve(); };
     const oeffnen = async (names: string[], defaultSuggestions = false) => {
-      await page.onShowSuggestions(listA());
+      page.onShowSuggestions(listA());
       http.expectOne(suggestionsUrl).flush(vorschlaege(names, defaultSuggestions));
-      await Promise.resolve();
+      await mikrotasks();
     };
 
     beforeEach(() => {
-      dialoge = [];
+      sheets = [];
+      praesentiert = 0;
+      entfernt = 0;
       alerts = TestBed.inject(AlertService) as jasmine.SpyObj<AlertService>;
-      spyOn(service, 'addItemsToShoppingList').and.callThrough();
-      spyOn(TestBed.inject(LoadingController), 'create').and.resolveTo(
-        { present: () => Promise.resolve(), dismiss: () => Promise.resolve(true) } as unknown as HTMLIonLoadingElement);
-      spyOn(TestBed.inject(AlertController), 'create').and.callFake((options?: AlertOptions) => {
-        dialoge.push(options!);
-        return Promise.resolve({ present: () => Promise.resolve() } as unknown as HTMLIonAlertElement);
+      loadingCreate = spyOn(TestBed.inject(LoadingController), 'create').and.callThrough();
+      alertCreate = spyOn(TestBed.inject(AlertController), 'create').and.callThrough();
+      modalCreate = spyOn(TestBed.inject(ModalController), 'create').and.callFake((options: ModalOptions) => {
+        sheets.push(options);
+        return Promise.resolve(modalEl());
       });
     });
 
-    it('Öffnen: GET für Gruppe und Liste, je Vorschlag eine nicht angehakte Checkbox, kein Hinweis', async () => {
+    it('Öffnen: GET für Gruppe und Liste, dann das Bottom Sheet statt eines Alerts (AC 1)', async () => {
       await oeffnen(['Milch', 'Brot', 'Eier']);
 
-      expect(dialoge.length).toBe(1);
-      expect(dialog().header).toBe('alerts.shoppinglist.suggestions.header');
-      expect(dialog().message).toBeUndefined();
-      expect(dialog().inputs).toEqual(['Milch', 'Brot', 'Eier'].map(name => ({ type: 'checkbox', label: name, value: name })));
+      expect(sheets.length).toBe(1);
+      expect(sheet().component).toBe(SuggestionsSheetComponent);
+      expect(sheet().cssClass).toBe('bottom-sheet');
+      expect(sheet().breakpoints).toEqual([0, 0.75, 1]);
+      expect(praesentiert).toBe(1);
+      expect(alertCreate).not.toHaveBeenCalled();
     });
 
-    it('Bestätigen mit zwei von drei Vorschlägen: POST add-items nur mit diesen, danach stehen sie in der Liste (AC7)', async () => {
+    it('übergibt alle Vorschläge unverändert, Listenname, Gruppe, Liste und ein freies adding-Signal (AC 2)', async () => {
       await oeffnen(['Milch', 'Brot', 'Eier']);
 
-      bestaetigen(['Milch', 'Eier']);
-      const req = http.expectOne(addItemsUrl);
-      expect(req.request.body).toEqual({ groupId: 1, shoppingListId: 1, names: ['Milch', 'Eier'] });
-      req.flush([
-        { id: 14, name: 'Milch', completed: false, shoppingListId: 1, groupId: 1 },
-        { id: 15, name: 'Eier', completed: false, shoppingListId: 1, groupId: 1 },
-      ], { status: 201, statusText: 'Created' });
-
-      expect(itemIdsOfA()).toEqual([11, 12, 13, 14, 15]);
+      expect(props().suggestions).toEqual(vorschlaege(['Milch', 'Brot', 'Eier']));
+      expect(props().listName).toBe('Liste 1');
+      expect(props().groupId).toBe(1);
+      expect(props().listId).toBe(1);
+      expect(props().adding()).toBeFalse();
+      expect(props().inContext()).toBeTrue();
     });
 
-    it('Bestätigen ohne Auswahl: kein Request', async () => {
-      await oeffnen(['Milch']);
-
-      bestaetigen([]);
-
-      http.expectNone(addItemsUrl);
-      expect(service.addItemsToShoppingList).not.toHaveBeenCalled();
-    });
-
-    it('Standardvorschläge: Hinweis im Dialog', async () => {
+    it('Standardvorschläge: Kennzeichen wird an das Sheet weitergegeben', async () => {
       await oeffnen(['Milch', 'Tomaten'], true);
 
-      expect(dialog().message).toBe('alerts.shoppinglist.suggestions.defaults_hint');
-      expect(dialog().inputs!.length).toBe(2);
+      expect(props().suggestions.defaultSuggestions).toBeTrue();
     });
 
-    it('keine Vorschläge: Hinweis und nur der Schließen-Button', async () => {
+    it('keine Vorschläge: Sheet öffnet mit leerer Liste (Leerzustand im Sheet)', async () => {
       await oeffnen([]);
 
-      expect(dialog().message).toBe('alerts.shoppinglist.suggestions.empty');
-      expect(dialog().inputs).toEqual([]);
-      expect((dialog().buttons as AlertButton[]).map(button => button.role)).toEqual(['cancel']);
+      expect(praesentiert).toBe(1);
+      expect(props().suggestions.names).toEqual([]);
     });
 
-    it('Fehler beim Laden: Toast, kein Dialog', async () => {
-      await page.onShowSuggestions(listA());
+    describe('Ladeanzeige im Chip statt Overlay', () => {
+      const chip = () => (fixture.nativeElement as HTMLElement).querySelector('.suggestions-chip') as HTMLIonChipElement;
+
+      beforeEach(() => {
+        page.toggleLists = { 1: true };
+        fixture.detectChanges();
+      });
+
+      it('während des GET: Spinner statt Icon, Chip gesperrt, kein Lade-Overlay', () => {
+        page.onShowSuggestions(listA());
+        fixture.detectChanges();
+
+        expect(page.loadingSuggestions().has(1)).toBeTrue();
+        expect(chip().disabled).toBeTrue();
+        expect(chip().getAttribute('aria-busy')).toBe('true');
+        expect(chip().querySelector('ion-spinner')).not.toBeNull();
+        expect(chip().querySelector('ion-icon')).toBeNull();
+        expect(loadingCreate).not.toHaveBeenCalled();
+        http.expectOne(suggestionsUrl).flush(vorschlaege(['Milch']));
+      });
+
+      it('nach dem Laden: Icon zurück, Chip wieder aktiv', async () => {
+        await oeffnen(['Milch']);
+        fixture.detectChanges();
+
+        expect(page.loadingSuggestions().size).toBe(0);
+        expect(chip().disabled).toBeFalse();
+        expect(chip().querySelector('ion-spinner')).toBeNull();
+        expect(chip().querySelector('ion-icon')).not.toBeNull();
+      });
+
+      it('nach einem Ladefehler: Chip wieder aktiv', async () => {
+        page.onShowSuggestions(listA());
+        http.expectOne(suggestionsUrl).flush('Server error', { status: 500, statusText: 'Server Error' });
+        await mikrotasks();
+        fixture.detectChanges();
+
+        expect(page.loadingSuggestions().size).toBe(0);
+        expect(chip().disabled).toBeFalse();
+      });
+
+      it('erneutes Tippen während des Ladens: nur ein GET, nur ein Sheet', async () => {
+        page.onShowSuggestions(listA());
+        page.onShowSuggestions(listA());
+        http.expectOne(suggestionsUrl).flush(vorschlaege(['Milch']));
+        await mikrotasks();
+
+        expect(sheets.length).toBe(1);
+      });
+
+      // Review F-002: der Ladezustand endet mit dem Wechsel, nicht erst mit der Antwort der alten Anfrage
+      it('Gruppenwechsel während des GET: Chip sofort wieder frei, schon vor der alten Antwort', async () => {
+        page.onShowSuggestions(listA());
+        const alt = http.expectOne(suggestionsUrl);
+
+        groupService.setActiveGroup(urlaub);
+        fixture.detectChanges();
+        http.expectOne(loadUrl(2)).flush([aShoppingList({ id: 1 })]);
+        groupService.setActiveGroup(wg);
+        fixture.detectChanges();
+        http.expectOne(loadUrl(1)).flush(loadedLists());
+        page.toggleLists = { 1: true };
+        fixture.detectChanges();
+
+        expect(page.loadingSuggestions().size).toBe(0);
+        expect(chip().disabled).toBeFalse();
+
+        // neue Anfrage möglich; die späte alte Antwort beendet deren Ladezustand nicht
+        page.onShowSuggestions(listA());
+        const neu = http.match(suggestionsUrl).find(req => req !== alt)!;
+        alt.flush(vorschlaege(['Milch']));
+        await mikrotasks();
+
+        expect(page.loadingSuggestions().has(1)).toBeTrue();
+        expect(sheets.length).toBe(0);
+
+        neu.flush(vorschlaege(['Brot']));
+        await mikrotasks();
+
+        expect(page.loadingSuggestions().size).toBe(0);
+        expect(sheets.length).toBe(1);
+        expect(props().suggestions.names).toEqual(['Brot']);
+      });
+
+      it('Logout und Login während des GET: Chip sofort wieder frei', () => {
+        page.onShowSuggestions(listA());
+        const alt = http.expectOne(suggestionsUrl);
+
+        session.next(null);
+        session.next(aLoggedInUser({ id: 7 }));
+        groupService.setActiveGroup(wg);
+        fixture.detectChanges();
+        http.expectOne(loadUrl(1)).flush(loadedLists());
+
+        expect(page.loadingSuggestions().size).toBe(0);
+        alt.flush(vorschlaege(['Milch']));
+      });
+    });
+
+    it('Fehler beim Laden: Toast, kein Sheet', async () => {
+      page.onShowSuggestions(listA());
       http.expectOne(suggestionsUrl).flush('Server error', { status: 500, statusText: 'Server Error' });
+      await mikrotasks();
 
       expect(alerts.showToast).toHaveBeenCalledOnceWith('alerts.shoppinglist.suggestions.error');
-      expect(dialoge).toEqual([]);
+      expect(modalCreate).not.toHaveBeenCalled();
     });
 
-    it('Gruppenwechsel während des GET: kein Dialog und kein Toast (F-002)', async () => {
-      await page.onShowSuggestions(listA());
+    it('Gruppenwechsel während des GET: kein Sheet und kein Toast (DIV-23 F-002)', async () => {
+      page.onShowSuggestions(listA());
       const req = http.expectOne(suggestionsUrl);
 
       groupService.setActiveGroup(urlaub);
       fixture.detectChanges();
       http.expectOne(loadUrl(2)).flush([aShoppingList({ id: 1 })]);
       req.flush(vorschlaege(['Milch']));
-      await Promise.resolve();
+      await mikrotasks();
 
-      expect(dialoge).toEqual([]);
+      expect(modalCreate).not.toHaveBeenCalled();
       expect(alerts.showToast).not.toHaveBeenCalled();
     });
 
-    it('Gruppenwechsel bei offenem Dialog: Bestätigen sendet nichts (F-002)', async () => {
+    it('Kontext weg, bevor create() fertig ist: Sheet wird entfernt statt gezeigt', async () => {
+      let erzeugt!: (el: HTMLIonModalElement) => void;
+      modalCreate.and.callFake((options: ModalOptions) => {
+        sheets.push(options);
+        return new Promise<HTMLIonModalElement>(resolve => erzeugt = resolve);
+      });
       await oeffnen(['Milch']);
 
       groupService.setActiveGroup(urlaub);
       fixture.detectChanges();
       http.expectOne(loadUrl(2)).flush([aShoppingList({ id: 1 })]);
-      bestaetigen(['Milch']);
+      erzeugt(modalEl());
+      await mikrotasks();
 
-      http.expectNone(addItemsUrl);
-      expect(service.addItemsToShoppingList).not.toHaveBeenCalled();
+      expect(praesentiert).toBe(0);
+      expect(entfernt).toBe(1);
     });
 
-    it('Logout und Login mit derselben Gruppe bei offenem Dialog: Bestätigen sendet nichts (F-002)', async () => {
-      await oeffnen(['Milch']);
+    // Bestehende Regressionstests (DIV-23 F-002), jetzt über den Kontext, den das Sheet erhält: ist er ungültig, sendet
+    // das Sheet beim Bestätigen nichts und schließt (Nachweis in suggestions-sheet.component.spec.ts).
+    describe('Kontext bei geöffnetem Sheet', () => {
+      it('Gruppenwechsel: Kontext ungültig, auch nach dem Laden der neuen Gruppe', async () => {
+        await oeffnen(['Milch']);
 
-      session.next(null);
-      session.next(aLoggedInUser({ id: 7 }));
-      groupService.setActiveGroup(wg);
-      fixture.detectChanges();
-      http.expectOne(loadUrl(1)).flush(loadedLists());
-      bestaetigen(['Milch']);
+        groupService.setActiveGroup(urlaub);
+        fixture.detectChanges();
+        http.expectOne(loadUrl(2)).flush([aShoppingList({ id: 1 })]);
 
-      http.expectNone(addItemsUrl);
-      expect(service.addItemsToShoppingList).not.toHaveBeenCalled();
-    });
+        expect(props().inContext()).toBeFalse();
+        http.expectNone(addItemsUrl);
+      });
 
-    it('Liste inzwischen gelöscht (delete-list) bei offenem Dialog: Bestätigen sendet nichts (F-002)', async () => {
-      await oeffnen(['Milch']);
+      it('Logout und Login mit derselben Gruppe: Kontext ungültig', async () => {
+        await oeffnen(['Milch']);
 
-      event('delete-list', { id: 1, name: 'Liste 1', groupId: 1 });
-      bestaetigen(['Milch']);
+        session.next(null);
+        session.next(aLoggedInUser({ id: 7 }));
+        groupService.setActiveGroup(wg);
+        fixture.detectChanges();
+        http.expectOne(loadUrl(1)).flush(loadedLists());
 
-      http.expectNone(addItemsUrl);
-      expect(service.addItemsToShoppingList).not.toHaveBeenCalled();
+        expect(props().inContext()).toBeFalse();
+        http.expectNone(addItemsUrl);
+      });
+
+      it('Liste inzwischen gelöscht (delete-list): Kontext ungültig', async () => {
+        await oeffnen(['Milch']);
+
+        event('delete-list', { id: 1, name: 'Liste 1', groupId: 1 });
+
+        expect(props().inContext()).toBeFalse();
+        http.expectNone(addItemsUrl);
+      });
     });
   });
 

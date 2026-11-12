@@ -113,8 +113,12 @@
                   [attr.aria-label]="'domains.shoppinglists.more_actions' | translate">
                   <ion-icon name="ellipsis-horizontal" slot="icon-only"></ion-icon>
                 </ion-button>
-                <ion-chip (click)="onShowSuggestions(list)" color="success">
-                    <ion-icon name="sparkles-outline" size="small"></ion-icon>
+                <!-- Während des Ladens Spinner statt Icon und gesperrt (DIV-69, statt Lade-Overlay) -->
+                <ion-chip class="suggestions-chip" (click)="onShowSuggestions(list)" color="success"
+                  [disabled]="loadingSuggestions().has(list.id)" [attr.aria-busy]="loadingSuggestions().has(list.id)">
+                  <ion-spinner *ngIf="loadingSuggestions().has(list.id); else suggestionsIcon" name="crescent"
+                    [attr.aria-label]="'alerts.shoppinglist.suggestions.loading' | translate"></ion-spinner>
+                  <ng-template #suggestionsIcon><ion-icon name="sparkles-outline" size="small"></ion-icon></ng-template>
                   <ion-text><small>{{ 'domains.shoppinglists.suggestions' | translate }}</small></ion-text>
                 </ion-chip>
               </div>
