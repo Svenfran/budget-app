@@ -1,0 +1,123 @@
+// Nur Ionic-Theme-Variablen: Dark/Light folgt dem color-theme automatisch.
+// Modal, Header, Untertitel, Trennlinie und Aktionsbereich: gemeinsamer Basis-Style in src/theme/bottom-sheet.scss.
+// Hier nur, was es nur im Filter-Sheet gibt: Titelblock mit Schließen-Button, Abschnitte, Felder, Datums-Grid, Footer.
+
+// Unter ion-header geschachtelt: die globalen Basisregeln (`ion-modal.bottom-sheet .sheet-…`) sind sonst
+// spezifischer als die gekapselten Regeln dieser Komponente (wie im Vorschlags-Sheet, DIV-69).
+ion-header {
+  padding: 8px 20px 0;
+
+  .sheet-header {
+    align-items: flex-start;
+
+    .sheet-title {
+      flex: 1;
+      min-width: 0;
+    }
+
+    > ion-icon {
+      margin-top: 2px;
+    }
+
+    .btn-close {
+      flex-shrink: 0;
+      margin: -6px -12px 0 0;
+    }
+  }
+
+  .sheet-title .sheet-subtitle {
+    margin: 2px 0 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.filter-form {
+  padding-bottom: 8px;
+}
+
+.section-label {
+  margin: 12px 0 6px;
+  font-size: 0.85em;
+  font-weight: 600;
+  color: var(--ion-color-medium);
+}
+
+// Einheitliche Feldzeilen: abgesetzt vom Sheet-Hintergrund, abgerundet, Icon links
+.filter-field {
+  --background: var(--ion-color-step-50, var(--ion-color-light));
+  --border-radius: 10px;
+  --padding-start: 12px;
+  --inner-padding-end: 8px;
+  margin-bottom: 8px;
+
+  > ion-icon[slot='start'] {
+    margin-inline-end: 12px;
+    color: var(--ion-color-medium);
+  }
+
+  ion-select {
+    width: 100%;
+  }
+}
+
+// Nebeneinander, bei großer Schrift (zu wenig Platz für zwei Spalten) automatisch untereinander
+.date-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9em, 1fr));
+  column-gap: 8px;
+}
+
+.date-field ion-label {
+  margin: 10px 0;
+}
+
+.date-caption {
+  display: block;
+  font-size: 0.75em;
+  color: var(--ion-color-medium);
+}
+
+.date-value {
+  display: block;
+}
+
+.date-placeholder {
+  color: var(--ion-color-medium);
+}
+
+.date-range-error {
+  margin: 4px 0 0;
+  font-size: 0.9em;
+  color: var(--ion-color-danger);
+}
+
+// Footer bleibt bei jedem Breakpoint sichtbar (expandToScroll: false); Safe-Area kommt aus .sheet-actions.
+// Buttons nebeneinander, bei Platzmangel (große Schrift) untereinander.
+ion-footer .sheet-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 0;
+  padding: 8px 20px calc(8px + var(--ion-safe-area-bottom, 0px));
+
+  ion-button {
+    margin: 0;
+    white-space: normal;
+  }
+
+  .btn-reset {
+    flex: 1 1 8em;
+  }
+
+  .btn-apply {
+    flex: 2 1 12em;
+  }
+}
+
+// Der Inline-Picker liegt im DOM innerhalb des Sheets; die Sheet-Regel `ion-modal.bottom-sheet ion-content`
+// (deckender Hintergrund, kein Abstand oben) würde sonst auch ihn treffen. Zurück auf den Dialog-Look aller
+// Datums-Picker aus global.scss (`ion-modal ion-content`). Gekapselt spezifischer als die globale Sheet-Regel.
+ion-modal.filter-date-picker ion-content {
+  --background: transparent;
+  --padding-top: 20vh;
+}
