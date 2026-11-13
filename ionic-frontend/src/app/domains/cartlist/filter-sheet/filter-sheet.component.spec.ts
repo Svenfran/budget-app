@@ -359,4 +359,18 @@ describe('FilterSheetComponent (DIV-71)', () => {
     expect((selects[1] as HTMLIonSelectElement).multiple).toBeTrue();
     expect(options(1)).toEqual(['Sven', 'Anna']);
   });
+
+  // Gerätetest 200 %: das schwebende Label von ion-select wurde abgeschnitten → Platzhalter + aria-label
+  it('Kategorie und Ersteller: Platzhalter und Screenreader-Label statt schwebendem Label', () => {
+    render();
+
+    const [kategorie, ersteller] = Array.from(el().querySelectorAll('ion-select')) as HTMLIonSelectElement[];
+
+    expect(kategorie.placeholder).toBe(key('placeholder_category'));
+    expect(kategorie.getAttribute('aria-label')).toBe(key('placeholder_category'));
+    expect(kategorie.label).toBeUndefined();
+    expect(ersteller.placeholder).toBe(key('placeholder_cart_owner'));
+    expect(ersteller.getAttribute('aria-label')).toBe(key('placeholder_cart_owner'));
+    expect(ersteller.label).toBeUndefined();
+  });
 });

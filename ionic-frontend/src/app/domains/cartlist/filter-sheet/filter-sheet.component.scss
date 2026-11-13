@@ -4,10 +4,18 @@
 
 // Inhaltshohes Sheet (`bottom-sheet-auto`, wie der Export-Dialog): höchstens 90 % der Höhe; Kopf und Footer fest,
 // nur der Mittelteil scrollt (min-height: 0, damit er im Flex-Layout schrumpfen kann).
+//
+// Tastatur (AC 10): `--keyboard-offset` setzt AppComponent.initKeyboardOffset() auf den von der Tastatur verdeckten
+// Teil der WebView – 0, wenn das System die WebView selbst verkleinert, sonst die Tastaturhöhe (gemessen, typisch
+// Edge-to-Edge ab Android 15). Der Abstand unten hebt Felder und Footer über die Tastatur (das Sheet ist unten
+// angedockt und wächst nach oben, der Bereich unter der Tastatur bleibt leer); die Höchsthöhe zieht ihn ab, damit der
+// Kopf oben nicht aus dem Bild rutscht. Übergang etwa so lang wie die Tastatur-Animation (wie bei den Alerts).
 .filter-sheet {
   display: flex;
   flex-direction: column;
-  max-height: 90vh;
+  max-height: calc(90vh - var(--keyboard-offset, 0px));
+  margin-bottom: var(--keyboard-offset, 0px);
+  transition: margin-bottom 250ms ease-out, max-height 250ms ease-out;
 }
 
 .sheet-body {
@@ -109,16 +117,16 @@
 
 // Footer außerhalb des scrollenden Mittelteils, daher immer sichtbar; Abstand zur Safe-Area unten.
 // Klare Hierarchie: „Reset“ als schlichter Text-Button links, „Filter anwenden“ als einzige gefüllte Aktion rechts.
-// Bei großer Schrift bricht die Beschriftung im Button um (white-space: normal), die Anordnung bleibt.
+// Mindestbreiten in em wachsen mit der Schrift: passen beide nicht mehr in eine Zeile (z. B. 200 %), stehen sie in
+// voller Breite untereinander, „Filter anwenden“ oben (wrap-reverse) und „Reset“ darunter – wie im Export-Dialog.
 .sheet-footer {
   flex: none;
 }
 
 .sheet-footer .sheet-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: wrap-reverse;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   margin-top: 0;
   padding: 8px 20px calc(8px + var(--ion-safe-area-bottom, 0px));
@@ -129,15 +137,11 @@
   }
 
   .btn-reset {
-    flex: none;
-    // Text an der Kante der Felder ausrichten (Innenabstand des Text-Buttons ausgleichen)
-    margin-inline-start: -8px;
+    flex: 1 1 6em;
   }
 
   .btn-apply {
-    flex: 1 1 auto;
-    max-width: 65%;
-    margin-inline-start: auto;
+    flex: 2 1 12em;
   }
 }
 
@@ -147,4 +151,12 @@
 ion-modal.filter-date-picker ion-content {
   --background: transparent;
   --padding-top: 20vh;
+}
+
+// Picker-Buttons (Reset, Abbrechen, Speichern): ion-datetime richtet sie rechtsbündig ohne Umbruch aus, bei großer
+// Schrift ragte der erste Button links aus dem Bild. Hier dürfen sie umbrechen und bleiben rechtsbündig.
+ion-modal.filter-date-picker ion-datetime ion-buttons {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 100%;
 }

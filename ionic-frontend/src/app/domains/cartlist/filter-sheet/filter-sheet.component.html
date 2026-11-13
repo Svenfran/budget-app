@@ -36,18 +36,22 @@
       <div class="sheet-divider"></div>
 
       <p class="section-label">{{ 'domains.spendings.overlay.filter.section_assignment' | translate }}</p>
+    <!-- Platzhalter statt schwebendem Label: ion-select schneidet das schwebende Label bei großer Schrift ab
+         (feste Mindesthöhe, overflow: hidden). Icon und Abschnittstitel geben bei gewählten Werten den Kontext. -->
       <ion-item lines="none" class="filter-field">
         <ion-icon name="pricetag-outline" slot="start" aria-hidden="true"></ion-icon>
-        <ion-select formControlName="categories" class="select-category" [multiple]="true" labelPlacement="floating"
-                    [label]="'domains.spendings.overlay.filter.placeholder_category' | translate"
+        <ion-select formControlName="categories" class="select-category" [multiple]="true"
+                    [placeholder]="'domains.spendings.overlay.filter.placeholder_category' | translate"
+                    [attr.aria-label]="'domains.spendings.overlay.filter.placeholder_category' | translate"
                     [interfaceOptions]="{ header: ('domains.spendings.overlay.filter.placeholder_category' | translate) }">
           <ion-select-option *ngFor="let category of categoryList()" [value]="category.name">{{ category.name }}</ion-select-option>
         </ion-select>
       </ion-item>
       <ion-item lines="none" class="filter-field">
         <ion-icon name="person-outline" slot="start" aria-hidden="true"></ion-icon>
-        <ion-select formControlName="members" class="select-member" [multiple]="true" labelPlacement="floating"
-                    [label]="'domains.spendings.overlay.filter.placeholder_cart_owner' | translate"
+        <ion-select formControlName="members" class="select-member" [multiple]="true"
+                    [placeholder]="'domains.spendings.overlay.filter.placeholder_cart_owner' | translate"
+                    [attr.aria-label]="'domains.spendings.overlay.filter.placeholder_cart_owner' | translate"
                     [interfaceOptions]="{ header: ('domains.spendings.overlay.filter.placeholder_cart_owner' | translate) }">
           <ion-select-option *ngFor="let member of members()" [value]="member.userName">{{ member.userName }}</ion-select-option>
         </ion-select>
