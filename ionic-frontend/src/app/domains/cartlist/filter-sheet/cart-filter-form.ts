@@ -70,6 +70,18 @@ export function toIsoDay(date: Date): string {
   return `${date.getFullYear()}-${month}-${day}`;
 }
 
+/**
+ * Kalendertag eines Kaufdatums für den Zeitraumfilter, so wie die Liste ihn anzeigt (date-Pipe): ein reines Datum
+ * `YYYY-MM-DD` (Backend, DATE-Spalte) unverändert – `new Date(...)` läse es als Mitternacht UTC und verschöbe es westlich
+ * von UTC auf den Vortag –, alles andere (Zeitstempel, `Date`) als lokaler Kalendertag.
+ */
+export function purchaseDayOf(datePurchased: Date | string): string {
+  if (typeof datePurchased === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(datePurchased)) {
+    return datePurchased;
+  }
+  return toIsoDay(new Date(datePurchased));
+}
+
 function fromIsoDay(isoDay: string): Date {
   const [year, month, day] = isoDay.split('-').map(part => parseInt(part, 10));
   return new Date(year, month - 1, day);

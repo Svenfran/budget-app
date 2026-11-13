@@ -254,8 +254,8 @@ describe('CartlistPage – Filter (Bestand)', () => {
     expect(titles()).toEqual(['Kino', 'EDEKA Markt']);
   });
 
-  // Format aus dem Backend (DATE-Spalte, JSON ohne Uhrzeit → Mitternacht UTC). Annahme wie bei der Anzeige
-  // (date-Pipe): Zeitzone des Geräts UTC oder östlich davon, sonst wäre schon der angezeigte Tag ein anderer.
+  // Format aus dem Backend (DATE-Spalte, JSON ohne Uhrzeit): zählt wie in der Anzeige (date-Pipe) zu genau diesem
+  // Tag, unabhängig von der Zeitzone (Codex-Review F-001).
   it('Datum von/bis: Kaufdatum im Backend-Format „yyyy-MM-dd“ zählt zu diesem Tag', () => {
     const backendCart = aCart({ title: 'Backend', amount: 5, userDto: sven, categoryDto: lebensmittel,
       datePurchased: '2025-06-20' as unknown as Date });
