@@ -233,13 +233,37 @@ describe('CartlistPage – Filter (Bestand)', () => {
     expect(sum()).toBe(47.5);
   });
 
-  // Bestehende Semantik (nicht Teil von DIV-71): „bis“ ist lokale Mitternacht, spätere Uhrzeiten am selben Tag fallen heraus
-  it('Datum bis: bis einschließlich lokaler Mitternacht des Tages', () => {
+  // Regression (DIV-71, Fix): früher war „bis“ lokale Mitternacht, spätere Uhrzeiten am Enddatum fielen heraus
+  it('Datum bis: einschließlich des ganzen Tages, auch spätere Uhrzeiten', () => {
     page.filterCarts({ endDate: new Date(2025, 5, 20) });
 
-    expect(titles()).toEqual(['Edeka', 'Rossmann', 'Kino']);
-    expect(count()).toBe(3);
-    expect(sum()).toBe(75.5);
+    expect(titles()).toEqual(['Edeka', 'Rossmann', 'Kino', 'EDEKA Markt']);
+    expect(count()).toBe(4);
+    expect(sum()).toBe(87.5);
+  });
+
+  it('Datum bis: schließt den Folgetag aus', () => {
+    page.filterCarts({ endDate: new Date(2025, 5, 19) });
+
+    expect(titles()).toEqual(['Edeka', 'Rossmann']);
+  });
+
+  it('Datum von = bis: genau die Carts dieses Tages', () => {
+    page.filterCarts({ startDate: new Date(2025, 5, 20), endDate: new Date(2025, 5, 20) });
+
+    expect(titles()).toEqual(['Kino', 'EDEKA Markt']);
+  });
+
+  // Format aus dem Backend (DATE-Spalte, JSON ohne Uhrzeit → Mitternacht UTC). Annahme wie bei der Anzeige
+  // (date-Pipe): Zeitzone des Geräts UTC oder östlich davon, sonst wäre schon der angezeigte Tag ein anderer.
+  it('Datum von/bis: Kaufdatum im Backend-Format „yyyy-MM-dd“ zählt zu diesem Tag', () => {
+    const backendCart = aCart({ title: 'Backend', amount: 5, userDto: sven, categoryDto: lebensmittel,
+      datePurchased: '2025-06-20' as unknown as Date });
+    initCartList.set([...alle, backendCart]);
+
+    page.filterCarts({ startDate: new Date(2025, 5, 20), endDate: new Date(2025, 5, 20) });
+
+    expect(titles()).toEqual(['Kino', 'EDEKA Markt', 'Backend']);
   });
 
   it('kombiniert mehrere Kriterien mit UND (AC 4)', () => {

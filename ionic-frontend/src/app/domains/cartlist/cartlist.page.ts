@@ -16,6 +16,7 @@ import { CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
 import { exportDialogModalOptions } from './export-dialog/export-dialog-options';
 import { filterSheetModalOptions } from './filter-sheet/filter-sheet-options';
 import { FILTER_SHEET_APPLY_ROLE } from './filter-sheet/filter-sheet.component';
+import { toIsoDay } from './filter-sheet/cart-filter-form';
 
 @Component({
   selector: 'app-cartlist',
@@ -261,16 +262,22 @@ export class CartlistPage implements OnInit {
       return;
     }
 
+    // Zeitraum nach lokalem Kalendertag (wie die Anzeige per date-Pipe), beide Grenzen einschließlich. Ein Vergleich
+    // mit Uhrzeit schloss Carts am Enddatum aus: Das Backend liefert reine Daten (Mitternacht UTC = 01:00/02:00 Uhr in
+    // Deutschland), „bis“ war lokale Mitternacht.
+    const startDay = cartFilter.startDate ? toIsoDay(cartFilter.startDate) : null;
+    const endDay = cartFilter.endDate ? toIsoDay(cartFilter.endDate) : null;
+
     this.filterTerm.set('');
     this.cartList.set(this.initCartList());
-    this.cartList.update(carts => 
+    this.cartList.update(carts =>
       carts.filter(cart =>
         (cartFilter.title ? cart.title?.toLowerCase().includes(cartFilter.title.toLowerCase()) : true) &&
         (cartFilter.description ? cart.description?.toLowerCase().includes(cartFilter.description.toLowerCase()) : true) &&
         (cartFilter.category && cartFilter.category.length > 0 ? cartFilter.category.includes(cart.categoryDto.name) : true) &&
         (cartFilter.userName && cartFilter.userName.length > 0 ? cartFilter.userName.includes(cart.userDto.userName) : true) &&
-        (cartFilter.startDate ? new Date(cart.datePurchased) >= cartFilter.startDate : true) &&
-        (cartFilter.endDate ? new Date(cart.datePurchased) <= cartFilter.endDate : true)
+        (startDay ? toIsoDay(new Date(cart.datePurchased)) >= startDay : true) &&
+        (endDay ? toIsoDay(new Date(cart.datePurchased)) <= endDay : true)
     ))
 
     this.filterMode.set(true);
