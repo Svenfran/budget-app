@@ -144,17 +144,6 @@ export class FilterSheetComponent implements OnInit {
     this.openPicker.set(null);
   }
 
-  /**
-   * Tipp neben den Kalender: Die Picker-Modals sind (wie alle Datums-Picker der App, global.scss) vollflächig mit
-   * transparentem ion-content, der echte Backdrop ist dadurch nicht erreichbar. Ein Tipp auf die leere Content-Fläche
-   * selbst (nicht auf den Kalender darin) schließt daher wie „Abbrechen“; das Formular bleibt unverändert.
-   */
-  onPickerAreaClick(event: Event) {
-    if (event.target === event.currentTarget) {
-      this.closeDatePicker();
-    }
-  }
-
   /** Picker auf beliebigem Weg geschlossen (auch Backdrop/Hardware-Back): Zustand zurücksetzen, damit er wieder öffnet. */
   onPickerDismissed() {
     this.openPicker.set(null);

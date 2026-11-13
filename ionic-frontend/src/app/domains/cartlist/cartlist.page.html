@@ -47,7 +47,7 @@
     <div class="total">
       <ion-text>{{ (filterTerm() === "" ? 'domains.spendings.total' : (filterTerm().length > 10 ? (filterTerm() | slice:0:10) + '...' : (filterTerm()))) | translate  }} ({{ count() }})</ion-text>
         <ion-chip color="primary" *ngIf="filterMode()">
-          <ion-label (click)="openFilterSheet()">filter</ion-label>
+          <ion-label (click)="openFilterSheet()">{{ 'domains.spendings.filter' | translate }}</ion-label>
           <ion-icon name="close" (click)="deleteFilter()"></ion-icon>
         </ion-chip>
         <!-- <ion-chip [attr.color]="filterMode() ? 'primary' : 'medium'">

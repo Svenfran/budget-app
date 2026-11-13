@@ -152,11 +152,4 @@ ion-modal.filter-date-picker ion-content {
   --background: transparent;
   --padding-top: 20vh;
 }
-
-// Picker-Buttons (Reset, Abbrechen, Speichern): ion-datetime richtet sie rechtsbündig ohne Umbruch aus, bei großer
-// Schrift ragte der erste Button links aus dem Bild. Hier dürfen sie umbrechen und bleiben rechtsbündig.
-ion-modal.filter-date-picker ion-datetime ion-buttons {
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  max-width: 100%;
-}
+// Tipp neben den Kalender und Umbruch der Picker-Buttons: app-weit für alle `date-picker-modal` in global.scss.

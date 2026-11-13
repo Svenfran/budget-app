@@ -76,11 +76,10 @@
 
       <!-- Je Datumsfeld ein Inline-Picker. Sein Inhalt wird bei jedem Öffnen neu erzeugt und zeigt so immer den
            Formularwert, nie eine verworfene Auswahl. -->
-      <ion-modal *ngFor="let date of dateFields" class="filter-date-picker" [ngClass]="'picker-' + date.field"
+      <ion-modal *ngFor="let date of dateFields" class="filter-date-picker date-picker-modal" [ngClass]="'picker-' + date.field"
                  [isOpen]="openPicker() === date.field" (didDismiss)="onPickerDismissed()">
         <ng-template>
-          <!-- Die transparente Content-Fläche deckt den Backdrop ab: Tipp auf die leere Fläche schließt wie Abbrechen -->
-          <ion-content (click)="onPickerAreaClick($event)">
+          <ion-content>
             <ion-datetime #datetime
                           [locale]="currentLang()"
                           size="cover"

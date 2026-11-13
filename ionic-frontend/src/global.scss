@@ -86,6 +86,26 @@ ion-modal {
 // Bottom Sheets (Export DIV-68, Einkaufsvorschläge DIV-69): Ausnahme von der transparenten Overlay-Regel oben
 @import "./theme/bottom-sheet.scss";
 
+// Datums-Picker (ion-modal mit ion-datetime, Klasse `date-picker-modal`; DIV-71): Der transparente, vollflächige
+// Modal-Inhalt (Regel oben) liegt über dem Backdrop, ein Tipp neben den Kalender schloss deshalb nicht. Der Inhalt
+// lässt Tipps jetzt durch, nur der Kalender nimmt sie an: ein Tipp daneben trifft den Backdrop und schließt den Picker
+// ohne Übernahme (wie „Abbrechen“).
+ion-modal.date-picker-modal::part(content) {
+  pointer-events: none;
+}
+
+ion-modal.date-picker-modal ion-datetime {
+  pointer-events: auto;
+
+  // Eigene Buttons (Reset, Abbrechen, Speichern): ion-datetime richtet sie rechtsbündig ohne Umbruch aus, bei großer
+  // Schrift ragte der erste Button links aus dem Bild. Hier dürfen sie umbrechen und bleiben rechtsbündig.
+  ion-buttons {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: 100%;
+  }
+}
+
 .group-name {
   font-weight: 600;
 }
