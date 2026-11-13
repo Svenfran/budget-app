@@ -219,6 +219,10 @@
                 "header": "Datum nicht im Zeitraum der Mitgliedschaft",
                 "message_new_edit": "Du warst zu dem gewählten Zeitpunkt kein Mitglied der Gruppe. Bitte wähle ein anderes Datum.",
                 "message_settlementpayment": "Der Nutzer \"{{userName}}\" war zu dem gewählten Zeitpunkt kein Mitglied der Gruppe. Bitte wähle ein anderes Datum."
+            },
+            "settlement_failed": {
+                "header": "Ausgleichszahlung nicht gespeichert",
+                "message": "Die Ausgleichszahlung konnte nicht gespeichert werden. Deine Eingaben bleiben erhalten, bitte versuche es erneut."
             }
         },
         "forgot_password": {

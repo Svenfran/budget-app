@@ -5,7 +5,7 @@ import { Cart } from '../model/cart';
 import { Group } from 'src/app/model/group';
 import { INIT_VALUES } from 'src/app/constants/default-values';
 import { AlertService } from 'src/app/service/alert.service';
-import { SettlementPaymentDto } from 'src/app/settlement-payment/model/settlement-payment-dto';
+import { SettlementPaymentDto } from '../model/settlement-payment-dto';
 import { RECURRENCE_TYPE } from 'src/app/constants/recurrence-type';
 import { TranslateService } from '@ngx-translate/core';
 import { firstValueFrom } from 'rxjs';
@@ -221,34 +221,49 @@ export class CartService {
       })
   }
 
-  addSettlementPayment(payment: SettlementPaymentDto): void {
-    this.http
-      .post<Cart[]>(this.settlementPaymentUrl, payment)
-      .subscribe({
-        next: (result) => {
-          this.cartList.update(carts => {
-            const updatedCarts = [...carts, ...result];
-            return updatedCarts.sort((a, b) => new Date(b.datePurchased).getTime() - new Date(a.datePurchased).getTime());
-          });
-          
-          this.initCartList.update(carts => {
-            const updatedCarts = [...carts, ...result];
-            return updatedCarts.sort((a, b) => new Date(b.datePurchased).getTime() - new Date(a.datePurchased).getTime());
-          });
-          
-          this.triggerUpdate();
-        },
-        error: (err) => {
-          console.error("Error adding settlement payment:", err);
+  /**
+   * Ausgleichszahlung speichern (DIV-70). Der State ändert sich wie bisher nur nach Erfolg, synchron im `next`.
+   *
+   * @returns true nach Erfolg, false bei jedem Fehler (das Promise wird nie zurückgewiesen); das Sheet bleibt dann mit
+   * den Eingaben offen. Der Fehlerbody ist nicht immer Text (Netzwerkfehler, JSON, null), daher die Typprüfung.
+   */
+  addSettlementPayment(payment: SettlementPaymentDto): Promise<boolean> {
+    return new Promise(resolve => {
+      this.http
+        .post<Cart[]>(this.settlementPaymentUrl, payment)
+        .subscribe({
+          next: (result) => {
+            this.cartList.update(carts => {
+              const updatedCarts = [...carts, ...result];
+              return updatedCarts.sort((a, b) => new Date(b.datePurchased).getTime() - new Date(a.datePurchased).getTime());
+            });
 
-          if (err.error.includes('not within membership period')) {
-            this.alertService.showErrorAlert(
-              this.translate.instant("alerts.cart.invalid_membership.header"),
-              this.translate.instant("alerts.cart.invalid_membership.message_settlementpayment", { userName: payment.member.userName })
-            )
+            this.initCartList.update(carts => {
+              const updatedCarts = [...carts, ...result];
+              return updatedCarts.sort((a, b) => new Date(b.datePurchased).getTime() - new Date(a.datePurchased).getTime());
+            });
+
+            this.triggerUpdate();
+            resolve(true);
+          },
+          error: (err) => {
+            console.error("Error adding settlement payment:", err);
+
+            if (typeof err?.error === 'string' && err.error.includes('not within membership period')) {
+              this.alertService.showErrorAlert(
+                this.translate.instant("alerts.cart.invalid_membership.header"),
+                this.translate.instant("alerts.cart.invalid_membership.message_settlementpayment", { userName: payment.member.userName })
+              )
+            } else {
+              this.alertService.showErrorAlert(
+                this.translate.instant("alerts.cart.settlement_failed.header"),
+                this.translate.instant("alerts.cart.settlement_failed.message")
+              )
+            }
+            resolve(false);
           }
-        }
-      })
+        })
+    });
   }
 
   /**

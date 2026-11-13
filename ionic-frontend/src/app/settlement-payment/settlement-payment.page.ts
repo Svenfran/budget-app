@@ -5,7 +5,7 @@ import { AuthService } from '../auth/auth.service';
 import { GroupService } from '../service/group.service';
 import { User } from '../auth/user';
 import moment from 'moment';
-import { SettlementPaymentDto } from './model/settlement-payment-dto';
+import { SettlementPaymentDto } from '../domains/cartlist/model/settlement-payment-dto';
 import { LanguageService } from '../service/language.service';
 
 @Component({

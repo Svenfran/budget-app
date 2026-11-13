@@ -219,6 +219,10 @@
                 "header": "Date not in the period of membership",
                 "message_new_edit": "You were not a member of the group at the time selected. Please choose another date.",
                 "message_settlementpayment": "The user \"{{userName}}\" was not a member of the group at the time selected. Please choose another date."
+            },
+            "settlement_failed": {
+                "header": "Repayment not saved",
+                "message": "The repayment could not be saved. Your entries have been kept, please try again."
             }
         },
         "forgot_password": {
