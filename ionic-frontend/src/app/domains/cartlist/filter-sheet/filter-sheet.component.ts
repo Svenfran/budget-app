@@ -20,7 +20,7 @@ export type DatePickerRef = Pick<IonDatetime, 'confirm' | 'value'>;
 /**
  * Ausgabenfilter als Bottom Sheet (DIV-71, ersetzt FilterModalPage). Das Formular ist der Bearbeitungszustand und
  * startet als Kopie des angewendeten Filters; übernommen wird nur über „Filter anwenden“ (Rolle `apply`). „Reset“ leert
- * nur die Felder, X/Wischen/Backdrop/Hardware-Back schließen ohne Übernahme.
+ * nur die Felder, X/Backdrop/Hardware-Back schließen ohne Übernahme.
  *
  * Datumsauswahl: je Feld ein Inline-Modal mit ion-datetime. Mit eigenen Buttons übernimmt ion-datetime einen
  * angeklickten Tag erst per `confirm()` in `value`, daher bestätigt „Speichern“ zuerst und liest danach. Ionic setzt
@@ -142,6 +142,17 @@ export class FilterSheetComponent implements OnInit {
   /** „Abbrechen“ im Picker: Formular unverändert. */
   closeDatePicker() {
     this.openPicker.set(null);
+  }
+
+  /**
+   * Tipp neben den Kalender: Die Picker-Modals sind (wie alle Datums-Picker der App, global.scss) vollflächig mit
+   * transparentem ion-content, der echte Backdrop ist dadurch nicht erreichbar. Ein Tipp auf die leere Content-Fläche
+   * selbst (nicht auf den Kalender darin) schließt daher wie „Abbrechen“; das Formular bleibt unverändert.
+   */
+  onPickerAreaClick(event: Event) {
+    if (event.target === event.currentTarget) {
+      this.closeDatePicker();
+    }
   }
 
   /** Picker auf beliebigem Weg geschlossen (auch Backdrop/Hardware-Back): Zustand zurücksetzen, damit er wieder öffnet. */

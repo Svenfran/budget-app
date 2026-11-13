@@ -13,18 +13,17 @@ describe('filterSheetModalOptions (DIV-71)', () => {
     expect(options.componentProps?.['cartFilter']).toBe(filter);
   });
 
-  // FA1/Leitplanke: nur die Felder scrollen, der Footer mit den Aktionen bleibt bei jedem Breakpoint sichtbar
-  it('Bottom Sheet mit Breakpoints, Griff und festem Footer im gemeinsamen Basis-Style', () => {
+  // Ruhiges Sheet beim Bedienen: inhaltshoch wie der Export-Dialog, ohne Breakpoints und Griff (kein Mitziehen)
+  it('inhaltshohes Bottom Sheet ohne Breakpoints und Griff im gemeinsamen Basis-Style', () => {
     const options = filterSheetModalOptions(filter);
 
-    expect(options.breakpoints).toEqual([0, 0.75, 1]);
-    expect(options.initialBreakpoint).toBe(0.75);
-    expect(options.expandToScroll).toBeFalse();
-    expect(options.handle).toBeTrue();
-    expect(options.cssClass).toEqual(['bottom-sheet', 'filter-sheet']);
+    expect(options.cssClass).toEqual(['bottom-sheet', 'bottom-sheet-auto', 'filter-sheet']);
+    expect(options.breakpoints).toBeUndefined();
+    expect(options.initialBreakpoint).toBeUndefined();
+    expect(options.handle).toBeUndefined();
   });
 
-  it('ohne Schließ-Sperre: Wischen, Backdrop und Hardware-Back schließen jederzeit (ohne Übernahme)', () => {
+  it('ohne Schließ-Sperre: Backdrop und Hardware-Back schließen jederzeit (ohne Übernahme)', () => {
     expect(filterSheetModalOptions(filter).canDismiss).toBeUndefined();
   });
 

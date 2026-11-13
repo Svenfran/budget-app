@@ -6,10 +6,11 @@ import { FilterSheetComponent } from './filter-sheet.component';
 let sheetSeq = 0;
 
 /**
- * Modal-Optionen des Ausgabenfilters (DIV-71): Ionic-Sheet mit Breakpoints (Start bei 75 %, ganz hoch oder wegwischen)
- * und Griff; `expandToScroll: false` lässt bei jedem Breakpoint nur die Felder scrollen und hält den Footer mit „Reset“
- * und „Filter anwenden“ sichtbar. Gemeinsamer Basis-Style `bottom-sheet` (src/theme/bottom-sheet.scss). Kein
- * `canDismiss`: das Sheet stellt keinen Request, Wegwischen/Backdrop/Hardware-Back schließen jederzeit ohne Übernahme.
+ * Modal-Optionen des Ausgabenfilters (DIV-71): unten angedockt und so hoch wie der Inhalt, ohne Breakpoints und Griff
+ * (inhaltshohe Variante `bottom-sheet-auto` aus src/theme/bottom-sheet.scss, wie der Export-Dialog DIV-68). Ein
+ * Breakpoint-Sheet zog beim Bedienen des Formulars mit (Wischen an Kopf, Footer oder Feldern); dieses Sheet bewegt
+ * sich nicht. Den festen Footer und den scrollenden Mittelteil baut die Komponente selbst. Kein `canDismiss`: das
+ * Sheet stellt keinen Request, Backdrop und Hardware-Back schließen jederzeit ohne Übernahme.
  * Eigene Modal-ID, mit der die Komponente gezielt sich selbst schließt (nicht ein darüberliegendes Picker-Modal oder
  * ein zweites, kurz danach geöffnetes Sheet).
  */
@@ -19,10 +20,6 @@ export function filterSheetModalOptions(cartFilter: CartFilter): ModalOptions {
     id,
     component: FilterSheetComponent,
     componentProps: { cartFilter, modalId: id },
-    breakpoints: [0, 0.75, 1],
-    initialBreakpoint: 0.75,
-    expandToScroll: false,
-    handle: true,
-    cssClass: ['bottom-sheet', 'filter-sheet'],
+    cssClass: ['bottom-sheet', 'bottom-sheet-auto', 'filter-sheet'],
   };
 }

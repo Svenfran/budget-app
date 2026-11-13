@@ -299,6 +299,29 @@ describe('FilterSheetComponent (DIV-71)', () => {
 
       expect(component.form.controls.startDate.value).toBe('2025-06-10');
     });
+
+    // Der vollflächige, transparente Picker-Content deckt den Backdrop ab: Tipp auf die leere Fläche schließt
+    it('Tipp auf die leere Fläche neben dem Kalender schließt den Picker ohne Änderung', () => {
+      component.form.patchValue({ startDate: '2025-06-10' });
+      component.openDatePicker('startDate');
+      const content = document.createElement('ion-content');
+
+      component.onPickerAreaClick({ target: content, currentTarget: content } as unknown as Event);
+
+      expect(component.openPicker()).toBeNull();
+      expect(component.form.controls.startDate.value).toBe('2025-06-10');
+    });
+
+    it('Tipp in den Kalender selbst lässt den Picker offen', () => {
+      component.openDatePicker('startDate');
+      const content = document.createElement('ion-content');
+      const kalender = document.createElement('ion-datetime');
+      content.appendChild(kalender);
+
+      component.onPickerAreaClick({ target: kalender, currentTarget: content } as unknown as Event);
+
+      expect(component.openPicker()).toBe('startDate');
+    });
   });
 
   it('Enter im Textfeld schließt nur die Tastatur und wendet nichts an (FA3)', () => {

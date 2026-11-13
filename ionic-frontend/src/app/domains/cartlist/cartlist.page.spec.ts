@@ -397,7 +397,7 @@ describe('CartlistPage – Filter-Sheet', () => {
     expect(modalCtrl.create).toHaveBeenCalledTimes(1);
     const options = modalCtrl.create.calls.mostRecent().args[0];
     expect(options.component).toBe(FilterSheetComponent);
-    expect(options.cssClass).toEqual(['bottom-sheet', 'filter-sheet']);
+    expect(options.cssClass).toEqual(['bottom-sheet', 'bottom-sheet-auto', 'filter-sheet']);
     const passed = options.componentProps?.['cartFilter'] as CartFilter;
     expect(passed).toEqual(jasmine.objectContaining({ category: ['Drogerie'] }));
     expect(passed).not.toBe(page.cartFilter);
@@ -418,7 +418,7 @@ describe('CartlistPage – Filter-Sheet', () => {
     expect(sum()).toBe(20);
   });
 
-  it('Abbrechen (X), Wischen oder Backdrop: angewendeter Filter, Liste, Anzahl und Summe unverändert (AC 7)', async () => {
+  it('Abbrechen (X), Backdrop oder Hardware-Back: angewendeter Filter, Liste, Anzahl und Summe unverändert (AC 7)', async () => {
     page.filterCarts({ category: ['Lebensmittel'] });
     page.cartFilter = { category: ['Lebensmittel'] };
 

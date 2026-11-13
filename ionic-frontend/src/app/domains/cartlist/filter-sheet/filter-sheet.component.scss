@@ -2,9 +2,25 @@
 // Modal, Header, Untertitel, Trennlinie und Aktionsbereich: gemeinsamer Basis-Style in src/theme/bottom-sheet.scss.
 // Hier nur, was es nur im Filter-Sheet gibt: Titelblock mit Schließen-Button, Abschnitte, Felder, Datums-Grid, Footer.
 
-// Unter ion-header geschachtelt: die globalen Basisregeln (`ion-modal.bottom-sheet .sheet-…`) sind sonst
+// Inhaltshohes Sheet (`bottom-sheet-auto`, wie der Export-Dialog): höchstens 90 % der Höhe; Kopf und Footer fest,
+// nur der Mittelteil scrollt (min-height: 0, damit er im Flex-Layout schrumpfen kann).
+.filter-sheet {
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+
+.sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 20px;
+}
+
+// Unter .sheet-top geschachtelt: die globalen Basisregeln (`ion-modal.bottom-sheet .sheet-…`) sind sonst
 // spezifischer als die gekapselten Regeln dieser Komponente (wie im Vorschlags-Sheet, DIV-69).
-ion-header {
+.sheet-top {
+  flex: none;
   padding: 8px 20px 0;
 
   .sheet-header {
@@ -91,11 +107,18 @@ ion-header {
   color: var(--ion-color-danger);
 }
 
-// Footer bleibt bei jedem Breakpoint sichtbar (expandToScroll: false); Safe-Area kommt aus .sheet-actions.
-// Buttons nebeneinander, bei Platzmangel (große Schrift) untereinander.
-ion-footer .sheet-actions {
+// Footer außerhalb des scrollenden Mittelteils, daher immer sichtbar; Abstand zur Safe-Area unten.
+// Klare Hierarchie: „Reset“ als schlichter Text-Button links, „Filter anwenden“ als einzige gefüllte Aktion rechts.
+// Bei großer Schrift bricht die Beschriftung im Button um (white-space: normal), die Anordnung bleibt.
+.sheet-footer {
+  flex: none;
+}
+
+.sheet-footer .sheet-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
   margin-top: 0;
   padding: 8px 20px calc(8px + var(--ion-safe-area-bottom, 0px));
@@ -106,11 +129,15 @@ ion-footer .sheet-actions {
   }
 
   .btn-reset {
-    flex: 1 1 8em;
+    flex: none;
+    // Text an der Kante der Felder ausrichten (Innenabstand des Text-Buttons ausgleichen)
+    margin-inline-start: -8px;
   }
 
   .btn-apply {
-    flex: 2 1 12em;
+    flex: 1 1 auto;
+    max-width: 65%;
+    margin-inline-start: auto;
   }
 }
 
