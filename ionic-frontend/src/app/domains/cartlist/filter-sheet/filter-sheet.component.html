@@ -1,0 +1,119 @@
+<!-- Header, Untertitel, Trennlinie und Aktionsbereich: gemeinsamer Basis-Style (src/theme/bottom-sheet.scss).
+     Inhaltshohes Sheet ohne Breakpoints (wie der Export-Dialog): Kopf und Footer fest, nur der Mittelteil scrollt. -->
+<div class="filter-sheet">
+  <div class="sheet-top">
+    <div class="sheet-header">
+      <ion-icon name="filter-outline" color="primary" aria-hidden="true"></ion-icon>
+      <div class="sheet-title">
+        <h2>{{ 'domains.spendings.overlay.filter.header' | translate }}</h2>
+        <p class="sheet-subtitle">{{ 'domains.spendings.overlay.filter.subtitle' | translate }}</p>
+      </div>
+      <ion-button fill="clear" color="medium" class="btn-close" (click)="close()"
+                  [attr.aria-label]="'domains.spendings.overlay.filter.btn_cancel' | translate">
+        <ion-icon name="close" slot="icon-only"></ion-icon>
+      </ion-button>
+    </div>
+  </div>
+
+  <!-- Kein <form>-Element: Enter darf nichts absenden (FA3), nur die Tastatur schließen. -->
+  <div class="sheet-body">
+    <div [formGroup]="form" class="filter-form">
+      <p class="section-label">{{ 'domains.spendings.overlay.filter.section_content' | translate }}</p>
+      <ion-item lines="none" class="filter-field">
+        <ion-icon name="text-outline" slot="start" aria-hidden="true"></ion-icon>
+        <ion-input formControlName="title" class="input-title" type="text" enterkeyhint="done" [clearInput]="true"
+                   labelPlacement="floating" [label]="'domains.spendings.overlay.filter.title' | translate"
+                   (keyup.enter)="blurInput($event)"></ion-input>
+      </ion-item>
+      <ion-item lines="none" class="filter-field">
+        <ion-icon name="document-text-outline" slot="start" aria-hidden="true"></ion-icon>
+        <ion-input formControlName="description" class="input-description" type="text" enterkeyhint="done"
+                   [clearInput]="true" labelPlacement="floating"
+                   [label]="'domains.spendings.overlay.filter.description' | translate"
+                   (keyup.enter)="blurInput($event)"></ion-input>
+      </ion-item>
+
+      <div class="sheet-divider"></div>
+
+      <p class="section-label">{{ 'domains.spendings.overlay.filter.section_assignment' | translate }}</p>
+    <!-- Platzhalter statt schwebendem Label: ion-select schneidet das schwebende Label bei großer Schrift ab
+         (feste Mindesthöhe, overflow: hidden). Icon und Abschnittstitel geben bei gewählten Werten den Kontext. -->
+      <ion-item lines="none" class="filter-field">
+        <ion-icon name="pricetag-outline" slot="start" aria-hidden="true"></ion-icon>
+        <ion-select formControlName="categories" class="select-category" [multiple]="true"
+                    [placeholder]="'domains.spendings.overlay.filter.placeholder_category' | translate"
+                    [attr.aria-label]="'domains.spendings.overlay.filter.placeholder_category' | translate"
+                    [interfaceOptions]="{ header: ('domains.spendings.overlay.filter.placeholder_category' | translate) }">
+          <ion-select-option *ngFor="let category of categoryList()" [value]="category.name">{{ category.name }}</ion-select-option>
+        </ion-select>
+      </ion-item>
+      <ion-item lines="none" class="filter-field">
+        <ion-icon name="person-outline" slot="start" aria-hidden="true"></ion-icon>
+        <ion-select formControlName="members" class="select-member" [multiple]="true"
+                    [placeholder]="'domains.spendings.overlay.filter.placeholder_cart_owner' | translate"
+                    [attr.aria-label]="'domains.spendings.overlay.filter.placeholder_cart_owner' | translate"
+                    [interfaceOptions]="{ header: ('domains.spendings.overlay.filter.placeholder_cart_owner' | translate) }">
+          <ion-select-option *ngFor="let member of members()" [value]="member.userName">{{ member.userName }}</ion-select-option>
+        </ion-select>
+      </ion-item>
+
+      <div class="sheet-divider"></div>
+
+      <p class="section-label">{{ 'domains.spendings.overlay.filter.section_period' | translate }}</p>
+      <div class="date-grid">
+        <ion-item *ngFor="let date of dateFields" lines="none" class="filter-field date-field"
+                  [ngClass]="'date-' + date.field" [button]="true" [detail]="false" (click)="openDatePicker(date.field)">
+          <ion-icon name="calendar-outline" slot="start" aria-hidden="true"></ion-icon>
+          <ion-label class="ion-text-wrap">
+            <ng-container *ngIf="displayDate(date.field) as shown; else placeholder">
+              <span class="date-caption">{{ date.labelKey | translate }}</span>
+              <span class="date-value">{{ shown }}</span>
+            </ng-container>
+            <ng-template #placeholder><span class="date-placeholder">{{ date.labelKey | translate }}</span></ng-template>
+          </ion-label>
+        </ion-item>
+      </div>
+
+      <!-- Je Datumsfeld ein Inline-Picker. Sein Inhalt wird bei jedem Öffnen neu erzeugt und zeigt so immer den
+           Formularwert, nie eine verworfene Auswahl. -->
+      <ion-modal *ngFor="let date of dateFields" class="filter-date-picker date-picker-modal" [ngClass]="'picker-' + date.field"
+                 [isOpen]="openPicker() === date.field" (didDismiss)="onPickerDismissed()">
+        <ng-template>
+          <ion-content>
+            <ion-datetime #datetime
+                          [locale]="currentLang()"
+                          size="cover"
+                          presentation="date"
+                          [firstDayOfWeek]="1"
+                          [preferWheel]="false"
+                          [value]="pickerValue(date.field)"
+                          [min]="minFor(date.field)"
+                          [max]="maxFor(date.field)">
+              <ion-buttons slot="buttons">
+                <ion-button color="primary" class="btn-picker-reset" (click)="clearDate(date.field)">{{ 'global.date_picker.btn_reset' | translate }}</ion-button>
+                <ion-button color="primary" class="btn-picker-cancel" (click)="closeDatePicker()">{{ 'global.date_picker.btn_cancel' | translate }}</ion-button>
+                <ion-button color="primary" class="btn-picker-ok" (click)="pickDate(date.field, datetime)">{{ 'global.date_picker.btn_ok' | translate }}</ion-button>
+              </ion-buttons>
+            </ion-datetime>
+          </ion-content>
+        </ng-template>
+      </ion-modal>
+
+      <p class="date-range-error" *ngIf="form.hasError('dateRange')" role="alert">
+        {{ 'domains.spendings.overlay.filter.error_date_range' | translate }}
+      </p>
+    </div>
+  </div>
+
+  <div class="sheet-footer">
+    <div class="sheet-actions">
+      <ion-button fill="clear" color="medium" class="btn-reset" (click)="reset()">
+        {{ 'domains.spendings.overlay.filter.btn_reset' | translate }}
+      </ion-button>
+      <ion-button class="btn-apply" (click)="apply()" [disabled]="form.invalid">
+        <ion-icon name="checkmark" slot="start"></ion-icon>
+        {{ 'domains.spendings.overlay.filter.btn_apply' | translate }}
+      </ion-button>
+    </div>
+  </div>
+</div>

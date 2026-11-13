@@ -67,12 +67,6 @@ export const routes: Routes = [
     canActivate: [AuthGuard]
   },
   {
-    path: 'filter-modal',
-    loadChildren: () => import('./filter-modal/filter-modal.module').then( m => m.FilterModalPageModule),
-    canLoad: [AuthGuard],
-    canActivate: [AuthGuard]
-  },
-  {
     path: 'userprofile',
     loadChildren: () => import('./userprofile/userprofile.module').then( m => m.UserprofilePageModule),
     canLoad: [AuthGuard],

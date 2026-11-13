@@ -10,11 +10,13 @@ import { OverviewService } from '../overview/service/overview.service';
 import { CategoryService } from 'src/app/service/category.service';
 import { SettlementPaymentPage } from 'src/app/settlement-payment/settlement-payment.page';
 import { INIT_VALUES } from 'src/app/constants/default-values';
-import { FilterModalPage } from 'src/app/filter-modal/filter-modal.page';
-import { CartFilter } from 'src/app/filter-modal/model/CartFilter';
+import { CartFilter } from './model/cart-filter';
 import { TranslateService } from '@ngx-translate/core';
 import { CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
 import { exportDialogModalOptions } from './export-dialog/export-dialog-options';
+import { filterSheetModalOptions } from './filter-sheet/filter-sheet-options';
+import { FILTER_SHEET_APPLY_ROLE } from './filter-sheet/filter-sheet.component';
+import { purchaseDayOf, toIsoDay } from './filter-sheet/cart-filter-form';
 
 @Component({
   selector: 'app-cartlist',
@@ -228,24 +230,29 @@ export class CartlistPage implements OnInit {
     return (await modal).present();
   }
 
-  async filterModal() {
-    const modal = this.modalCtrl.create({
-      component: FilterModalPage,
-      componentProps: { 
-        activeGroupId: this.activeGroup.id,
-        cartFilter: this.cartFilter
-      },
-      backdropDismiss: true
+  /**
+   * Menüpunkt „Filter“ und Filter-Chip: Filter als Bottom Sheet (DIV-71). Das Sheet bearbeitet eine Kopie des
+   * angewendeten Filters; übernommen wird nur bei „Filter anwenden“ und nur, wenn aktive Gruppe und Anmelde-Sitzung
+   * noch dieselben sind (sonst wurde die Liste inzwischen neu geladen und der Filter zurückgesetzt).
+   */
+  async openFilterSheet() {
+    const groupId = this.groupService.activeGroupId();
+    const sameSession = this.groupService.sessionGuard();
+    const draft: CartFilter = {
+      ...this.cartFilter,
+      category: this.cartFilter.category?.slice(),
+      userName: this.cartFilter.userName?.slice(),
+    };
+    const modal = await this.modalCtrl.create(filterSheetModalOptions(draft));
+
+    modal.onDidDismiss<CartFilter>().then(({ data, role }) => {
+      if (role !== FILTER_SHEET_APPLY_ROLE || !data) return;
+      if (this.groupService.activeGroupId() !== groupId || !sameSession()) return;
+      this.filterCarts(data);
+      this.cartFilter = data;
     });
 
-    (await modal).onDidDismiss().then((response) => {
-      if (response.data) {
-        this.filterCarts(response.data);
-        this.cartFilter = response.data;
-      }
-    });
-
-    return (await modal).present();
+    await modal.present();
   }
 
   filterCarts(cartFilter: CartFilter) {
@@ -255,16 +262,21 @@ export class CartlistPage implements OnInit {
       return;
     }
 
+    // Zeitraum nach Kalendertag, wie die Liste ihn anzeigt (purchaseDayOf), beide Grenzen einschließlich. Ein Vergleich
+    // mit Uhrzeit schloss Carts am Enddatum aus („bis“ war lokale Mitternacht).
+    const startDay = cartFilter.startDate ? toIsoDay(cartFilter.startDate) : null;
+    const endDay = cartFilter.endDate ? toIsoDay(cartFilter.endDate) : null;
+
     this.filterTerm.set('');
     this.cartList.set(this.initCartList());
-    this.cartList.update(carts => 
+    this.cartList.update(carts =>
       carts.filter(cart =>
         (cartFilter.title ? cart.title?.toLowerCase().includes(cartFilter.title.toLowerCase()) : true) &&
         (cartFilter.description ? cart.description?.toLowerCase().includes(cartFilter.description.toLowerCase()) : true) &&
         (cartFilter.category && cartFilter.category.length > 0 ? cartFilter.category.includes(cart.categoryDto.name) : true) &&
         (cartFilter.userName && cartFilter.userName.length > 0 ? cartFilter.userName.includes(cart.userDto.userName) : true) &&
-        (cartFilter.startDate ? new Date(cart.datePurchased) >= cartFilter.startDate : true) &&
-        (cartFilter.endDate ? new Date(cart.datePurchased) <= cartFilter.endDate : true)
+        (startDay ? purchaseDayOf(cart.datePurchased) >= startDay : true) &&
+        (endDay ? purchaseDayOf(cart.datePurchased) <= endDay : true)
     ))
 
     this.filterMode.set(true);
