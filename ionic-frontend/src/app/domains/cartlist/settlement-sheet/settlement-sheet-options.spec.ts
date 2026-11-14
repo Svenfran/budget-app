@@ -89,6 +89,27 @@ describe('settlementSheetModalOptions (DIV-70)', () => {
       expect(shared.dismiss).toHaveBeenCalledOnceWith(options.id!);
     });
 
+    // Codex-Implementierungsreview 2, F-001: Die Verwerfen-Freigabe gilt nur, wenn das Sheet wirklich geschlossen wurde.
+    [
+      { name: 'liefert false', dismiss: () => Promise.resolve(false) },
+      { name: 'wird zurückgewiesen', dismiss: () => Promise.reject(new Error('overlay does not exist')) },
+    ].forEach(c => {
+      it(`„Verwerfen“, aber Schließen ${c.name}: der nächste Schließversuch fragt wieder`, async () => {
+        spyOn(console, 'error');
+        const shared = state({ dirty: signal(true), dismiss: jasmine.createSpy('dismiss').and.callFake(c.dismiss) });
+        const canDismiss = canDismissOf(shared);
+
+        expect(await canDismiss(undefined, 'cancel')).toBeFalse();
+        await settle();
+        expect(shared.dismiss).toHaveBeenCalledTimes(1);
+
+        confirmDiscard.and.resolveTo(false);
+        expect(await canDismiss(undefined, 'cancel')).toBeFalse();
+        await settle();
+        expect(confirmDiscard).toHaveBeenCalledTimes(2);
+      });
+    });
+
     it('geänderte Eingaben + „Weiter bearbeiten“: bleibt offen; ein späterer Versuch fragt erneut (E1)', async () => {
       confirmDiscard.and.resolveTo(false);
       const shared = state({ dirty: signal(true) });

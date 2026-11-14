@@ -51,10 +51,16 @@ export function settlementSheetModalOptions(state: SettlementSheetState): ModalO
       if (role === SETTLEMENT_SHEET_SAVED_ROLE || discarded || !state.dirty()) return true;
       if (!confirming) {
         confirming = state.confirmDiscard()
-          .then(discard => {
+          .then(async discard => {
             if (!discard) return;
             discarded = true;
-            return state.dismiss(id).then(() => undefined);
+            try {
+              // Freigabe nur, wenn das Sheet wirklich geschlossen wurde (Codex-Implementierungsreview 2, F-001)
+              if (!(await state.dismiss(id))) discarded = false;
+            } catch (err) {
+              discarded = false;
+              throw err;
+            }
           })
           .catch(err => console.error('Error discarding settlement sheet:', err))
           .finally(() => confirming = null);
