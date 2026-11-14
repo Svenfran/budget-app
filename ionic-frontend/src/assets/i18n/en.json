@@ -106,7 +106,13 @@
                     "to_member": "To member*",
                     "date": "Date*",
                     "btn_cancel": "Cancel",
-                    "no_members": "No members available"
+                    "no_members": "No members available",
+                    "discard": {
+                        "header": "Discard entries?",
+                        "message": "Your repayment entries will be lost.",
+                        "btn_discard": "Discard",
+                        "btn_continue": "Keep editing"
+                    }
                 },
                 "filter": {
                     "header": "Filter",

@@ -218,12 +218,40 @@ export class CartlistPage implements OnInit {
 
   /**
    * Menüpunkt „Ausgleichszahlung“: Bottom Sheet (DIV-70). Das Sheet speichert selbst über CartService und schließt
-   * erst nach Erfolg; `saving` sperrt das Schließen, solange der Request läuft.
+   * erst nach Erfolg; `saving` sperrt das Schließen, solange der Request läuft. Bei geänderten Eingaben (`dirty`) fragt
+   * das Schließen über X, Backdrop oder Hardware-Back vorher nach (confirmDiscard).
    */
   async openSettlementSheet() {
     const saving = signal(false);
-    const modal = await this.modalCtrl.create(settlementSheetModalOptions({ saving }));
+    const dirty = signal(false);
+    const modal = await this.modalCtrl.create(
+      settlementSheetModalOptions({ saving, dirty, confirmDiscard: () => this.confirmDiscard() }));
     await modal.present();
+  }
+
+  /** Laufende Rückfrage „Eingaben verwerfen?“; gleichzeitige Auslöser (z. B. Doppel-Tipp) teilen sich einen Alert. */
+  private discardConfirmation: Promise<boolean> | null = null;
+
+  /** Rückfrage vor dem Verwerfen der Ausgleichszahlung: true nur bei „Verwerfen“. */
+  confirmDiscard(): Promise<boolean> {
+    if (!this.discardConfirmation) {
+      this.discardConfirmation = this.askDiscard().finally(() => this.discardConfirmation = null);
+    }
+    return this.discardConfirmation;
+  }
+
+  private async askDiscard(): Promise<boolean> {
+    const alert = await this.alertCtrl.create({
+      header: this.translate.instant('domains.spendings.overlay.settlementpayment.discard.header'),
+      message: this.translate.instant('domains.spendings.overlay.settlementpayment.discard.message'),
+      buttons: [
+        { text: this.translate.instant('domains.spendings.overlay.settlementpayment.discard.btn_continue'), role: 'cancel' },
+        { text: this.translate.instant('domains.spendings.overlay.settlementpayment.discard.btn_discard'), role: 'destructive' },
+      ],
+    });
+    await alert.present();
+    const { role } = await alert.onDidDismiss();
+    return role === 'destructive';
   }
 
   /**

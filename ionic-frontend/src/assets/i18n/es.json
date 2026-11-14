@@ -106,7 +106,13 @@
                     "to_member": "Al miembro*",
                     "date": "Fecha*",
                     "btn_cancel": "Cancelar",
-                    "no_members": "No hay miembros disponibles"
+                    "no_members": "No hay miembros disponibles",
+                    "discard": {
+                        "header": "¿Descartar los datos?",
+                        "message": "Se perderán los datos del repago.",
+                        "btn_discard": "Descartar",
+                        "btn_continue": "Seguir editando"
+                    }
                 },
                 "filter": {
                     "header": "Filtro",

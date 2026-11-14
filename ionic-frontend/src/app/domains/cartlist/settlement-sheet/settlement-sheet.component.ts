@@ -1,4 +1,5 @@
-import { Component, computed, Input, OnInit, signal, WritableSignal } from '@angular/core';
+import { Component, computed, DestroyRef, Input, OnInit, signal, WritableSignal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, Validators } from '@angular/forms';
 import { IonDatetime, ModalController } from '@ionic/angular';
 import { take } from 'rxjs';
@@ -38,6 +39,8 @@ export class SettlementSheetComponent implements OnInit {
   /** ID des eigenen Modals (settlementSheetModalOptions): Schließen trifft nur dieses Sheet. */
   @Input() modalId!: string;
   @Input() saving!: WritableSignal<boolean>;
+  /** Eingaben geändert: die Schließ-Sperre fragt dann vor dem Verwerfen nach (settlementSheetModalOptions). */
+  @Input() dirty!: WritableSignal<boolean>;
 
   readonly group = this.groupService.activeGroup();
   readonly currentLang = this.langService.currentLang;
@@ -62,13 +65,22 @@ export class SettlementSheetComponent implements OnInit {
     private groupService: GroupService,
     private cartService: CartService,
     private authService: AuthService,
-    private langService: LanguageService
+    private langService: LanguageService,
+    private destroyRef: DestroyRef
   ) {}
 
   ngOnInit() {
     this.authService.user.pipe(take(1)).subscribe(user => this.userId.set(user?.id));
     this.groupService.getGroupMembers(this.group.id);
     this.groupService.getGroupMembershipHistoryForGroupAndUser(this.group);
+
+    // Über form.events statt valueChanges: das Datum wird per setValue() und danach markAsDirty() gesetzt; beim
+    // Wert-Event ist das Formular noch pristine, erst das Pristine-Event zeigt die Änderung (Codex-Review 1, F-001).
+    // Startwerte (Datum heute) sind vorher gesetzt und machen das Formular nicht dirty.
+    this.dirty.set(this.form.dirty);
+    this.form.events
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.dirty.set(this.form.dirty));
   }
 
   get amount() { return this.form.controls.amount; }

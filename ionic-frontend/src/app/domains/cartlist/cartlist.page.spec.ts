@@ -1,6 +1,6 @@
 import { computed, signal, WritableSignal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { IonicModule, ModalController } from '@ionic/angular';
+import { AlertController, IonicModule, ModalController } from '@ionic/angular';
 import { BehaviorSubject } from 'rxjs';
 import { AuthService } from 'src/app/auth/auth.service';
 import { User } from 'src/app/auth/user';
@@ -140,8 +140,16 @@ describe('CartlistPage – Ausgleichszahlung', () => {
   let page: CartlistPage;
   let modalCtrl: jasmine.SpyObj<ModalController>;
   let modal: jasmine.SpyObj<HTMLIonModalElement>;
+  let alertCtrl: jasmine.SpyObj<AlertController>;
+  let alertEl: jasmine.SpyObj<HTMLIonAlertElement>;
+  let answer: (role: string | undefined) => void;
 
   beforeEach(() => {
+    alertEl = jasmine.createSpyObj<HTMLIonAlertElement>('HTMLIonAlertElement', ['present', 'onDidDismiss']);
+    alertEl.present.and.resolveTo();
+    alertEl.onDidDismiss.and.callFake(() => new Promise(resolve => answer = role => resolve({ role })));
+    alertCtrl = jasmine.createSpyObj<AlertController>('AlertController', ['create']);
+    alertCtrl.create.and.resolveTo(alertEl);
     modal = jasmine.createSpyObj<HTMLIonModalElement>('HTMLIonModalElement', ['present']);
     modal.present.and.resolveTo();
     modalCtrl = jasmine.createSpyObj<ModalController>('ModalController', ['create']);
@@ -164,6 +172,7 @@ describe('CartlistPage – Ausgleichszahlung', () => {
         { provide: AuthService, useValue: authServiceStub(null) },
         { provide: AlertService, useValue: alertServiceSpy() },
         { provide: ModalController, useValue: modalCtrl },
+        { provide: AlertController, useValue: alertCtrl },
       ],
     });
     TestBed.overrideTemplate(CartlistPage, '');
@@ -202,6 +211,76 @@ describe('CartlistPage – Ausgleichszahlung', () => {
     const [first, second] = modalCtrl.create.calls.allArgs().map(args => args[0].componentProps?.['saving']);
 
     expect(first).not.toBe(second);
+  });
+
+  // Phase 3 (E1): Rückfrage beim Schließen mit geänderten Eingaben
+  describe('Rückfrage „Eingaben verwerfen?“', () => {
+    const key = (suffix: string) => `domains.spendings.overlay.settlementpayment.discard.${suffix}`;
+    /** wartet, bis der Alert präsentiert ist (create/present laufen asynchron) */
+    const alertShown = async () => {
+      for (let i = 0; i < 10 && !alertEl.present.calls.count(); i++) await Promise.resolve();
+      expect(alertEl.present).toHaveBeenCalled();
+    };
+
+    it('zeigt einen Alert mit Titel, Text und den Aktionen „Weiter bearbeiten“ / „Verwerfen“', async () => {
+      const result = page.confirmDiscard();
+      await alertShown();
+
+      expect(alertCtrl.create).toHaveBeenCalledOnceWith(jasmine.objectContaining({
+        header: key('header'),
+        message: key('message'),
+        buttons: [
+          { text: key('btn_continue'), role: 'cancel' },
+          { text: key('btn_discard'), role: 'destructive' },
+        ],
+      }));
+      answer('destructive');
+      expect(await result).toBeTrue();
+    });
+
+    it('„Weiter bearbeiten“, Backdrop oder Hardware-Back am Alert: nicht verwerfen', async () => {
+      for (const role of ['cancel', 'backdrop', undefined]) {
+        alertEl.present.calls.reset();
+        const result = page.confirmDiscard();
+        await alertShown();
+        answer(role);
+        expect(await result).toBeFalse();
+      }
+    });
+
+    it('gleichzeitige Auslöser (z. B. Doppel-Tipp) teilen sich einen Alert; danach fragt es wieder neu', async () => {
+      const first = page.confirmDiscard();
+      const second = page.confirmDiscard();
+      await alertShown();
+
+      expect(alertCtrl.create).toHaveBeenCalledTimes(1);
+      answer('cancel');
+      expect(await first).toBeFalse();
+      expect(await second).toBeFalse();
+
+      alertEl.present.calls.reset();
+      const third = page.confirmDiscard();
+      await alertShown();
+      expect(alertCtrl.create).toHaveBeenCalledTimes(2);
+      answer('destructive');
+      expect(await third).toBeTrue();
+    });
+
+    it('das geöffnete Sheet fragt bei geänderten Eingaben über die Seite nach', async () => {
+      await page.openSettlementSheet();
+      const options = modalCtrl.create.calls.mostRecent().args[0];
+      const dirty = options.componentProps?.['dirty'] as WritableSignal<boolean>;
+      const canDismiss = options.canDismiss as (data?: unknown, role?: string) => Promise<boolean>;
+
+      expect(await canDismiss(undefined, 'backdrop')).toBeTrue();
+      expect(alertCtrl.create).not.toHaveBeenCalled();
+
+      dirty.set(true);
+      const closing = canDismiss(undefined, 'backdrop');
+      await alertShown();
+      answer('cancel');
+      expect(await closing).toBeFalse();
+    });
   });
 });
 

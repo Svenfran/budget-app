@@ -11,6 +11,7 @@ import { authServiceStub, provideServiceTesting } from 'src/testing/test-provide
 import { toIsoDay } from '../filter-sheet/cart-filter-form';
 import { Zeitraum } from '../new-edit-cart/model/gmh-zeitraum';
 import { CartService } from '../service/cart.service';
+import { settlementSheetModalOptions } from './settlement-sheet-options';
 import { SettlementDatePickerRef, SettlementSheetComponent } from './settlement-sheet.component';
 
 describe('SettlementSheetComponent (DIV-70)', () => {
@@ -23,6 +24,7 @@ describe('SettlementSheetComponent (DIV-70)', () => {
   let groupMembers: WritableSignal<GroupMembers>;
   let history: WritableSignal<Zeitraum[]>;
   let saving: WritableSignal<boolean>;
+  let dirty: WritableSignal<boolean>;
 
   const MODAL_ID = 'settlement-sheet-42';
   const today = toIsoDay(REFERENCE_DATE);
@@ -70,6 +72,7 @@ describe('SettlementSheetComponent (DIV-70)', () => {
     groupMembers = signal(members());
     history = signal<Zeitraum[]>([]);
     saving = signal(false);
+    dirty = signal(false);
     TestBed.configureTestingModule({
       declarations: [SettlementSheetComponent],
       imports: [IonicModule.forRoot(), TranslateModule, ReactiveFormsModule],
@@ -93,6 +96,7 @@ describe('SettlementSheetComponent (DIV-70)', () => {
     component = fixture.componentInstance;
     component.modalId = MODAL_ID;
     component.saving = saving;
+    component.dirty = dirty;
     detect();
   });
 
@@ -347,6 +351,60 @@ describe('SettlementSheetComponent (DIV-70)', () => {
 
       expect(component.isDateEnabled('2025-03-01')).toBeTrue();
       expect(component.isDateEnabled('2025-02-28')).toBeFalse();
+    });
+  });
+
+  // Phase 3 (E1): „geändert“ für die Rückfrage beim Schließen
+  describe('dirty', () => {
+    const amountInput = () => el().querySelector('ion-input.input-amount') as HTMLIonInputElement;
+    const typeAmount = (value: string) => {
+      (amountInput() as unknown as { value: string }).value = value;
+      amountInput().dispatchEvent(new CustomEvent('ionInput', { bubbles: true }));
+      detect();
+    };
+
+    it('frisches Sheet ist unverändert (Startdatum heute setzt nichts)', () => {
+      expect(dirty()).toBeFalse();
+      expect(component.form.controls.datePurchased.value).toBe(today);
+    });
+
+    it('Eingabe eines Betrags macht das Sheet geändert', () => {
+      typeAmount('12');
+
+      expect(component.form.controls.amount.value).toBe(12);
+      expect(dirty()).toBeTrue();
+    });
+
+    // Regression Codex-Review 1, F-001: setValue() + markAsDirty() – valueChanges allein sähe das nicht
+    it('nur das Datum über den Picker geändert: geändert, und Schließen fragt nach', async () => {
+      const confirmDiscard = jasmine.createSpy('confirmDiscard').and.resolveTo(false);
+      const canDismiss = settlementSheetModalOptions({ saving, dirty, confirmDiscard }).canDismiss as
+        (data?: unknown, role?: string) => Promise<boolean>;
+
+      await component.pickDate(datetime(today, '2025-06-12T00:00:00'));
+
+      expect(dirty()).toBeTrue();
+      expect(await canDismiss(undefined, 'cancel')).toBeFalse();
+      expect(confirmDiscard).toHaveBeenCalledTimes(1);
+    });
+
+    it('Picker geöffnet und abgebrochen oder von außen geschlossen: bleibt unverändert', () => {
+      component.openDatePicker();
+      component.closeDatePicker();
+      component.openDatePicker();
+      component.onPickerDismissed();
+
+      expect(dirty()).toBeFalse();
+    });
+
+    it('Sperren und Freigeben beim Speichern ändert den Zustand nicht', async () => {
+      addSettlementPayment.and.resolveTo(false);
+      component.form.setValue({ amount: 10, memberId: anna.id, datePurchased: today });
+      expect(dirty()).toBeFalse();
+
+      await component.save();
+
+      expect(dirty()).toBeFalse();
     });
   });
 });

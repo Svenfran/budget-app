@@ -106,7 +106,13 @@
                     "to_member": "An Mitglied*",
                     "date": "Datum*",
                     "btn_cancel": "Abbrechen",
-                    "no_members": "Keine Mitglieder vorhanden"
+                    "no_members": "Keine Mitglieder vorhanden",
+                    "discard": {
+                        "header": "Eingaben verwerfen?",
+                        "message": "Deine Eingaben zur Ausgleichszahlung gehen verloren.",
+                        "btn_discard": "Verwerfen",
+                        "btn_continue": "Weiter bearbeiten"
+                    }
                 },
                 "filter": {
                     "header": "Filter",
