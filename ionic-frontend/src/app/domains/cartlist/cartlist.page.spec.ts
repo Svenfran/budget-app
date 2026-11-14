@@ -16,6 +16,7 @@ import { CartlistPage } from './cartlist.page';
 import { CartService } from './service/cart.service';
 import { ExportDialogComponent } from './export-dialog/export-dialog.component';
 import { FilterSheetComponent } from './filter-sheet/filter-sheet.component';
+import { SettlementSheetComponent } from './settlement-sheet/settlement-sheet.component';
 import { CartFilter } from './model/cart-filter';
 
 // DIV-36: Lade-Effect der Einkaufsliste (gleiche Struktur wie Shopping/Overview). Template ausgeblendet – geprüft wird
@@ -130,6 +131,77 @@ describe('CartlistPage – Export-Dialog', () => {
     expect(await canDismiss()).toBeFalse();
     exporting.set(false);
     expect(await canDismiss()).toBeTrue();
+  });
+});
+
+// DIV-70: Der Menüpunkt „Ausgleichszahlung“ öffnet das Ausgleichszahlungs-Sheet; die Schließ-Sperre hängt an genau
+// diesem Modal. Gespeichert wird im Sheet selbst (kein onDidDismiss auf der Seite).
+describe('CartlistPage – Ausgleichszahlung', () => {
+  let page: CartlistPage;
+  let modalCtrl: jasmine.SpyObj<ModalController>;
+  let modal: jasmine.SpyObj<HTMLIonModalElement>;
+
+  beforeEach(() => {
+    modal = jasmine.createSpyObj<HTMLIonModalElement>('HTMLIonModalElement', ['present']);
+    modal.present.and.resolveTo();
+    modalCtrl = jasmine.createSpyObj<ModalController>('ModalController', ['create']);
+    modalCtrl.create.and.resolveTo(modal);
+    const cartList = signal<Cart[]>([]);
+    TestBed.configureTestingModule({
+      declarations: [CartlistPage],
+      imports: [IonicModule.forRoot()],
+      providers: [
+        ...provideServiceTesting(),
+        {
+          provide: CartService, useValue: {
+            cartList, initCartList: signal<Cart[]>([]), cartUpdated: signal(0),
+            sum: computed(() => 0), count: computed(() => 0), getCartListByGroupId: jasmine.createSpy('load'),
+          },
+        },
+        { provide: OverviewService, useValue: { overviewRefresh: signal(0) } },
+        { provide: CategoryService, useValue: { categoryUpdate: signal(0) } },
+        { provide: StorageService, useValue: storageServiceFake() },
+        { provide: AuthService, useValue: authServiceStub(null) },
+        { provide: AlertService, useValue: alertServiceSpy() },
+        { provide: ModalController, useValue: modalCtrl },
+      ],
+    });
+    TestBed.overrideTemplate(CartlistPage, '');
+    TestBed.inject(GroupService).setActiveGroup(aGroup({ id: 3, name: 'WG' }));
+    const fixture = TestBed.createComponent(CartlistPage);
+    fixture.detectChanges();
+    page = fixture.componentInstance;
+  });
+
+  it('erzeugt genau ein Ausgleichszahlungs-Sheet und präsentiert es (AC 1)', async () => {
+    await page.openSettlementSheet();
+
+    expect(modalCtrl.create).toHaveBeenCalledTimes(1);
+    const options = modalCtrl.create.calls.mostRecent().args[0];
+    expect(options.component).toBe(SettlementSheetComponent);
+    expect(options.cssClass).toEqual(['bottom-sheet', 'bottom-sheet-auto', 'settlement-sheet']);
+    expect(options.componentProps?.['modalId']).toBe(options.id);
+    expect(modal.present).toHaveBeenCalledTimes(1);
+  });
+
+  it('die an create übergebene Sperre liest das saving-Signal, das das Sheet erhält', async () => {
+    await page.openSettlementSheet();
+    const options = modalCtrl.create.calls.mostRecent().args[0];
+    const saving = options.componentProps?.['saving'] as WritableSignal<boolean>;
+    const canDismiss = options.canDismiss as () => Promise<boolean>;
+
+    expect(saving()).toBeFalse();
+    expect(await canDismiss()).toBeTrue();
+    saving.set(true);
+    expect(await canDismiss()).toBeFalse();
+  });
+
+  it('jedes Öffnen bekommt ein eigenes saving-Signal', async () => {
+    await page.openSettlementSheet();
+    await page.openSettlementSheet();
+    const [first, second] = modalCtrl.create.calls.allArgs().map(args => args[0].componentProps?.['saving']);
+
+    expect(first).not.toBe(second);
   });
 });
 

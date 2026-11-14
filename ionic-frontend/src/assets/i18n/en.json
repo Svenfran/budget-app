@@ -99,6 +99,9 @@
             "overlay": {
                 "settlementpayment": {
                     "title": "Repayment",
+                    "subtitle": "Record a payment to a member of the group.",
+                    "btn_save": "Save",
+                    "placeholder_member": "To member",
                     "amount": "Amount in €*",
                     "to_member": "To member*",
                     "date": "Date*",

@@ -99,6 +99,9 @@
             "overlay": {
                 "settlementpayment": {
                     "title": "Ausgleichszahlung",
+                    "subtitle": "Erfasse eine Zahlung an ein Mitglied der Gruppe.",
+                    "btn_save": "Speichern",
+                    "placeholder_member": "An Mitglied",
                     "amount": "Betrag in €*",
                     "to_member": "An Mitglied*",
                     "date": "Datum*",

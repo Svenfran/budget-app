@@ -8,7 +8,6 @@ import { Cart } from './model/cart';
 import { Router } from '@angular/router';
 import { OverviewService } from '../overview/service/overview.service';
 import { CategoryService } from 'src/app/service/category.service';
-import { SettlementPaymentPage } from 'src/app/settlement-payment/settlement-payment.page';
 import { INIT_VALUES } from 'src/app/constants/default-values';
 import { CartFilter } from './model/cart-filter';
 import { TranslateService } from '@ngx-translate/core';
@@ -17,6 +16,7 @@ import { exportDialogModalOptions } from './export-dialog/export-dialog-options'
 import { filterSheetModalOptions } from './filter-sheet/filter-sheet-options';
 import { FILTER_SHEET_APPLY_ROLE } from './filter-sheet/filter-sheet.component';
 import { purchaseDayOf, toIsoDay } from './filter-sheet/cart-filter-form';
+import { settlementSheetModalOptions } from './settlement-sheet/settlement-sheet-options';
 
 @Component({
   selector: 'app-cartlist',
@@ -216,18 +216,14 @@ export class CartlistPage implements OnInit {
     this.cartList.set(this.initCartList());
   }
 
-  async settlementPayment() {
-    const modal = this.modalCtrl.create({
-      component: SettlementPaymentPage,
-      backdropDismiss: true
-    });
-
-    (await modal).onDidDismiss().then((response) => {
-      if (response.data) {
-        this.cartService.addSettlementPayment(response.data);
-      }
-    });
-    return (await modal).present();
+  /**
+   * Menüpunkt „Ausgleichszahlung“: Bottom Sheet (DIV-70). Das Sheet speichert selbst über CartService und schließt
+   * erst nach Erfolg; `saving` sperrt das Schließen, solange der Request läuft.
+   */
+  async openSettlementSheet() {
+    const saving = signal(false);
+    const modal = await this.modalCtrl.create(settlementSheetModalOptions({ saving }));
+    await modal.present();
   }
 
   /**

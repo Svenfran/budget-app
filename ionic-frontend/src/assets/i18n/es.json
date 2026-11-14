@@ -99,6 +99,9 @@
             "overlay": {
                 "settlementpayment": {
                     "title": "Repago",
+                    "subtitle": "Registra un pago a un miembro del grupo.",
+                    "btn_save": "Guardar",
+                    "placeholder_member": "Al miembro",
                     "amount": "Importe en €*",
                     "to_member": "Al miembro*",
                     "date": "Fecha*",
