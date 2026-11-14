@@ -99,11 +99,19 @@
             "overlay": {
                 "settlementpayment": {
                     "title": "Repago",
+                    "subtitle": "Registra un pago a un miembro del grupo.",
+                    "btn_save": "Guardar",
+                    "placeholder_member": "Al miembro",
                     "amount": "Importe en €*",
-                    "to_member": "Al miembro*",
                     "date": "Fecha*",
                     "btn_cancel": "Cancelar",
-                    "no_members": "No hay miembros disponibles"
+                    "no_members": "No hay miembros disponibles",
+                    "discard": {
+                        "header": "¿Descartar los datos?",
+                        "message": "Se perderán los datos del repago.",
+                        "btn_discard": "Descartar",
+                        "btn_continue": "Seguir editando"
+                    }
                 },
                 "filter": {
                     "header": "Filtro",
@@ -219,6 +227,10 @@
                 "header": "Fecha fuera del periodo de membresía",
                 "message_new_edit": "No eras miembro del grupo en la fecha seleccionada. Por favor elige otra fecha.",
                 "message_settlementpayment": "El usuario \"{{userName}}\" no era miembro del grupo en la fecha seleccionada. Por favor elige otra fecha."
+            },
+            "settlement_failed": {
+                "header": "Repago no guardado",
+                "message": "No se pudo guardar el repago. Tus datos se han conservado, por favor inténtalo de nuevo."
             }
         },
         "forgot_password": {

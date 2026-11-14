@@ -1,8 +1,7 @@
 import { FormControl, FormGroup } from '@angular/forms';
 import { CartFilter } from '../model/cart-filter';
 import {
-  CartFilterFormValue, dateRangeValidator, formatDisplayDate, isoDayOf, purchaseDayOf, toCartFilter, toFormValue,
-  toIsoDay,
+  CartFilterFormValue, dateRangeValidator, purchaseDayOf, toCartFilter, toFormValue,
 } from './cart-filter-form';
 
 // DIV-71: Abbildung zwischen angewendetem Filter und Formular des Filter-Sheets. Feste lokale Daten, nie das aktuelle.
@@ -148,20 +147,6 @@ describe('cart-filter-form (DIV-71)', () => {
   });
 
   describe('Datumshilfen', () => {
-    it('formatDisplayDate: ISO-Tag → dd.MM.yyyy', () => {
-      expect(formatDisplayDate('2025-06-05')).toBe('05.06.2025');
-    });
-
-    it('isoDayOf: Tagesanteil eines ion-datetime-Werts ohne Zeitzonenverschiebung', () => {
-      expect(isoDayOf('2025-06-05')).toBe('2025-06-05');
-      expect(isoDayOf('2025-06-05T23:59:00')).toBe('2025-06-05');
-      expect(isoDayOf('2025-06-05T00:30:00+02:00')).toBe('2025-06-05');
-    });
-
-    it('toIsoDay: lokaler Kalendertag, zweistellig aufgefüllt', () => {
-      expect(toIsoDay(new Date(2025, 0, 5, 23, 59))).toBe('2025-01-05');
-    });
-
     // Regression (Codex-Review F-001): new Date('2025-06-20') ist Mitternacht UTC, westlich von UTC lokal schon der 19.
     // Ohne Date-Umweg unabhängig von der Zeitzone des Testrechners.
     it('purchaseDayOf: reines Datum aus dem Backend bleibt dieser Tag', () => {

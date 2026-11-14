@@ -8,7 +8,6 @@ import { Cart } from './model/cart';
 import { Router } from '@angular/router';
 import { OverviewService } from '../overview/service/overview.service';
 import { CategoryService } from 'src/app/service/category.service';
-import { SettlementPaymentPage } from 'src/app/settlement-payment/settlement-payment.page';
 import { INIT_VALUES } from 'src/app/constants/default-values';
 import { CartFilter } from './model/cart-filter';
 import { TranslateService } from '@ngx-translate/core';
@@ -16,7 +15,9 @@ import { CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
 import { exportDialogModalOptions } from './export-dialog/export-dialog-options';
 import { filterSheetModalOptions } from './filter-sheet/filter-sheet-options';
 import { FILTER_SHEET_APPLY_ROLE } from './filter-sheet/filter-sheet.component';
-import { purchaseDayOf, toIsoDay } from './filter-sheet/cart-filter-form';
+import { purchaseDayOf } from './filter-sheet/cart-filter-form';
+import { toIsoDay } from './iso-day';
+import { settlementSheetModalOptions } from './settlement-sheet/settlement-sheet-options';
 
 @Component({
   selector: 'app-cartlist',
@@ -216,18 +217,46 @@ export class CartlistPage implements OnInit {
     this.cartList.set(this.initCartList());
   }
 
-  async settlementPayment() {
-    const modal = this.modalCtrl.create({
-      component: SettlementPaymentPage,
-      backdropDismiss: true
-    });
+  /**
+   * Menüpunkt „Ausgleichszahlung“: Bottom Sheet (DIV-70). Das Sheet speichert selbst über CartService und schließt
+   * erst nach Erfolg; `saving` sperrt das Schließen, solange der Request läuft. Bei geänderten Eingaben (`dirty`) fragt
+   * das Schließen über X, Backdrop oder Hardware-Back vorher nach (confirmDiscard).
+   */
+  async openSettlementSheet() {
+    const saving = signal(false);
+    const dirty = signal(false);
+    const modal = await this.modalCtrl.create(settlementSheetModalOptions({
+      saving,
+      dirty,
+      confirmDiscard: () => this.confirmDiscard(),
+      dismiss: modalId => this.modalCtrl.dismiss(undefined, 'cancel', modalId),
+    }));
+    await modal.present();
+  }
 
-    (await modal).onDidDismiss().then((response) => {
-      if (response.data) {
-        this.cartService.addSettlementPayment(response.data);
-      }
+  /** Laufende Rückfrage „Eingaben verwerfen?“; gleichzeitige Auslöser (z. B. Doppel-Tipp) teilen sich einen Alert. */
+  private discardConfirmation: Promise<boolean> | null = null;
+
+  /** Rückfrage vor dem Verwerfen der Ausgleichszahlung: true nur bei „Verwerfen“. */
+  confirmDiscard(): Promise<boolean> {
+    if (!this.discardConfirmation) {
+      this.discardConfirmation = this.askDiscard().finally(() => this.discardConfirmation = null);
+    }
+    return this.discardConfirmation;
+  }
+
+  private async askDiscard(): Promise<boolean> {
+    const alert = await this.alertCtrl.create({
+      header: this.translate.instant('domains.spendings.overlay.settlementpayment.discard.header'),
+      message: this.translate.instant('domains.spendings.overlay.settlementpayment.discard.message'),
+      buttons: [
+        { text: this.translate.instant('domains.spendings.overlay.settlementpayment.discard.btn_continue'), role: 'cancel' },
+        { text: this.translate.instant('domains.spendings.overlay.settlementpayment.discard.btn_discard'), role: 'destructive' },
+      ],
     });
-    return (await modal).present();
+    await alert.present();
+    const { role } = await alert.onDidDismiss();
+    return role === 'destructive';
   }
 
   /**

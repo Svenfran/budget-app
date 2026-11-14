@@ -12,6 +12,7 @@ import { ScientificCurrencyPipe } from 'src/app/pipe/scientific.pipe';
 import { TranslateModule } from '@ngx-translate/core';
 import { ExportDialogComponent } from './export-dialog/export-dialog.component';
 import { FilterSheetComponent } from './filter-sheet/filter-sheet.component';
+import { SettlementSheetComponent } from './settlement-sheet/settlement-sheet.component';
 
 @NgModule({
   imports: [
@@ -24,6 +25,6 @@ import { FilterSheetComponent } from './filter-sheet/filter-sheet.component';
     TranslateModule,
     ScientificCurrencyPipe
   ],
-  declarations: [CartlistPage, ExportDialogComponent, FilterSheetComponent]
+  declarations: [CartlistPage, ExportDialogComponent, FilterSheetComponent, SettlementSheetComponent]
 })
 export class CartlistPageModule {}

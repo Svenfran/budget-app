@@ -99,11 +99,19 @@
             "overlay": {
                 "settlementpayment": {
                     "title": "Repayment",
+                    "subtitle": "Record a payment to a member of the group.",
+                    "btn_save": "Save",
+                    "placeholder_member": "To member",
                     "amount": "Amount in €*",
-                    "to_member": "To member*",
                     "date": "Date*",
                     "btn_cancel": "Cancel",
-                    "no_members": "No members available"
+                    "no_members": "No members available",
+                    "discard": {
+                        "header": "Discard entries?",
+                        "message": "Your repayment entries will be lost.",
+                        "btn_discard": "Discard",
+                        "btn_continue": "Keep editing"
+                    }
                 },
                 "filter": {
                     "header": "Filter",
@@ -219,6 +227,10 @@
                 "header": "Date not in the period of membership",
                 "message_new_edit": "You were not a member of the group at the time selected. Please choose another date.",
                 "message_settlementpayment": "The user \"{{userName}}\" was not a member of the group at the time selected. Please choose another date."
+            },
+            "settlement_failed": {
+                "header": "Repayment not saved",
+                "message": "The repayment could not be saved. Your entries have been kept, please try again."
             }
         },
         "forgot_password": {

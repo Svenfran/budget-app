@@ -1,4 +1,4 @@
-import { KeyboardOffset } from './keyboard-offset';
+import { KeyboardOffset, offsetMinusViewportShift } from './keyboard-offset';
 
 describe('KeyboardOffset', () => {
   const VIEWPORT = 800;
@@ -115,5 +115,22 @@ describe('KeyboardOffset', () => {
       expect(offset.willShow(KEYBOARD)).toBeNull();
       expect(offset.didShow(KEYBOARD, PORTRAIT.height - KEYBOARD)).toBe(0);
     });
+  });
+});
+
+// DIV-70: Werte vom Gerät (Samsung S22, Android 16, Edge-to-Edge): Tastatur 358, WebView bleibt 832 hoch.
+describe('offsetMinusViewportShift', () => {
+  it('ohne Verschiebung des sichtbaren Bereichs: voller Offset', () => {
+    expect(offsetMinusViewportShift(358, 0)).toBe(358);
+  });
+
+  it('sichtbarer Bereich nach oben geschoben: Offset um die Verschiebung kleiner (Buttons bleiben direkt über der Tastatur)', () => {
+    expect(offsetMinusViewportShift(358, 120)).toBe(238);
+  });
+
+  it('nie negativ, auch bei größerer Verschiebung oder Rundung', () => {
+    expect(offsetMinusViewportShift(358, 400)).toBe(0);
+    expect(offsetMinusViewportShift(0, 50)).toBe(0);
+    expect(offsetMinusViewportShift(358, -0.4)).toBe(358);
   });
 });

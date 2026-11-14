@@ -1,5 +1,6 @@
 import { AbstractControl, ValidationErrors, ValidatorFn } from '@angular/forms';
 import { CartFilter } from '../model/cart-filter';
+import { toIsoDay } from '../iso-day';
 
 /**
  * Werte des Filter-Formulars (DIV-71). Datumswerte als ISO-Tag `YYYY-MM-DD` (lokaler Kalendertag): direkt kompatibel mit
@@ -48,27 +49,6 @@ export const dateRangeValidator: ValidatorFn = (group: AbstractControl): Validat
   const end: string | null = group.get('endDate')?.value ?? null;
   return start && end && start > end ? { dateRange: true } : null;
 };
-
-/** ISO-Tag `YYYY-MM-DD` → Anzeige `dd.MM.yyyy` (bisheriges Anzeigeformat der Datumsfelder). */
-export function formatDisplayDate(isoDay: string): string {
-  const [year, month, day] = isoDay.split('-');
-  return `${day}.${month}.${year}`;
-}
-
-/**
- * Tagesanteil eines `ion-datetime`-Werts (`YYYY-MM-DD` oder `YYYY-MM-DDTHH:mm…`). Bewusst ohne `new Date(...)`, damit
- * keine Zeitzonenverschiebung den Tag ändert.
- */
-export function isoDayOf(datetimeValue: string): string {
-  return datetimeValue.substring(0, 10);
-}
-
-/** Lokaler Kalendertag eines Datums als ISO-Tag. */
-export function toIsoDay(date: Date): string {
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${date.getFullYear()}-${month}-${day}`;
-}
 
 /**
  * Kalendertag eines Kaufdatums für den Zeitraumfilter, so wie die Liste ihn anzeigt (date-Pipe): ein reines Datum

@@ -1,10 +1,10 @@
-import { HttpTestingController } from '@angular/common/http/testing';
-import { TestBed } from '@angular/core/testing';
+import { HttpTestingController, TestRequest } from '@angular/common/http/testing';
+import { fakeAsync, flush, TestBed } from '@angular/core/testing';
 import { TranslateService } from '@ngx-translate/core';
 import { Init } from 'src/app/constants/default-values';
 import { RECURRENCE_TYPE } from 'src/app/constants/recurrence-type';
 import { AlertService } from 'src/app/service/alert.service';
-import { SettlementPaymentDto } from 'src/app/settlement-payment/model/settlement-payment-dto';
+import { SettlementPaymentDto } from '../model/settlement-payment-dto';
 import { environment } from 'src/environments/environment';
 import { aCart, aGroup, aUser } from 'src/testing/test-data';
 import { alertServiceSpy, provideServiceTesting } from 'src/testing/test-providers';
@@ -275,7 +275,7 @@ describe('CartService', () => {
       amount: 25, groupId: 1, member: aUser({ userName: 'Anna' }), datePurchased: new Date('2025-02-01'),
     });
 
-    it('fügt die erzeugten Ausgleichsbuchungen sortiert in beide Listen ein und meldet die Änderung', () => {
+    it('fügt die erzeugten Ausgleichsbuchungen sortiert in beide Listen ein, meldet die Änderung und liefert true', async () => {
       const older = aCart({ id: 1, datePurchased: new Date('2025-01-01') });
       const newest = aCart({ id: 4, datePurchased: new Date('2025-03-01') });
       service.cartList.set([older]);
@@ -283,7 +283,7 @@ describe('CartService', () => {
       const updatesBefore = service.cartUpdated();
       const dto = payment();
 
-      service.addSettlementPayment(dto);
+      const result = service.addSettlementPayment(dto);
       const req = http.expectOne(`${api}/settlement-payment/add`);
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual(dto);
@@ -295,9 +295,10 @@ describe('CartService', () => {
       expect(ids(service.cartList())).toEqual([3, 2, 1]);
       expect(ids(service.initCartList())).toEqual([4, 3, 2, 1]);
       expect(service.cartUpdated()).toBe(updatesBefore + 1);
+      expect(await result).toBeTrue();
     });
 
-    it('lässt beide Listen bei einem Fehler unverändert und zeigt den Mitgliedschafts-Hinweis mit dem Mitglied', () => {
+    it('lässt beide Listen bei einem Fehler unverändert, zeigt den Mitgliedschafts-Hinweis mit dem Mitglied und liefert false', async () => {
       const cartList = [aCart({ id: 1 })];
       const initCartList = [aCart({ id: 1 }), aCart({ id: 3 })];
       service.cartList.set(cartList);
@@ -305,7 +306,7 @@ describe('CartService', () => {
       const updatesBefore = service.cartUpdated();
       const instant = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
 
-      service.addSettlementPayment(payment());
+      const result = service.addSettlementPayment(payment());
       http.expectOne(`${api}/settlement-payment/add`).flush(notWithinMembership,
         { status: 400, statusText: 'Bad Request' });
 
@@ -317,19 +318,50 @@ describe('CartService', () => {
       // TranslateService ohne Loader setzt keine Parameter ein – deshalb am Aufruf von instant() prüfen.
       expect(instant).toHaveBeenCalledWith(
         'alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Anna' });
+      expect(alerts.showErrorAlert).toHaveBeenCalledTimes(1);
+      expect(await result).toBeFalse();
+    });
+
+    // DIV-70: Jeder andere Fehler zeigt einen allgemeinen Hinweis und liefert false. Der Fehlerbody ist nicht immer Text
+    // (Netzwerkfehler, JSON, null) – die Prüfung auf den Mitgliedschafts-Text darf daran nicht scheitern.
+    [
+      {
+        name: 'Text-Body (403)',
+        fail: (req: TestRequest) => req.flush('User with ID 5 is either a member nor the owner of the group',
+          { status: 403, statusText: 'Forbidden' }),
+      },
+      { name: 'null-Body (500)', fail: (req: TestRequest) => req.flush(null, { status: 500, statusText: 'Server Error' }) },
+      {
+        name: 'Objekt-Body (400)',
+        fail: (req: TestRequest) => req.flush({ message: 'Bad Request' }, { status: 400, statusText: 'Bad Request' }),
+      },
+      { name: 'Netzwerkfehler (Status 0)', fail: (req: TestRequest) => req.error(new ProgressEvent('error')) },
+    ].forEach(c => {
+      it(`zeigt bei einem anderen Fehler (${c.name}) den allgemeinen Hinweis, lässt den State unverändert und liefert false`, async () => {
+        const cartList = [aCart({ id: 1 })];
+        const initCartList = [aCart({ id: 1 }), aCart({ id: 3 })];
+        service.cartList.set(cartList);
+        service.initCartList.set(initCartList);
+        const updatesBefore = service.cartUpdated();
+
+        const result = service.addSettlementPayment(payment());
+        c.fail(http.expectOne(`${api}/settlement-payment/add`));
+
+        expect(await result).toBeFalse();
+        expect(service.cartList()).toEqual(cartList);
+        expect(service.initCartList()).toEqual(initCartList);
+        expect(service.cartUpdated()).toBe(updatesBefore);
+        expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(
+          'alerts.cart.settlement_failed.header', 'alerts.cart.settlement_failed.message');
+      });
     });
   });
 
-  // Nur der Mitgliedschafts-Fehler hat einen eigenen Hinweis; andere Fehler laufen ohne Alert durch.
+  // addCart/updateCart: Nur der Mitgliedschafts-Fehler hat einen eigenen Hinweis; andere Fehler laufen ohne Alert durch.
+  // (addSettlementPayment zeigt seit DIV-70 einen allgemeinen Hinweis, siehe oben.)
   [
     { name: 'addCart', call: (s: CartService) => s.addCart(aCart({ id: null })), url: `${api}/add` },
     { name: 'updateCart', call: (s: CartService) => s.updateCart(aCart({ id: 1 })), url: `${api}/update` },
-    {
-      name: 'addSettlementPayment',
-      call: (s: CartService) => s.addSettlementPayment(
-        { amount: 25, groupId: 1, member: aUser(), datePurchased: new Date('2025-02-01') }),
-      url: `${api}/settlement-payment/add`,
-    },
   ].forEach(c => {
     it(`${c.name} zeigt bei einem anderen Fehler keinen Hinweis`, () => {
       c.call(service);
@@ -337,6 +369,33 @@ describe('CartService', () => {
         { status: 403, statusText: 'Forbidden' });
 
       expect(alerts.showErrorAlert).not.toHaveBeenCalled();
+    });
+
+    // DIV-70 Phase 4 (A): Der Fehlerbody ist nicht immer Text. `err.error.includes` warf bisher im error-Callback;
+    // RxJS meldet das asynchron als unbehandelten Fehler – flush() holt ihn in diesen Test.
+    [
+      { name: 'null-Body (500)', fail: (req: TestRequest) => req.flush(null, { status: 500, statusText: 'Server Error' }) },
+      {
+        name: 'Objekt-Body (400)',
+        fail: (req: TestRequest) => req.flush({ message: 'Bad Request' }, { status: 400, statusText: 'Bad Request' }),
+      },
+      { name: 'Netzwerkfehler (Status 0)', fail: (req: TestRequest) => req.error(new ProgressEvent('error')) },
+    ].forEach(f => {
+      it(`${c.name}: ${f.name} läuft ohne Absturz und ohne Hinweis durch, State unverändert`, fakeAsync(() => {
+        const cartList = [aCart({ id: 1 })];
+        service.cartList.set(cartList);
+        service.initCartList.set(cartList);
+        const updatesBefore = service.cartUpdated();
+
+        c.call(service);
+        f.fail(http.expectOne(c.url));
+        flush();
+
+        expect(alerts.showErrorAlert).not.toHaveBeenCalled();
+        expect(service.cartList()).toEqual(cartList);
+        expect(service.initCartList()).toEqual(cartList);
+        expect(service.cartUpdated()).toBe(updatesBefore);
+      }));
     });
   });
 
