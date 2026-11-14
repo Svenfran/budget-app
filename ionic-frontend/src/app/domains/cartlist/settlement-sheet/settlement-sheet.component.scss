@@ -4,13 +4,13 @@
 
 // Inhaltshohes Sheet (`bottom-sheet-auto`): höchstens 90 % der Höhe; Kopf und Footer fest, nur der Mittelteil scrollt.
 // Tastatur: `--keyboard-offset` (AppComponent.initKeyboardOffset) hebt Felder und Footer über die Tastatur und zieht
-// den verdeckten Teil von der Höchsthöhe ab, damit der Kopf oben nicht aus dem Bild rutscht.
+// den verdeckten Teil von der Höchsthöhe ab, damit der Kopf oben nicht aus dem Bild rutscht. Ohne Übergangsanimation:
+// Der Offset wird beim Start der Tastatur-Animation gesetzt; eine Animation ließ die Buttons nachziehen (DIV-70).
 .settlement-sheet {
   display: flex;
   flex-direction: column;
   max-height: calc(90vh - var(--keyboard-offset, 0px));
   margin-bottom: var(--keyboard-offset, 0px);
-  transition: margin-bottom 250ms ease-out, max-height 250ms ease-out;
 }
 
 .sheet-body {
@@ -98,31 +98,18 @@
 }
 
 // Footer außerhalb des scrollenden Mittelteils, daher immer sichtbar; Abstand zur Safe-Area unten.
-// „Abbrechen“ als schlichter Text-Button links, „Speichern“ als einzige gefüllte Aktion rechts. Passen beide nicht
-// mehr in eine Zeile (große Schrift), stehen sie untereinander, „Speichern“ oben (wrap-reverse).
+// Einzige Aktion „Speichern“ in voller Breite (expand="block"); geschlossen wird über das X im Kopf.
 .sheet-footer {
   flex: none;
 }
 
 .sheet-footer .sheet-actions {
-  display: flex;
-  flex-wrap: wrap-reverse;
-  align-items: center;
-  gap: 8px;
   margin-top: 0;
   padding: 8px 20px calc(8px + var(--ion-safe-area-bottom, 0px));
 
-  ion-button {
+  .btn-save {
     margin: 0;
     white-space: normal;
-  }
-
-  .btn-cancel {
-    flex: 1 1 6em;
-  }
-
-  .btn-save {
-    flex: 2 1 12em;
   }
 }
 

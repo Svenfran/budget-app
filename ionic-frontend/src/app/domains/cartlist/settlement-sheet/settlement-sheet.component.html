@@ -85,12 +85,10 @@
     </ng-template>
   </div>
 
-  <div class="sheet-footer">
+  <!-- Nur „Speichern“ in voller Breite; geschlossen wird über das X oben (kein doppeltes „Abbrechen“, Nutzerwunsch). -->
+  <div class="sheet-footer" *ngIf="recipients().length > 0">
     <div class="sheet-actions">
-      <ion-button fill="clear" color="medium" class="btn-cancel" (click)="close()" [disabled]="saving()">
-        {{ 'domains.spendings.overlay.settlementpayment.btn_cancel' | translate }}
-      </ion-button>
-      <ion-button *ngIf="recipients().length > 0" class="btn-save" (click)="save()" [disabled]="form.invalid || saving()">
+      <ion-button expand="block" class="btn-save" (click)="save()" [disabled]="form.invalid || saving()">
         <ion-spinner *ngIf="saving()" name="crescent" slot="start"></ion-spinner>
         <ion-icon *ngIf="!saving()" name="checkmark" slot="start"></ion-icon>
         {{ 'domains.spendings.overlay.settlementpayment.btn_save' | translate }}

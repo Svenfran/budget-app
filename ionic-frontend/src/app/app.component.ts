@@ -24,7 +24,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { LanguageService } from './service/language.service';
 import { ShoppinglistService } from './domains/shoppinglist/service/shoppinglist.service';
 import { isLongBackground, ResyncThrottle } from './service/resync-throttle';
-import { KeyboardOffset } from './service/keyboard-offset';
+import { KeyboardOffset, offsetMinusViewportShift } from './service/keyboard-offset';
 
 @Component({
   selector: 'app-root',
@@ -291,19 +291,31 @@ export class AppComponent {
    * Setzt `--keyboard-offset` (global.scss) auf den von der Tastatur verdeckten Teil der WebView, damit Alerts mit
    * Eingabefeld im freien Bereich zentriert werden – ab dem zweiten Öffnen synchron mit der Tastatur-Animation,
    * beim ersten Öffnen nach dem Einblenden (Geräteverhalten wird dabei gemessen, siehe KeyboardOffset).
+   * Hat die WebView den sichtbaren Bereich zum fokussierten Feld hochgeschoben (`visualViewport.offsetTop`), wird diese
+   * Verschiebung abgezogen, sonst stünden die Bottom Sheets zu hoch (DIV-70, offsetMinusViewportShift).
    */
   private initKeyboardOffset() {
     if (!isPlatform('capacitor')) return;
     const root = document.documentElement;
     const keyboardOffset = new KeyboardOffset(window.innerHeight, window.innerWidth);
+    // zuletzt von KeyboardOffset gelieferter Offset (null: Tastatur zu oder Verhalten noch unbekannt)
+    let baseOffset: number | null = null;
+    const applyOffset = () => {
+      if (baseOffset === null) return;
+      const shifted = offsetMinusViewportShift(baseOffset, window.visualViewport?.offsetTop ?? 0);
+      root.style.setProperty('--keyboard-offset', `${shifted}px`);
+    };
     const setOffset = (px: number | null) => {
-      if (px !== null) root.style.setProperty('--keyboard-offset', `${px}px`);
+      if (px === null) return;
+      baseOffset = px;
+      applyOffset();
     };
     this.keyboardListeners = [
       Keyboard.addListener('keyboardWillShow', info => setOffset(keyboardOffset.willShow(info.keyboardHeight))),
       Keyboard.addListener('keyboardDidShow', info => setOffset(keyboardOffset.didShow(info.keyboardHeight, window.innerHeight))),
       Keyboard.addListener('keyboardWillHide', () => {
         keyboardOffset.willHide();
+        baseOffset = null;
         root.style.removeProperty('--keyboard-offset');
       }),
       Keyboard.addListener('keyboardDidHide', () => keyboardOffset.didHide(window.innerHeight)),
@@ -311,8 +323,14 @@ export class AppComponent {
     // Größenänderung: bei offener Tastatur neu messen (die WebView wird ggf. erst nach keyboardDidShow verkleinert), bei
     // geschlossener Tastatur nach einer Drehung die Höhe ohne Tastatur aktualisieren (KeyboardOffset.viewportResized)
     const onResize = () => setOffset(keyboardOffset.viewportResized(window.innerWidth, window.innerHeight));
+    // Verschiebung des sichtbaren Bereichs (hoch beim Fokussieren, zurück per Wischen): Offset nachführen
+    const onViewportScroll = () => applyOffset();
     window.addEventListener('resize', onResize);
-    this.removeResizeListener = () => window.removeEventListener('resize', onResize);
+    window.visualViewport?.addEventListener('scroll', onViewportScroll);
+    this.removeResizeListener = () => {
+      window.removeEventListener('resize', onResize);
+      window.visualViewport?.removeEventListener('scroll', onViewportScroll);
+    };
   }
 
   initBackButton() {

@@ -120,14 +120,21 @@ describe('SettlementSheetComponent (DIV-70)', () => {
     expect(options).toEqual(['Olga', 'Anna']);
   });
 
-  it('ohne Empfänger: Hinweis statt Formular, nur „Abbrechen“', () => {
+  it('ohne Empfänger: Hinweis statt Formular, kein „Speichern“, Schließen über das X', () => {
     groupMembers.set(members([]));
     detect();
 
     expect(el().querySelector('.no-members')?.textContent).toContain(key('no_members'));
     expect(el().querySelector('.settlement-form')).toBeNull();
     expect(button('btn-save')).toBeNull();
-    expect(button('btn-cancel')).not.toBeNull();
+    expect(button('btn-close')).not.toBeNull();
+  });
+
+  // Nutzerwunsch (Feedback Phase 2): „Abbrechen“ doppelte das X; nur noch „Speichern“ in voller Breite
+  it('Footer enthält nur „Speichern“ in voller Breite, kein „Abbrechen“', () => {
+    expect(button('btn-cancel')).toBeNull();
+    expect(el().querySelectorAll('.sheet-actions ion-button').length).toBe(1);
+    expect(button('btn-save')!.expand).toBe('block');
   });
 
   describe('Validierung (AC 3–5)', () => {
@@ -208,7 +215,7 @@ describe('SettlementSheetComponent (DIV-70)', () => {
       expect(component.form.disabled).toBeTrue();
       expect(el().querySelector('ion-button.btn-save ion-spinner')).not.toBeNull();
       expect(button('btn-save')!.disabled).toBeTrue();
-      expect(button('btn-cancel')!.disabled).toBeTrue();
+      expect(button('btn-close')!.disabled).toBeTrue();
 
       request.settle(true);
       await saved;
@@ -270,14 +277,10 @@ describe('SettlementSheetComponent (DIV-70)', () => {
     });
   });
 
-  it('X und „Abbrechen“ schließen das eigene Modal ohne Daten', () => {
+  it('X schließt das eigene Modal ohne Daten', () => {
     button('btn-close')!.click();
-    button('btn-cancel')!.click();
 
-    expect(modalCtrl.dismiss.calls.allArgs()).toEqual([
-      [undefined, 'cancel', MODAL_ID],
-      [undefined, 'cancel', MODAL_ID],
-    ]);
+    expect(modalCtrl.dismiss).toHaveBeenCalledOnceWith(undefined, 'cancel', MODAL_ID);
   });
 
   describe('Datumsauswahl', () => {

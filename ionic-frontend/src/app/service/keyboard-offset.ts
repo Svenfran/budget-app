@@ -79,3 +79,14 @@ export class KeyboardOffset {
     return this.resizesViewport !== false || this.keyboardHeight <= 0 ? 0 : this.keyboardHeight;
   }
 }
+
+/**
+ * Offset abzüglich der Verschiebung des sichtbaren Bereichs (DIV-70). Unter Edge-to-Edge verkleinert Android nur den
+ * sichtbaren Bereich (`visualViewport`), nicht die WebView. Liegt das fokussierte Feld beim Einblenden noch unter der
+ * Tastatur, schiebt die WebView den sichtbaren Bereich nach oben (`visualViewport.offsetTop`). Käme der volle Offset
+ * dazu, stünde der Inhalt um diese Verschiebung zu hoch, mit einer leeren, scrollbaren Fläche über der Tastatur.
+ * Ein zurückgeschobener Bereich (offsetTop 0) ergibt wieder den vollen Offset.
+ */
+export function offsetMinusViewportShift(offset: number, viewportOffsetTop: number): number {
+  return Math.max(0, offset - Math.max(0, viewportOffsetTop));
+}

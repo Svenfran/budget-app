@@ -9,13 +9,13 @@
 // Teil der WebView – 0, wenn das System die WebView selbst verkleinert, sonst die Tastaturhöhe (gemessen, typisch
 // Edge-to-Edge ab Android 15). Der Abstand unten hebt Felder und Footer über die Tastatur (das Sheet ist unten
 // angedockt und wächst nach oben, der Bereich unter der Tastatur bleibt leer); die Höchsthöhe zieht ihn ab, damit der
-// Kopf oben nicht aus dem Bild rutscht. Übergang etwa so lang wie die Tastatur-Animation (wie bei den Alerts).
+// Kopf oben nicht aus dem Bild rutscht. Ohne Übergangsanimation: Der Offset wird beim Start der Tastatur-Animation
+// gesetzt; eine Animation ließ die Buttons nachziehen (DIV-70).
 .filter-sheet {
   display: flex;
   flex-direction: column;
   max-height: calc(90vh - var(--keyboard-offset, 0px));
   margin-bottom: var(--keyboard-offset, 0px);
-  transition: margin-bottom 250ms ease-out, max-height 250ms ease-out;
 }
 
 .sheet-body {
