@@ -15,7 +15,8 @@ import { CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
 import { exportDialogModalOptions } from './export-dialog/export-dialog-options';
 import { filterSheetModalOptions } from './filter-sheet/filter-sheet-options';
 import { FILTER_SHEET_APPLY_ROLE } from './filter-sheet/filter-sheet.component';
-import { purchaseDayOf, toIsoDay } from './filter-sheet/cart-filter-form';
+import { purchaseDayOf } from './filter-sheet/cart-filter-form';
+import { toIsoDay } from './iso-day';
 import { settlementSheetModalOptions } from './settlement-sheet/settlement-sheet-options';
 
 @Component({

@@ -105,7 +105,7 @@ export class CartService {
         error: (err) => {
           console.error('Error adding cart:', err);
 
-          if (err.error.includes('not within membership period')) {
+          if (isNotWithinMembership(err)) {
             const header = this.translate.instant("alerts.cart.invalid_membership.header");
             const message = this.translate.instant("alerts.cart.invalid_membership.message_new_edit");
             this.alertService.showErrorAlert(header, message);
@@ -191,7 +191,7 @@ export class CartService {
         error: (err) => {
           console.error('Error updating cart:', err);
 
-          if (err.error.includes('not within membership period')) {
+          if (isNotWithinMembership(err)) {
             const header = this.translate.instant("alerts.cart.invalid_membership.header");
             const message = this.translate.instant("alerts.cart.invalid_membership.message_new_edit");
             this.alertService.showErrorAlert(header, message);
@@ -249,7 +249,7 @@ export class CartService {
           error: (err) => {
             console.error("Error adding settlement payment:", err);
 
-            if (typeof err?.error === 'string' && err.error.includes('not within membership period')) {
+            if (isNotWithinMembership(err)) {
               this.alertService.showErrorAlert(
                 this.translate.instant("alerts.cart.invalid_membership.header"),
                 this.translate.instant("alerts.cart.invalid_membership.message_settlementpayment", { userName: payment.member.userName })
@@ -300,4 +300,12 @@ export class CartService {
       return false;
     }
   }
+}
+
+/**
+ * Mitgliedschafts-Fehler des Backends (Error-Message-Contract, siehe CartControllerApiSpec). Der Fehlerbody ist nicht
+ * immer Text (Netzwerkfehler, JSON, null), daher die Typprüfung vor `includes` (DIV-70).
+ */
+function isNotWithinMembership(err: { error?: unknown } | null | undefined): boolean {
+  return typeof err?.error === 'string' && err.error.includes('not within membership period');
 }

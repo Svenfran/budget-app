@@ -1,5 +1,5 @@
 import { HttpTestingController, TestRequest } from '@angular/common/http/testing';
-import { TestBed } from '@angular/core/testing';
+import { fakeAsync, flush, TestBed } from '@angular/core/testing';
 import { TranslateService } from '@ngx-translate/core';
 import { Init } from 'src/app/constants/default-values';
 import { RECURRENCE_TYPE } from 'src/app/constants/recurrence-type';
@@ -369,6 +369,33 @@ describe('CartService', () => {
         { status: 403, statusText: 'Forbidden' });
 
       expect(alerts.showErrorAlert).not.toHaveBeenCalled();
+    });
+
+    // DIV-70 Phase 4 (A): Der Fehlerbody ist nicht immer Text. `err.error.includes` warf bisher im error-Callback;
+    // RxJS meldet das asynchron als unbehandelten Fehler – flush() holt ihn in diesen Test.
+    [
+      { name: 'null-Body (500)', fail: (req: TestRequest) => req.flush(null, { status: 500, statusText: 'Server Error' }) },
+      {
+        name: 'Objekt-Body (400)',
+        fail: (req: TestRequest) => req.flush({ message: 'Bad Request' }, { status: 400, statusText: 'Bad Request' }),
+      },
+      { name: 'Netzwerkfehler (Status 0)', fail: (req: TestRequest) => req.error(new ProgressEvent('error')) },
+    ].forEach(f => {
+      it(`${c.name}: ${f.name} läuft ohne Absturz und ohne Hinweis durch, State unverändert`, fakeAsync(() => {
+        const cartList = [aCart({ id: 1 })];
+        service.cartList.set(cartList);
+        service.initCartList.set(cartList);
+        const updatesBefore = service.cartUpdated();
+
+        c.call(service);
+        f.fail(http.expectOne(c.url));
+        flush();
+
+        expect(alerts.showErrorAlert).not.toHaveBeenCalled();
+        expect(service.cartList()).toEqual(cartList);
+        expect(service.initCartList()).toEqual(cartList);
+        expect(service.cartUpdated()).toBe(updatesBefore);
+      }));
     });
   });
 

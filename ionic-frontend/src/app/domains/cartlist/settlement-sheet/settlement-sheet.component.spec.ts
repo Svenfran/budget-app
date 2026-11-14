@@ -8,7 +8,7 @@ import { GroupMembers } from 'src/app/groupmembers/model/groupmembers-dto';
 import { GroupService } from 'src/app/service/group.service';
 import { aGroup, aLoggedInUser, aUser, REFERENCE_DATE } from 'src/testing/test-data';
 import { authServiceStub, provideServiceTesting } from 'src/testing/test-providers';
-import { toIsoDay } from '../filter-sheet/cart-filter-form';
+import { toIsoDay } from '../iso-day';
 import { Zeitraum } from '../new-edit-cart/model/gmh-zeitraum';
 import { CartService } from '../service/cart.service';
 import { settlementSheetModalOptions } from './settlement-sheet-options';
