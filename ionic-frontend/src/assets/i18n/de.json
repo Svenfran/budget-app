@@ -72,6 +72,7 @@
             "total": "Gesamt",
             "export_menu": "Exportieren",
             "settlement": "Ausgleichszahlung",
+            "settlement_menu": "Ausgleichen",
             "filter": "Filter",
             "no_spendings": "Keine Ausgaben vorhanden!",
             "toast": {
