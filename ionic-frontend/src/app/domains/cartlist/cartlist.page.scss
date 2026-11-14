@@ -36,12 +36,13 @@
     padding-right: 36px;
 }
 
+// Breiter als der Text bei Standardschrift braucht, damit Labels bei vergrößerter Systemschrift nicht mitten im Wort umbrechen
 ion-popover {
-    --width: 14rem;
+    --width: min(16rem, calc(100vw - 2rem));
 }
 
 .pop-icon {
-    margin-right: 1rem;
+    margin-right: 0.75rem;
 }
 
 .titlestyle {

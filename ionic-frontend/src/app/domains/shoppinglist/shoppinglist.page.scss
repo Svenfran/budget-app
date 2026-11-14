@@ -60,12 +60,12 @@ ion-chip {
 
 // Overflow-Menü wie auf der Ausgaben-Seite (cartlist), aber ohne den MD-Standardschatten des Popovers
 ion-popover.list-menu {
-    --width: 14rem;
+    --width: min(16rem, calc(100vw - 2rem));
     --box-shadow: none;
 }
 
 .pop-icon {
-    margin-right: 1rem;
+    margin-right: 0.75rem;
 }
 
 ion-item-sliding {

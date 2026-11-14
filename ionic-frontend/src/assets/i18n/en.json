@@ -72,6 +72,7 @@
             "total": "Total",
             "export_menu": "Export",
             "settlement": "Repayment",
+            "settlement_menu": "Settle up",
             "filter": "Filter",
             "no_spendings": "No expenses available!",
             "toast": {
