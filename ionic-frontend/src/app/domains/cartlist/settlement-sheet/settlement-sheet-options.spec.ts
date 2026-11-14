@@ -4,8 +4,10 @@ import { SettlementSheetComponent } from './settlement-sheet.component';
 
 describe('settlementSheetModalOptions (DIV-70)', () => {
   let confirmDiscard: jasmine.Spy<() => Promise<boolean>>;
-  const state = (overrides: Partial<SettlementSheetState> = {}): SettlementSheetState =>
-    ({ saving: signal(false), dirty: signal(false), confirmDiscard, ...overrides });
+  const state = (overrides: Partial<SettlementSheetState> = {}): SettlementSheetState => ({
+    saving: signal(false), dirty: signal(false), confirmDiscard,
+    dismiss: jasmine.createSpy('dismiss').and.resolveTo(true), ...overrides,
+  });
   type CanDismiss = (data?: unknown, role?: string) => Promise<boolean>;
   const canDismissOf = (s: SettlementSheetState) => settlementSheetModalOptions(s).canDismiss as CanDismiss;
 
@@ -62,16 +64,80 @@ describe('settlementSheetModalOptions (DIV-70)', () => {
       expect(confirmDiscard).not.toHaveBeenCalled();
     });
 
-    it('geänderte Eingaben + „Verwerfen“: schließt', async () => {
-      expect(await canDismissOf(state({ dirty: signal(true) }))(undefined, 'backdrop')).toBeTrue();
+    const settle = () => new Promise(resolve => setTimeout(resolve));
+
+    it('geänderte Eingaben + „Verwerfen“: hält zunächst fest, schließt dann das eigene Sheet; weitere Prüfungen lassen durch', async () => {
+      const shared = state({ dirty: signal(true) });
+      const canDismiss = canDismissOf(shared);
+
+      expect(await canDismiss(undefined, 'backdrop')).toBeFalse();
+      await settle();
+
+      expect(confirmDiscard).toHaveBeenCalledTimes(1);
+      expect(shared.dismiss).toHaveBeenCalledTimes(1);
+      expect(await canDismiss(undefined, 'cancel')).toBeTrue();
       expect(confirmDiscard).toHaveBeenCalledTimes(1);
     });
 
-    it('geänderte Eingaben + „Weiter bearbeiten“: bleibt offen (E1)', async () => {
-      confirmDiscard.and.resolveTo(false);
+    it('„Verwerfen“ schließt über die eigene Modal-ID', async () => {
+      const shared = state({ dirty: signal(true) });
+      const options = settlementSheetModalOptions(shared);
 
-      expect(await canDismissOf(state({ dirty: signal(true) }))(undefined, 'cancel')).toBeFalse();
-      expect(confirmDiscard).toHaveBeenCalledTimes(1);
+      await (options.canDismiss as CanDismiss)(undefined, 'cancel');
+      await settle();
+
+      expect(shared.dismiss).toHaveBeenCalledOnceWith(options.id!);
+    });
+
+    it('geänderte Eingaben + „Weiter bearbeiten“: bleibt offen; ein späterer Versuch fragt erneut (E1)', async () => {
+      confirmDiscard.and.resolveTo(false);
+      const shared = state({ dirty: signal(true) });
+      const canDismiss = canDismissOf(shared);
+
+      expect(await canDismiss(undefined, 'cancel')).toBeFalse();
+      await settle();
+      expect(shared.dismiss).not.toHaveBeenCalled();
+
+      expect(await canDismiss(undefined, 'cancel')).toBeFalse();
+      await settle();
+      expect(confirmDiscard).toHaveBeenCalledTimes(2);
+      expect(shared.dismiss).not.toHaveBeenCalled();
+    });
+
+    // Codex-Implementierungsreview F-001: Ionic serialisiert dismiss() und prüft canDismiss erst nach dem vorherigen
+    // Aufruf. Ein Doppel-Tipp (X, Backdrop, Hardware-Back) durfte keine zweite Rückfrage nachreichen.
+    describe('mehrere Schließversuche hintereinander (wie von Ionic serialisiert)', () => {
+      let answer: (discard: boolean) => void;
+      const closeTwice = (canDismiss: CanDismiss) =>
+        canDismiss(undefined, 'cancel').then(() => canDismiss(undefined, 'backdrop'));
+
+      beforeEach(() => confirmDiscard.and.callFake(() => new Promise<boolean>(resolve => answer = resolve)));
+
+      it('„Weiter bearbeiten“: genau eine Rückfrage, Sheet bleibt offen', async () => {
+        const shared = state({ dirty: signal(true) });
+        const closing = closeTwice(canDismissOf(shared));
+
+        await Promise.resolve();
+        answer(false);
+        await closing;
+        await new Promise(resolve => setTimeout(resolve));
+
+        expect(confirmDiscard).toHaveBeenCalledTimes(1);
+        expect(shared.dismiss).not.toHaveBeenCalled();
+      });
+
+      it('„Verwerfen“: genau eine Rückfrage und genau ein Schließen', async () => {
+        const shared = state({ dirty: signal(true) });
+        const closing = closeTwice(canDismissOf(shared));
+
+        await Promise.resolve();
+        answer(true);
+        await closing;
+        await new Promise(resolve => setTimeout(resolve));
+
+        expect(confirmDiscard).toHaveBeenCalledTimes(1);
+        expect(shared.dismiss).toHaveBeenCalledTimes(1);
+      });
     });
 
     it('liest die Signale beim Schließen, nicht beim Erzeugen', async () => {
@@ -81,6 +147,7 @@ describe('settlementSheetModalOptions (DIV-70)', () => {
       shared.dirty.set(true);
       confirmDiscard.and.resolveTo(false);
       expect(await canDismiss(undefined, 'cancel')).toBeFalse();
+      await settle();
       shared.dirty.set(false);
       expect(await canDismiss(undefined, 'cancel')).toBeTrue();
     });

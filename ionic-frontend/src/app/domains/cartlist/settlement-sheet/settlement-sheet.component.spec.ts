@@ -378,7 +378,7 @@ describe('SettlementSheetComponent (DIV-70)', () => {
     // Regression Codex-Review 1, F-001: setValue() + markAsDirty() – valueChanges allein sähe das nicht
     it('nur das Datum über den Picker geändert: geändert, und Schließen fragt nach', async () => {
       const confirmDiscard = jasmine.createSpy('confirmDiscard').and.resolveTo(false);
-      const canDismiss = settlementSheetModalOptions({ saving, dirty, confirmDiscard }).canDismiss as
+      const canDismiss = settlementSheetModalOptions({ saving, dirty, confirmDiscard, dismiss: jasmine.createSpy('dismiss') }).canDismiss as
         (data?: unknown, role?: string) => Promise<boolean>;
 
       await component.pickDate(datetime(today, '2025-06-12T00:00:00'));

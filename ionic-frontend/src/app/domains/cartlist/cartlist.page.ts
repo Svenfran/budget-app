@@ -225,8 +225,12 @@ export class CartlistPage implements OnInit {
   async openSettlementSheet() {
     const saving = signal(false);
     const dirty = signal(false);
-    const modal = await this.modalCtrl.create(
-      settlementSheetModalOptions({ saving, dirty, confirmDiscard: () => this.confirmDiscard() }));
+    const modal = await this.modalCtrl.create(settlementSheetModalOptions({
+      saving,
+      dirty,
+      confirmDiscard: () => this.confirmDiscard(),
+      dismiss: modalId => this.modalCtrl.dismiss(undefined, 'cancel', modalId),
+    }));
     await modal.present();
   }
 

@@ -10,6 +10,8 @@ export interface SettlementSheetState {
   dirty: WritableSignal<boolean>;
   /** Rückfrage „Eingaben verwerfen?“; true = verwerfen und schließen. */
   confirmDiscard: () => Promise<boolean>;
+  /** Schließt genau dieses Sheet (Modal-ID), nachdem „Verwerfen“ bestätigt wurde. */
+  dismiss: (modalId: string) => Promise<boolean>;
 }
 
 /** Laufende Nummer für eindeutige Modal-IDs der Ausgleichszahlungs-Sheets. */
@@ -25,10 +27,20 @@ let sheetSeq = 0;
  * - nach erfolgreichem Speichern (Rolle `saved`): schließen, die Komponente setzt `saving` vorher zurück,
  * - unveränderte Eingaben: sofort schließen,
  * - geänderte Eingaben: Rückfrage „Eingaben verwerfen?“ (E1), geschlossen wird nur bei „Verwerfen“.
+ *
+ * Die Rückfrage blockiert `canDismiss` nicht (Codex-Implementierungsreview F-001): Ionic serialisiert dismiss() über
+ * einen Lock und prüft `canDismiss` erst nach dem vorherigen Aufruf. Ein wartendes `canDismiss` hätte bei einem
+ * Doppel-Tipp (X, Backdrop, Hardware-Back) nach der ersten Antwort eine zweite Rückfrage ausgelöst. Deshalb: sofort
+ * `false`, eine laufende Rückfrage wird wiederverwendet, und bei „Verwerfen“ schließt sich das Sheet danach selbst
+ * (`state.dismiss`); die Entscheidung gilt dann für alle weiteren Prüfungen.
  * Eigene Modal-ID, mit der die Komponente gezielt sich selbst schließt (nicht den Datums-Picker darüber).
  */
 export function settlementSheetModalOptions(state: SettlementSheetState): ModalOptions {
   const id = `settlement-sheet-${++sheetSeq}`;
+  /** „Verwerfen“ bestätigt: weitere Prüfungen lassen das Schließen durch. */
+  let discarded = false;
+  /** Laufende Rückfrage; weitere Schließversuche währenddessen fragen nicht erneut. */
+  let confirming: Promise<void> | null = null;
   return {
     id,
     component: SettlementSheetComponent,
@@ -36,8 +48,18 @@ export function settlementSheetModalOptions(state: SettlementSheetState): ModalO
     cssClass: ['bottom-sheet', 'bottom-sheet-auto', 'settlement-sheet'],
     canDismiss: async (_data?: unknown, role?: string) => {
       if (state.saving()) return false;
-      if (role === SETTLEMENT_SHEET_SAVED_ROLE || !state.dirty()) return true;
-      return state.confirmDiscard();
+      if (role === SETTLEMENT_SHEET_SAVED_ROLE || discarded || !state.dirty()) return true;
+      if (!confirming) {
+        confirming = state.confirmDiscard()
+          .then(discard => {
+            if (!discard) return;
+            discarded = true;
+            return state.dismiss(id).then(() => undefined);
+          })
+          .catch(err => console.error('Error discarding settlement sheet:', err))
+          .finally(() => confirming = null);
+      }
+      return false;
     },
   };
 }

@@ -152,8 +152,9 @@ describe('CartlistPage – Ausgleichszahlung', () => {
     alertCtrl.create.and.resolveTo(alertEl);
     modal = jasmine.createSpyObj<HTMLIonModalElement>('HTMLIonModalElement', ['present']);
     modal.present.and.resolveTo();
-    modalCtrl = jasmine.createSpyObj<ModalController>('ModalController', ['create']);
+    modalCtrl = jasmine.createSpyObj<ModalController>('ModalController', ['create', 'dismiss']);
     modalCtrl.create.and.resolveTo(modal);
+    modalCtrl.dismiss.and.resolveTo(true);
     const cartList = signal<Cart[]>([]);
     TestBed.configureTestingModule({
       declarations: [CartlistPage],
@@ -276,10 +277,26 @@ describe('CartlistPage – Ausgleichszahlung', () => {
       expect(alertCtrl.create).not.toHaveBeenCalled();
 
       dirty.set(true);
-      const closing = canDismiss(undefined, 'backdrop');
+      expect(await canDismiss(undefined, 'backdrop')).toBeFalse();
       await alertShown();
       answer('cancel');
-      expect(await closing).toBeFalse();
+      await new Promise(resolve => setTimeout(resolve));
+      expect(modalCtrl.dismiss).not.toHaveBeenCalled();
+    });
+
+    // F-001: nach „Verwerfen“ schließt das Sheet sich über seine eigene Modal-ID
+    it('„Verwerfen“ schließt genau dieses Sheet über den ModalController', async () => {
+      await page.openSettlementSheet();
+      const options = modalCtrl.create.calls.mostRecent().args[0];
+      (options.componentProps?.['dirty'] as WritableSignal<boolean>).set(true);
+      const canDismiss = options.canDismiss as (data?: unknown, role?: string) => Promise<boolean>;
+
+      expect(await canDismiss(undefined, 'cancel')).toBeFalse();
+      await alertShown();
+      answer('destructive');
+      await new Promise(resolve => setTimeout(resolve));
+
+      expect(modalCtrl.dismiss).toHaveBeenCalledOnceWith(undefined, 'cancel', options.id);
     });
   });
 });
