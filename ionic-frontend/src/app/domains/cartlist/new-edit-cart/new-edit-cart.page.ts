@@ -47,6 +47,17 @@ export class NewEditCartPage implements OnInit {
    */
   public formCategories = signal<CategoryDto[] | null>(null);
   public categoriesLoaded = computed(() => this.formCategories() !== null);
+  /**
+   * Auswählbare Kategorien: Neuanlage und Duplizieren ohne die Ausgleichszahlungs-Kategorie (DIV-73, Ausgleichszahlungen
+   * nur über das eigene Sheet); Bearbeiten mit allen, damit eine bestehende Ausgleichszahlung ihre Kategorie behält.
+   * `isAddMode` steht ab ngOnInit fest, also vor dem ersten Laden der Kategorien.
+   */
+  public selectableCategories = computed(() => {
+    const categories = this.formCategories() ?? [];
+    return this.isAddMode
+      ? categories.filter(cat => !this.categoryService.isSettlementpayment(cat.name))
+      : categories;
+  });
   public activeGroup = this.groupService.activeGroup();
   public cartList = this.cartService.cartList;
   public zeitraeume = this.groupService.groupMembershipHistory;
@@ -145,7 +156,7 @@ export class NewEditCartPage implements OnInit {
       return;
     }
 
-    const category = this.formCategories()!.find(cat => cat.id === this.form.value.categoryId);
+    const category = this.selectableCategories().find(cat => cat.id === this.form.value.categoryId);
     if (!category) {
       this.categoryId?.setValue('');
       this.form.markAllAsTouched();
@@ -260,7 +271,7 @@ export class NewEditCartPage implements OnInit {
   private clearUnknownCategory() {
     const categoryId = this.categoryId;
     if (!categoryId?.value) return;
-    if (!this.formCategories()!.some(cat => cat.id === categoryId.value)) {
+    if (!this.selectableCategories().some(cat => cat.id === categoryId.value)) {
       categoryId.setValue('');
       categoryId.markAsTouched();
     }

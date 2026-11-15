@@ -321,4 +321,52 @@ describe('NewEditCartPage', () => {
       expect(navigate).toHaveBeenCalledOnceWith(['domains', 'tabs', 'cartlist']);
     });
   });
+
+  describe('Ausgleichszahlungs-Kategorie (Phase 4, F3)', () => {
+    const ausgleich = aCategory({ id: 44, name: 'Ausgleichszahlung', groupId: GROUP_ID });
+    const ausgleichszahlung = aCart({ id: 3, title: 'Ausgleich an Ben', amount: 20, groupId: GROUP_ID, userDto: anna,
+      categoryDto: ausgleich, datePurchased: new Date('2025-05-01T00:00:00Z') });
+
+    it('Neuanlage bietet die Ausgleichszahlungs-Kategorie nicht an', () => {
+      createPage();
+      answerCategories([lebensmittel, ausgleich, drogerie]);
+
+      expect(optionTexts()).toEqual(['Lebensmittel', 'Drogerie']);
+    });
+
+    it('Duplizieren bietet die Ausgleichszahlungs-Kategorie nicht an', () => {
+      createPage({ duplicateOf: '1' });
+      answerCategories([lebensmittel, ausgleich, drogerie]);
+
+      expect(optionTexts()).toEqual(['Lebensmittel', 'Drogerie']);
+      expect(page.form.value.categoryId).toBe(42);
+    });
+
+    it('Neuanlage mit der Ausgleichszahlungs-Kategorie (z. B. manipuliert) wird ohne Request abgelehnt', async () => {
+      createPage();
+      answerCategories([lebensmittel, ausgleich, drogerie]);
+      page.form.patchValue({ title: 'Einkauf', amount: '10', categoryId: 44 });
+
+      page.onSubmit();
+      await resolveLoadings();
+
+      expect(loadingCreate).not.toHaveBeenCalled();
+      expect(cartService.addCart).not.toHaveBeenCalled();
+      expect(page.form.value.categoryId).toBe('');
+    });
+
+    it('Bearbeiten einer Ausgleichszahlung zeigt die Kategorie weiterhin, behält sie und speichert (AC 13)', async () => {
+      createPage({ id: '3' }, [ausgleichszahlung]);
+      answerCategories([lebensmittel, ausgleich, drogerie]);
+
+      expect(optionTexts()).toEqual(['Lebensmittel', 'Ausgleichszahlung', 'Drogerie']);
+      expect(page.form.value.categoryId).toBe(44);
+
+      page.onSubmit();
+      await resolveLoadings();
+
+      expect(cartService.updateCart).toHaveBeenCalledOnceWith(jasmine.objectContaining({
+        id: 3, categoryDto: { id: 44, name: 'Ausgleichszahlung', groupId: GROUP_ID } }));
+    });
+  });
 });

@@ -78,7 +78,7 @@
               formControlName="categoryId"
               [okText]="'global.selections.btn_ok' | translate" 
               [cancelText]="'global.selections.btn_cancel' | translate">
-              <ion-select-option *ngFor="let category of formCategories() ?? []" [value]="category.id">{{ category.name }}</ion-select-option>
+              <ion-select-option *ngFor="let category of selectableCategories()" [value]="category.id">{{ category.name }}</ion-select-option>
             </ion-select>
           </ion-item>
           <ion-item lines="none" *ngIf="categoryId?.invalid && categoryId?.touched">
