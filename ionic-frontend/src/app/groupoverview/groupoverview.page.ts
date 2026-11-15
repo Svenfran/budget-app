@@ -2,7 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { GroupService } from '../service/group.service';
 import { User } from '../auth/user';
 import { AuthService } from '../auth/auth.service';
-import { AlertController, IonItemSliding, LoadingController, ModalController, Platform } from '@ionic/angular';
+import { AlertController, IonItemSliding, LoadingController, ModalController } from '@ionic/angular';
 import { Group } from '../model/group';
 import { NewMemberDto } from './model/new-member-dto';
 import { GroupOverview } from './model/group-overview';
@@ -12,6 +12,7 @@ import { Router } from '@angular/router';
 import { EmailValidator } from '../Validator/email-validator';
 import { AlertService } from '../service/alert.service';
 import { TranslateService } from '@ngx-translate/core';
+import { Location } from '@angular/common';
 
 @Component({
   selector: 'app-groupoverview',
@@ -33,7 +34,8 @@ export class GroupoverviewPage implements OnInit {
     private modalCtrl: ModalController,
     private router: Router,
     private alertService: AlertService,
-    private translate: TranslateService
+    private translate: TranslateService,
+    private location: Location
   ) {}
 
   ngOnInit() {
@@ -59,7 +61,7 @@ export class GroupoverviewPage implements OnInit {
     if (this.groupService.activeGroup().id !== group.id) {
       this.groupService.setActiveGroup(group);
     }
-    this.router.navigateByUrl('/domains/tabs/overview', { replaceUrl: true });
+    this.location.back();
   }
 
   onCreateGroup() {
