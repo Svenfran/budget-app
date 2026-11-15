@@ -1,4 +1,4 @@
-import { Component, effect, OnInit, ViewChild } from '@angular/core';
+import { Component, computed, effect, OnInit, signal, ViewChild } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { IonDatetime, LoadingController, MenuController } from '@ionic/angular';
@@ -15,6 +15,7 @@ import { RECURRENCE_TYPE } from 'src/app/constants/recurrence-type';
 import { TranslateService } from '@ngx-translate/core';
 import { LanguageService } from 'src/app/service/language.service';
 import { calculateNextExecutionDate } from './next-execution-date';
+import { duplicateFormValues, duplicateSource } from './duplicate-cart';
 
 
 @Component({
@@ -27,6 +28,10 @@ export class NewEditCartPage implements OnInit {
   @ViewChild(IonDatetime) datetime!: IonDatetime;
 
   public isAddMode: boolean = true;
+  /** Neuanlage mit Werten einer eigenen Ausgabe vorbelegt (DIV-73, Query-Parameter `duplicateOf`). */
+  public isDuplicate: boolean = false;
+  /** Gesetzt ab dem Absenden bis zum Verlassen der Seite: verhindert doppeltes Speichern. */
+  public saving: boolean = false;
   public cartId: string | null = null;
   public form!: FormGroup;
   public showPicker = false;
@@ -36,7 +41,12 @@ export class NewEditCartPage implements OnInit {
   public maxDate = "";
   public today = new Date();
   public user!: User;
-  public categories = this.categoryService.categories;
+  /**
+   * Kategorien aus genau der eigenen Anfrage dieser Seite (`null` = noch nicht erfolgreich geladen). Bewusst nicht das
+   * gemeinsame `categoryService.categories`: Das können ältere Anfragen anderer Seiten später noch überschreiben.
+   */
+  public formCategories = signal<CategoryDto[] | null>(null);
+  public categoriesLoaded = computed(() => this.formCategories() !== null);
   public activeGroup = this.groupService.activeGroup();
   public cartList = this.cartService.cartList;
   public zeitraeume = this.groupService.groupMembershipHistory;
@@ -74,7 +84,6 @@ export class NewEditCartPage implements OnInit {
 
   ngOnInit() {
     this.initializeForm();
-    this.categoryService.getCategoriesByGroup(this.activeGroup);
 
     this.cartId = this.route.snapshot.paramMap.get('id');
     this.isAddMode = !this.cartId;
@@ -84,6 +93,13 @@ export class NewEditCartPage implements OnInit {
     })
 
     this.setInitialFormValues();
+
+    // Nach der Vorbelegung laden: Der Callback prüft die vorbelegte Kategorie gegen das Ergebnis dieser Anfrage.
+    this.categoryService.getCategoriesByGroup(this.activeGroup, result => {
+      if (result === null) return;
+      this.formCategories.set(result);
+      if (this.isDuplicate) this.clearUnknownCategory();
+    });
   }
 
   ionViewWillLeave() {
@@ -92,6 +108,7 @@ export class NewEditCartPage implements OnInit {
 
   ionViewWillEnter() {
     this.menuCtrl.enable(false, 'm1');
+    this.saving = false;
   }
 
   initializeForm() {
@@ -111,35 +128,50 @@ export class NewEditCartPage implements OnInit {
   get description() {return this.form.get('description');}
   get amount() {return this.form.get('amount');}
   get datePurchased() {return this.form.get('datePurchased');}
-  get categoryId() {return this.form.get('category');}
+  get categoryId() {return this.form.get('categoryId');}
   get recurrenceType() {return this.form.get('recurrenceType');}
   get templateUpdateSelected() {return this.form.get('templateUpdateSelected');}
 
 
+  /**
+   * Reihenfolge (DIV-73): Kategorien der eigenen Anfrage geladen → Formular gültig → Kategorie vorhanden → nicht bereits
+   * gesendet. Alle Abbrüche liegen vor dem Setzen von `saving`, die Sperre bleibt also nie nach einer Ablehnung stehen.
+   */
   onSubmit() {
+    if (!this.categoriesLoaded()) return;
+
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       return;
     }
 
+    const category = this.formCategories()!.find(cat => cat.id === this.form.value.categoryId);
+    if (!category) {
+      this.categoryId?.setValue('');
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    if (this.saving) return;
+    this.saving = true;
+
+    const categoryDto: CategoryDto = {
+      id: category.id,
+      name: category.name,
+      groupId: category.groupId
+    }
+
     if (this.isAddMode) {
-      this.onCreateCart();
+      this.onCreateCart(categoryDto);
     } else {
-      this.onUpdateCart();
+      this.onUpdateCart(categoryDto);
     }
   }
 
-  onCreateCart() {
+  onCreateCart(categoryDto: CategoryDto) {
     this.loadingCtrl.create({
       message: this.translate.instant("carts.loading_add")
     }).then(loadingEl => {
-      const category = this.categories().find(cat => cat.id === this.form.value.categoryId)!;
-      const categoryDto: CategoryDto = {
-        id: category.id,
-        name: category.name,
-        groupId: category.groupId
-      }
-
       const newCart: Cart = {
         id: null,
         title: this.form.value.title.trim(),
@@ -158,16 +190,10 @@ export class NewEditCartPage implements OnInit {
     })
   }
 
-  onUpdateCart() {
+  onUpdateCart(categoryDto: CategoryDto) {
     this.loadingCtrl.create({
       message: this.translate.instant("carts.loading_update")
     }).then(loadingEl => {
-      const category = this.categories().find(cat => cat.id === this.form.value.categoryId)!;
-      const categoryDto: CategoryDto = {
-        id: category.id,
-        name: category.name,
-        groupId: category.groupId
-      }
       const updatedCart: Cart = {
         id: this.form.value.id,
         title: this.form.value.title.trim(),
@@ -212,10 +238,31 @@ export class NewEditCartPage implements OnInit {
         recurrenceType: cart.hasActiveTemplate ? cart.recurrenceType : RECURRENCE_TYPE.NONE
       })
     } else if (this.isAddMode) {
+      const template = this.findDuplicateSource();
+      this.isDuplicate = !!template;
       this.form.patchValue({
+        ...(template ? duplicateFormValues(template) : {}),
         datePurchased: this.formattedString,
         recurrenceType: RECURRENCE_TYPE.NONE
       });
+    }
+  }
+
+  /** Vorlage aus `?duplicateOf=<id>` (DIV-73), nur eigene, reguläre Ausgaben der aktiven Gruppe. */
+  private findDuplicateSource(): Cart | undefined {
+    const duplicateOf = this.route.snapshot.queryParamMap.get('duplicateOf');
+    if (!duplicateOf) return undefined;
+    return duplicateSource(this.cartList(), +duplicateOf, this.activeGroup.id, this.user?.name,
+      name => this.categoryService.isSettlementpayment(name));
+  }
+
+  /** Nach dem Laden: eine vorbelegte, in der Gruppe nicht (mehr) vorhandene Kategorie leeren, Pflichtmeldung zeigen. */
+  private clearUnknownCategory() {
+    const categoryId = this.categoryId;
+    if (!categoryId?.value) return;
+    if (!this.formCategories()!.some(cat => cat.id === categoryId.value)) {
+      categoryId.setValue('');
+      categoryId.markAsTouched();
     }
   }
 

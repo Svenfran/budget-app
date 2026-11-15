@@ -6,7 +6,7 @@
     <ion-title *ngIf="isAddMode">{{ 'carts.title_add' | translate }}</ion-title>
     <ion-title *ngIf="!isAddMode">{{ 'carts.title_edit' | translate }}</ion-title>
     <ion-buttons slot="primary">
-      <ion-button (click)="onSubmit()" [disabled]="!form.valid">
+      <ion-button (click)="onSubmit()" [disabled]="!form.valid || saving || !categoriesLoaded()">
         <ion-icon name="checkmark" slot="icon-only"></ion-icon>
       </ion-button>
     </ion-buttons>
@@ -16,6 +16,13 @@
 <ion-content>
   <form [formGroup]="form" (ngSubmit)="onSubmit()">
     <ion-grid>
+      <ion-row *ngIf="isDuplicate">
+        <ion-col class="ion-padding-horizontal" size-sm="6" offset-sm="3">
+          <ion-text class="ion-text-wrap duplicate-hint" color="medium">
+            <small>{{ 'carts.duplicate_hint' | translate }}</small>
+          </ion-text>
+        </ion-col>
+      </ion-row>
       <ion-row>
         <ion-col size-sm="6" offset-sm="3">
           <ion-item lines="none">
@@ -59,7 +66,7 @@
               formControlName="description"
             ></ion-textarea>
           </ion-item>
-          <span class="ion-padding"><small>{{0 + form.controls['description'].value.length}} / 255</small></span>
+          <span class="ion-padding"><small>{{ form.controls['description'].value?.length ?? 0 }} / 255</small></span>
         </ion-col>
       </ion-row>
       <ion-row>
@@ -71,7 +78,7 @@
               formControlName="categoryId"
               [okText]="'global.selections.btn_ok' | translate" 
               [cancelText]="'global.selections.btn_cancel' | translate">
-              <ion-select-option *ngFor="let category of categories()" [value]="category.id">{{ category.name }}</ion-select-option>
+              <ion-select-option *ngFor="let category of formCategories() ?? []" [value]="category.id">{{ category.name }}</ion-select-option>
             </ion-select>
           </ion-item>
           <ion-item lines="none" *ngIf="categoryId?.invalid && categoryId?.touched">
