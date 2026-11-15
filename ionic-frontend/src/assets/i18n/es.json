@@ -496,15 +496,23 @@
             "month": "Mes",
             "year": "Año"
         },
+        "perspective": {
+            "personal": "Personal",
+            "group": "Gastos del grupo"
+        },
         "kpi": {
             "total_spent": "Gastos totales",
             "paid_by_user": "Pagado por ti",
             "current_balance": "Saldo actual",
             "current_balance_hint": "Independiente del periodo",
-            "paid_cart_count": "Compras pagadas"
+            "paid_cart_count": "Compras pagadas",
+            "cart_count": "Número de gastos",
+            "average_per_cart": "Promedio por gasto",
+            "member_count": "Número de miembros"
         },
         "timeline": {
             "title": "Pagado por ti",
+            "title_group": "Gastos del grupo",
             "week": "Sem. {{week}}"
         },
         "categories": {
@@ -514,6 +522,7 @@
             "no_chart": "Ninguna categoría con importe positivo para el gráfico."
         },
         "empty": "No hay gastos propios en el periodo seleccionado.",
+        "empty_group": "No hay gastos en el periodo seleccionado.",
         "error": "No se pudieron cargar las estadísticas.",
         "retry": "Volver a cargar"
     },

@@ -26,6 +26,15 @@
           </ion-item>
         </ion-list>
 
+        <ion-segment [value]="perspective()" (ionChange)="onPerspectiveChange($any($event.detail.value))">
+          <ion-segment-button value="PERSONAL">
+            <ion-label>{{ 'statistics.perspective.personal' | translate }}</ion-label>
+          </ion-segment-button>
+          <ion-segment-button value="GROUP">
+            <ion-label>{{ 'statistics.perspective.group' | translate }}</ion-label>
+          </ion-segment-button>
+        </ion-segment>
+
         <ion-segment [value]="filter().period" (ionChange)="onPeriodChange($any($event.detail.value))">
           <ion-segment-button value="MONTH">
             <ion-label>{{ 'statistics.filter.period_month' | translate }}</ion-label>
@@ -70,7 +79,7 @@
       <!-- Kennzahlen -->
       <ion-row>
         <ion-col size-md="6" offset-md="3">
-          <div class="kpis">
+          <div class="kpis" *ngIf="perspective() === 'PERSONAL'">
             <div class="kpi">
               <ion-text color="medium"><small>{{ 'statistics.kpi.total_spent' | translate }}</small></ion-text>
               <strong>{{ stats.totalSpent | scientificCurrency }}</strong>
@@ -91,14 +100,34 @@
               <strong>{{ stats.paidCartCount }}</strong>
             </div>
           </div>
+          <div class="kpis" *ngIf="perspective() === 'GROUP'">
+            <div class="kpi">
+              <ion-text color="medium"><small>{{ 'statistics.kpi.total_spent' | translate }}</small></ion-text>
+              <strong>{{ stats.totalSpent | scientificCurrency }}</strong>
+            </div>
+            <div class="kpi">
+              <ion-text color="medium"><small>{{ 'statistics.kpi.cart_count' | translate }}</small></ion-text>
+              <strong>{{ stats.groupView.cartCount }}</strong>
+            </div>
+            <div class="kpi">
+              <ion-text color="medium"><small>{{ 'statistics.kpi.average_per_cart' | translate }}</small></ion-text>
+              <strong>{{ stats.groupView.averagePerCart | scientificCurrency }}</strong>
+            </div>
+            <div class="kpi">
+              <ion-text color="medium"><small>{{ 'statistics.kpi.member_count' | translate }}</small></ion-text>
+              <strong>{{ stats.groupView.memberCount }}</strong>
+            </div>
+          </div>
         </ion-col>
       </ion-row>
 
       <!-- Zeitreihe -->
-      <ion-row *ngIf="hasPersonalSpendings()">
+      <ion-row *ngIf="hasSpendings()">
         <ion-col size-md="6" offset-md="3">
           <ion-list-header>
-            <ion-label color="medium">{{ 'statistics.timeline.title' | translate }}</ion-label>
+            <ion-label color="medium">
+              {{ (perspective() === 'GROUP' ? 'statistics.timeline.title_group' : 'statistics.timeline.title') | translate }}
+            </ion-label>
           </ion-list-header>
           <app-bar-chart [labels]="barLabels()" [values]="barValues()"></app-bar-chart>
         </ion-col>
@@ -111,10 +140,12 @@
             <ion-list-header>
               <ion-label color="medium">{{ 'statistics.categories.title' | translate }}</ion-label>
             </ion-list-header>
-            <ion-item *ngIf="!hasPersonalSpendings()" lines="none">
-              <ion-label class="ion-text-wrap" color="medium">{{ 'statistics.empty' | translate }}</ion-label>
+            <ion-item *ngIf="!hasSpendings()" lines="none">
+              <ion-label class="ion-text-wrap" color="medium">
+                {{ (perspective() === 'GROUP' ? 'statistics.empty_group' : 'statistics.empty') | translate }}
+              </ion-label>
             </ion-item>
-            <ng-container *ngIf="hasPersonalSpendings()">
+            <ng-container *ngIf="hasSpendings()">
               <app-donut-chart *ngIf="donutSegments().length > 0" [segments]="donutSegments()" [labels]="donutLabels()"></app-donut-chart>
               <ion-item *ngIf="donutSegments().length === 0" lines="none">
                 <ion-label class="ion-text-wrap" color="medium">{{ 'statistics.categories.no_chart' | translate }}</ion-label>
