@@ -188,6 +188,12 @@ export class CartlistPage implements OnInit {
     this.router.navigate(['domains', 'tabs', 'cartlist', 'new-edit', cart.id?.toString()]);
   }
 
+  /** Sliding-Aktion „Duplizieren“ (DIV-73): Neuanlage mit den Werten dieser Ausgabe, angelegt wird erst beim Speichern. */
+  duplicateCart(cart: Cart, slidingItem: IonItemSliding) {
+    slidingItem.close();
+    this.router.navigate(['domains', 'tabs', 'cartlist', 'new-edit'], { queryParams: { duplicateOf: cart.id } });
+  }
+
   /** Menüpunkt „Download“: Export-Dialog als Bottom Sheet (DIV-68). */
   async openExportDialog() {
     const exporting = signal(false);
