@@ -34,6 +34,8 @@
           <ion-item-sliding *ngFor="let group of groupOverviewList(), let i = index" #slidingItem>
             <ion-item button detail="false"
                       (click)="onSelectGroup(group, slidingItem)"
+                      [class.active-group]="group.id === activeGroupId()"
+                      [attr.aria-current]="group.id === activeGroupId() ? 'true' : null"
                       [lines]="i === groupOverviewList().length - 1 ? 'none' : 'inset'">
               <ion-icon *ngIf="group.memberCount > 0" slot="start" name="people-outline"></ion-icon>
               <ion-icon *ngIf="group.memberCount === 0" slot="start" name="person-outline"></ion-icon>
