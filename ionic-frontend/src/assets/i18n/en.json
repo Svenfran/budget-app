@@ -496,15 +496,23 @@
             "month": "Month",
             "year": "Year"
         },
+        "perspective": {
+            "personal": "Personal",
+            "group": "Group expenses"
+        },
         "kpi": {
             "total_spent": "Total spending",
             "paid_by_user": "Paid by you",
             "current_balance": "Current balance",
             "current_balance_hint": "Independent of the period",
-            "paid_cart_count": "Paid purchases"
+            "paid_cart_count": "Paid purchases",
+            "cart_count": "Number of expenses",
+            "average_per_cart": "Average per expense",
+            "member_count": "Number of members"
         },
         "timeline": {
             "title": "Paid by you",
+            "title_group": "Group expenses",
             "week": "CW {{week}}"
         },
         "categories": {
@@ -514,6 +522,7 @@
             "no_chart": "No category with a positive amount for the chart."
         },
         "empty": "No spending of your own in the selected period.",
+        "empty_group": "No spending in the selected period.",
         "error": "The statistics could not be loaded.",
         "retry": "Reload"
     },

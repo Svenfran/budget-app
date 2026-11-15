@@ -2,7 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { GroupService } from '../service/group.service';
 import { User } from '../auth/user';
 import { AuthService } from '../auth/auth.service';
-import { AlertController, IonItemSliding, LoadingController, ModalController, Platform } from '@ionic/angular';
+import { AlertController, IonItemSliding, LoadingController, ModalController } from '@ionic/angular';
 import { Group } from '../model/group';
 import { NewMemberDto } from './model/new-member-dto';
 import { GroupOverview } from './model/group-overview';
@@ -23,6 +23,8 @@ export class GroupoverviewPage implements OnInit {
 
   public isLoading: boolean = false;
   public groupOverviewList = this.groupService.groupOverviewList;
+  /** markiert die aktive Gruppe in der Liste */
+  public activeGroupId = this.groupService.activeGroupId;
   public user: User | undefined;
 
   constructor(
@@ -50,16 +52,19 @@ export class GroupoverviewPage implements OnInit {
     }, 2000);
   }
 
+  /**
+   * Setzt die angeklickte Gruppe aktiv; die Liste markiert sie. Bewusst ohne Navigation (DIV-72) – zurück geht es über
+   * den Zurück-Button der Seite.
+   */
   async onSelectGroup(group: GroupOverview, slidingItem: IonItemSliding) {
-    // Ist das Item gerade aufgeswiped, nur schließen statt navigieren
+    // Ist das Item gerade aufgeswiped, nur schließen statt auswählen
     if (await slidingItem.getOpenAmount() !== 0) {
       slidingItem.close();
       return;
     }
-    if (this.groupService.activeGroup().id !== group.id) {
+    if (this.activeGroupId() !== group.id) {
       this.groupService.setActiveGroup(group);
     }
-    this.router.navigateByUrl('/domains/tabs/overview', { replaceUrl: true });
   }
 
   onCreateGroup() {

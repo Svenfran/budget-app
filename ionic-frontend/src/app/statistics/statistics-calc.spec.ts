@@ -1,6 +1,6 @@
-import { StatisticsCategoryDto, StatisticsDto, StatisticsTimelineEntryDto } from './model/statistics-dto';
+import { StatisticsCategoryDto, StatisticsDto, StatisticsGroupViewDto, StatisticsTimelineEntryDto } from './model/statistics-dto';
 import {
-  categoryRows, DONUT_OTHER_COLOR_INDEX, donutSegments, hasPersonalSpendings, timelineLabels, yearOptions,
+  categoryRows, DONUT_OTHER_COLOR_INDEX, donutSegments, hasSpendings, perspectiveView, timelineLabels, yearOptions,
 } from './statistics-calc';
 
 describe('statistics-calc', () => {
@@ -12,8 +12,11 @@ describe('statistics-calc', () => {
     ({ year: 2025, month: null, week: null, from: null, to: null, amount: 0, ...overrides });
   const dto = (overrides: Partial<StatisticsDto>): StatisticsDto => ({
     groupId: null, period: 'YEAR', year: 2025, month: null, totalSpent: 0, paidByUser: 0, paidCartCount: 0, currentBalance: 0,
-    availableYears: [], timeline: [], categories: [], ...overrides,
+    availableYears: [], timeline: [], categories: [],
+    groupView: { cartCount: 0, averagePerCart: 0, memberCount: 0, timeline: [], categories: [] }, ...overrides,
   });
+  const groupView = (overrides: Partial<StatisticsGroupViewDto>): StatisticsGroupViewDto =>
+    ({ cartCount: 0, averagePerCart: 0, memberCount: 0, timeline: [], categories: [], ...overrides });
 
   /** Lebensmittel 60, Haushalt 20, Ausgleichszahlung −30, Erstattung −10 → bezahlt 40, Donut-Summe 80 */
   const mixed = [category('Lebensmittel', 60), category('Haushalt', 20), category('Ausgleichszahlung', -30, true),
@@ -104,8 +107,8 @@ describe('statistics-calc', () => {
     it('ohne eigene Carts gibt es keine persönlichen Ausgaben, auch wenn andere bezahlt haben', () => {
       const othersPaid = dto({ totalSpent: 80, paidByUser: 0, timeline: [entry({ month: 1 }), entry({ month: 2 })] });
 
-      expect(hasPersonalSpendings(othersPaid)).toBeFalse();
-      expect(hasPersonalSpendings(null)).toBeFalse();
+      expect(perspectiveView(othersPaid, 'PERSONAL').hasSpendings).toBeFalse();
+      expect(perspectiveView(null, 'PERSONAL').hasSpendings).toBeFalse();
     });
 
     it('netto 0 durch +100 € Lebensmittel und −100 € Ausgleichszahlung zählt als persönliche Ausgaben', () => {
@@ -114,12 +117,79 @@ describe('statistics-calc', () => {
         categories: [category('Lebensmittel', 100), category('Ausgleichszahlung', -100, true)],
       });
 
-      expect(hasPersonalSpendings(netZero)).toBeTrue();
+      expect(perspectiveView(netZero, 'PERSONAL').hasSpendings).toBeTrue();
       expect(categoryRows(netZero.categories).length).toBe(2);
     });
 
     it('eine Zeitreihe ungleich 0 zählt als persönliche Ausgaben', () => {
-      expect(hasPersonalSpendings(dto({ timeline: [entry({ month: 3, amount: -20 })] }))).toBeTrue();
+      expect(hasSpendings([entry({ month: 3, amount: -20 })], [])).toBeTrue();
+      expect(hasSpendings([entry({ month: 3, amount: 0 })], [])).toBeFalse();
+    });
+  });
+
+  describe('Perspektive (DIV-72)', () => {
+    /** AC3/AC4: A 100 + 25, B 50 → persönlich 125, Gruppe 175 */
+    const stats = dto({
+      totalSpent: 175, paidByUser: 125,
+      timeline: [entry({ month: 3, amount: 100 }), entry({ month: 5, amount: 25 })],
+      categories: [category('Lebensmittel', 125)],
+      groupView: groupView({
+        cartCount: 3, averagePerCart: 58.33, memberCount: 3,
+        timeline: [entry({ month: 3, amount: 150 }), entry({ month: 5, amount: 25 })],
+        categories: [category('Lebensmittel', 175)],
+      }),
+    });
+
+    it('PERSONAL liefert die persönliche Zeitreihe und Kategorien (AC2/AC4)', () => {
+      const view = perspectiveView(stats, 'PERSONAL');
+
+      expect(view.timeline.map(e => e.amount)).toEqual([100, 25]);
+      expect(view.categories).toEqual([category('Lebensmittel', 125)]);
+      expect(view.hasSpendings).toBeTrue();
+    });
+
+    it('GROUP liefert Zeitreihe und Kategorien aus groupView; Summe = Gesamtausgaben (AC5/AC6)', () => {
+      const view = perspectiveView(stats, 'GROUP');
+
+      expect(view.timeline.map(e => e.amount)).toEqual([150, 25]);
+      expect(view.categories).toEqual([category('Lebensmittel', 175)]);
+      expect(cents(view.timeline.map(e => e.amount))).toBe(17500);
+      expect(cents(view.categories.map(c => c.amount))).toBe(17500);
+      expect(view.hasSpendings).toBeTrue();
+    });
+
+    it('ohne Daten sind beide Perspektiven leer', () => {
+      expect(perspectiveView(null, 'GROUP')).toEqual({ timeline: [], categories: [], hasSpendings: false });
+      expect(perspectiveView(null, 'PERSONAL')).toEqual({ timeline: [], categories: [], hasSpendings: false });
+    });
+
+    it('nur andere haben bezahlt: Gruppe zeigt Diagramme, persönlich den Empty-State', () => {
+      const othersPaid = dto({
+        totalSpent: 80, timeline: [entry({ month: 4 })],
+        groupView: groupView({ cartCount: 1, timeline: [entry({ month: 4, amount: 80 })], categories: [category('Technik', 80)] }),
+      });
+
+      expect(perspectiveView(othersPaid, 'PERSONAL').hasSpendings).toBeFalse();
+      expect(perspectiveView(othersPaid, 'GROUP').hasSpendings).toBeTrue();
+    });
+
+    it('Gruppe ohne Carts im Zeitraum: Empty-State (AC10)', () => {
+      const empty = dto({ groupView: groupView({ timeline: [entry({ month: 1 }), entry({ month: 2 })] }) });
+
+      expect(perspectiveView(empty, 'GROUP').hasSpendings).toBeFalse();
+    });
+
+    it('Donut und Liste auf Gruppenkategorien: Prozent und Farben nach denselben Regeln (AC6)', () => {
+      const groupCategories = perspectiveView(dto({
+        groupView: groupView({ categories: [category('Technik', 70), category('Lebensmittel', 30), category('Ausgleichszahlung', 5, true)] }),
+      }), 'GROUP').categories;
+
+      expect(donutSegments(groupCategories).map(s => [s.name, s.percent, s.colorIndex])).toEqual([
+        ['Technik', 70, 0], ['Lebensmittel', 30, 1],
+      ]);
+      expect(categoryRows(groupCategories).map(r => [r.name, r.percent, r.colorIndex])).toEqual([
+        ['Technik', 70, 0], ['Lebensmittel', 30, 1], ['Ausgleichszahlung', null, null],
+      ]);
     });
   });
 

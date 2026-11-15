@@ -2,10 +2,10 @@ import { Component, computed, effect, signal, untracked } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
 import { GroupService } from 'src/app/service/group.service';
 import { LanguageService } from 'src/app/service/language.service';
-import { StatisticsPeriod } from './model/statistics-dto';
+import { StatisticsPeriod, StatisticsPerspective } from './model/statistics-dto';
 import { ChartThemeService } from './service/chart-theme.service';
 import { StatisticsService } from './service/statistics.service';
-import { categoryRows, donutSegments, hasPersonalSpendings, timelineLabels, yearOptions } from './statistics-calc';
+import { categoryRows, donutSegments, perspectiveView, timelineLabels, yearOptions } from './statistics-calc';
 
 /** Wert der Gruppenauswahl für „Alle Gruppen“ (ion-select kommt mit null als Wert nicht zurecht). */
 const ALL_GROUPS = 'all';
@@ -29,19 +29,27 @@ export class StatisticsPage {
   public hasError = this.statisticsService.hasError;
   public groups = this.groupService.groupsSideNav;
 
+  /**
+   * Persönlich oder Gruppenausgaben (DIV-72): nur Anzeige, kein Request. Nicht Teil des Filters, damit ein Filterwechsel
+   * sie behält; beim Betreten der Seite immer „Persönlich“ (AC1, E6).
+   */
+  public perspective = signal<StatisticsPerspective>('PERSONAL');
+  /** Zeitreihe, Kategorien und Empty-State der gewählten Perspektive aus der geladenen Antwort */
+  public view = computed(() => perspectiveView(this.statistics(), this.perspective()));
+
   public selectedGroup = computed(() => this.filter().groupId ?? ALL_GROUPS);
-  public categoryRows = computed(() => categoryRows(this.statistics()?.categories ?? []));
-  public hasPersonalSpendings = computed(() => hasPersonalSpendings(this.statistics()));
+  public categoryRows = computed(() => categoryRows(this.view().categories));
+  public hasSpendings = computed(() => this.view().hasSpendings);
   public palette = computed(() => this.chartThemeService.theme().palette);
   public barLabels = computed(() => {
     const statistics = this.statistics();
     const lang = this.languageService.currentLang();
     if (!statistics) return [];
-    return timelineLabels(statistics.period, statistics.timeline, lang,
+    return timelineLabels(statistics.period, this.view().timeline, lang,
       week => this.translate.instant('statistics.timeline.week', { week }));
   });
-  public barValues = computed(() => this.statistics()?.timeline.map(entry => entry.amount) ?? []);
-  public donutSegments = computed(() => donutSegments(this.statistics()?.categories ?? []));
+  public barValues = computed(() => this.view().timeline.map(entry => entry.amount));
+  public donutSegments = computed(() => donutSegments(this.view().categories));
   public donutLabels = computed(() => {
     this.languageService.currentLang();
     return this.donutSegments().map(segment => segment.name ?? this.translate.instant('statistics.categories.other'));
@@ -68,7 +76,12 @@ export class StatisticsPage {
   }
 
   ionViewWillEnter() {
+    this.perspective.set('PERSONAL');
     this.statisticsService.load();
+  }
+
+  onPerspectiveChange(value: StatisticsPerspective) {
+    this.perspective.set(value);
   }
 
   onGroupChange(value: number | string) {

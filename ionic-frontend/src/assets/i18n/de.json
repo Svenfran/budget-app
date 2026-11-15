@@ -496,15 +496,23 @@
             "month": "Monat",
             "year": "Jahr"
         },
+        "perspective": {
+            "personal": "Persönlich",
+            "group": "Gruppenausgaben"
+        },
         "kpi": {
             "total_spent": "Gesamtausgaben",
             "paid_by_user": "Von dir bezahlt",
             "current_balance": "Aktueller Saldo",
             "current_balance_hint": "Unabhängig vom Zeitraum",
-            "paid_cart_count": "Bezahlte Einkäufe"
+            "paid_cart_count": "Bezahlte Einkäufe",
+            "cart_count": "Anzahl Ausgaben",
+            "average_per_cart": "Durchschnitt pro Ausgabe",
+            "member_count": "Anzahl Mitglieder"
         },
         "timeline": {
             "title": "Von dir bezahlt",
+            "title_group": "Gruppenausgaben",
             "week": "KW {{week}}"
         },
         "categories": {
@@ -514,6 +522,7 @@
             "no_chart": "Keine Kategorie mit positivem Betrag für das Diagramm."
         },
         "empty": "Keine eigenen Ausgaben im gewählten Zeitraum.",
+        "empty_group": "Keine Ausgaben im gewählten Zeitraum.",
         "error": "Die Statistik konnte nicht geladen werden.",
         "retry": "Erneut laden"
     },

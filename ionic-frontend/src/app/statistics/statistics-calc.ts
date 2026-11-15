@@ -1,4 +1,6 @@
-import { StatisticsCategoryDto, StatisticsDto, StatisticsPeriod, StatisticsTimelineEntryDto } from './model/statistics-dto';
+import {
+  StatisticsCategoryDto, StatisticsDto, StatisticsPeriod, StatisticsPerspective, StatisticsTimelineEntryDto,
+} from './model/statistics-dto';
 
 /** Höchstens so viele Kategorien erscheinen einzeln im Donut, der Rest wird zu „Sonstige“ (K8). */
 export const DONUT_MAX_CATEGORIES = 8;
@@ -95,13 +97,30 @@ export function yearOptions(availableYears: number[], currentYear: number, selec
   return [...new Set([...availableYears, currentYear, selectedYear])].sort((a, b) => b - a);
 }
 
+/** Was die Diagramme in der gewählten Perspektive zeigen (DIV-72). */
+export interface PerspectiveView {
+  timeline: StatisticsTimelineEntryDto[];
+  categories: StatisticsCategoryDto[];
+  /** Diagramme statt Empty-State, siehe {@link hasSpendings} */
+  hasSpendings: boolean;
+}
+
 /**
- * Gibt es persönliche Ausgaben für die Diagramme? Nein, wenn die Zeitreihe nur 0 enthält und keine Kategoriezeile
- * existiert – unabhängig von den Gesamtausgaben (Codex F-002). Ja auch dann, wenn sich Zeilen zu 0 aufheben.
+ * Zeitreihe und Kategorien der Perspektive: PERSONAL die persönlichen Felder, GROUP `groupView`. Ohne Daten leer.
+ * Der Wechsel rechnet nur auf der geladenen Antwort, es gibt keinen eigenen Request.
  */
-export function hasPersonalSpendings(dto: StatisticsDto | null): boolean {
-  if (!dto) return false;
-  return dto.categories.length > 0 || dto.timeline.some(entry => entry.amount !== 0);
+export function perspectiveView(dto: StatisticsDto | null, perspective: StatisticsPerspective): PerspectiveView {
+  if (!dto) return { timeline: [], categories: [], hasSpendings: false };
+  const { timeline, categories } = perspective === 'GROUP' ? dto.groupView : dto;
+  return { timeline, categories, hasSpendings: hasSpendings(timeline, categories) };
+}
+
+/**
+ * Gibt es Ausgaben für die Diagramme? Nein, wenn die Zeitreihe nur 0 enthält und keine Kategoriezeile existiert –
+ * unabhängig von den Gesamtausgaben (Codex F-002). Ja auch dann, wenn sich Zeilen zu 0 aufheben.
+ */
+export function hasSpendings(timeline: StatisticsTimelineEntryDto[], categories: StatisticsCategoryDto[]): boolean {
+  return categories.length > 0 || timeline.some(entry => entry.amount !== 0);
 }
 
 function donutCategories(categories: StatisticsCategoryDto[]): StatisticsCategoryDto[] {

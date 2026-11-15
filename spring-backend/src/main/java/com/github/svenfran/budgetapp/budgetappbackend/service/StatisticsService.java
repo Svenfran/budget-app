@@ -3,6 +3,7 @@ package com.github.svenfran.budgetapp.budgetappbackend.service;
 import com.github.svenfran.budgetapp.budgetappbackend.constants.StatisticsPeriod;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.StatisticsCategoryDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.StatisticsDto;
+import com.github.svenfran.budgetapp.budgetappbackend.dto.StatisticsGroupViewDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.StatisticsTimelineEntryDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Cart;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
@@ -21,12 +22,16 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static com.github.svenfran.budgetapp.budgetappbackend.helper.CostShareCalculator.toEuro;
 
 /**
  * Statistikseite (DIV-63): Ausgaben, Zeitreihe und Kategorien einer Gruppe oder aller Gruppen des Nutzers, dazu der
  * aktuelle offene Saldo wie in der Übersicht. Rein lesend.
+ * <p>
+ * Jede Antwort enthält beide Perspektiven (DIV-72): die persönlichen Felder und {@code groupView} mit allen Carts der
+ * gewählten Gruppen sowie der Anzahl ihrer aktuellen Personen. Der Perspektivwechsel im Frontend braucht keinen Request.
  */
 @Service
 public class StatisticsService {
@@ -91,15 +96,35 @@ public class StatisticsService {
         dto.setPaidCartCount(result.paidCartCount());
         dto.setCurrentBalance(toEuro(balanceCents));
         dto.setAvailableYears(List.copyOf(availableYears));
-        dto.setTimeline(result.timeline().stream()
+        dto.setTimeline(toTimelineDtos(result.timeline()));
+        dto.setCategories(toCategoryDtos(result.categories()));
+        var group = result.group();
+        dto.setGroupView(new StatisticsGroupViewDto(group.cartCount(), toEuro(group.averageCents()), memberCount(groups),
+                toTimelineDtos(group.timeline()), toCategoryDtos(group.categories())));
+        return dto;
+    }
+
+    /** Aktuelle Personen der Gruppen (Owner und Mitglieder), jede genau einmal – auch wenn der Owner in members steht. */
+    private int memberCount(List<Group> groups) {
+        return (int) groups.stream()
+                .flatMap(group -> Stream.concat(Stream.of(group.getOwner()), group.getMembers().stream()))
+                .map(User::getId)
+                .distinct()
+                .count();
+    }
+
+    private List<StatisticsTimelineEntryDto> toTimelineDtos(List<StatisticsCalculator.TimelineEntry> entries) {
+        return entries.stream()
                 .map(entry -> new StatisticsTimelineEntryDto(entry.year(), entry.month(), entry.week(),
                         entry.from(), entry.to(), toEuro(entry.amountCents())))
-                .toList());
-        dto.setCategories(result.categories().stream()
+                .toList();
+    }
+
+    private List<StatisticsCategoryDto> toCategoryDtos(List<StatisticsCalculator.CategoryEntry> categories) {
+        return categories.stream()
                 .map(category -> new StatisticsCategoryDto(category.name(), toEuro(category.amountCents()),
                         category.settlement()))
-                .toList());
-        return dto;
+                .toList();
     }
 
     private void validate(StatisticsPeriod period, Integer year, Integer month) throws InvalidStatisticsRequestException {

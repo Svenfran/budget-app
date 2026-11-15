@@ -1,3 +1,16 @@
+// Aktive Gruppe (DIV-72): Akzentbalken links in der Primärfarbe, leicht abgesetzter Hintergrund. Die Tönung leitet sich
+// aus der Textfarbe ab (Hell: dunkler, Dunkel: heller) und liegt über dem normalen Item-Hintergrund: Der Hintergrund
+// muss deckend bleiben, sonst scheinen die Slide-Aktionen von ion-item-sliding durch das Item hindurch.
+ion-item.active-group {
+    --background: linear-gradient(rgba(var(--ion-text-color-rgb, 0, 0, 0), 0.06), rgba(var(--ion-text-color-rgb, 0, 0, 0), 0.06)),
+        var(--ion-item-background, var(--ion-background-color, #fff));
+
+    // Balken als Inset-Schatten am inneren Element: liegt über dessen deckendem Hintergrund und gleitet mit dem Item
+    &::part(native) {
+        box-shadow: inset 3px 0 0 var(--ion-color-primary);
+    }
+}
+
 .group-details {
     display: flex;
     align-items: center;
