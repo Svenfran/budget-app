@@ -19,9 +19,12 @@ public class StatisticsDto {
     private double currentBalance;
     // absteigend, Jahre mit Carts in den gewählten Gruppen
     private List<Integer> availableYears;
+    // persönlich: nur Carts mit dem Nutzer als Zahler
     private List<StatisticsTimelineEntryDto> timeline;
-    // Betrag absteigend, ohne 0-Zeilen
+    // persönlich; Betrag absteigend, ohne 0-Zeilen
     private List<StatisticsCategoryDto> categories;
+    // Gruppenperspektive (DIV-72): alle Carts, unabhängig vom Zahler
+    private StatisticsGroupViewDto groupView;
 
     public StatisticsDto() {
     }
@@ -112,5 +115,13 @@ public class StatisticsDto {
 
     public void setCategories(List<StatisticsCategoryDto> categories) {
         this.categories = categories;
+    }
+
+    public StatisticsGroupViewDto getGroupView() {
+        return groupView;
+    }
+
+    public void setGroupView(StatisticsGroupViewDto groupView) {
+        this.groupView = groupView;
     }
 }

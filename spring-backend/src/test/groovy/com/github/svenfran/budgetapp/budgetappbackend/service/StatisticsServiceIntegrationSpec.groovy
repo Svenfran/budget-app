@@ -22,6 +22,7 @@ import static java.time.LocalDate.of
  * Statistikseite (DIV-63): Gruppenauswahl, Berechtigung und aktueller Saldo über StatisticsService. Die Berechnung
  * der Zeitreihe und Kategorien prüft StatisticsCalculatorSpec; hier geht es um das Zusammenspiel mit der Datenbank,
  * GroupService (Gruppen des Nutzers) und SpendingsOverviewService (Saldo, Konsistenz mit der Übersicht, AC13).
+ * DIV-72: Gruppenblock (groupView) mit Mitgliederzahl, Gruppenauswahl und centgenauem Abgleich mit der Übersicht (AC9).
  *
  * - Alle Mitgliedschaften beginnen am 01.01.2024, Einkäufe liegen 2025.
  * - Bedingungen enthalten nur IDs und DTO-Werte, keine Entities.
@@ -282,11 +283,152 @@ class StatisticsServiceIntegrationSpec extends IntegrationSpec {
         leer.availableYears == [2025]
     }
 
+    // --- Gruppenperspektive (DIV-72) ---
+
+    def "DIV-72 AC3: Einzelne Gruppe: Gruppenblock 175,00 €, 3 Ausgaben, Ø 58,33 €, 3 Mitglieder; persönlich 125,00 €"() {
+        given:
+        def anna = fixtures.user(name: 'Anna')
+        def ben = fixtures.user(name: 'Ben')
+        def wg = fixtures.group(owner: anna, members: [ben, fixtures.user(name: 'Cleo')], memberSince: SEIT)
+        einkauf(wg, anna, 100d, of(2025, 3, 1))
+        einkauf(wg, ben, 50d, of(2025, 3, 2))
+        einkauf(wg, anna, 25d, of(2025, 5, 1))
+        def kategorie = wg.category.name
+        flushAndClear()
+        loginAs(anna)
+        LOG.info('Szenario: Gruppe {}, Anna {} (Owner) 100 + 25, Ben {} 50, Cleo (Mitglied, ohne Carts); Kategorie {}',
+                wg.group.id, anna.id, ben.id, kategorie)
+
+        when:
+        def dto = statistik(wg.group.id, YEAR, 2025)
+
+        then:
+        dto.totalSpent == 175d
+        dto.groupView.cartCount == 3L
+        dto.groupView.averagePerCart == 58.33d
+        dto.groupView.memberCount == 3
+        dto.groupView.categories*.name == [kategorie]
+        dto.groupView.categories*.amount == [175d]
+        dto.groupView.timeline*.amount.take(5) == [0d, 0d, 150d, 0d, 25d]
+
+        and: "AC4: persönlich unverändert"
+        dto.paidByUser == 125d
+        dto.timeline*.amount.take(5) == [0d, 0d, 100d, 0d, 25d]
+        dto.categories*.amount == [125d]
+    }
+
+    def "DIV-72: Steht der Owner zugleich in members, zählt er bei den Mitgliedern einmal (#auswahl)"() {
+        given:
+        def anna = fixtures.user(name: 'Anna')
+        def ben = fixtures.user(name: 'Ben')
+        def wg = fixtures.group(owner: anna, members: [anna, ben], memberSince: SEIT)
+        def gid = wg.group.id
+        flushAndClear()
+        loginAs(anna)
+        LOG.info('Szenario: Gruppe {}, Anna {} (Owner und Mitglied), Ben {}; Auswahl {}', gid, anna.id, ben.id, auswahl)
+
+        when:
+        def dto = statistik(auswahl == 'Gruppe' ? gid : null, ALL, null)
+
+        then:
+        dto.groupView.memberCount == 2
+
+        where:
+        auswahl << ['Gruppe', 'alle Gruppen']
+    }
+
+    def "DIV-72 E1/AC7: Alle Gruppen: Gruppenblock über die Gruppen des Nutzers, jeder Cart und jede Person einmal; fremde und verlassene Gruppen zählen nicht"() {
+        given: "Haushalt (Anna Owner, Ben), Urlaub (Olaf Owner, Anna, Ben, Cleo), fremde Gruppe, Gruppe, die Anna verlassen hat"
+        def anna = fixtures.user(name: 'Anna')
+        def ben = fixtures.user(name: 'Ben')
+        def cleo = fixtures.user(name: 'Cleo')
+        def olaf = fixtures.user(name: 'Olaf')
+        def haushalt = fixtures.group(owner: anna, members: [ben], memberSince: SEIT)
+        def urlaub = fixtures.group(owner: olaf, members: [anna, ben, cleo], memberSince: SEIT)
+        def fremd = fixtures.group(memberSince: SEIT)
+        def frueher = fixtures.group(memberSince: SEIT)
+        fixtures.membership(frueher, anna, membershipStart: DateUtils.toDate(SEIT), membershipEnd: DateUtils.toDate(of(2025, 1, 31)))
+        einkauf(haushalt, anna, 60d, of(2025, 3, 1))
+        einkauf(haushalt, ben, 40d, of(2025, 4, 1))
+        einkauf(urlaub, olaf, 30d, of(2025, 8, 1))
+        einkauf(urlaub, cleo, 20d, of(2025, 8, 2))
+        einkauf(fremd, fremd.owner, 500d, of(2025, 5, 1))
+        einkauf(frueher, anna, 999d, of(2025, 1, 10))
+        flushAndClear()
+        loginAs(anna)
+        LOG.info('Szenario: Anna {}, Ben {}, Cleo {}, Olaf {}; Haushalt {} (60 + 40), Urlaub {} (30 + 20), fremd {} (500), ' +
+                'früher {} (Anna entfernt, 999)', anna.id, ben.id, cleo.id, olaf.id, haushalt.group.id, urlaub.group.id,
+                fremd.group.id, frueher.group.id)
+
+        when:
+        def dto = statistik(null, YEAR, 2025)
+
+        then:
+        dto.totalSpent == 150d
+        dto.groupView.cartCount == 4L
+        dto.groupView.averagePerCart == 37.5d
+        dto.groupView.memberCount == 4      // Anna, Ben, Olaf, Cleo
+        cents(dto.groupView.timeline*.amount) == 15000L
+        cents(dto.groupView.categories*.amount) == 15000L
+        dto.groupView.categories.size() == 2
+
+        and: "persönlich unverändert"
+        dto.paidByUser == 60d
+    }
+
+    def "DIV-72 AC9: Gruppengesamtausgaben #period #year/#month stimmen centgenau mit der Übersicht überein (mit Ausgleichszahlung und ehemaligem Mitglied)"() {
+        given: "Anna (Owner) und Ben seit 2024, Dora nur 2024 Mitglied; Ausgleichszahlung Ben → Anna im März 2025"
+        def anna = fixtures.user(name: 'Anna')
+        def ben = fixtures.user(name: 'Ben')
+        def dora = fixtures.user(name: 'Dora')
+        def wg = fixtures.group(owner: anna, members: [ben], memberSince: SEIT)
+        fixtures.membership(wg, dora, membershipStart: DateUtils.toDate(SEIT), membershipEnd: DateUtils.toDate(of(2024, 12, 31)))
+        def gid = wg.group.id
+        einkauf(wg, anna, 90d, of(2025, 1, 10))
+        einkauf(wg, ben, 60.3d, of(2025, 3, 10))
+        einkauf(wg, dora, 33.33d, of(2024, 6, 1))
+        einkauf(wg, anna, 12.01d, of(2024, 11, 2))
+        zahlung(ben, anna, 20d, wg, of(2025, 3, 20))
+        def annaId = anna.id
+        LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {}, Dora {} (Mitglied nur 2024)', gid, annaId, ben.id, dora.id)
+
+        when:
+        loginAs(userRepository.findById(annaId).get())
+        def dto = statistik(gid, period, year, month)
+        def uebersicht = period == ALL
+                ? spendingsOverviewService.getSpendingsForGroupAndAllYears(gid).spendingsTotalYear.sumTotalYear
+                : period == YEAR
+                ? spendingsOverviewService.getSpendingsForGroupAndYear(year, gid).spendingsTotalYear.sumTotalYear
+                : spendingsOverviewService.getSpendingsForGroupAndYear(year, gid).spendingsPerMonth.find { it.month == month }.sumTotalMonth
+        LOG.info('Übersicht {} {}/{} -> {}', period, year, month, uebersicht)
+
+        then:
+        dto.totalSpent == uebersicht
+        dto.totalSpent == gesamt
+        cents(dto.groupView.timeline*.amount) == cents([gesamt])
+        cents(dto.groupView.categories*.amount) == cents([gesamt])
+        dto.groupView.cartCount == anzahl
+
+        where: "die Ausgleichszahlung (+20/−20) ändert keine Summe und zählt nicht als Ausgabe"
+        period | year | month || gesamt  | anzahl
+        MONTH  | 2025 | 3     || 60.3d   | 1L
+        YEAR   | 2025 | null  || 150.3d  | 2L
+        YEAR   | 2024 | null  || 45.34d  | 2L
+        ALL    | null | null  || 195.64d | 4L
+    }
+
+    private static long cents(List<Double> betraege) {
+        betraege.sum(0L) { Math.round(it * 100) } as long
+    }
+
     private StatisticsDto statistik(Long groupId, period, Integer year, Integer month = null) {
         def dto = statisticsService.getStatistics(groupId, period, year, month)
         LOG.info('statisticsService.getStatistics(Gruppe {}, {} {}/{}) -> totalSpent {}, paidByUser {}, paidCartCount {}, ' +
-                'currentBalance {}, timeline {}, categories {}', groupId ?: 'alle', period, year, month, dto.totalSpent,
-                dto.paidByUser, dto.paidCartCount, dto.currentBalance, dto.timeline*.amount, dto.categories.collect { "${it.name}=${it.amount}" })
+                'currentBalance {}, timeline {}, categories {}; groupView: cartCount {}, averagePerCart {}, memberCount {}, ' +
+                'timeline {}, categories {}', groupId ?: 'alle', period, year, month, dto.totalSpent,
+                dto.paidByUser, dto.paidCartCount, dto.currentBalance, dto.timeline*.amount, dto.categories.collect { "${it.name}=${it.amount}" },
+                dto.groupView.cartCount, dto.groupView.averagePerCart, dto.groupView.memberCount, dto.groupView.timeline*.amount,
+                dto.groupView.categories.collect { "${it.name}=${it.amount}" })
         dto
     }
 
