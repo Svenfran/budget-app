@@ -5,7 +5,7 @@ import { LanguageService } from 'src/app/service/language.service';
 import { StatisticsPeriod } from './model/statistics-dto';
 import { ChartThemeService } from './service/chart-theme.service';
 import { StatisticsService } from './service/statistics.service';
-import { categoryRows, donutSegments, hasPersonalSpendings, timelineLabels, yearOptions } from './statistics-calc';
+import { categoryRows, donutSegments, perspectiveView, timelineLabels, yearOptions } from './statistics-calc';
 
 /** Wert der Gruppenauswahl für „Alle Gruppen“ (ion-select kommt mit null als Wert nicht zurecht). */
 const ALL_GROUPS = 'all';
@@ -31,7 +31,7 @@ export class StatisticsPage {
 
   public selectedGroup = computed(() => this.filter().groupId ?? ALL_GROUPS);
   public categoryRows = computed(() => categoryRows(this.statistics()?.categories ?? []));
-  public hasPersonalSpendings = computed(() => hasPersonalSpendings(this.statistics()));
+  public hasPersonalSpendings = computed(() => perspectiveView(this.statistics(), 'PERSONAL').hasSpendings);
   public palette = computed(() => this.chartThemeService.theme().palette);
   public barLabels = computed(() => {
     const statistics = this.statistics();

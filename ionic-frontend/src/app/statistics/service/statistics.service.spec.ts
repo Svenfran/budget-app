@@ -25,7 +25,8 @@ describe('StatisticsService', () => {
 
   const statisticsDto = (overrides: Partial<StatisticsDto> = {}): StatisticsDto => ({
     groupId: null, period: 'YEAR', year: 2025, month: null, totalSpent: 100, paidByUser: 60, paidCartCount: 3, currentBalance: 10,
-    availableYears: [2025], timeline: [], categories: [], ...overrides,
+    availableYears: [2025], timeline: [], categories: [],
+    groupView: { cartCount: 0, averagePerCart: 0, memberCount: 0, timeline: [], categories: [] }, ...overrides,
   });
   const isStatisticsRequest = (request: HttpRequest<unknown>) => request.url === api;
   const params = (request: TestRequest) => request.request.params.keys()
