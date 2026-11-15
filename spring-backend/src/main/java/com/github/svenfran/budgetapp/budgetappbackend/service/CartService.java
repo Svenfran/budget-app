@@ -91,6 +91,9 @@ public class CartService {
         verificationService.verifyDatePurchasedWithinMembershipPeriod(gmh, cartDto.getDatePurchased());
         var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(cartDto.getDatePurchased(), group.getId());
         var cart = cartDtoMapper.cartDtoToEntity(cartDto, category, user, group, groupMemberCount);
+        // Neuanlage erzwingen (DIV-73): mit gesetzter ID würde save() per merge einen bestehenden, auch fremden Cart
+        // überschreiben – ohne Eigentümerprüfung. Der Mapper behält die ID, weil updateCart sie braucht.
+        cart.setId(null);
         createTemplateForCartIfRecurrenceTypeValid(cart, user, group, cartDto.getRecurrenceType());
         return new CartDto(cartRepository.save(cart));
     }

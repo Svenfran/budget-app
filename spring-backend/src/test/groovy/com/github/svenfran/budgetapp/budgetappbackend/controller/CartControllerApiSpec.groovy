@@ -120,6 +120,46 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
         response.contentAsString.contains('not within membership period')
     }
 
+    // ----- DIV-73: Neuanlage ignoriert eine mitgeschickte ID -----
+
+    def "POST /api/carts/add mit manipulierter ID eines fremden Einkaufs: 201, neue ID, Original unverändert"() {
+        given: 'Original gehört Anna in Gruppe A; Ben legt in seiner Gruppe B mit dessen ID an'
+        def gruppeA = fixtures.group()
+        def original = fixtures.cart(gruppeA, title: 'Original', amount: 25d)
+        def gruppeB = fixtures.group()
+        def ben = gruppeB.owner
+        def body = [id: original.id, title: 'Manipuliert', amount: 99, datePurchased: '2025-06-15',
+                    groupId: gruppeB.group.id, categoryDto: [id: gruppeB.category.id], recurrenceType: 'NONE']
+        LOG.info('Szenario: Gruppe A {} mit Owner Anna {} und Einkauf {} Original 25.00; Gruppe B {} mit Owner Ben {} ' +
+                '(Token für Ben); Body mit id {}', gruppeA.group.id, gruppeA.owner.id, original.id, gruppeB.group.id,
+                ben.id, original.id)
+
+        when:
+        def response = send(post('/api/carts/add'), user: ben, body: body)
+        def neu = json(response)
+        flushAndClear()
+        def abruf = send(get('/api/carts/{id}', original.id), user: gruppeA.owner)
+        // Ohne Fix gehört das Original danach Ben (Gruppe B) und Anna erhält 403 mit Text statt JSON
+        def originalNachher = abruf.status == 200 ? json(abruf) : [:]
+        LOG.info('Antwort: {} mit Cart {} (User {}, Gruppe {}); Original danach {}: {} {} (User {}, Gruppe {})',
+                response.status, neu.id, neu.userDto?.userName, neu.groupId, abruf.status, originalNachher.title,
+                originalNachher.amount, originalNachher.userDto?.userName, originalNachher.groupId)
+
+        then: 'Neuanlage mit eigener ID für den angemeldeten Nutzer in der erlaubten Gruppe'
+        response.status == 201
+        neu.id != original.id
+        def (benName, gruppeBId, annaName, gruppeAId) = [ben.name, gruppeB.group.id, gruppeA.owner.name, gruppeA.group.id]
+        neu.userDto.userName == benName
+        neu.groupId == gruppeBId
+
+        and: 'Original unverändert'
+        abruf.status == 200
+        originalNachher.title == 'Original'
+        originalNachher.amount == 25
+        originalNachher.userDto.userName == annaName
+        originalNachher.groupId == gruppeAId
+    }
+
     // ----- DIV-14: Löschen und Ausgleichszahlung auf HTTP-Ebene -----
 
     def "Löschen eines fremden Einkaufs: 403"() {
