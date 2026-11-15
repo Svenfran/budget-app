@@ -460,6 +460,43 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         templateRepository.findByGroupId(groupId).isEmpty()
     }
 
+    def "addCart mit der ID eines fremden Einkaufs legt einen neuen Einkauf an, das Original bleibt unverändert (DIV-73)"() {
+        given: "Original gehört Anna in Gruppe A; Ben schickt dessen ID beim Anlegen in seiner eigenen Gruppe B mit"
+        def gruppeA = fixtures.group()
+        def original = fixtures.cart(gruppeA, title: 'Original', amount: 25d)
+        def gruppeB = fixtures.group()
+        def ben = gruppeB.owner
+        def (originalId, gruppeAId, annaId, gruppeBId, benId) = [original.id, gruppeA.group.id, gruppeA.owner.id,
+                                                                 gruppeB.group.id, ben.id]
+        def dto = TestData.cartDto(id: originalId, groupId: gruppeBId, categoryDto: TestData.categoryDto(gruppeB.category),
+                title: 'Manipuliert', amount: 99d)
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe A {} mit Owner Anna {} und Einkauf {} Original 25.00; Gruppe B {} mit Owner Ben {} ' +
+                '(angemeldet); DTO mit id {}', gruppeAId, annaId, originalId, gruppeBId, benId, originalId)
+
+        when:
+        def result = cartService.addCart(dto)
+        flushAndClear()
+        def neu = cartRepository.findById(result.id).get()
+        def unveraendert = cartRepository.findById(originalId).get()
+        LOG.info('cartService.addCart(id {}, Manipuliert 99.00) -> Cart {} (User {}, Gruppe {}); Original {}: {} {} ' +
+                '(User {}, Gruppe {})', originalId, result.id, neu.user.id, neu.group.id, originalId,
+                unveraendert.title, unveraendert.amount, unveraendert.user.id, unveraendert.group.id)
+
+        then: "Neuanlage mit eigener ID für den angemeldeten Nutzer in der erlaubten Gruppe"
+        result.id != originalId
+        neu.user.id == benId
+        neu.group.id == gruppeBId
+        neu.title == 'Manipuliert'
+
+        and: "Original vollständig unverändert"
+        unveraendert.title == 'Original'
+        unveraendert.amount == 25d
+        unveraendert.user.id == annaId
+        unveraendert.group.id == gruppeAId
+    }
+
     def "Nicht-Mitglied kann keinen Einkauf anlegen"() {
         given:
         def wg = fixtures.group()

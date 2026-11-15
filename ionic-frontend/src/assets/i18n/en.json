@@ -75,6 +75,9 @@
             "settlement_menu": "Settle up",
             "filter": "Filter",
             "no_spendings": "No expenses available!",
+            "duplicate": "Duplicate",
+            "edit": "Edit",
+            "delete": "Delete",
             "toast": {
                 "message": "Download successfull."
             },
@@ -461,6 +464,7 @@
     "carts": {
         "title_add": "Add purchase",
         "title_edit": "Edit purchase",
+        "duplicate_hint": "Data copied from an existing expense",
         "form": {
             "title": "Title*",
             "amount": "Amount in €*",

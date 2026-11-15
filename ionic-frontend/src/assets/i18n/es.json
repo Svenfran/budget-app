@@ -75,6 +75,9 @@
             "settlement_menu": "Saldar",
             "filter": "Filtro",
             "no_spendings": "No hay gastos registrados",
+            "duplicate": "Duplicar",
+            "edit": "Editar",
+            "delete": "Eliminar",
             "toast": {
                 "message": "Archivo descargado con éxito."
             },
@@ -461,6 +464,7 @@
     "carts": {
         "title_add": "Agregar compra",
         "title_edit": "Editar compra",
+        "duplicate_hint": "Datos copiados de un gasto existente",
         "form": {
             "title": "Título*",
             "amount": "Importe en €*",

@@ -1,6 +1,10 @@
 import { computed, signal, WritableSignal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { AlertController, IonicModule, ModalController } from '@ionic/angular';
+import { ScrollingModule } from '@angular/cdk/scrolling';
+import { Router, RouterModule } from '@angular/router';
+import { AlertController, IonicModule, IonItemSliding, ModalController } from '@ionic/angular';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { ScientificCurrencyPipe } from 'src/app/pipe/scientific.pipe';
 import { BehaviorSubject } from 'rxjs';
 import { AuthService } from 'src/app/auth/auth.service';
 import { User } from 'src/app/auth/user';
@@ -671,5 +675,114 @@ describe('CartlistPage – Filter-Sheet', () => {
     expect(page.filterMode()).toBeFalse();
     expect(page.cartFilter).toEqual({});
     expect(count()).toBe(3);
+  });
+});
+
+// DIV-73: Sliding-Aktion „Duplizieren“. Navigation ohne Template; Sichtbarkeit und Reihenfolge der Aktionen im echten
+// Template mit echter Ausgleichszahlungs-Erkennung (Übersetzung von domains.spendings.settlement gesetzt).
+describe('CartlistPage – Sliding-Aktionen (DIV-73)', () => {
+  const anna = aUser({ userName: 'Anna' });
+  const ben = aUser({ userName: 'Ben' });
+  const eigener = aCart({ id: 11, title: 'Eigener Einkauf', userDto: anna, categoryDto: aCategory({ name: 'Lebensmittel' }) });
+  const ausgleich = aCart({ id: 12, title: 'Ausgleich an Ben', userDto: anna,
+    categoryDto: aCategory({ name: 'Ausgleichszahlung' }) });
+  const fremder = aCart({ id: 13, title: 'Bens Einkauf', userDto: ben, categoryDto: aCategory({ name: 'Lebensmittel' }) });
+
+  let cartList: WritableSignal<Cart[]>;
+  let fixture: ComponentFixture<CartlistPage>;
+  let page: CartlistPage;
+
+  function setup(withTemplate: boolean) {
+    cartList = signal<Cart[]>([]);
+    TestBed.configureTestingModule({
+      declarations: [CartlistPage],
+      imports: [IonicModule.forRoot(), ScrollingModule, TranslateModule, RouterModule, ScientificCurrencyPipe],
+      providers: [
+        ...provideServiceTesting(),
+        {
+          provide: CartService, useValue: {
+            cartList, initCartList: signal<Cart[]>([]), cartUpdated: signal(0),
+            sum: computed(() => 0), count: computed(() => cartList().length),
+            getCartListByGroupId: jasmine.createSpy('load')
+              .and.callFake((_group: unknown, _refresh: boolean, onComplete?: () => void) => onComplete?.()),
+          },
+        },
+        { provide: OverviewService, useValue: { overviewRefresh: signal(0) } },
+        { provide: StorageService, useValue: storageServiceFake() },
+        { provide: AuthService, useValue: authServiceStub(aLoggedInUser({ name: 'Anna' })) },
+        { provide: AlertService, useValue: alertServiceSpy() },
+      ],
+    });
+    if (!withTemplate) TestBed.overrideTemplate(CartlistPage, '');
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('de', { domains: { spendings: {
+      settlement: 'Ausgleichszahlung', duplicate: 'Duplizieren', edit: 'Bearbeiten', delete: 'Löschen' } } });
+    translate.use('de');
+    TestBed.inject(GroupService).setActiveGroup(aGroup({ id: 3, name: 'WG' }));
+    fixture = TestBed.createComponent(CartlistPage);
+    fixture.detectChanges();
+    page = fixture.componentInstance;
+  }
+
+  describe('Navigation', () => {
+    let slidingItem: jasmine.SpyObj<IonItemSliding>;
+    let navigate: jasmine.Spy;
+
+    beforeEach(() => {
+      setup(false);
+      slidingItem = jasmine.createSpyObj<IonItemSliding>('IonItemSliding', ['close']);
+      navigate = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
+    });
+
+    it('Duplizieren schließt das Sliding-Item und öffnet die Neuanlage mit duplicateOf (AC 2)', () => {
+      page.duplicateCart(eigener, slidingItem);
+
+      expect(slidingItem.close).toHaveBeenCalledTimes(1);
+      expect(navigate).toHaveBeenCalledOnceWith(['domains', 'tabs', 'cartlist', 'new-edit'],
+        { queryParams: { duplicateOf: 11 } });
+    });
+
+    it('Bearbeiten navigiert wie bisher zur Bearbeitung (AC 13)', () => {
+      page.editCart(eigener, slidingItem);
+
+      expect(slidingItem.close).toHaveBeenCalledTimes(1);
+      expect(navigate).toHaveBeenCalledOnceWith(['domains', 'tabs', 'cartlist', 'new-edit', '11']);
+    });
+  });
+
+  describe('Sichtbarkeit und Reihenfolge', () => {
+    /** aria-labels der Optionen je Einkaufstitel, in Template-Reihenfolge. */
+    function optionsByTitle(): Record<string, string[]> {
+      const result: Record<string, string[]> = {};
+      fixture.nativeElement.querySelectorAll('ion-item-sliding').forEach((sliding: HTMLElement) => {
+        const title = sliding.querySelector('h2.titlestyle')!.textContent!.trim();
+        result[title] = Array.from(sliding.querySelectorAll('ion-item-option'))
+          .map(option => (option as HTMLElement).getAttribute('aria-label')!);
+      });
+      return result;
+    }
+
+    beforeEach(async () => {
+      setup(true);
+      cartList.set([eigener, ausgleich, fremder]);
+      fixture.detectChanges();
+      // Virtual Scroll rendert die Zeilen erst nach dem nächsten Animation Frame
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+    });
+
+    it('eigene reguläre Ausgabe: Duplizieren → Bearbeiten → Löschen (AC 1, Z1)', () => {
+      expect(optionsByTitle()['Eigener Einkauf']).toEqual(['Duplizieren', 'Bearbeiten', 'Löschen']);
+    });
+
+    it('eigene Ausgleichszahlung: kein Duplizieren, Bearbeiten und Löschen wie bisher (FA5)', () => {
+      expect(optionsByTitle()['Ausgleich an Ben']).toEqual(['Bearbeiten', 'Löschen']);
+    });
+
+    it('fremde Ausgabe: keine Aktionen (Z2)', () => {
+      expect(optionsByTitle()['Bens Einkauf']).toEqual([]);
+    });
   });
 });

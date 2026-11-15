@@ -75,6 +75,9 @@
             "settlement_menu": "Ausgleichen",
             "filter": "Filter",
             "no_spendings": "Keine Ausgaben vorhanden!",
+            "duplicate": "Duplizieren",
+            "edit": "Bearbeiten",
+            "delete": "Löschen",
             "toast": {
                 "message": "Datei erfolgreich heruntergeladen."
             },
@@ -461,6 +464,7 @@
     "carts": {
         "title_add": "Einkauf hinzufügen",
         "title_edit": "Einkauf bearbeiten",
+        "duplicate_hint": "Daten aus bestehender Ausgabe übernommen",
         "form": {
             "title": "Titel*",
             "amount": "Betrag in €*",
