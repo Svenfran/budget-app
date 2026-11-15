@@ -13,6 +13,7 @@ import { EmailValidator } from '../Validator/email-validator';
 import { AlertService } from '../service/alert.service';
 import { TranslateService } from '@ngx-translate/core';
 import { Location } from '@angular/common';
+import { returnAfterGroupSelection } from './group-navigation';
 
 @Component({
   selector: 'app-groupoverview',
@@ -61,7 +62,7 @@ export class GroupoverviewPage implements OnInit {
     if (this.groupService.activeGroup().id !== group.id) {
       this.groupService.setActiveGroup(group);
     }
-    this.location.back();
+    returnAfterGroupSelection(this.router, this.location);
   }
 
   onCreateGroup() {
