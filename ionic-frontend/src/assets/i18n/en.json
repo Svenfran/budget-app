@@ -107,6 +107,7 @@
                     "btn_save": "Save",
                     "placeholder_member": "To member",
                     "amount": "Amount in €*",
+                    "amount_positive": "Amount must be greater than 0",
                     "date": "Date*",
                     "btn_cancel": "Cancel",
                     "no_members": "No members available",

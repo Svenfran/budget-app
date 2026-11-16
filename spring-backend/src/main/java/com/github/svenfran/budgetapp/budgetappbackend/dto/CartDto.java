@@ -25,6 +25,8 @@ public class CartDto {
     private boolean templateUpdateSelected;
     private Long templateId;
     private boolean hasTemplateChanged = false;
+    // Ausgleichszahlung (DIV-74): Id des Settlements an beiden Carts eines Paars, sonst null. Nur Ausgabe.
+    private Long settlementId;
 
     public CartDto(Cart cart) {
         this.id = cart.getId();
@@ -40,6 +42,8 @@ public class CartDto {
         this.hasActiveTemplate = getTemplateIsActive(cart);
         this.nextExecutionDate = getNextExecutionDate(cart);
         this.templateId = getTemplateId(cart);
+        // getId() auf einem nicht initialisierten Proxy lädt nichts nach
+        this.settlementId = cart.getSettlement() != null ? cart.getSettlement().getId() : null;
     }
 
     public CartDto() {}
@@ -190,5 +194,13 @@ public class CartDto {
 
     public void setHasTemplateChanged(boolean hasTemplateChanged) {
         this.hasTemplateChanged = hasTemplateChanged;
+    }
+
+    public Long getSettlementId() {
+        return settlementId;
+    }
+
+    public void setSettlementId(Long settlementId) {
+        this.settlementId = settlementId;
     }
 }

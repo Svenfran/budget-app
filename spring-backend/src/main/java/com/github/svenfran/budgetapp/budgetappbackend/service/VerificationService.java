@@ -2,6 +2,7 @@ package com.github.svenfran.budgetapp.budgetappbackend.service;
 
 import com.github.svenfran.budgetapp.budgetappbackend.constants.UserEnum;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto;
+import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.*;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.EmailUtils;
@@ -10,6 +11,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.BindingResult;
 
+import java.math.BigDecimal;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -156,6 +158,40 @@ public class VerificationService {
                 return;
             }
         } throw new DatePurchasedNotWithinMembershipPeriodException("Date purchased is not within membership period");
+    }
+
+    /**
+     * Request-Struktur beim Anlegen einer Ausgleichszahlung (DIV-74). Wird vor jedem Loader aufgerufen, der eine Id aus
+     * dem Request verwendet, damit fehlende Felder als 400 statt als NPE/500 enden.
+     */
+    public void verifyValidSettlementPaymentForCreate(SettlementPaymentDto dto) throws InvalidSettlementPaymentException {
+        if (dto == null) throw new InvalidSettlementPaymentException("Settlement payment is required");
+        requireSettlementField(dto.getGroupId(), "groupId");
+        requireSettlementField(dto.getMember(), "member");
+        requireSettlementField(dto.getMember().getId(), "member.id");
+        requireSettlementField(dto.getDatePurchased(), "datePurchased");
+        verifyValidSettlementAmount(dto.getAmount());
+    }
+
+    /** Betrag einer Ausgleichszahlung: Pflicht, größer als 0 und höchstens zwei Nachkommastellen (Cent). */
+    public void verifyValidSettlementAmount(Double amount) throws InvalidSettlementPaymentException {
+        requireSettlementField(amount, "amount");
+        if (amount.isNaN() || amount.isInfinite() || amount <= 0
+                || BigDecimal.valueOf(amount).stripTrailingZeros().scale() > 2) {
+            throw new InvalidSettlementPaymentException("Settlement amount must be greater than 0 with at most 2 decimal places");
+        }
+    }
+
+    public void verifyPayerIsNotReceiver(User payer, User receiver) throws InvalidSettlementPaymentException {
+        if (payer.getId().equals(receiver.getId())) {
+            throw new InvalidSettlementPaymentException("Payer and receiver of a settlement payment must differ");
+        }
+    }
+
+    private static void requireSettlementField(Object value, String field) throws InvalidSettlementPaymentException {
+        if (value == null) {
+            throw new InvalidSettlementPaymentException("Settlement payment field '" + field + "' is required");
+        }
     }
 
     private boolean emailExists(String email) {

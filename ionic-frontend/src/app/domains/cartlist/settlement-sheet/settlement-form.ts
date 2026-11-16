@@ -8,10 +8,15 @@ import { SettlementPaymentDto } from '../model/settlement-payment-dto';
  * Formularlogik der Ausgleichszahlung (DIV-70), verhaltensgleich aus der früheren SettlementPaymentPage übernommen.
  */
 
-/** Betrag: Pflichtfeld, Dezimaltrennung nur mit Punkt; 0 und negative Werte bleiben erlaubt (wie bisher). */
+/**
+ * Betrag: Pflichtfeld, größer als 0 und höchstens zwei Nachkommastellen, Dezimaltrennung nur mit Punkt (DIV-74; vorher
+ * waren 0 und negative Werte erlaubt). Die Richtung ergibt sich aus Zahler und Empfänger, nicht aus dem Vorzeichen.
+ * Das Backend prüft dieselben Regeln.
+ */
 export const AMOUNT_VALIDATORS: ValidatorFn[] = [
   Validators.required,
-  Validators.pattern('[+-]?([0-9]*[.])?[0-9]+'),
+  Validators.pattern('[0-9]*([.][0-9]{1,2})?'),
+  Validators.min(0.01),
 ];
 
 /** Formularwerte, wenn das Formular gültig ist; `datePurchased` als ISO-Tag `YYYY-MM-DD`. */

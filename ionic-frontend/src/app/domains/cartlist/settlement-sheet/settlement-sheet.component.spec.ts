@@ -164,6 +164,20 @@ describe('SettlementSheetComponent (DIV-70)', () => {
       expect(el().querySelector('.error-amount')?.textContent).toContain('global.errors.invalid_amount');
     });
 
+    it('Betrag 0 sperrt „Speichern“ und zeigt nach Bedienung den Hinweis „größer als 0“ (DIV-74)', async () => {
+      component.form.patchValue({ amount: 0, memberId: anna.id });
+      component.form.controls.amount.markAsTouched();
+      detect();
+
+      expect(button('btn-save')!.disabled).toBeTrue();
+      const text = el().querySelector('.error-amount')?.textContent ?? '';
+      expect(text).toContain('domains.spendings.overlay.settlementpayment.amount_positive');
+      expect(text).not.toContain('global.errors.invalid_amount');
+
+      await component.save();
+      expect(addSettlementPayment).not.toHaveBeenCalled();
+    });
+
     // Feedback Phase 2: ion-select meldet ionBlur (→ touched) schon beim Öffnen der Auswahl
     it('Öffnen der Empfänger-Auswahl zeigt noch keinen Fehler', () => {
       component.form.controls.memberId.markAsTouched();

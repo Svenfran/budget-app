@@ -102,12 +102,26 @@ describe('settlement-form (DIV-70)', () => {
   });
 
   // Nur der Validator, nicht der Ionic-Eingabeweg (ion-input type="number" wandelt die Eingabe vorher per parseFloat um).
-  describe('AMOUNT_VALIDATORS (bestehende Regeln)', () => {
+  describe('AMOUNT_VALIDATORS (DIV-74: größer als 0, höchstens zwei Nachkommastellen)', () => {
     const errorsOf = (value: unknown) => new FormControl(value, AMOUNT_VALIDATORS).errors;
 
-    [25, 0, -5, 1.5, 0.5, '25', '0', '-5', '1.5', '.5', '+3'].forEach(value => {
+    [25, 1.5, 0.5, 0.01, 12.34, '25', '1.5', '.5', '0.01', '12.30'].forEach(value => {
       it(`akzeptiert ${JSON.stringify(value)}`, () => {
         expect(errorsOf(value)).toBeNull();
+      });
+    });
+
+    [0, '0', '0.00', 0.001].forEach(value => {
+      it(`lehnt ${JSON.stringify(value)} als nicht größer als 0 ab`, () => {
+        const errors = errorsOf(value);
+        expect(errors).not.toBeNull();
+        expect(errors?.['min'] ?? errors?.['pattern']).toBeDefined();
+      });
+    });
+
+    [-5, '-5', '+3', 1.234, '1.234', '-0.5'].forEach(value => {
+      it(`lehnt ${JSON.stringify(value)} ab (Vorzeichen oder mehr als zwei Nachkommastellen)`, () => {
+        expect(errorsOf(value)?.['pattern']).toBeDefined();
       });
     });
 

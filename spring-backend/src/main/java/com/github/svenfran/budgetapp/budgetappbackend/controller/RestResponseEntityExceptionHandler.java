@@ -47,7 +47,8 @@ public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionH
             DatePurchasedNotWithinMembershipPeriodException.class,
             UserNameNotAllowedException.class,
             ShoppingItemMoveWithinSameListException.class,
-            InvalidStatisticsRequestException.class
+            InvalidStatisticsRequestException.class,
+            InvalidSettlementPaymentException.class
     })
     protected ResponseEntity<Object> handleBadRequest(Exception ex, WebRequest request) {
         return buildResponse(ex, HttpStatus.BAD_REQUEST);

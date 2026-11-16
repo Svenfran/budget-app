@@ -107,6 +107,7 @@
                     "btn_save": "Speichern",
                     "placeholder_member": "An Mitglied",
                     "amount": "Betrag in €*",
+                    "amount_positive": "Betrag muss größer als 0 sein",
                     "date": "Datum*",
                     "btn_cancel": "Abbrechen",
                     "no_members": "Keine Mitglieder vorhanden",

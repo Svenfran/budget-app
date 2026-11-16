@@ -218,6 +218,58 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
         result*.userDto*.id == [annaId, benId]
         result*.categoryDto*.name == ['Ausgleichszahlung', 'Ausgleichszahlung']
         result.every { it.id != null }
+
+        and: "DIV-74: beide Einkäufe tragen dieselbe Settlement-Id"
+        result*.settlementId.unique().size() == 1
+        result[0].settlementId != null
+    }
+
+    def "Normaler Einkauf trägt settlementId null im JSON"() {
+        given:
+        def wg = fixtures.group()
+        fixtures.cart(wg, title: 'Pizza', amount: 25d)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Einkauf Pizza ohne Ausgleichszahlung', wg.group.id, wg.owner.id)
+
+        when:
+        def response = send(get('/api/carts/carts-by-groupid/{id}', wg.group.id), user: wg.owner)
+        def body = json(response)
+        LOG.info('Antwort: settlementId {}', body*.settlementId)
+
+        then:
+        response.status == 200
+        body[0].containsKey('settlementId')
+        body[0].settlementId == null
+    }
+
+    def "Ausgleichszahlung mit #fall: 400 statt 500, nichts angelegt"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def basis = [amount: 30, groupId: wg.group.id, member: [id: ben.id], datePurchased: '2025-06-15']
+        def body = aendern(basis, wg.owner.id)
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), Ben {}; Body {}', wg.group.id, wg.owner.id, ben.id, body)
+
+        when:
+        def response = addSettlement(wg.owner, body)
+        LOG.info('Antwort: {}', response.contentAsString)
+        def carts = send(get('/api/carts/carts-by-groupid/{id}', wg.group.id), user: wg.owner)
+
+        then:
+        response.status == 400
+        response.contentAsString.contains(meldung)
+        json(carts).isEmpty()
+
+        where:
+        fall                      | aendern                                                              || meldung
+        'Betrag 0'                | { Map b, Long ownerId -> b + [amount: 0] }                           || 'greater than 0'
+        'negativem Betrag'        | { Map b, Long ownerId -> b + [amount: -5] }                          || 'greater than 0'
+        'Betrag mit 3 Nachkommastellen' | { Map b, Long ownerId -> b + [amount: 1.234] }                 || 'at most 2 decimal'
+        'fehlendem Betrag'        | { Map b, Long ownerId -> b.findAll { it.key != 'amount' } }          || "'amount'"
+        'fehlendem Empfänger'     | { Map b, Long ownerId -> b.findAll { it.key != 'member' } }          || "'member'"
+        'Empfänger ohne Id'       | { Map b, Long ownerId -> b + [member: [:]] }                         || "'member.id'"
+        'fehlender Gruppe'        | { Map b, Long ownerId -> b.findAll { it.key != 'groupId' } }         || "'groupId'"
+        'fehlendem Datum'         | { Map b, Long ownerId -> b.findAll { it.key != 'datePurchased' } }   || "'datePurchased'"
+        'Zahler gleich Empfänger' | { Map b, Long ownerId -> b + [member: [id: ownerId]] }              || 'must differ'
     }
 
     def "Ausgleichszahlung an ein Nicht-Mitglied: 403"() {

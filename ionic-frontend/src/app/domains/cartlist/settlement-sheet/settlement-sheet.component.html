@@ -28,6 +28,7 @@
       <p class="field-error error-amount" *ngIf="showError(amount)" role="alert">
         <ng-container *ngIf="amount.errors?.['required']">{{ 'global.errors.required' | translate }}</ng-container>
         <ng-container *ngIf="amount.errors?.['pattern']">{{ 'global.errors.invalid_amount' | translate }}</ng-container>
+        <ng-container *ngIf="amount.errors?.['min'] && !amount.errors?.['pattern']">{{ 'domains.spendings.overlay.settlementpayment.amount_positive' | translate }}</ng-container>
       </p>
 
     <!-- Platzhalter statt schwebendem Label: ion-select schneidet das schwebende Label bei großer Schrift ab (DIV-71). -->

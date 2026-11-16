@@ -2,6 +2,7 @@ package com.github.svenfran.budgetapp.budgetappbackend.service
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AuthenticationRequest
+import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto
 import com.github.svenfran.budgetapp.budgetappbackend.entity.*
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*
@@ -366,6 +367,92 @@ class VerificationServiceSpec extends Specification {
 
         then:
         noExceptionThrown()
+    }
+
+    // ----- Ausgleichszahlung (DIV-74) -----
+
+    def "Gültige Ausgleichszahlung (Betrag #betrag) wird akzeptiert"() {
+        given:
+        def dto = new SettlementPaymentDto(betrag, 1L, new UserDto(id: 2L), DateUtils.toDate(TestData.REFERENCE_DATE))
+
+        when:
+        service.verifyValidSettlementPaymentForCreate(dto)
+
+        then:
+        noExceptionThrown()
+
+        where:
+        betrag << [0.01d, 1d, 30.1d, 30.10d, 1234.56d]
+    }
+
+    def "Betrag #betrag einer Ausgleichszahlung wird abgelehnt"() {
+        when:
+        service.verifyValidSettlementAmount(betrag)
+
+        then:
+        def e = thrown(InvalidSettlementPaymentException)
+        e.message.contains(meldung)
+
+        where:
+        betrag                   || meldung
+        null                     || "'amount'"
+        0d                       || 'greater than 0'
+        -0.01d                   || 'greater than 0'
+        1.234d                   || 'at most 2 decimal'
+        0.001d                   || 'at most 2 decimal'
+        Double.NaN               || 'greater than 0'
+        Double.POSITIVE_INFINITY || 'greater than 0'
+    }
+
+    def "Fehlendes Pflichtfeld #feld einer Ausgleichszahlung wird vor jedem Laden abgelehnt"() {
+        given:
+        def dto = new SettlementPaymentDto(30d, 1L, new UserDto(id: 2L), DateUtils.toDate(TestData.REFERENCE_DATE))
+        aendern(dto)
+
+        when:
+        service.verifyValidSettlementPaymentForCreate(dto)
+
+        then:
+        def e = thrown(InvalidSettlementPaymentException)
+        e.message == "Settlement payment field '$feld' is required".toString()
+
+        where:
+        feld            | aendern
+        'groupId'       | { SettlementPaymentDto d -> d.groupId = null }
+        'member'        | { SettlementPaymentDto d -> d.member = null }
+        'member.id'     | { SettlementPaymentDto d -> d.member.id = null }
+        'datePurchased' | { SettlementPaymentDto d -> d.datePurchased = null }
+        'amount'        | { SettlementPaymentDto d -> d.amount = null }
+    }
+
+    def "Ausgleichszahlung ohne Anfrage wird abgelehnt"() {
+        when:
+        service.verifyValidSettlementPaymentForCreate(null)
+
+        then:
+        thrown(InvalidSettlementPaymentException)
+    }
+
+    def "Zahler und Empfänger #fall"() {
+        given:
+        def anna = TestData.user(id: 1L)
+        def empfaenger = TestData.user(id: empfaengerId)
+
+        when:
+        def abgelehnt = false
+        try {
+            service.verifyPayerIsNotReceiver(anna, empfaenger)
+        } catch (InvalidSettlementPaymentException ignored) {
+            abgelehnt = true
+        }
+
+        then:
+        abgelehnt == erwartetAbgelehnt
+
+        where:
+        fall                                    | empfaengerId || erwartetAbgelehnt
+        'sind dieselbe Person: abgelehnt'       | 1L           || true
+        'sind verschiedene Personen: akzeptiert' | 2L          || false
     }
 
     /** BindingResult wie nach @Valid, mit genau einem Feldfehler (Fehlercode beliebig). */

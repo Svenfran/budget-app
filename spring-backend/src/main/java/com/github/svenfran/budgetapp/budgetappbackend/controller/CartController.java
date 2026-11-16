@@ -6,6 +6,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto;
 import com.github.svenfran.budgetapp.budgetappbackend.service.CartService;
 import com.github.svenfran.budgetapp.budgetappbackend.service.ExportService;
+import com.github.svenfran.budgetapp.budgetappbackend.service.SettlementService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -22,9 +23,12 @@ public class CartController {
 
     private final ExportService exportService;
 
-    public CartController(CartService cartService, ExportService exportService) {
+    private final SettlementService settlementService;
+
+    public CartController(CartService cartService, ExportService exportService, SettlementService settlementService) {
         this.cartService = cartService;
         this.exportService = exportService;
+        this.settlementService = settlementService;
     }
 
     @GetMapping("/carts/carts-by-groupid/{groupId}")
@@ -59,7 +63,7 @@ public class CartController {
 
     @PostMapping("/carts/settlement-payment/add")
     public ResponseEntity<List<CartDto>> addSettlementPayment(@RequestBody SettlementPaymentDto settlementPaymentDto) throws Exception {
-        var payment = cartService.addSettlementPayment(settlementPaymentDto);
+        var payment = settlementService.addSettlementPayment(settlementPaymentDto);
         return new ResponseEntity<>(payment, HttpStatus.OK);
     }
 

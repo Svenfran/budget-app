@@ -78,6 +78,11 @@ class TestData {
                   datePurchased: DateUtils.toDate(REFERENCE_DATE)] + overrides)
     }
 
+    /** Ausgleichszahlung (DIV-74) ohne Carts; Gruppe, Zahler und Empfänger per Named Argument. */
+    static Settlement settlement(Map overrides = [:]) {
+        new Settlement([amount: 30.0d, datePurchased: DateUtils.toDate(REFERENCE_DATE)] + overrides)
+    }
+
     static CartTemplate cartTemplate(Map overrides = [:]) {
         new CartTemplate([title: 'Einkauf', description: 'Wocheneinkauf', amount: 40.0d,
                           recurrenceType: RecurrenceType.MONTHLY, active: true, startDate: REFERENCE_DATE,

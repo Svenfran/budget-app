@@ -35,7 +35,7 @@ class StatisticsServiceIntegrationSpec extends IntegrationSpec {
     @Autowired StatisticsService statisticsService
     @Autowired SpendingsOverviewService spendingsOverviewService
     @Autowired GroupService groupService
-    @Autowired CartService cartService
+    @Autowired SettlementService settlementService
     @Autowired UserRepository userRepository
 
     def "AC3: Einzelne Gruppe zeigt nur deren Ausgaben und Saldo"() {
@@ -442,11 +442,11 @@ class StatisticsServiceIntegrationSpec extends IntegrationSpec {
         fixtures.cart(wg, user: zahler, amount: betrag, datePurchased: DateUtils.toDate(datum))
     }
 
-    /** Ausgleichszahlung über CartService, wie sie die App anlegt (Sender- und Empfänger-Cart). */
+    /** Ausgleichszahlung über SettlementService, wie sie die App anlegt (Sender- und Empfänger-Cart). */
     private void zahlung(User von, User an, Double betrag, GroupScenario wg, LocalDate tag) {
         loginAs(userRepository.findById(von.id).get())
-        cartService.addSettlementPayment(new SettlementPaymentDto(betrag, wg.group.id, new UserDto(an), DateUtils.toDate(tag)))
+        settlementService.addSettlementPayment(new SettlementPaymentDto(betrag, wg.group.id, new UserDto(an), DateUtils.toDate(tag)))
         flushAndClear()
-        LOG.info('cartService.addSettlementPayment(User {} an User {}, {})', von.id, an.id, betrag)
+        LOG.info('settlementService.addSettlementPayment(User {} an User {}, {})', von.id, an.id, betrag)
     }
 }

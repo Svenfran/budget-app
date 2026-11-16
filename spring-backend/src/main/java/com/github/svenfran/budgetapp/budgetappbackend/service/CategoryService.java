@@ -41,7 +41,11 @@ public class CategoryService {
         var user = dataLoaderService.getAuthenticatedUser();
         var group = dataLoaderService.loadGroup(categoryDto.getGroupId());
         verificationService.verifyIsPartOfGroup(user, group);
-        return new CategoryDto(categoryRepository.save(categoryDtoMapper.CategoryDtoToEntity(categoryDto, group)));
+        var category = categoryDtoMapper.CategoryDtoToEntity(categoryDto, group);
+        // Neuanlage erzwingen (DIV-74, Muster CartService.addCart): mit einer vom Client gesendeten Id würde save() per
+        // merge eine bestehende Kategorie überschreiben und u. a. ihr Settlement-Kennzeichen auf false setzen.
+        category.setId(null);
+        return new CategoryDto(categoryRepository.save(category));
     }
 
     public CategoryDto updateCategory(@Validated CategoryDto categoryDto) throws GroupNotFoundException, CategoryBelongsNotToGroupException, CategoryNotFoundException, NotOwnerOrMemberOfGroupException, UserNotFoundException {
@@ -50,7 +54,10 @@ public class CategoryService {
         verificationService.verifyIsPartOfGroup(user, group);
         var category = dataLoaderService.loadCategory(categoryDto.getId());
         verificationService.verifyCategoryIsPartOfGroup(category, group);
-        return new CategoryDto(categoryRepository.save(categoryDtoMapper.CategoryDtoToEntity(categoryDto, group)));
+        var updated = categoryDtoMapper.CategoryDtoToEntity(categoryDto, group);
+        // Das Settlement-Kennzeichen kommt nie vom Client (DIV-74): beim Umbenennen bleibt es erhalten.
+        updated.setSettlement(category.isSettlement());
+        return new CategoryDto(categoryRepository.save(updated));
     }
 
     public void deleteCategory(@Validated CategoryDto categoryDto) throws GroupNotFoundException, CategoryBelongsNotToGroupException, CategoryNotFoundException, CategoryIsUsedByCartException, NotOwnerOrMemberOfGroupException, UserNotFoundException {

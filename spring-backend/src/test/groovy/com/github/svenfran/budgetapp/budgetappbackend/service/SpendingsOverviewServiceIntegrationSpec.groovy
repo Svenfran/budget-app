@@ -42,7 +42,7 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
     @Autowired GroupMembershipHistoryRepository membershipRepository
     @Autowired CartRepository cartRepository
     @Autowired UserRepository userRepository
-    @Autowired CartService cartService
+    @Autowired SettlementService settlementService
 
     def "Austritt und Eintritt über den Jahreswechsel: Jahre 2024 und 2025 sowie Gesamtübersicht"() {
         given: "Anna (Owner) seit 01.01.2024, Ben 01.01.–31.12.2024, Cleo ab 01.01.2025 10 Uhr (Beitritt mit Uhrzeit)"
@@ -590,13 +590,13 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         users.groupBy { it.userId }.collectEntries { id, eintraege -> [id, diffSummeInCent(eintraege)] }
     }
 
-    /** Ausgleichszahlung über CartService, wie sie die App anlegt (Sender- und Empfänger-Cart). */
+    /** Ausgleichszahlung über SettlementService, wie sie die App anlegt (Sender- und Empfänger-Cart). */
     private void zahlung(Long vonId, Long anId, Double betrag, GroupScenario wg, Date tag) {
         loginAs(userRepository.findById(vonId).get())
         def an = userRepository.findById(anId).get()
-        cartService.addSettlementPayment(new SettlementPaymentDto(betrag, wg.group.id, new UserDto(an), tag))
+        settlementService.addSettlementPayment(new SettlementPaymentDto(betrag, wg.group.id, new UserDto(an), tag))
         flushAndClear()
-        LOG.info('cartService.addSettlementPayment(User {} an User {}, {})', vonId, anId, betrag)
+        LOG.info('settlementService.addSettlementPayment(User {} an User {}, {})', vonId, anId, betrag)
     }
 
     private Map<Long, Double> diffs(Long betrachterId, GroupScenario wg) {

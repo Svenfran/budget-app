@@ -107,6 +107,7 @@
                     "btn_save": "Guardar",
                     "placeholder_member": "Al miembro",
                     "amount": "Importe en €*",
+                    "amount_positive": "El importe debe ser mayor que 0",
                     "date": "Fecha*",
                     "btn_cancel": "Cancelar",
                     "no_members": "No hay miembros disponibles",
