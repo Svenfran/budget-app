@@ -169,9 +169,11 @@ public class UserProfileService {
         var userAuth = dataLoaderService.getAuthenticatedUser();
         var userChange = dataLoaderService.loadUser(userDto.getId());
         verificationService.verifyIsAuthenticatedUser(userChange, userAuth);
-        verificationService.verifyUserNameIsAllowed(userDto.getUserName());
-        verificationService.verifyUserNameNotExists(userDto.getUserName());
-        userChange.setName(userDto.getUserName());
+        // Umgebende Leerzeichen (z. B. von der Tastatur-Autovervollständigung) nicht mitspeichern
+        var userName = userDto.getUserName() == null ? null : userDto.getUserName().trim();
+        verificationService.verifyUserNameIsAllowed(userName);
+        verificationService.verifyUserNameNotExists(userName);
+        userChange.setName(userName);
         return new UserDto(userRepository.save(userChange), userChange.getEmail());
     }
 

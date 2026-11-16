@@ -1,5 +1,5 @@
 import { Component, effect, NgZone, Renderer2 } from '@angular/core';
-import { firstValueFrom, Subscription } from 'rxjs';
+import {Subscription } from 'rxjs';
 import { AuthService } from './auth/auth.service';
 import { Router } from '@angular/router';
 import { User } from './auth/user';

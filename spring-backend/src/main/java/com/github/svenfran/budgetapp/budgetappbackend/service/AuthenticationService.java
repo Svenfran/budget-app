@@ -59,9 +59,11 @@ public class AuthenticationService {
         verificationService.verifyEmailIsValid(bindingResult, "email");
         verificationService.verifyDeviceIdIsPresent(bindingResult);
         verificationService.verifyEmailNotExists(request.getEmail());
-        verificationService.verifyUserNameNotExists(request.getName());
+        // Umgebende Leerzeichen nicht mitspeichern (das Frontend trimmt auch, der Server verlässt sich nicht darauf)
+        var userName = request.getName() == null ? null : request.getName().trim();
+        verificationService.verifyUserNameNotExists(userName);
         var user = new User();
-        user.setName(request.getName());
+        user.setName(userName);
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         var savedUser = userRepository.save(user);
@@ -69,7 +71,7 @@ public class AuthenticationService {
         var expTime = jwtService.extractExpiration(token).getTime();
         saveUserToken(savedUser, token, request.getDeviceId());
         groupService.createDefaultGroup(savedUser);
-        return new AuthenticationResponse(savedUser.getId(), request.getName(), savedUser.getEmail(), expTime, token);
+        return new AuthenticationResponse(savedUser.getId(), savedUser.getName(), savedUser.getEmail(), expTime, token);
     }
 
     @Transactional
