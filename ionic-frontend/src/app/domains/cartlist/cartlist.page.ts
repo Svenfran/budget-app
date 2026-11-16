@@ -15,8 +15,7 @@ import { CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
 import { exportDialogModalOptions } from './export-dialog/export-dialog-options';
 import { filterSheetModalOptions } from './filter-sheet/filter-sheet-options';
 import { FILTER_SHEET_APPLY_ROLE } from './filter-sheet/filter-sheet.component';
-import { purchaseDayOf } from './filter-sheet/cart-filter-form';
-import { toIsoDay } from './iso-day';
+import { applyCartFilter } from './filter-sheet/cart-filter-form';
 import { settlementSheetModalOptions } from './settlement-sheet/settlement-sheet-options';
 import { SettlementEditData, settlementEditData } from './settlement-sheet/settlement-form';
 import { AlertService } from 'src/app/service/alert.service';
@@ -85,7 +84,17 @@ export class CartlistPage implements OnInit {
       }
       this.cartVisible = false;
     });
-  
+    // Aktiven Filter nach jeder erfolgreichen Änderung neu anwenden (DIV-74, Review F-001): Die Services ersetzen bzw.
+    // ergänzen Einträge in der gefilterten Liste, ohne die Filterkriterien zu prüfen – ein bearbeiteter Einkauf blieb sonst
+    // sichtbar, obwohl er nicht mehr passt. Grundlage ist die vollständige Liste; Chip und Filter bleiben erhalten.
+    effect(() => {
+      this.cartService.cartUpdated();
+      untracked(() => {
+        if (this.filterMode()) {
+          this.cartList.set(applyCartFilter(this.initCartList(), this.cartFilter));
+        }
+      });
+    });
   }
 
   ngOnInit() {
@@ -356,22 +365,12 @@ export class CartlistPage implements OnInit {
       return;
     }
 
-    // Zeitraum nach Kalendertag, wie die Liste ihn anzeigt (purchaseDayOf), beide Grenzen einschließlich. Ein Vergleich
-    // mit Uhrzeit schloss Carts am Enddatum aus („bis“ war lokale Mitternacht).
-    const startDay = cartFilter.startDate ? toIsoDay(cartFilter.startDate) : null;
-    const endDay = cartFilter.endDate ? toIsoDay(cartFilter.endDate) : null;
-
+    // Zeitraum nach Kalendertag, wie die Liste ihn anzeigt (purchaseDayOf), beide Grenzen einschließlich – siehe
+    // applyCartFilter. Ein Vergleich mit Uhrzeit schloss Carts am Enddatum aus („bis“ war lokale Mitternacht).
     this.filterTerm.set('');
-    this.cartList.set(this.initCartList());
-    this.cartList.update(carts =>
-      carts.filter(cart =>
-        (cartFilter.title ? cart.title?.toLowerCase().includes(cartFilter.title.toLowerCase()) : true) &&
-        (cartFilter.description ? cart.description?.toLowerCase().includes(cartFilter.description.toLowerCase()) : true) &&
-        (cartFilter.category && cartFilter.category.length > 0 ? cartFilter.category.includes(cart.categoryDto.name) : true) &&
-        (cartFilter.userName && cartFilter.userName.length > 0 ? cartFilter.userName.includes(cart.userDto.userName) : true) &&
-        (startDay ? purchaseDayOf(cart.datePurchased) >= startDay : true) &&
-        (endDay ? purchaseDayOf(cart.datePurchased) <= endDay : true)
-    ))
+    // Merken, damit der Filter nach jeder erfolgreichen Änderung neu angewendet werden kann (DIV-74)
+    this.cartFilter = cartFilter;
+    this.cartList.set(applyCartFilter(this.initCartList(), cartFilter));
 
     this.filterMode.set(true);
   }

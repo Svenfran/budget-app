@@ -474,6 +474,8 @@ describe('CartlistPage – Filter (Bestand)', () => {
   let page: CartlistPage;
   let cartList: WritableSignal<Cart[]>;
   let initCartList: WritableSignal<Cart[]>;
+  let cartUpdated: WritableSignal<number>;
+  let filterFixture: ComponentFixture<CartlistPage>;
   let count: () => number;
   let sum: () => number;
 
@@ -497,6 +499,7 @@ describe('CartlistPage – Filter (Bestand)', () => {
   const titles = () => cartList().map(cart => cart.title);
 
   beforeEach(() => {
+    cartUpdated = signal(0);
     cartList = signal<Cart[]>([]);
     initCartList = signal<Cart[]>([]);
     count = computed(() => cartList().length);
@@ -508,7 +511,7 @@ describe('CartlistPage – Filter (Bestand)', () => {
         ...provideServiceTesting(),
         {
           provide: CartService, useValue: {
-            cartList, initCartList, cartUpdated: signal(0), sum, count,
+            cartList, initCartList, cartUpdated, sum, count,
             getCartListByGroupId: jasmine.createSpy('load'),
           },
         },
@@ -521,9 +524,9 @@ describe('CartlistPage – Filter (Bestand)', () => {
     });
     TestBed.overrideTemplate(CartlistPage, '');
     TestBed.inject(GroupService).setActiveGroup(aGroup({ id: 3, name: 'WG' }));
-    const fixture = TestBed.createComponent(CartlistPage);
-    fixture.detectChanges();
-    page = fixture.componentInstance;
+    filterFixture = TestBed.createComponent(CartlistPage);
+    filterFixture.detectChanges();
+    page = filterFixture.componentInstance;
     initCartList.set(alle);
     cartList.set(alle);
   });
@@ -558,6 +561,45 @@ describe('CartlistPage – Filter (Bestand)', () => {
     expect(titles()).toEqual(['Edeka', 'Kino']);
     expect(count()).toBe(2);
     expect(sum()).toBe(65);
+  });
+
+  /** Simuliert eine erfolgreiche Änderung wie die Services: Eintrag in beiden Listen ersetzen, dann triggerUpdate(). */
+  const erfolgreichGeaendert = (geaendert: Cart) => {
+    initCartList.update(carts => carts.map(c => c.id === geaendert.id ? geaendert : c));
+    cartList.update(carts => carts.map(c => c.id === geaendert.id ? geaendert : c));
+    cartUpdated.update(n => n + 1);
+    filterFixture.detectChanges();
+  };
+
+  // Regression DIV-74, Codex-Implementierungsreview F-001
+  it('aktiver Datumsfilter: ein bearbeiteter Einkauf, der nicht mehr passt, verschwindet nach dem Speichern aus der Liste', () => {
+    page.filterCarts({ startDate: new Date(2025, 5, 15) });
+    expect(titles()).toEqual(['Kino', 'EDEKA Markt']);
+
+    erfolgreichGeaendert({ ...kino, datePurchased: new Date(2025, 5, 1) });
+
+    expect(titles()).toEqual(['EDEKA Markt']);
+    expect(count()).toBe(1);
+    expect(sum()).toBe(12);
+    expect(page.filterMode()).toBeTrue();
+  });
+
+  it('aktiver Schnellfilter Kategorie: Filter und Chip bleiben, die Liste folgt der Änderung (DIV-74)', () => {
+    page.onFilter('category', 'Lebensmittel');
+    expect(titles()).toEqual(['Edeka', 'EDEKA Markt']);
+
+    erfolgreichGeaendert({ ...edeka, categoryDto: drogerie });
+
+    expect(titles()).toEqual(['EDEKA Markt']);
+    expect(page.filterTerm()).toBe('Lebensmittel');
+    expect(page.cartFilter).toEqual({ category: ['Lebensmittel'] });
+  });
+
+  it('ohne aktiven Filter lässt eine erfolgreiche Änderung die Liste, wie der Service sie gesetzt hat (DIV-74)', () => {
+    erfolgreichGeaendert({ ...kino, datePurchased: new Date(2025, 5, 1) });
+
+    expect(titles()).toEqual(['Edeka', 'Rossmann', 'Kino', 'EDEKA Markt']);
+    expect(page.filterMode()).toBeFalse();
   });
 
   it('Datum von: inklusiv ab lokaler Mitternacht', () => {
