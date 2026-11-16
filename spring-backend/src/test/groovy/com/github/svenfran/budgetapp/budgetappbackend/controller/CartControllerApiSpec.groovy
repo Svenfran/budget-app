@@ -410,6 +410,38 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
         'unbekannte Id: 404'              || 404
     }
 
+    def "Ausgleichszahlung mit Zahler (Richtungsumschalter): #fall"() {
+        given:
+        def ben = fixtures.user()
+        def cleo = fixtures.user()
+        def wg = fixtures.group(members: [ben, cleo])
+        def nutzer = [owner: wg.owner, ben: ben, cleo: cleo]
+        def body = [amount: 25, groupId: wg.group.id, member: [id: ben.id], datePurchased: '2025-06-15', payer: zahler(nutzer)]
+        LOG.info('Szenario: Gruppe {}, Owner {}, Ben {}, Cleo {}; {} sendet {}', wg.group.id, wg.owner.id, ben.id, cleo.id,
+                handelnder, body)
+
+        when:
+        def response = addSettlement(nutzer[handelnder], body)
+        LOG.info('Antwort: {} {}', response.status, response.contentAsString)
+
+        then:
+        response.status == status
+        if (status == 200) {
+            def ownerId = wg.owner.id
+            def benId = ben.id
+            assert json(response)*.userDto*.id == [ownerId, benId]
+            assert json(response)*.amount == [25, -25]
+        } else {
+            assert response.contentAsString.contains(meldung)
+        }
+
+        where:
+        fall                                         | handelnder | zahler                         || status | meldung
+        'Ben erfasst „erhalten vom Owner“: 200'       | 'ben'      | { n -> [id: n.owner.id] }      || 200    | null
+        'Cleo erfasst Owner → Ben: 403'               | 'cleo'     | { n -> [id: n.owner.id] }      || 403    | 'neither payer nor receiver'
+        'Zahler ohne Id: 400'                         | 'ben'      | { n -> [:] }                   || 400    | "'payer.id'"
+    }
+
     def "Ausgleichszahlung bearbeiten als #rolle: 200 mit beiden Einkäufen, Ids bleiben"() {
         given:
         def ben = fixtures.user()

@@ -362,7 +362,7 @@ export class CartService {
             if (isNotWithinMembership(err)) {
               this.alertService.showErrorAlert(
                 this.translate.instant("alerts.cart.invalid_membership.header"),
-                this.translate.instant("alerts.cart.invalid_membership.message_settlementpayment", { userName: payment.member.userName })
+                this.translate.instant("alerts.cart.invalid_membership.message_settlementpayment", { userName: (payment.payer ?? payment.member).userName })
               )
             } else {
               this.alertService.showErrorAlert(

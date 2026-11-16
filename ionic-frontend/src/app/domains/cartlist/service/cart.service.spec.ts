@@ -555,6 +555,21 @@ describe('CartService', () => {
       expect(await result).toBeFalse();
     });
 
+    it('erhaltene Zahlung (DIV-74): sendet payer und nennt im Mitgliedschafts-Hinweis die Gegenpartei (Zahler)', async () => {
+      const instant = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
+      const dto: SettlementPaymentDto = {
+        ...payment(), payer: aUser({ userName: 'Ben' }), member: aUser({ userName: 'Ich' }),
+      };
+
+      const result = service.addSettlementPayment(dto);
+      const req = http.expectOne(`${api}/settlement-payment/add`);
+      expect(req.request.body.payer.userName).toBe('Ben');
+      req.flush(notWithinMembership, { status: 400, statusText: 'Bad Request' });
+
+      expect(await result).toBeFalse();
+      expect(instant).toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Ben' });
+    });
+
     // DIV-70: Jeder andere Fehler zeigt einen allgemeinen Hinweis und liefert false. Der Fehlerbody ist nicht immer Text
     // (Netzwerkfehler, JSON, null) – die Prüfung auf den Mitgliedschafts-Text darf daran nicht scheitern.
     [

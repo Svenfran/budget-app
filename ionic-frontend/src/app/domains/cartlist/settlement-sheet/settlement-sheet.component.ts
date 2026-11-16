@@ -9,8 +9,8 @@ import { LanguageService } from 'src/app/service/language.service';
 import { formatDisplayDate, isoDayOf, toIsoDay } from '../iso-day';
 import { CartService } from '../service/cart.service';
 import {
-  AMOUNT_VALIDATORS, editRecipients, isDaySelectable, SettlementEditData, SettlementFormValue, settlementRecipients,
-  toSettlementPaymentDto,
+  AMOUNT_VALIDATORS, editRecipients, isDaySelectable, SettlementDirection, SettlementEditData, SettlementFormValue,
+  settlementRecipients, toSettlementPaymentDto,
 } from './settlement-form';
 
 /** Rolle, mit der das Sheet nach erfolgreichem Speichern schließt. */
@@ -52,6 +52,13 @@ export class SettlementSheetComponent implements OnInit {
   readonly group = this.groupService.activeGroup();
   readonly currentLang = this.langService.currentLang;
   readonly userId = signal<number | undefined>(undefined);
+  readonly userName = signal('');
+  /**
+   * Richtung (DIV-74): „Ich habe gezahlt an …“ oder „Ich habe erhalten von …“. Bewusst kein Formularfeld, damit die
+   * bestehenden Formularwerte unverändert bleiben; ein Wechsel markiert das Formular als geändert. Im Edit-Modus fest
+   * aus der Rolle (der Zahler ist nicht änderbar).
+   */
+  readonly direction = signal<SettlementDirection>('paid');
   readonly recipients = computed(() => settlementRecipients(this.groupService.groupMembers(), this.userId()));
   /** Auswahlliste im Edit-Modus des Zahlers: aktuelle Empfänger plus der bisherige (ggf. ausgetretene) Empfänger. */
   readonly selectableRecipients = computed(() => this.settlement
@@ -83,7 +90,10 @@ export class SettlementSheetComponent implements OnInit {
   ) {}
 
   ngOnInit() {
-    this.authService.user.pipe(take(1)).subscribe(user => this.userId.set(user?.id));
+    this.authService.user.pipe(take(1)).subscribe(user => {
+      this.userId.set(user?.id);
+      this.userName.set(user?.name ?? '');
+    });
     this.groupService.getGroupMembers(this.group.id);
     this.groupService.getGroupMembershipHistoryForGroupAndUser(this.group);
 
@@ -95,6 +105,7 @@ export class SettlementSheetComponent implements OnInit {
         datePurchased: this.settlement.datePurchased,
       });
       if (this.settlement.role === 'receiver') this.memberId.disable();
+      this.direction.set(this.settlement.role === 'payer' ? 'paid' : 'received');
       const groupId = this.group.id;
       const sameSession = this.groupService.sessionGuard();
       this.isCurrent = () => this.groupService.activeGroupId() === groupId && sameSession();
@@ -135,11 +146,26 @@ export class SettlementSheetComponent implements OnInit {
     return this.settlement?.role !== 'receiver';
   }
 
+  /** Richtungsumschalter (nur beim Anlegen): ein Wechsel gilt als Eingabe (Rückfrage beim Verwerfen). */
+  changeDirection(value: unknown) {
+    if (this.settlement || (value !== 'paid' && value !== 'received') || value === this.direction()) return;
+    this.direction.set(value);
+    this.form.markAsDirty();
+  }
+
+  /** Platzhalter der Gegenpartei-Auswahl je Richtung. */
+  memberPlaceholderKey(): string {
+    return this.direction() === 'received'
+      ? 'domains.spendings.overlay.settlementpayment.placeholder_member_from'
+      : 'domains.spendings.overlay.settlementpayment.placeholder_member';
+  }
+
   async save() {
     if (this.form.invalid || this.saving()) return;
     const recipients = this.settlement ? [...this.selectableRecipients(), this.settlement.receiver] : this.recipients();
+    const receivedBy = this.direction() === 'received' ? { id: this.userId()!, userName: this.userName() } : undefined;
     const dto = toSettlementPaymentDto(this.form.getRawValue() as SettlementFormValue, this.group.id, recipients,
-      this.settlement?.id);
+      { settlementId: this.settlement?.id, receivedBy });
 
     this.saving.set(true);
     this.form.disable({ emitEvent: false });

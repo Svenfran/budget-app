@@ -169,8 +169,19 @@ public class VerificationService {
         requireSettlementField(dto.getGroupId(), "groupId");
         requireSettlementField(dto.getMember(), "member");
         requireSettlementField(dto.getMember().getId(), "member.id");
+        if (dto.getPayer() != null) {
+            requireSettlementField(dto.getPayer().getId(), "payer.id");
+        }
         requireSettlementField(dto.getDatePurchased(), "datePurchased");
         verifyValidSettlementAmount(dto.getAmount());
+    }
+
+    /** Anlegen einer Ausgleichszahlung nur, wenn der angemeldete Nutzer Zahler oder Empfänger ist (DIV-74). */
+    public void verifyIsPartyOfPayment(User user, User payer, User receiver) throws NotPartyOfSettlementException {
+        if (!(user.getId().equals(payer.getId()) || user.getId().equals(receiver.getId()))) {
+            throw new NotPartyOfSettlementException("User with ID " + user.getId()
+                    + " is neither payer nor receiver of the settlement payment");
+        }
     }
 
     /**

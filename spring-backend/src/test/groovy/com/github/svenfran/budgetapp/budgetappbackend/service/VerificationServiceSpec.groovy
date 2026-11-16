@@ -425,6 +425,49 @@ class VerificationServiceSpec extends Specification {
         'amount'        | { SettlementPaymentDto d -> d.amount = null }
     }
 
+    def "Anlegen mit Zahler ohne Id wird vor jedem Laden abgelehnt, ohne Zahler und mit Zahler-Id akzeptiert (Phase 5)"() {
+        given:
+        def dto = new SettlementPaymentDto(30d, 1L, new UserDto(id: 2L), DateUtils.toDate(TestData.REFERENCE_DATE))
+        dto.payer = payer
+
+        when:
+        def meldung = null
+        try {
+            service.verifyValidSettlementPaymentForCreate(dto)
+        } catch (InvalidSettlementPaymentException e) {
+            meldung = e.message
+        }
+
+        then:
+        meldung == erwartet
+
+        where:
+        payer                || erwartet
+        null                 || null
+        new UserDto(id: 3L)  || null
+        new UserDto()        || "Settlement payment field 'payer.id' is required"
+    }
+
+    def "Anlegen durch #rolle #ergebnis (Zahler 1, Empfänger 2)"() {
+        when:
+        def abgelehnt = false
+        try {
+            service.verifyIsPartyOfPayment(TestData.user(id: userId), TestData.user(id: 1L), TestData.user(id: 2L))
+        } catch (NotPartyOfSettlementException ignored) {
+            abgelehnt = true
+        }
+
+        then:
+        abgelehnt == erwartetAbgelehnt
+
+        where:
+        rolle       | userId || erwartetAbgelehnt
+        'Zahler'    | 1L     || false
+        'Empfänger' | 2L     || false
+        'Dritten'   | 3L     || true
+        ergebnis = erwartetAbgelehnt ? 'wird abgelehnt' : 'ist erlaubt'
+    }
+
     def "Ausgleichszahlung ohne Anfrage wird abgelehnt"() {
         when:
         service.verifyValidSettlementPaymentForCreate(null)

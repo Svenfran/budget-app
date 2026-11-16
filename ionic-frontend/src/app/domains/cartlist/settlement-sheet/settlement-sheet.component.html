@@ -18,6 +18,17 @@
   <div class="sheet-body">
     <!-- Kein <form>-Element: Enter darf nicht absenden, nur die Tastatur schließen (wie DIV-71). -->
     <div *ngIf="showForm(); else noRecipients" [formGroup]="form" class="settlement-form">
+      <!-- Richtung (DIV-74): beim Anlegen wählbar, im Edit-Modus aus der Rolle und gesperrt (Zahler nicht änderbar) -->
+      <ion-segment class="direction-segment" [value]="direction()" [disabled]="!!settlement || saving()"
+                   (ionChange)="changeDirection($event.detail.value)">
+        <ion-segment-button value="paid" class="direction-paid">
+          <ion-label class="ion-text-wrap">{{ 'domains.spendings.overlay.settlementpayment.direction_paid' | translate }}</ion-label>
+        </ion-segment-button>
+        <ion-segment-button value="received" class="direction-received">
+          <ion-label class="ion-text-wrap">{{ 'domains.spendings.overlay.settlementpayment.direction_received' | translate }}</ion-label>
+        </ion-segment-button>
+      </ion-segment>
+
       <ion-item lines="none" class="settlement-field">
         <ion-icon name="cash-outline" slot="start" aria-hidden="true"></ion-icon>
         <ion-input formControlName="amount" class="input-amount" type="number" inputmode="decimal"
@@ -43,11 +54,11 @@
       <ion-item *ngIf="canSelectReceiver()" lines="none" class="settlement-field">
         <ion-icon name="person-outline" slot="start" aria-hidden="true"></ion-icon>
         <ion-select formControlName="memberId" class="select-member"
-                    [placeholder]="'domains.spendings.overlay.settlementpayment.placeholder_member' | translate"
-                    [attr.aria-label]="'domains.spendings.overlay.settlementpayment.placeholder_member' | translate"
+                    [placeholder]="memberPlaceholderKey() | translate"
+                    [attr.aria-label]="memberPlaceholderKey() | translate"
                     [okText]="'global.selections.btn_ok' | translate"
                     [cancelText]="'global.selections.btn_cancel' | translate"
-                    [interfaceOptions]="{ header: ('domains.spendings.overlay.settlementpayment.placeholder_member' | translate) }"
+                    [interfaceOptions]="{ header: (memberPlaceholderKey() | translate) }"
                     (ionDismiss)="memberSelectClosed.set(true)">
           <ion-select-option *ngFor="let member of selectableRecipients()" [value]="member.id">{{ member.userName }}</ion-select-option>
         </ion-select>

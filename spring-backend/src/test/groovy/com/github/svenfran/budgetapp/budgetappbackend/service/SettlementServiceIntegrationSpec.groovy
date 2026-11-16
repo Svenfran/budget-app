@@ -205,6 +205,59 @@ class SettlementServiceIntegrationSpec extends IntegrationSpec {
         senderTitle == 'Ausgleichszahlung an Maximilian...'
     }
 
+    def "Erhaltene Zahlung (Phase 5): Ben erfasst „erhalten von Owner“ – Zahler ist der Owner, Ersteller Ben"() {
+        given:
+        LocaleContextHolder.setLocale(Locale.GERMAN)
+        def ben = fixtures.user(name: "Ben${TestData.nextId()}")
+        def wg = fixtures.group(members: [ben])
+        def (groupId, ownerId, benId, ownerName, benName) = [wg.group.id, wg.owner.id, ben.id, wg.owner.name, ben.name]
+        def dto = new SettlementPaymentDto(25d, groupId, new UserDto(id: benId), DateUtils.toDate(TestData.REFERENCE_DATE))
+        dto.payer = new UserDto(id: ownerId)
+        flushAndClear()
+        loginAs(userRepository.findById(benId).get())
+        LOG.info('Szenario: Gruppe {}, Owner {}, Ben {} (angemeldet) erfasst 25.00 erhalten vom Owner', groupId, ownerId, benId)
+
+        when:
+        def result = settlementService.addSettlementPayment(dto)
+        flushAndClear()
+        def settlement = settlementsDerGruppe(groupId).first()
+        def carts = result*.id.collect { cartRepository.findById(it).get() }
+        LOG.info('settlementService.addSettlementPayment(erhalten von {}) -> Settlement {} Zahler {}, Empfänger {}, Ersteller {}; ' +
+                'Carts User {}, Beträge {}', ownerId, settlement.id, settlement.payer.id, settlement.receiver.id,
+                settlement.createdBy.id, carts*.user*.id, carts*.amount)
+
+        then:
+        settlement.payer.id == ownerId
+        settlement.receiver.id == benId
+        settlement.createdBy.id == benId
+        settlement.amount == 25d
+        carts*.user*.id == [ownerId, benId]
+        carts*.amount == [25d, -25d]
+        carts*.title == ["Ausgleichszahlung an ${benName}".toString(), "Ausgleichszahlung von ${ownerName}".toString()]
+    }
+
+    def "Anlegen durch einen Unbeteiligten (Phase 5): Cleo erfasst eine Zahlung Owner → Ben, nichts angelegt"() {
+        given:
+        LocaleContextHolder.setLocale(Locale.GERMAN)
+        def ben = fixtures.user()
+        def cleo = fixtures.user()
+        def wg = fixtures.group(members: [ben, cleo])
+        def groupId = wg.group.id
+        def dto = new SettlementPaymentDto(25d, groupId, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE))
+        dto.payer = new UserDto(id: wg.owner.id)
+        flushAndClear()
+        loginAs(userRepository.findById(cleo.id).get())
+        LOG.info('Szenario: Gruppe {}, Owner {}, Ben {}, Cleo {} (angemeldet) erfasst Owner -> Ben', groupId, wg.owner.id, ben.id, cleo.id)
+
+        when:
+        LOG.info('settlementService.addSettlementPayment(Owner -> Ben) als Cleo, erwartet NotPartyOfSettlementException')
+        settlementService.addSettlementPayment(dto)
+
+        then:
+        thrown(NotPartyOfSettlementException)
+        nichtsAngelegt(groupId)
+    }
+
     // ----- Ablehnungen: keine Zeile wird geschrieben -----
 
     def "#fall wird abgelehnt, weder Settlement noch Settlement-Kategorie noch Einkäufe werden angelegt"() {

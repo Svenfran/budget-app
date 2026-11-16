@@ -53,19 +53,35 @@ export function isDaySelectable(isoDay: string, zeitraeume: Zeitraum[], userId: 
   );
 }
 
+/** Richtung beim Anlegen (DIV-74): „Ich habe gezahlt an …“ bzw. „Ich habe erhalten von …“. */
+export type SettlementDirection = 'paid' | 'received';
+
+export interface SettlementDtoOptions {
+  /** Edit-Modus (DIV-74): Id des Settlements; `member` bleibt der Empfänger, die Richtung zählt nicht. */
+  settlementId?: number;
+  /**
+   * Anlegen einer erhaltenen Zahlung: der angemeldete Nutzer. Die gewählte Gegenpartei (`memberId`) wird dann Zahler
+   * (`payer`), der Nutzer Empfänger (`member`).
+   */
+  receivedBy?: UserDto;
+}
+
 /**
- * Request der Ausgleichszahlung. `datePurchased` ist wie bisher Mitternacht UTC des gewählten Tages. Ist der Empfänger
- * nicht mehr in `recipients` (Liste inzwischen neu geladen), bleibt sein Name leer; das Backend prüft die Mitgliedschaft.
- * Mit `settlementId` (Edit-Modus, DIV-74) trägt der Request die Id des Settlements; `member` bleibt der Empfänger.
+ * Request der Ausgleichszahlung. `datePurchased` ist wie bisher Mitternacht UTC des gewählten Tages. Ist die gewählte
+ * Gegenpartei nicht mehr in `recipients` (Liste inzwischen neu geladen), bleibt ihr Name leer; das Backend prüft die
+ * Mitgliedschaft. Ohne Optionen wie bisher: Zahler ist der angemeldete Nutzer (kein `payer`), `member` der Empfänger.
  */
 export function toSettlementPaymentDto(value: SettlementFormValue, groupId: number, recipients: UserDto[],
-                                       settlementId?: number): SettlementPaymentDto {
+                                       options: SettlementDtoOptions = {}): SettlementPaymentDto {
   const recipient = recipients.find(member => member.id === value.memberId);
+  const counterpart: UserDto = { id: value.memberId, userName: recipient?.userName ?? '' };
+  const received = options.settlementId === undefined && !!options.receivedBy;
   return {
-    ...(settlementId !== undefined ? { id: settlementId } : {}),
+    ...(options.settlementId !== undefined ? { id: options.settlementId } : {}),
+    ...(received ? { payer: counterpart } : {}),
     amount: value.amount,
     groupId,
-    member: { id: value.memberId, userName: recipient?.userName ?? '' },
+    member: received ? { id: options.receivedBy!.id, userName: options.receivedBy!.userName } : counterpart,
     datePurchased: new Date(value.datePurchased),
   };
 }

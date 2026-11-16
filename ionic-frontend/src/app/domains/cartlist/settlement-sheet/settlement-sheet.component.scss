@@ -54,6 +54,16 @@
   padding: 12px 0 8px;
 }
 
+// Richtungsumschalter (DIV-74): über den Feldern, zweizeilige Beschriftung bei großer Schrift erlaubt
+.direction-segment {
+  margin-bottom: 12px;
+
+  ion-segment-button {
+    min-height: 44px;
+    text-transform: none;
+  }
+}
+
 // Einheitliche Feldzeilen: abgerundet, Icon links
 .settlement-field {
   --border-radius: 10px;

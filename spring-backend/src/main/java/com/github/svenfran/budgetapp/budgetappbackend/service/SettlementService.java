@@ -46,19 +46,23 @@ public class SettlementService {
     }
 
     /**
-     * Legt ein Settlement und seine beiden Carts an. Zahler ist der angemeldete Nutzer, {@code member} der Empfänger.
+     * Legt ein Settlement und seine beiden Carts an. {@code member} ist der Empfänger, {@code payer} der Zahler – ohne
+     * Angabe der angemeldete Nutzer. Mit {@code payer} lässt sich eine erhaltene Zahlung erfassen
+     * („Ich habe erhalten von …“, DIV-74); der angemeldete Nutzer muss dabei Zahler oder Empfänger sein.
      *
      * @return Zahler-Cart, dann Empfänger-Cart (beide mit {@code settlementId})
      */
     @Transactional
     public List<CartDto> addSettlementPayment(SettlementPaymentDto dto) throws UserNotFoundException, GroupNotFoundException,
-            NotOwnerOrMemberOfGroupException, DatePurchasedNotWithinMembershipPeriodException, InvalidSettlementPaymentException {
+            NotOwnerOrMemberOfGroupException, DatePurchasedNotWithinMembershipPeriodException, InvalidSettlementPaymentException,
+            NotPartyOfSettlementException {
         var user = dataLoaderService.getAuthenticatedUser();
         verificationService.verifyValidSettlementPaymentForCreate(dto);
         var group = dataLoaderService.loadGroup(dto.getGroupId());
-        var payer = user;
+        var payer = dto.getPayer() == null ? user : dataLoaderService.loadUser(dto.getPayer().getId());
         var receiver = dataLoaderService.loadUser(dto.getMember().getId());
         verificationService.verifyPayerIsNotReceiver(payer, receiver);
+        verificationService.verifyIsPartyOfPayment(user, payer, receiver);
         verificationService.verifyIsPartOfGroup(payer, group);
         verificationService.verifyIsPartOfGroup(receiver, group);
         verifyPartiesWereMembersAt(group, payer, receiver, dto.getDatePurchased());

@@ -142,10 +142,39 @@ describe('settlement-form (DIV-70)', () => {
     const ben = aUser({ userName: 'Ben' });
 
     it('toSettlementPaymentDto trägt im Edit-Modus die Settlement-Id, member bleibt der Empfänger', () => {
-      const dto = toSettlementPaymentDto({ amount: 30, memberId: ben.id, datePurchased: '2025-06-10' }, 7, [ben], 70);
+      const dto = toSettlementPaymentDto({ amount: 30, memberId: ben.id, datePurchased: '2025-06-10' }, 7, [ben], { settlementId: 70 });
 
       expect(dto).toEqual({
         id: 70, amount: 30, groupId: 7, member: { id: ben.id, userName: 'Ben' }, datePurchased: new Date('2025-06-10'),
+      });
+    });
+
+    describe('Richtung „erhalten von“ (Phase 5)', () => {
+      const ich = { id: 50, userName: 'Ich' };
+
+      it('erhaltene Zahlung: Gegenpartei wird Zahler (payer), ich bin Empfänger (member)', () => {
+        const dto = toSettlementPaymentDto({ amount: 25, memberId: ben.id, datePurchased: '2025-06-10' }, 7, [ben],
+          { receivedBy: ich });
+
+        expect(dto).toEqual({
+          payer: { id: ben.id, userName: 'Ben' }, amount: 25, groupId: 7, member: ich, datePurchased: new Date('2025-06-10'),
+        });
+      });
+
+      it('ohne receivedBy bleibt der Request wie bisher (kein payer)', () => {
+        const dto = toSettlementPaymentDto({ amount: 25, memberId: ben.id, datePurchased: '2025-06-10' }, 7, [ben]);
+
+        expect(dto.payer).toBeUndefined();
+        expect(dto.member).toEqual({ id: ben.id, userName: 'Ben' });
+      });
+
+      it('im Edit-Modus zählt die Richtung nicht: member bleibt der Empfänger, kein payer', () => {
+        const dto = toSettlementPaymentDto({ amount: 25, memberId: ben.id, datePurchased: '2025-06-10' }, 7, [ben],
+          { settlementId: 70, receivedBy: ich });
+
+        expect(dto.payer).toBeUndefined();
+        expect(dto.member.id).toBe(ben.id);
+        expect(dto.id).toBe(70);
       });
     });
 
