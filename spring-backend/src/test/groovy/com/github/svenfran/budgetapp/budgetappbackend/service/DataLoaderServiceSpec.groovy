@@ -9,7 +9,7 @@ class DataLoaderServiceSpec extends Specification {
     // Stubs liefern für Optional-Rückgaben Optional.empty(), d. h. jedes Objekt fehlt.
     def service = new DataLoaderService(Stub(GroupRepository), Stub(CartRepository), Stub(CategoryRepository),
             Stub(UserRepository), Stub(ShoppingListRepository), Stub(ShoppingItemRepository),
-            Stub(GroupMembershipHistoryRepository))
+            Stub(GroupMembershipHistoryRepository), Stub(SettlementRepository))
 
     def "Fehlendes Objekt (#methode) wirft #exception.simpleName mit Meldung"() {
         when:
@@ -29,5 +29,6 @@ class DataLoaderServiceSpec extends Specification {
         'loadUser'         | { it.loadUser(99L) }                         || UserNotFoundException         | 'User with Id 99 not found'
         'loadShoppingList' | { it.loadShoppingList(99999L) }              || ShoppingListNotFoundException | 'Shoppinglist with Id 99999 not found'
         'loadShoppingItem' | { it.loadShoppingItem(999999L) }             || ShoppingItemNotFoundException | 'Shoppingitem with Id 999999 not found'
+        'loadSettlementForUpdate' | { it.loadSettlementForUpdate(77L) } || SettlementNotFoundException | 'Settlement with Id 77 not found'
     }
 }

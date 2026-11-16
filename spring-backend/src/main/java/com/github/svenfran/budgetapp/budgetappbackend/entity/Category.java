@@ -26,6 +26,11 @@ public class Category implements Serializable{
     @JsonBackReference
     private Set<Cart> carts;
 
+    // Settlement-Kategorie der Gruppe (DIV-74): unabhängig von Name und Sprache. Wird nur serverseitig gesetzt
+    // (Anlage durch SettlementService / Standardkategorien), nie aus einem Client-DTO übernommen.
+    @Column(name = "is_settlement", nullable = false)
+    private boolean settlement;
+
     public Category(Long id, String name, Group group, Set<Cart> carts) {
         this.id = id;
         this.name = name;
@@ -64,6 +69,14 @@ public class Category implements Serializable{
         return group;
     }
 
+    public boolean isSettlement() {
+        return settlement;
+    }
+
+    public void setSettlement(boolean settlement) {
+        this.settlement = settlement;
+    }
+
     public void setGroup(Group group) {
         this.group = group;
     }
@@ -73,6 +86,7 @@ public class Category implements Serializable{
         return "Category{" +
                 "id=" + id +
                 ", name='" + name + '\'' +
+                ", settlement=" + settlement +
                 ", groupId=" + (group == null ? null : group.getId()) +
                 '}';
     }

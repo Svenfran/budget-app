@@ -2,17 +2,12 @@ package com.github.svenfran.budgetapp.budgetappbackend.service;
 
 import com.github.svenfran.budgetapp.budgetappbackend.constants.RecurrenceType;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto;
-import com.github.svenfran.budgetapp.budgetappbackend.dto.CategoryDto;
-import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto;
-import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.*;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.RecurrenceCalculator;
-import com.github.svenfran.budgetapp.budgetappbackend.helper.Translator;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartTemplateRepository;
-import com.github.svenfran.budgetapp.budgetappbackend.repository.CategoryRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.service.mapper.CartDtoMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,7 +18,6 @@ import org.springframework.validation.annotation.Validated;
 
 import java.time.Clock;
 import java.time.LocalDate;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Objects;
@@ -35,33 +29,23 @@ public class CartService {
 
     private final CartRepository cartRepository;
 
-    private final CategoryRepository categoryRepository;
-
     private final CartDtoMapper cartDtoMapper;
-    
+
     private final DataLoaderService dataLoaderService;
 
     private final VerificationService verificationService;
 
     private final CartTemplateRepository templateRepository;
 
-    private final Translator translator;
-
     private final Clock clock;
 
-    private static final String SETTLEMENT_CATEGORY_NAME = "categories.default.settlement";
-
-    public CartService(CartRepository cartRepository, CategoryRepository categoryRepository,
-                       CartDtoMapper cartDtoMapper, DataLoaderService dataLoaderService,
-                       VerificationService verificationService, CartTemplateRepository templateRepository,
-                       Translator translator, Clock clock) {
+    public CartService(CartRepository cartRepository, CartDtoMapper cartDtoMapper, DataLoaderService dataLoaderService,
+                       VerificationService verificationService, CartTemplateRepository templateRepository, Clock clock) {
         this.cartRepository = cartRepository;
-        this.categoryRepository = categoryRepository;
         this.cartDtoMapper = cartDtoMapper;
         this.dataLoaderService = dataLoaderService;
         this.verificationService = verificationService;
         this.templateRepository = templateRepository;
-        this.translator = translator;
         this.clock = clock;
     }
 
@@ -82,12 +66,14 @@ public class CartService {
     }
 
     @Transactional
-    public CartDto addCart(@Validated CartDto cartDto) throws UserNotFoundException, CategoryNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, DatePurchasedNotWithinMembershipPeriodException {
+    public CartDto addCart(@Validated CartDto cartDto) throws UserNotFoundException, CategoryNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, DatePurchasedNotWithinMembershipPeriodException, SettlementCategoryNotAllowedException {
         var user = dataLoaderService.getAuthenticatedUser();
         var category = dataLoaderService.loadCategory(cartDto.getCategoryDto().getId());
         var group = dataLoaderService.loadGroup(cartDto.getGroupId());
         var gmh = dataLoaderService.loadMembershipHistoryForGroupAndUser(group.getId(), user.getId());
         verificationService.verifyIsPartOfGroup(user, group);
+        // Ausgleichszahlungen nur über SettlementService (DIV-74)
+        verificationService.verifyCategoryIsNotSettlement(category);
         verificationService.verifyDatePurchasedWithinMembershipPeriod(gmh, cartDto.getDatePurchased());
         var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(cartDto.getDatePurchased(), group.getId());
         var cart = cartDtoMapper.cartDtoToEntity(cartDto, category, user, group, groupMemberCount);
@@ -99,84 +85,37 @@ public class CartService {
     }
 
     @Transactional
-    public CartDto updateCart(@Validated CartDto cartDto) throws UserNotFoundException, CategoryNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, DatePurchasedNotWithinMembershipPeriodException, CartNotFoundException, NotOwnerOfCartException {
+    public CartDto updateCart(@Validated CartDto cartDto) throws UserNotFoundException, CategoryNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, DatePurchasedNotWithinMembershipPeriodException, CartNotFoundException, NotOwnerOfCartException, SettlementCartNotEditableException, SettlementCategoryNotAllowedException {
         var user = dataLoaderService.getAuthenticatedUser();
         var cart = dataLoaderService.loadCart(cartDto.getId());
         var group = dataLoaderService.loadGroup(cartDto.getGroupId());
         var gmh = dataLoaderService.loadMembershipHistoryForGroupAndUser(group.getId(), user.getId());
         verificationService.verifyIsPartOfGroup(user, group);
         verificationService.verifyIsOwnerOfCart(user, cart);
+        // Ausgleichszahlungen nur über SettlementService (DIV-74): weder Settlement-Carts noch die Settlement-Kategorie
+        verificationService.verifyCartIsNotSettlement(cart);
         verificationService.verifyDatePurchasedWithinMembershipPeriod(gmh, cartDto.getDatePurchased());
         var category = dataLoaderService.loadCategory(cartDto.getCategoryDto().getId());
+        verificationService.verifyCategoryIsNotSettlement(category);
         var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(cartDto.getDatePurchased(), group.getId());
         return updateCartAndTemplateIfValid(cart, cartDto, user, group, category, groupMemberCount);
     }
 
-    public void deleteCart(Long id) throws UserNotFoundException, CartNotFoundException, GroupNotFoundException, NotOwnerOfCartException, NotOwnerOrMemberOfGroupException {
+    // Transaktional (DIV-74): Template-Deaktivierung und Löschen gemeinsam
+    @Transactional
+    public void deleteCart(Long id) throws UserNotFoundException, CartNotFoundException, GroupNotFoundException, NotOwnerOfCartException, NotOwnerOrMemberOfGroupException, SettlementCartNotEditableException {
         var user = dataLoaderService.getAuthenticatedUser();
         var cart = dataLoaderService.loadCart(id);
         var group = dataLoaderService.loadGroup(cart.getGroup().getId());
         verificationService.verifyIsPartOfGroup(user, group);
         verificationService.verifyIsOwnerOfCart(user, cart);
+        // Ausgleichszahlungen nur paarweise über SettlementService löschen (DIV-74)
+        verificationService.verifyCartIsNotSettlement(cart);
         deactivateCartTemplateIfCartDeleted(cart);
         cartRepository.deleteById(id);
     }
 
-    @Transactional
-    public List<CartDto> addSettlementPayment(@Validated SettlementPaymentDto settlementPaymentDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, DatePurchasedNotWithinMembershipPeriodException {
-        var user = dataLoaderService.getAuthenticatedUser();
-        var group = dataLoaderService.loadGroup(settlementPaymentDto.getGroupId());
-        var member = dataLoaderService.loadUser(settlementPaymentDto.getMember().getId());
-        var gmhUser = dataLoaderService.loadMembershipHistoryForGroupAndUser(group.getId(), user.getId());
-        var gmhMember = dataLoaderService.loadMembershipHistoryForGroupAndUser(group.getId(), member.getId());
-        verificationService.verifyIsPartOfGroup(user, group);
-        verificationService.verifyIsPartOfGroup(member, group);
-        verificationService.verifyDatePurchasedWithinMembershipPeriod(gmhUser, settlementPaymentDto.getDatePurchased());
-        verificationService.verifyDatePurchasedWithinMembershipPeriod(gmhMember, settlementPaymentDto.getDatePurchased());
-        createCategoryForSettlementPaymentIfNotExist(group);
-        var category = dataLoaderService.loadCategoryByGroupAndName(group, translator.translate(SETTLEMENT_CATEGORY_NAME));
-        var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(settlementPaymentDto.getDatePurchased(), group.getId());
-        return createSettlementPaymentCarts(category, user, member, group, settlementPaymentDto.getAmount(), groupMemberCount, settlementPaymentDto.getDatePurchased());
-    }
-
-    private List<CartDto> createSettlementPaymentCarts(Category category, User user, User member, Group group, Double amount, int groupMemberCount, Date datePurchased) {
-        var cartDtoSender = new CartDto();
-        cartDtoSender.setTitle(translator.translate("cart.settlement_to") + " " + formatUsername(member.getName()));
-        cartDtoSender.setDescription("");
-        cartDtoSender.setDatePurchased(datePurchased);
-        cartDtoSender.setAmount(amount);
-        cartDtoSender.setUserDto(new UserDto(user));
-        cartDtoSender.setGroupId(group.getId());
-        cartDtoSender.setCategoryDto(new CategoryDto(category));
-        var cartSender = cartRepository.save(cartDtoMapper.cartDtoToEntity(cartDtoSender, category, user, group, groupMemberCount));
-        cartDtoSender.setId(cartSender.getId());
-
-        var cartDtoReceiver = new CartDto();
-        cartDtoReceiver.setTitle(translator.translate("cart.settlement_from") + " " + formatUsername(user.getName()));
-        cartDtoReceiver.setDescription("");
-        cartDtoReceiver.setDatePurchased(datePurchased);
-        cartDtoReceiver.setAmount((-1) * amount);
-        cartDtoReceiver.setUserDto(new UserDto(member));
-        cartDtoReceiver.setGroupId(group.getId());
-        cartDtoReceiver.setCategoryDto(new CategoryDto(category));
-        var cartReceiver = cartRepository.save(cartDtoMapper.cartDtoToEntity(cartDtoReceiver, category, member, group, groupMemberCount));
-        cartDtoReceiver.setId(cartReceiver.getId());
-
-        return Arrays.asList(cartDtoSender, cartDtoReceiver);
-    }
-
-    private String formatUsername(String name) {
-        if (name != null && name.length() > 10) {
-            return name.substring(0, 10) + "...";
-        }
-        return name;
-    }
-
-    private void createCategoryForSettlementPaymentIfNotExist(Group group) {
-        if (categoryRepository.findCategoryByGroupAndName(group, translator.translate(SETTLEMENT_CATEGORY_NAME)) == null) {
-            categoryRepository.save(new Category(null, translator.translate(SETTLEMENT_CATEGORY_NAME), group, null));
-        }
-    }
+    // Ausgleichszahlungen: SettlementService (DIV-74)
 
     // ----- Wiederholende Einträge -----
 

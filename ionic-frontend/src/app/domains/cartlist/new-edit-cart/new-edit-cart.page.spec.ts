@@ -66,7 +66,6 @@ describe('NewEditCartPage', () => {
           categories: sharedCategories,
           getCategoriesByGroup: (_group: unknown, onComplete: (result: CategoryDto[] | null) => void) =>
             categoryCallbacks.push(onComplete),
-          isSettlementpayment: (name: string) => name === 'Ausgleichszahlung',
         } },
         { provide: GroupService, useValue: {
           activeGroup: signal(aGroup({ id: GROUP_ID, dateCreated: new Date('2024-01-01T00:00:00Z') })),
@@ -322,10 +321,12 @@ describe('NewEditCartPage', () => {
     });
   });
 
-  describe('Ausgleichszahlungs-Kategorie (Phase 4, F3)', () => {
-    const ausgleich = aCategory({ id: 44, name: 'Ausgleichszahlung', groupId: GROUP_ID });
+  describe('Ausgleichszahlungs-Kategorie (DIV-73 Phase 4, F3; DIV-74: per Kennzeichen, auch beim Bearbeiten gesperrt)', () => {
+    const ausgleich = aCategory({ id: 44, name: 'Ausgleichszahlung', groupId: GROUP_ID, settlement: true });
     const ausgleichszahlung = aCart({ id: 3, title: 'Ausgleich an Ben', amount: 20, groupId: GROUP_ID, userDto: anna,
-      categoryDto: ausgleich, datePurchased: new Date('2025-05-01T00:00:00Z') });
+      categoryDto: ausgleich, datePurchased: new Date('2025-05-01T00:00:00Z'), settlementId: 70 });
+    const umbenannt = aCategory({ id: 45, name: 'Rückzahlungen', groupId: GROUP_ID, settlement: true });
+    const namensgleich = aCategory({ id: 46, name: 'Ausgleichszahlung', groupId: GROUP_ID });
 
     it('Neuanlage bietet die Ausgleichszahlungs-Kategorie nicht an', () => {
       createPage();
@@ -355,18 +356,27 @@ describe('NewEditCartPage', () => {
       expect(page.form.value.categoryId).toBe('');
     });
 
-    it('Bearbeiten einer Ausgleichszahlung zeigt die Kategorie weiterhin, behält sie und speichert (AC 13)', async () => {
-      createPage({ id: '3' }, [ausgleichszahlung]);
+    it('Bearbeiten eines normalen Einkaufs bietet die Settlement-Kategorie ebenfalls nicht an (DIV-74)', () => {
+      createPage({ id: '1' });
       answerCategories([lebensmittel, ausgleich, drogerie]);
 
-      expect(optionTexts()).toEqual(['Lebensmittel', 'Ausgleichszahlung', 'Drogerie']);
-      expect(page.form.value.categoryId).toBe(44);
+      expect(page.isAddMode).toBeFalse();
+      expect(optionTexts()).toEqual(['Lebensmittel', 'Drogerie']);
+    });
 
-      page.onSubmit();
-      await resolveLoadings();
+    it('erkennt die Settlement-Kategorie am Kennzeichen, nicht am Namen (DIV-74)', () => {
+      createPage();
+      answerCategories([lebensmittel, umbenannt, namensgleich]);
 
-      expect(cartService.updateCart).toHaveBeenCalledOnceWith(jasmine.objectContaining({
-        id: 3, categoryDto: { id: 44, name: 'Ausgleichszahlung', groupId: GROUP_ID } }));
+      expect(optionTexts()).toEqual(['Lebensmittel', 'Ausgleichszahlung']);
+    });
+
+    it('Bearbeiten einer Ausgleichszahlung über die URL führt zurück zur Liste, ohne Kategorien zu laden (DIV-74)', () => {
+      createPage({ id: '3' }, [ausgleichszahlung]);
+
+      expect(navigate).toHaveBeenCalledOnceWith(['domains', 'tabs', 'cartlist']);
+      expect(categoryCallbacks.length).toBe(0);
+      expect(cartService.updateCart).not.toHaveBeenCalled();
     });
   });
 });

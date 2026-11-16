@@ -106,7 +106,14 @@
                     "subtitle": "Erfasse eine Zahlung an ein Mitglied der Gruppe.",
                     "btn_save": "Speichern",
                     "placeholder_member": "An Mitglied",
+                    "placeholder_member_from": "Von Mitglied",
+                    "direction_paid": "Ich habe gezahlt an",
+                    "direction_received": "Ich habe erhalten von",
                     "amount": "Betrag in €*",
+                    "amount_positive": "Betrag muss größer als 0 sein",
+                    "title_edit": "Ausgleichszahlung bearbeiten",
+                    "subtitle_edit": "Änderungen gelten für beide Beteiligten.",
+                    "paid_by": "Gezahlt von",
                     "date": "Datum*",
                     "btn_cancel": "Abbrechen",
                     "no_members": "Keine Mitglieder vorhanden",
@@ -231,6 +238,23 @@
                 "header": "Datum nicht im Zeitraum der Mitgliedschaft",
                 "message_new_edit": "Du warst zu dem gewählten Zeitpunkt kein Mitglied der Gruppe. Bitte wähle ein anderes Datum.",
                 "message_settlementpayment": "Der Nutzer \"{{userName}}\" war zu dem gewählten Zeitpunkt kein Mitglied der Gruppe. Bitte wähle ein anderes Datum."
+            },
+            "delete_settlement": {
+                "header": "Ausgleichszahlung löschen:",
+                "message": "Möchtest du die Ausgleichszahlung \"{{cartTitle}}\" wirklich löschen? Sie wird für beide Beteiligten entfernt."
+            },
+            "settlement_delete_failed": {
+                "header": "Ausgleichszahlung nicht gelöscht",
+                "message": "Die Ausgleichszahlung konnte nicht gelöscht werden. Bitte versuche es erneut."
+            },
+            "settlement_already_deleted": "Die Ausgleichszahlung wurde bereits gelöscht.",
+            "settlement_update_failed": {
+                "header": "Ausgleichszahlung nicht gespeichert",
+                "message": "Die Änderung konnte nicht gespeichert werden. Deine Eingaben bleiben erhalten, bitte versuche es erneut."
+            },
+            "settlement_not_found": {
+                "header": "Ausgleichszahlung nicht mehr vorhanden",
+                "message": "Die Ausgleichszahlung wurde inzwischen gelöscht. Die Liste wird neu geladen."
             },
             "settlement_failed": {
                 "header": "Ausgleichszahlung nicht gespeichert",

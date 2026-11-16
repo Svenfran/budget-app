@@ -24,5 +24,3 @@ export enum INIT_NUMBERS {
     /** Health-Abfrage gilt nach dieser Zeit ohne Antwort als DOWN (Server bzw. Netz antwortet nicht). */
     HEALTH_CHECK_TIMEOUT_MS = 10000
 }
-
-export const SETTLEMENTPAYMENT_CATEGORIES = ['Ausgleichszahlung', 'Repayment', 'Repago'];

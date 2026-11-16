@@ -106,7 +106,14 @@
                     "subtitle": "Registra un pago a un miembro del grupo.",
                     "btn_save": "Guardar",
                     "placeholder_member": "Al miembro",
+                    "placeholder_member_from": "De miembro",
+                    "direction_paid": "He pagado a",
+                    "direction_received": "He recibido de",
                     "amount": "Importe en €*",
+                    "amount_positive": "El importe debe ser mayor que 0",
+                    "title_edit": "Editar repago",
+                    "subtitle_edit": "Los cambios se aplican a ambas partes.",
+                    "paid_by": "Pagado por",
                     "date": "Fecha*",
                     "btn_cancel": "Cancelar",
                     "no_members": "No hay miembros disponibles",
@@ -231,6 +238,23 @@
                 "header": "Fecha fuera del periodo de membresía",
                 "message_new_edit": "No eras miembro del grupo en la fecha seleccionada. Por favor elige otra fecha.",
                 "message_settlementpayment": "El usuario \"{{userName}}\" no era miembro del grupo en la fecha seleccionada. Por favor elige otra fecha."
+            },
+            "delete_settlement": {
+                "header": "Eliminar repago:",
+                "message": "¿Seguro que quieres eliminar el repago \"{{cartTitle}}\"? Se eliminará para ambas partes."
+            },
+            "settlement_delete_failed": {
+                "header": "Repago no eliminado",
+                "message": "No se pudo eliminar el repago. Por favor, inténtalo de nuevo."
+            },
+            "settlement_already_deleted": "El repago ya ha sido eliminado.",
+            "settlement_update_failed": {
+                "header": "Repago no guardado",
+                "message": "No se pudo guardar el cambio. Tus datos se conservan, por favor, inténtalo de nuevo."
+            },
+            "settlement_not_found": {
+                "header": "El repago ya no existe",
+                "message": "El repago se ha eliminado mientras tanto. La lista se está recargando."
             },
             "settlement_failed": {
                 "header": "Repago no guardado",

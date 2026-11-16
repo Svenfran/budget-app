@@ -1,17 +1,20 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service
 
+import com.github.svenfran.budgetapp.budgetappbackend.dto.CategoryDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.StatisticsDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOrMemberOfGroupException
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
+import com.github.svenfran.budgetapp.budgetappbackend.repository.CategoryRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.Fixtures.GroupScenario
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.context.i18n.LocaleContextHolder
 
 import java.time.LocalDate
 
@@ -35,8 +38,10 @@ class StatisticsServiceIntegrationSpec extends IntegrationSpec {
     @Autowired StatisticsService statisticsService
     @Autowired SpendingsOverviewService spendingsOverviewService
     @Autowired GroupService groupService
-    @Autowired CartService cartService
+    @Autowired SettlementService settlementService
     @Autowired UserRepository userRepository
+    @Autowired CategoryRepository categoryRepository
+    @Autowired CategoryService categoryService
 
     def "AC3: Einzelne Gruppe zeigt nur deren Ausgaben und Saldo"() {
         given:
@@ -438,15 +443,52 @@ class StatisticsServiceIntegrationSpec extends IntegrationSpec {
                 .spendingsTotalYear.spendingsTotalUser.find { it.userId == nutzer.id }?.diff
     }
 
+    def "DIV-74 AC10: Ausgleichszahlungen werden nach Umbenennen der Kategorie und bei Anlage in anderer Sprache erkannt"() {
+        given: "Anna (Owner) zahlt 90 €; Ben → Anna 20 € (de); Kategorie umbenannt in 'Rückzahlungen'; Anna → Ben 5 € (en)"
+        LocaleContextHolder.setLocale(Locale.GERMAN)
+        def anna = fixtures.user(name: 'Anna')
+        def ben = fixtures.user(name: 'Ben')
+        def wg = fixtures.group(owner: anna, members: [ben], memberSince: SEIT)
+        def gid = wg.group.id
+        einkauf(wg, anna, 90d, of(2025, 1, 10))
+        zahlung(ben, anna, 20d, wg, of(2025, 4, 1))
+        def kategorie = categoryRepository.findAllByGroup_IdOrderByName(gid).find { it.settlement }
+        loginAs(userRepository.findById(anna.id).get())
+        categoryService.updateCategory(new CategoryDto(id: kategorie.id, name: 'Rückzahlungen', groupId: gid))
+        flushAndClear()
+        LocaleContextHolder.setLocale(Locale.ENGLISH)
+        zahlung(anna, ben, 5d, wg, of(2025, 5, 1))
+        def kategorienDerGruppe = categoryRepository.findAllByGroup_IdOrderByName(gid).collect { [it.name, it.settlement] }
+        LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {}; Settlement-Kategorie {} umbenannt; Kategorien {}', gid, anna.id,
+                ben.id, kategorie.id, kategorienDerGruppe)
+
+        when:
+        loginAs(userRepository.findById(ben.id).get())
+        def jahr = statistik(gid, YEAR, 2025)
+
+        then: "eine Settlement-Zeile über beide Zahlungen, unabhängig von Name und Sprache; kein bezahlter Einkauf für Ben"
+        jahr.categories.findAll { it.settlement }*.amount == [15d]
+        jahr.categories.findAll { !it.settlement }.isEmpty()
+        jahr.paidCartCount == 0L
+        jahr.groupView.cartCount == 1L
+
+        and: "keine zweite Settlement-Kategorie in Request-Sprache"
+        !kategorienDerGruppe.any { it[0] == 'Repayment' }
+        kategorienDerGruppe.findAll { it[1] }*.getAt(0) == ['Rückzahlungen']
+
+        cleanup:
+        LocaleContextHolder.resetLocaleContext()
+    }
+
     private void einkauf(GroupScenario wg, User zahler, Double betrag, LocalDate datum) {
         fixtures.cart(wg, user: zahler, amount: betrag, datePurchased: DateUtils.toDate(datum))
     }
 
-    /** Ausgleichszahlung über CartService, wie sie die App anlegt (Sender- und Empfänger-Cart). */
+    /** Ausgleichszahlung über SettlementService, wie sie die App anlegt (Sender- und Empfänger-Cart). */
     private void zahlung(User von, User an, Double betrag, GroupScenario wg, LocalDate tag) {
         loginAs(userRepository.findById(von.id).get())
-        cartService.addSettlementPayment(new SettlementPaymentDto(betrag, wg.group.id, new UserDto(an), DateUtils.toDate(tag)))
+        settlementService.addSettlementPayment(new SettlementPaymentDto(betrag, wg.group.id, new UserDto(an), DateUtils.toDate(tag)))
         flushAndClear()
-        LOG.info('cartService.addSettlementPayment(User {} an User {}, {})', von.id, an.id, betrag)
+        LOG.info('settlementService.addSettlementPayment(User {} an User {}, {})', von.id, an.id, betrag)
     }
 }

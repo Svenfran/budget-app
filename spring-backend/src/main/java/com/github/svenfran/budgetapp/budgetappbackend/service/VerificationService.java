@@ -2,6 +2,7 @@ package com.github.svenfran.budgetapp.budgetappbackend.service;
 
 import com.github.svenfran.budgetapp.budgetappbackend.constants.UserEnum;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto;
+import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.*;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.EmailUtils;
@@ -10,6 +11,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.BindingResult;
 
+import java.math.BigDecimal;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -156,6 +158,95 @@ public class VerificationService {
                 return;
             }
         } throw new DatePurchasedNotWithinMembershipPeriodException("Date purchased is not within membership period");
+    }
+
+    /**
+     * Request-Struktur beim Anlegen einer Ausgleichszahlung (DIV-74). Wird vor jedem Loader aufgerufen, der eine Id aus
+     * dem Request verwendet, damit fehlende Felder als 400 statt als NPE/500 enden.
+     */
+    public void verifyValidSettlementPaymentForCreate(SettlementPaymentDto dto) throws InvalidSettlementPaymentException {
+        if (dto == null) throw new InvalidSettlementPaymentException("Settlement payment is required");
+        requireSettlementField(dto.getGroupId(), "groupId");
+        requireSettlementField(dto.getMember(), "member");
+        requireSettlementField(dto.getMember().getId(), "member.id");
+        if (dto.getPayer() != null) {
+            requireSettlementField(dto.getPayer().getId(), "payer.id");
+        }
+        requireSettlementField(dto.getDatePurchased(), "datePurchased");
+        verifyValidSettlementAmount(dto.getAmount());
+    }
+
+    /** Anlegen einer Ausgleichszahlung nur, wenn der angemeldete Nutzer Zahler oder Empfänger ist (DIV-74). */
+    public void verifyIsPartyOfPayment(User user, User payer, User receiver) throws NotPartyOfSettlementException {
+        if (!(user.getId().equals(payer.getId()) || user.getId().equals(receiver.getId()))) {
+            throw new NotPartyOfSettlementException("User with ID " + user.getId()
+                    + " is neither payer nor receiver of the settlement payment");
+        }
+    }
+
+    /**
+     * Request-Struktur beim Bearbeiten einer Ausgleichszahlung (DIV-74): id, Empfänger, Betrag, Datum. groupId wird nicht
+     * geprüft, maßgeblich ist die Gruppe des Settlements. Vor jedem Loader aufrufen.
+     */
+    public void verifyValidSettlementPaymentForUpdate(SettlementPaymentDto dto) throws InvalidSettlementPaymentException {
+        if (dto == null) throw new InvalidSettlementPaymentException("Settlement payment is required");
+        requireSettlementField(dto.getId(), "id");
+        requireSettlementField(dto.getMember(), "member");
+        requireSettlementField(dto.getMember().getId(), "member.id");
+        requireSettlementField(dto.getDatePurchased(), "datePurchased");
+        verifyValidSettlementAmount(dto.getAmount());
+    }
+
+    /** Den Empfänger darf nur der Zahler ändern, sonst könnte sich der Empfänger selbst herausnehmen (DIV-74). */
+    public void verifyMayChangeReceiver(User user, Settlement settlement, User newReceiver) throws ReceiverChangeNotAllowedException {
+        if (!newReceiver.getId().equals(settlement.getReceiver().getId()) && !user.getId().equals(settlement.getPayer().getId())) {
+            throw new ReceiverChangeNotAllowedException("Only the payer may change the receiver of settlement " + settlement.getId());
+        }
+    }
+
+    /** Betrag einer Ausgleichszahlung: Pflicht, größer als 0 und höchstens zwei Nachkommastellen (Cent). */
+    public void verifyValidSettlementAmount(Double amount) throws InvalidSettlementPaymentException {
+        requireSettlementField(amount, "amount");
+        if (amount.isNaN() || amount.isInfinite() || amount <= 0
+                || BigDecimal.valueOf(amount).stripTrailingZeros().scale() > 2) {
+            throw new InvalidSettlementPaymentException("Settlement amount must be greater than 0 with at most 2 decimal places");
+        }
+    }
+
+    public void verifyPayerIsNotReceiver(User payer, User receiver) throws InvalidSettlementPaymentException {
+        if (payer.getId().equals(receiver.getId())) {
+            throw new InvalidSettlementPaymentException("Payer and receiver of a settlement payment must differ");
+        }
+    }
+
+    /** Settlement-Carts ändern sich nur über die Settlement-Endpunkte (DIV-74). */
+    public void verifyCartIsNotSettlement(Cart cart) throws SettlementCartNotEditableException {
+        if (cart.getSettlement() != null) {
+            throw new SettlementCartNotEditableException("Cart with Id " + cart.getId()
+                    + " belongs to a settlement payment and can only be changed via the settlement endpoints");
+        }
+    }
+
+    /** Die Settlement-Kategorie ist für normale Einkäufe gesperrt (DIV-74). */
+    public void verifyCategoryIsNotSettlement(Category category) throws SettlementCategoryNotAllowedException {
+        if (category.isSettlement()) {
+            throw new SettlementCategoryNotAllowedException("The settlement category with Id " + category.getId()
+                    + " cannot be used for regular carts");
+        }
+    }
+
+    /** Ändern und Löschen einer Ausgleichszahlung dürfen nur Zahler und Empfänger (DIV-74). */
+    public void verifyIsPartyOfSettlement(User user, Settlement settlement) throws NotPartyOfSettlementException {
+        if (!(user.getId().equals(settlement.getPayer().getId()) || user.getId().equals(settlement.getReceiver().getId()))) {
+            throw new NotPartyOfSettlementException("User with ID " + user.getId()
+                    + " is neither payer nor receiver of settlement " + settlement.getId());
+        }
+    }
+
+    private static void requireSettlementField(Object value, String field) throws InvalidSettlementPaymentException {
+        if (value == null) {
+            throw new InvalidSettlementPaymentException("Settlement payment field '" + field + "' is required");
+        }
     }
 
     private boolean emailExists(String email) {

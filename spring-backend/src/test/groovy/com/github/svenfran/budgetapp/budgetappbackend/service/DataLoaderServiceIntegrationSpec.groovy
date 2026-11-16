@@ -86,28 +86,6 @@ class DataLoaderServiceIntegrationSpec extends IntegrationSpec {
         categoryIds == [ausgehen, miete, wohnen]*.id
     }
 
-    def "Kategorie '#name' wird per Gruppe und Name gefunden: #gefunden"() {
-        given:
-        def wg = fixtures.group()
-        def andere = fixtures.group()
-        def lebensmittel = fixtures.category(wg, name: 'Lebensmittel')
-        fixtures.category(andere, name: 'Sport')
-        LOG.info('Szenario: Gruppe {} mit Lebensmittel {}, Gruppe {} mit Sport', wg.group.id, lebensmittel.id, andere.group.id)
-
-        when:
-        def result = dataLoaderService.loadCategoryByGroupAndName(wg.group, name)
-        LOG.info('dataLoaderService.loadCategoryByGroupAndName(Gruppe {}, \'{}\') -> Kategorie {}', wg.group.id, name, result?.id)
-
-        then:
-        gefunden ? result.id == lebensmittel.id : result == null
-
-        where:
-        name           || gefunden
-        'Lebensmittel' || true
-        'Sport'        || false
-        'Unbekannt'    || false
-    }
-
     def "Mitgliederzahl zum Kaufdatum: #fall"() {
         given: "Owner und Ben sind seit REFERENCE_DATE - 1 Jahr Mitglied; Bens Zeitraum wird je Fall angepasst"
         def ben = fixtures.user()

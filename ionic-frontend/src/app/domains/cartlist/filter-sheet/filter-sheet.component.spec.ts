@@ -2,7 +2,7 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ReactiveFormsModule } from '@angular/forms';
 import { IonicModule, ModalController } from '@ionic/angular';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { CategoryService } from 'src/app/service/category.service';
 import { GroupService } from 'src/app/service/group.service';
 import { aCategory, aGroup } from 'src/testing/test-data';
@@ -103,6 +103,15 @@ describe('FilterSheetComponent (DIV-71)', () => {
     });
     expect(dateItem('startDate').textContent).toContain(key('date_from'));
     expect(dateItem('endDate').textContent).toContain(key('date_to'));
+  });
+
+  it('Kategorie-Auswahl zeigt die Settlement-Kategorie in der App-Sprache, Wert bleibt der gespeicherte Name (DIV-74)', () => {
+    render();
+    spyOn(TestBed.inject(TranslateService), 'instant').and.callFake(
+      ((k: string) => k === 'domains.spendings.settlement' ? 'Repayment' : k) as never);
+
+    expect(component.label(aCategory({ name: 'Ausgleichszahlung', settlement: true }))).toBe('Repayment');
+    expect(component.label(aCategory({ name: 'Lebensmittel' }))).toBe('Lebensmittel');
   });
 
   it('lädt Mitglieder und Kategorien der aktiven Gruppe genau einmal beim Öffnen', () => {

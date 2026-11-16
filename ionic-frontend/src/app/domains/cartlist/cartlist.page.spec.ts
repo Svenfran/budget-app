@@ -305,12 +305,177 @@ describe('CartlistPage – Ausgleichszahlung', () => {
   });
 });
 
+// DIV-74: Einkäufe einer Ausgleichszahlung werden im Settlement-Sheet bearbeitet (nicht im normalen Formular) und immer
+// paarweise über den Settlement-Endpoint gelöscht. Template ausgeblendet – geprüft werden die Methoden hinter den Wischaktionen.
+describe('CartlistPage – Wischaktionen bei Ausgleichszahlungen (DIV-74)', () => {
+  let page: CartlistPage;
+  let groupService: GroupService;
+  let session: BehaviorSubject<User | null>;
+  let alertCtrl: jasmine.SpyObj<AlertController>;
+  let modalCtrl: jasmine.SpyObj<ModalController>;
+  let alerts: jasmine.SpyObj<AlertService>;
+  let initCartList: WritableSignal<Cart[]>;
+  let load: jasmine.Spy;
+  let cartService: { deleteCart: jasmine.Spy; deleteSettlementPayment: jasmine.Spy };
+  const slidingItem = () => jasmine.createSpyObj<IonItemSliding>('IonItemSliding', ['close']);
+  const anna = aUser({ userName: 'Anna' });
+  const ben = aUser({ userName: 'Ben' });
+  const settlementCart = aCart({ id: 11, title: 'Ausgleichszahlung an Ben', amount: 30, userDto: anna, settlementId: 70,
+    datePurchased: '2025-06-10' as unknown as Date });
+  const partnerCart = aCart({ id: 13, title: 'Ausgleichszahlung von Anna', amount: -30, userDto: ben, settlementId: 70,
+    datePurchased: '2025-06-10' as unknown as Date });
+  const normalCart = aCart({ id: 12, title: 'Pizza' });
+
+  /** Optionen des zuletzt erzeugten Alerts und der Handler des „Ja“-Buttons. */
+  const lastAlert = () => {
+    const options = alertCtrl.create.calls.mostRecent().args[0]!;
+    const ok = (options.buttons as { role?: string; handler?: () => void }[]).find(b => b.role !== 'cancel')!;
+    return { options, confirm: () => ok.handler!() };
+  };
+
+  beforeEach(() => {
+    session = new BehaviorSubject<User | null>(null);
+    const auth = authServiceStub(null);
+    (Object.getOwnPropertyDescriptor(auth, 'user')!.get as jasmine.Spy).and.returnValue(session);
+    const alertEl = jasmine.createSpyObj<HTMLIonAlertElement>('HTMLIonAlertElement', ['present']);
+    alertEl.present.and.resolveTo();
+    alertCtrl = jasmine.createSpyObj<AlertController>('AlertController', ['create']);
+    alertCtrl.create.and.resolveTo(alertEl);
+    cartService = {
+      deleteCart: jasmine.createSpy('deleteCart'),
+      deleteSettlementPayment: jasmine.createSpy('deleteSettlementPayment'),
+    };
+    modalCtrl = jasmine.createSpyObj<ModalController>('ModalController', ['create', 'dismiss']);
+    const modal = jasmine.createSpyObj<HTMLIonModalElement>('HTMLIonModalElement', ['present']);
+    modal.present.and.resolveTo();
+    modalCtrl.create.and.resolveTo(modal);
+    alerts = alertServiceSpy();
+    initCartList = signal<Cart[]>([]);
+    load = jasmine.createSpy('load');
+    TestBed.configureTestingModule({
+      declarations: [CartlistPage],
+      imports: [IonicModule.forRoot()],
+      providers: [
+        ...provideServiceTesting(),
+        {
+          provide: CartService, useValue: {
+            ...cartService, cartList: signal<Cart[]>([]), initCartList, cartUpdated: signal(0),
+            sum: computed(() => 0), count: computed(() => 0), getCartListByGroupId: load,
+          },
+        },
+        { provide: OverviewService, useValue: { overviewRefresh: signal(0) } },
+        { provide: CategoryService, useValue: { categoryUpdate: signal(0) } },
+        { provide: StorageService, useValue: storageServiceFake() },
+        { provide: AuthService, useValue: auth },
+        { provide: AlertService, useValue: alerts },
+        { provide: AlertController, useValue: alertCtrl },
+        { provide: ModalController, useValue: modalCtrl },
+      ],
+    });
+    TestBed.overrideTemplate(CartlistPage, '');
+    groupService = TestBed.inject(GroupService);
+    session.next(aLoggedInUser({ id: 7 }));
+    groupService.setActiveGroup(aGroup({ id: 3, name: 'WG' }));
+    const fixture = TestBed.createComponent(CartlistPage);
+    fixture.detectChanges();
+    page = fixture.componentInstance;
+  });
+
+  it('„Bearbeiten“ eines normalen Einkaufs öffnet das Formular', () => {
+    const navigate = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
+
+    page.editCart(normalCart, slidingItem());
+
+    expect(navigate).toHaveBeenCalledOnceWith(['domains', 'tabs', 'cartlist', 'new-edit', '12']);
+    expect(modalCtrl.create).not.toHaveBeenCalled();
+  });
+
+  it('„Bearbeiten“ einer Ausgleichszahlung öffnet das Settlement-Sheet im Edit-Modus, vorbelegt aus dem Cart-Paar', async () => {
+    const navigate = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
+    initCartList.set([normalCart, partnerCart, settlementCart]);
+
+    page.editCart(settlementCart, slidingItem());
+    await Promise.resolve();
+
+    expect(navigate).not.toHaveBeenCalled();
+    expect(modalCtrl.create).toHaveBeenCalledTimes(1);
+    const options = modalCtrl.create.calls.mostRecent().args[0];
+    expect(options.component).toBe(SettlementSheetComponent);
+    expect(options.componentProps?.['settlement']).toEqual({
+      id: 70, role: 'payer', payer: { id: anna.id, userName: 'Anna' }, receiver: { id: ben.id, userName: 'Ben' },
+      amount: 30, datePurchased: '2025-06-10',
+    });
+  });
+
+  it('„Bearbeiten“ ohne Partner-Cart (veraltete Liste): Hinweis und stilles Neuladen, kein Sheet', () => {
+    initCartList.set([settlementCart]);
+
+    page.editCart(settlementCart, slidingItem());
+
+    expect(modalCtrl.create).not.toHaveBeenCalled();
+    expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(
+      'alerts.cart.settlement_not_found.header', 'alerts.cart.settlement_not_found.message');
+    const [gruppe, refresh, , options] = load.calls.mostRecent().args;
+    expect(gruppe.id).toBe(3);
+    expect(refresh).toBeTrue();
+    expect(options.silent).toBeTrue();
+    expect(options.isCurrent()).toBeTrue();
+    groupService.setActiveGroup(aGroup({ id: 4, name: 'Andere' }));
+    expect(options.isCurrent()).toBeFalse();
+  });
+
+  it('Löschen eines Einkaufs einer Ausgleichszahlung fragt eigens nach und löscht das Paar über den Settlement-Endpoint', async () => {
+    const translate = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
+    const item = slidingItem();
+
+    page.onDeleteCart(settlementCart, item);
+    await Promise.resolve();
+    const { options, confirm } = lastAlert();
+    confirm();
+
+    expect(item.close).toHaveBeenCalled();
+    expect(options.header).toBe('alerts.cart.delete_settlement.header');
+    expect(translate).toHaveBeenCalledWith('alerts.cart.delete_settlement.message', { cartTitle: 'Ausgleichszahlung an Ben' });
+    expect(cartService.deleteSettlementPayment).toHaveBeenCalledOnceWith(70, jasmine.objectContaining({ id: 3 }),
+      jasmine.any(Function));
+    expect(cartService.deleteCart).not.toHaveBeenCalled();
+  });
+
+  it('isCurrent des Löschens wird nach Gruppenwechsel oder neuer Anmelde-Sitzung false', async () => {
+    page.onDeleteCart(settlementCart, slidingItem());
+    await Promise.resolve();
+    lastAlert().confirm();
+    const isCurrent = cartService.deleteSettlementPayment.calls.mostRecent().args[2] as () => boolean;
+
+    expect(isCurrent()).toBeTrue();
+    groupService.setActiveGroup(aGroup({ id: 4, name: 'Andere' }));
+    expect(isCurrent()).toBeFalse();
+
+    groupService.setActiveGroup(aGroup({ id: 3, name: 'WG' }));
+    expect(isCurrent()).toBeTrue();
+    session.next(null);
+    session.next(aLoggedInUser({ id: 7 }));
+    expect(isCurrent()).toBeFalse();
+  });
+
+  it('Löschen eines normalen Einkaufs bleibt beim bisherigen Endpoint', async () => {
+    page.onDeleteCart(normalCart, slidingItem());
+    await Promise.resolve();
+    const { options } = lastAlert();
+
+    expect(options.header).toBe('alerts.cart.delete.header');
+    expect(cartService.deleteSettlementPayment).not.toHaveBeenCalled();
+  });
+});
+
 // DIV-71: Charakterisierung der bestehenden Filterlogik vor dem Umbau auf das Filter-Bottom-Sheet. filterCarts, onFilter
 // und deleteFilter bleiben unverändert; Anzahl und Summe rechnet der Fake wie CartService aus cartList.
 describe('CartlistPage – Filter (Bestand)', () => {
   let page: CartlistPage;
   let cartList: WritableSignal<Cart[]>;
   let initCartList: WritableSignal<Cart[]>;
+  let cartUpdated: WritableSignal<number>;
+  let filterFixture: ComponentFixture<CartlistPage>;
   let count: () => number;
   let sum: () => number;
 
@@ -334,6 +499,7 @@ describe('CartlistPage – Filter (Bestand)', () => {
   const titles = () => cartList().map(cart => cart.title);
 
   beforeEach(() => {
+    cartUpdated = signal(0);
     cartList = signal<Cart[]>([]);
     initCartList = signal<Cart[]>([]);
     count = computed(() => cartList().length);
@@ -345,7 +511,7 @@ describe('CartlistPage – Filter (Bestand)', () => {
         ...provideServiceTesting(),
         {
           provide: CartService, useValue: {
-            cartList, initCartList, cartUpdated: signal(0), sum, count,
+            cartList, initCartList, cartUpdated, sum, count,
             getCartListByGroupId: jasmine.createSpy('load'),
           },
         },
@@ -358,9 +524,9 @@ describe('CartlistPage – Filter (Bestand)', () => {
     });
     TestBed.overrideTemplate(CartlistPage, '');
     TestBed.inject(GroupService).setActiveGroup(aGroup({ id: 3, name: 'WG' }));
-    const fixture = TestBed.createComponent(CartlistPage);
-    fixture.detectChanges();
-    page = fixture.componentInstance;
+    filterFixture = TestBed.createComponent(CartlistPage);
+    filterFixture.detectChanges();
+    page = filterFixture.componentInstance;
     initCartList.set(alle);
     cartList.set(alle);
   });
@@ -395,6 +561,45 @@ describe('CartlistPage – Filter (Bestand)', () => {
     expect(titles()).toEqual(['Edeka', 'Kino']);
     expect(count()).toBe(2);
     expect(sum()).toBe(65);
+  });
+
+  /** Simuliert eine erfolgreiche Änderung wie die Services: Eintrag in beiden Listen ersetzen, dann triggerUpdate(). */
+  const erfolgreichGeaendert = (geaendert: Cart) => {
+    initCartList.update(carts => carts.map(c => c.id === geaendert.id ? geaendert : c));
+    cartList.update(carts => carts.map(c => c.id === geaendert.id ? geaendert : c));
+    cartUpdated.update(n => n + 1);
+    filterFixture.detectChanges();
+  };
+
+  // Regression DIV-74, Codex-Implementierungsreview F-001
+  it('aktiver Datumsfilter: ein bearbeiteter Einkauf, der nicht mehr passt, verschwindet nach dem Speichern aus der Liste', () => {
+    page.filterCarts({ startDate: new Date(2025, 5, 15) });
+    expect(titles()).toEqual(['Kino', 'EDEKA Markt']);
+
+    erfolgreichGeaendert({ ...kino, datePurchased: new Date(2025, 5, 1) });
+
+    expect(titles()).toEqual(['EDEKA Markt']);
+    expect(count()).toBe(1);
+    expect(sum()).toBe(12);
+    expect(page.filterMode()).toBeTrue();
+  });
+
+  it('aktiver Schnellfilter Kategorie: Filter und Chip bleiben, die Liste folgt der Änderung (DIV-74)', () => {
+    page.onFilter('category', 'Lebensmittel');
+    expect(titles()).toEqual(['Edeka', 'EDEKA Markt']);
+
+    erfolgreichGeaendert({ ...edeka, categoryDto: drogerie });
+
+    expect(titles()).toEqual(['EDEKA Markt']);
+    expect(page.filterTerm()).toBe('Lebensmittel');
+    expect(page.cartFilter).toEqual({ category: ['Lebensmittel'] });
+  });
+
+  it('ohne aktiven Filter lässt eine erfolgreiche Änderung die Liste, wie der Service sie gesetzt hat (DIV-74)', () => {
+    erfolgreichGeaendert({ ...kino, datePurchased: new Date(2025, 5, 1) });
+
+    expect(titles()).toEqual(['Edeka', 'Rossmann', 'Kino', 'EDEKA Markt']);
+    expect(page.filterMode()).toBeFalse();
   });
 
   it('Datum von: inklusiv ab lokaler Mitternacht', () => {
@@ -496,6 +701,28 @@ describe('CartlistPage – Filter (Bestand)', () => {
     expect(page.filterMode()).toBeTrue();
     expect(titles()).toEqual(['Edeka', 'EDEKA Markt']);
     expect(sum()).toBe(52);
+  });
+
+  it('Schnellfilter Kategorie per Tipp: normale Kategorie mit ihrem Namen im Chip', () => {
+    page.onFilterCategory(aCart({ categoryDto: lebensmittel }));
+
+    expect(page.filterTerm()).toBe('Lebensmittel');
+    expect(page.cartFilter).toEqual({ category: ['Lebensmittel'] });
+  });
+
+  it('Schnellfilter Settlement-Kategorie (DIV-74): Chip in der App-Sprache, gefiltert wird über den gespeicherten Namen', () => {
+    const ausgleich = aCategory({ name: 'Ausgleichszahlung', settlement: true });
+    const zahlung = aCart({ title: 'Ausgleichszahlung an Ben', amount: 20, categoryDto: ausgleich, settlementId: 70 });
+    initCartList.set([...initCartList(), zahlung]);
+    cartList.set(initCartList());
+    spyOn(TestBed.inject(TranslateService), 'instant').and.callFake(
+      ((key: string) => key === 'domains.spendings.settlement' ? 'Repayment' : key) as never);
+
+    page.onFilterCategory(zahlung);
+
+    expect(page.filterTerm()).toBe('Repayment');
+    expect(page.cartFilter).toEqual({ category: ['Ausgleichszahlung'] });
+    expect(titles()).toEqual(['Ausgleichszahlung an Ben']);
   });
 
   it('Schnellfilter Ersteller: belegt cartFilter.userName vor; erneuter Tipp hebt ihn auf', () => {
@@ -679,12 +906,14 @@ describe('CartlistPage – Filter-Sheet', () => {
 });
 
 // DIV-73: Sliding-Aktion „Duplizieren“. Navigation ohne Template; Sichtbarkeit und Reihenfolge der Aktionen im echten
-// Template mit echter Ausgleichszahlungs-Erkennung (Übersetzung von domains.spendings.settlement gesetzt).
+// Template. DIV-74: Ausgleichszahlungen werden an der `settlementId` erkannt, nicht am Kategorienamen.
 describe('CartlistPage – Sliding-Aktionen (DIV-73)', () => {
   const anna = aUser({ userName: 'Anna' });
   const ben = aUser({ userName: 'Ben' });
   const eigener = aCart({ id: 11, title: 'Eigener Einkauf', userDto: anna, categoryDto: aCategory({ name: 'Lebensmittel' }) });
-  const ausgleich = aCart({ id: 12, title: 'Ausgleich an Ben', userDto: anna,
+  const ausgleich = aCart({ id: 12, title: 'Ausgleich an Ben', userDto: anna, settlementId: 70,
+    categoryDto: aCategory({ name: 'Rückzahlungen' }) });
+  const namensgleich = aCart({ id: 14, title: 'Unverknüpft', userDto: anna,
     categoryDto: aCategory({ name: 'Ausgleichszahlung' }) });
   const fremder = aCart({ id: 13, title: 'Bens Einkauf', userDto: ben, categoryDto: aCategory({ name: 'Lebensmittel' }) });
 
@@ -764,7 +993,7 @@ describe('CartlistPage – Sliding-Aktionen (DIV-73)', () => {
 
     beforeEach(async () => {
       setup(true);
-      cartList.set([eigener, ausgleich, fremder]);
+      cartList.set([eigener, ausgleich, namensgleich, fremder]);
       fixture.detectChanges();
       // Virtual Scroll rendert die Zeilen erst nach dem nächsten Animation Frame
       await new Promise(resolve => requestAnimationFrame(resolve));
@@ -779,6 +1008,16 @@ describe('CartlistPage – Sliding-Aktionen (DIV-73)', () => {
 
     it('eigene Ausgleichszahlung: kein Duplizieren, Bearbeiten und Löschen wie bisher (FA5)', () => {
       expect(optionsByTitle()['Ausgleich an Ben']).toEqual(['Bearbeiten', 'Löschen']);
+    });
+
+    it('Ausgleichszahlungs-Icon an der settlementId, auch in umbenannter Kategorie; unverknüpfter Cart zeigt Kürzel (DIV-74)', () => {
+      const sliding = (title: string) => Array.from(fixture.nativeElement.querySelectorAll('ion-item-sliding') as NodeListOf<HTMLElement>)
+        .find(s => s.querySelector('h2.titlestyle')!.textContent!.trim() === title)!;
+
+      expect(sliding('Ausgleich an Ben').querySelector('.category-circle ion-icon[name="swap-horizontal-outline"]')).not.toBeNull();
+      expect(sliding('Unverknüpft').querySelector('.category-circle ion-icon')).toBeNull();
+      expect(sliding('Unverknüpft').querySelector('.category-circle p')!.textContent!.trim()).toBe('AU');
+      expect(optionsByTitle()['Unverknüpft']).toEqual(['Duplizieren', 'Bearbeiten', 'Löschen']);
     });
 
     it('fremde Ausgabe: keine Aktionen (Z2)', () => {

@@ -2,6 +2,7 @@ package com.github.svenfran.budgetapp.budgetappbackend.service
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AuthenticationRequest
+import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto
 import com.github.svenfran.budgetapp.budgetappbackend.entity.*
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*
@@ -366,6 +367,240 @@ class VerificationServiceSpec extends Specification {
 
         then:
         noExceptionThrown()
+    }
+
+    // ----- Ausgleichszahlung (DIV-74) -----
+
+    def "Gültige Ausgleichszahlung (Betrag #betrag) wird akzeptiert"() {
+        given:
+        def dto = new SettlementPaymentDto(betrag, 1L, new UserDto(id: 2L), DateUtils.toDate(TestData.REFERENCE_DATE))
+
+        when:
+        service.verifyValidSettlementPaymentForCreate(dto)
+
+        then:
+        noExceptionThrown()
+
+        where:
+        betrag << [0.01d, 1d, 30.1d, 30.10d, 1234.56d]
+    }
+
+    def "Betrag #betrag einer Ausgleichszahlung wird abgelehnt"() {
+        when:
+        service.verifyValidSettlementAmount(betrag)
+
+        then:
+        def e = thrown(InvalidSettlementPaymentException)
+        e.message.contains(meldung)
+
+        where:
+        betrag                   || meldung
+        null                     || "'amount'"
+        0d                       || 'greater than 0'
+        -0.01d                   || 'greater than 0'
+        1.234d                   || 'at most 2 decimal'
+        0.001d                   || 'at most 2 decimal'
+        Double.NaN               || 'greater than 0'
+        Double.POSITIVE_INFINITY || 'greater than 0'
+    }
+
+    def "Fehlendes Pflichtfeld #feld einer Ausgleichszahlung wird vor jedem Laden abgelehnt"() {
+        given:
+        def dto = new SettlementPaymentDto(30d, 1L, new UserDto(id: 2L), DateUtils.toDate(TestData.REFERENCE_DATE))
+        aendern(dto)
+
+        when:
+        service.verifyValidSettlementPaymentForCreate(dto)
+
+        then:
+        def e = thrown(InvalidSettlementPaymentException)
+        e.message == "Settlement payment field '$feld' is required".toString()
+
+        where:
+        feld            | aendern
+        'groupId'       | { SettlementPaymentDto d -> d.groupId = null }
+        'member'        | { SettlementPaymentDto d -> d.member = null }
+        'member.id'     | { SettlementPaymentDto d -> d.member.id = null }
+        'datePurchased' | { SettlementPaymentDto d -> d.datePurchased = null }
+        'amount'        | { SettlementPaymentDto d -> d.amount = null }
+    }
+
+    def "Anlegen mit Zahler ohne Id wird vor jedem Laden abgelehnt, ohne Zahler und mit Zahler-Id akzeptiert (Phase 5)"() {
+        given:
+        def dto = new SettlementPaymentDto(30d, 1L, new UserDto(id: 2L), DateUtils.toDate(TestData.REFERENCE_DATE))
+        dto.payer = payer
+
+        when:
+        def meldung = null
+        try {
+            service.verifyValidSettlementPaymentForCreate(dto)
+        } catch (InvalidSettlementPaymentException e) {
+            meldung = e.message
+        }
+
+        then:
+        meldung == erwartet
+
+        where:
+        payer                || erwartet
+        null                 || null
+        new UserDto(id: 3L)  || null
+        new UserDto()        || "Settlement payment field 'payer.id' is required"
+    }
+
+    def "Anlegen durch #rolle #ergebnis (Zahler 1, Empfänger 2)"() {
+        when:
+        def abgelehnt = false
+        try {
+            service.verifyIsPartyOfPayment(TestData.user(id: userId), TestData.user(id: 1L), TestData.user(id: 2L))
+        } catch (NotPartyOfSettlementException ignored) {
+            abgelehnt = true
+        }
+
+        then:
+        abgelehnt == erwartetAbgelehnt
+
+        where:
+        rolle       | userId || erwartetAbgelehnt
+        'Zahler'    | 1L     || false
+        'Empfänger' | 2L     || false
+        'Dritten'   | 3L     || true
+        ergebnis = erwartetAbgelehnt ? 'wird abgelehnt' : 'ist erlaubt'
+    }
+
+    def "Ausgleichszahlung ohne Anfrage wird abgelehnt"() {
+        when:
+        service.verifyValidSettlementPaymentForCreate(null)
+
+        then:
+        thrown(InvalidSettlementPaymentException)
+    }
+
+    def "Zahler und Empfänger #fall"() {
+        given:
+        def anna = TestData.user(id: 1L)
+        def empfaenger = TestData.user(id: empfaengerId)
+
+        when:
+        def abgelehnt = false
+        try {
+            service.verifyPayerIsNotReceiver(anna, empfaenger)
+        } catch (InvalidSettlementPaymentException ignored) {
+            abgelehnt = true
+        }
+
+        then:
+        abgelehnt == erwartetAbgelehnt
+
+        where:
+        fall                                    | empfaengerId || erwartetAbgelehnt
+        'sind dieselbe Person: abgelehnt'       | 1L           || true
+        'sind verschiedene Personen: akzeptiert' | 2L          || false
+    }
+
+    def "Bearbeiten: fehlendes Pflichtfeld #feld wird vor jedem Laden abgelehnt, groupId ist nicht nötig"() {
+        given:
+        def dto = new SettlementPaymentDto(30d, null, new UserDto(id: 2L), DateUtils.toDate(TestData.REFERENCE_DATE))
+        dto.id = 70L
+        aendern(dto)
+
+        when:
+        def abgelehnt = null
+        try {
+            service.verifyValidSettlementPaymentForUpdate(dto)
+        } catch (InvalidSettlementPaymentException e) {
+            abgelehnt = e.message
+        }
+
+        then:
+        abgelehnt == (feld ? "Settlement payment field '$feld' is required".toString() : null)
+
+        where:
+        feld            | aendern
+        null            | { SettlementPaymentDto d -> }
+        'id'            | { SettlementPaymentDto d -> d.id = null }
+        'member'        | { SettlementPaymentDto d -> d.member = null }
+        'member.id'     | { SettlementPaymentDto d -> d.member.id = null }
+        'datePurchased' | { SettlementPaymentDto d -> d.datePurchased = null }
+        'amount'        | { SettlementPaymentDto d -> d.amount = null }
+    }
+
+    def "Empfänger ändern: #fall"() {
+        given:
+        def zahler = TestData.user(id: 1L)
+        def empfaenger = TestData.user(id: 2L)
+        def settlement = TestData.settlement(id: 70L, payer: zahler, receiver: empfaenger)
+        def handelnder = TestData.user(id: handelnderId)
+
+        when:
+        def abgelehnt = false
+        try {
+            service.verifyMayChangeReceiver(handelnder, settlement, TestData.user(id: neuerEmpfaengerId))
+        } catch (ReceiverChangeNotAllowedException ignored) {
+            abgelehnt = true
+        }
+
+        then:
+        abgelehnt == erwartetAbgelehnt
+
+        where:
+        fall                                          | handelnderId | neuerEmpfaengerId || erwartetAbgelehnt
+        'Zahler wechselt den Empfänger: erlaubt'      | 1L           | 3L                || false
+        'Empfänger wechselt den Empfänger: abgelehnt' | 2L           | 3L                || true
+        'Empfänger behält sich als Empfänger: erlaubt' | 2L          | 2L                || false
+    }
+
+    def "Einkauf mit Ausgleichszahlung ist über normale Endpunkte gesperrt, ohne erlaubt"() {
+        when:
+        service.verifyCartIsNotSettlement(TestData.cart(id: 5L, settlement: TestData.settlement(id: 70L)))
+
+        then:
+        def e = thrown(SettlementCartNotEditableException)
+        e.message.contains('Cart with Id 5')
+
+        when:
+        service.verifyCartIsNotSettlement(TestData.cart(id: 6L))
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "Settlement-Kategorie ist für normale Einkäufe gesperrt, andere Kategorien nicht"() {
+        when:
+        service.verifyCategoryIsNotSettlement(TestData.category(id: 20L, settlement: true))
+
+        then:
+        thrown(SettlementCategoryNotAllowedException)
+
+        when:
+        service.verifyCategoryIsNotSettlement(TestData.category(id: 21L))
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "#rolle #ergebnis Ausgleichszahlung ändern oder löschen"() {
+        given:
+        def settlement = TestData.settlement(id: 70L, payer: TestData.user(id: 1L), receiver: TestData.user(id: 2L))
+        def user = TestData.user(id: userId)
+
+        when:
+        def abgelehnt = false
+        try {
+            service.verifyIsPartyOfSettlement(user, settlement)
+        } catch (NotPartyOfSettlementException ignored) {
+            abgelehnt = true
+        }
+
+        then:
+        abgelehnt == erwartetAbgelehnt
+
+        where:
+        rolle        | userId || erwartetAbgelehnt
+        'Zahler'     | 1L     || false
+        'Empfänger'  | 2L     || false
+        'Dritter'    | 3L     || true
+        ergebnis = erwartetAbgelehnt ? 'darf keine' : 'darf die'
     }
 
     /** BindingResult wie nach @Valid, mit genau einem Feldfehler (Fehlercode beliebig). */

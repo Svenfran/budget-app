@@ -60,7 +60,36 @@ class EntityToStringSpec extends Specification {
 
         then:
         text.startsWith("Cart{id=100, title='Pizza'")
-        text.endsWith(", groupId=10, userId=1, categoryId=20, templateId=30}")
+        text.endsWith(", groupId=10, userId=1, categoryId=20, templateId=30, settlementId=null}")
+    }
+
+    def "toString einer Ausgleichszahlung und ihres Einkaufs gibt Beziehungen nur als ID aus"() {
+        given:
+        def anna = TestData.user(id: 1L)
+        def ben = TestData.user(id: 2L)
+        def group = TestData.group(id: 10L, owner: anna)
+        def settlement = TestData.settlement(id: 70L, amount: 12.5d, group: group, payer: anna, receiver: ben, createdBy: ben)
+        def cart = TestData.cart(id: 100L, group: group, user: anna, settlement: settlement)
+
+        when:
+        def settlementText = settlement.toString()
+        def cartText = cart.toString()
+
+        then:
+        settlementText.startsWith('Settlement{id=70, amount=12.5, ')
+        settlementText.endsWith(', groupId=10, payerId=1, receiverId=2, createdById=2}')
+        cartText.endsWith(', templateId=null, settlementId=70}')
+    }
+
+    def "toString einer migrierten Ausgleichszahlung ohne Ersteller wirft keinen Fehler"() {
+        given:
+        def settlement = TestData.settlement(id: 71L)
+
+        when:
+        def text = settlement.toString()
+
+        then:
+        text.endsWith(', groupId=null, payerId=null, receiverId=null, createdById=null}')
     }
 
     def "Passwort und E-Mail erscheinen nicht in toString des Nutzers"() {
@@ -86,7 +115,7 @@ class EntityToStringSpec extends Specification {
 
         then:
         groupText.endsWith(", ownerId=null}")
-        cartText.endsWith(", groupId=10, userId=1, categoryId=null, templateId=null}")
+        cartText.endsWith(", groupId=10, userId=1, categoryId=null, templateId=null, settlementId=null}")
     }
 
     def "toString von Kategorie, Einkaufsliste und Eintrag gibt Beziehungen nur als ID aus"() {
@@ -105,7 +134,7 @@ class EntityToStringSpec extends Specification {
         def itemText = item.toString()
 
         then:
-        categoryText == "Category{id=20, name='Lebensmittel', groupId=10}"
+        categoryText == "Category{id=20, name='Lebensmittel', settlement=false, groupId=10}"
         listText == "ShoppingList{id=40, name='Wocheneinkauf', dateCreated=null, lastUpdate=null, sortOrder=0, itemOrderRevision=0, groupId=10}"
         itemText == "ShoppingItem{id=50, name='Milch', isCompleted=true, dateCreated=null, lastUpdate=null, sortOrder=0, shoppingListId=40}"
     }

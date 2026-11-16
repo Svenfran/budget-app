@@ -83,6 +83,41 @@ class ExportServiceIntegrationSpec extends IntegrationSpec {
         LocaleContextHolder.resetLocaleContext()
     }
 
+    def "DIV-74: Settlement-Kategorie erscheint in der Export-Sprache #locale, andere Kategorien mit gespeichertem Namen"() {
+        given: "Settlement-Kategorie unter deutschem Namen angelegt, eine normale Kategorie heißt ebenfalls 'Ausgleichszahlung'"
+        def anna = fixtures.user(name: 'Anna')
+        def wg = fixtures.group(owner: anna, memberSince: SEIT)
+        def settlementKategorie = fixtures.category(wg, name: 'Ausgleichszahlung', settlement: true)
+        def namensgleich = fixtures.category(wg, name: 'Ausgleichszahlung')
+        fixtures.cart(wg, user: anna, title: 'Zahlung', amount: 20d, category: settlementKategorie,
+                datePurchased: DateUtils.toDate(of(2025, 5, 1)))
+        fixtures.cart(wg, user: anna, title: 'Normal', amount: 5d, category: namensgleich,
+                datePurchased: DateUtils.toDate(of(2025, 5, 2)))
+        flushAndClear()
+        LocaleContextHolder.setLocale(locale)
+        loginAs(anna)
+        def gid = wg.group.id
+        LOG.info('Szenario: Locale {}, Gruppe {}, Settlement-Kategorie {} und normale Kategorie {} (beide "Ausgleichszahlung")',
+                locale, gid, settlementKategorie.id, namensgleich.id)
+
+        when:
+        def carts = exportService.loadExportData(gid)[0].carts()
+        LOG.info('exportService.loadExportData({}) -> Kategorien {}', gid, carts.collect { [it.title(), it.category()] })
+
+        then:
+        carts.find { it.title() == 'Zahlung' }.category() == erwartet
+        carts.find { it.title() == 'Normal' }.category() == 'Ausgleichszahlung'
+
+        cleanup:
+        LocaleContextHolder.resetLocaleContext()
+
+        where:
+        locale           || erwartet
+        Locale.GERMAN    || 'Ausgleichszahlung'
+        Locale.ENGLISH   || 'Repayment'
+        new Locale('es') || 'Repago'
+    }
+
     def "Alle Gruppen: nur Gruppen des Nutzers, jede genau einmal, nach ID sortiert; fremde und verlassene Gruppen fehlen"() {
         given:
         def anna = fixtures.user(name: 'Anna')

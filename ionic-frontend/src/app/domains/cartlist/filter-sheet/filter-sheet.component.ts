@@ -1,6 +1,9 @@
 import { Component, Input, OnInit, signal } from '@angular/core';
 import { FormControl, FormGroup } from '@angular/forms';
 import { IonDatetime, ModalController } from '@ionic/angular';
+import { TranslateService } from '@ngx-translate/core';
+import { CategoryDto } from 'src/app/model/category-dto';
+import { categoryLabel } from 'src/app/service/category-label';
 import { CategoryService } from 'src/app/service/category.service';
 import { GroupService } from 'src/app/service/group.service';
 import { LanguageService } from 'src/app/service/language.service';
@@ -61,8 +64,14 @@ export class FilterSheetComponent implements OnInit {
     private modalCtrl: ModalController,
     private categoryService: CategoryService,
     private groupService: GroupService,
-    private langService: LanguageService
+    private langService: LanguageService,
+    private translate: TranslateService
   ) {}
+
+  /** Anzeigename in der Kategorie-Auswahl: die Settlement-Kategorie in der App-Sprache (DIV-74); Wert bleibt der Name. */
+  label(category: CategoryDto): string {
+    return categoryLabel(category, key => this.translate.instant(key));
+  }
 
   ngOnInit() {
     this.form.setValue(toFormValue(this.cartFilter));

@@ -46,11 +46,10 @@ public final class StatisticsCalculator {
      * @param carts           Carts der gewählten Gruppen (jede Gruppe höchstens einmal)
      * @param period          bei {@code MONTH} sind {@code year} und {@code month} Pflicht, bei {@code YEAR} nur {@code year}
      * @param availableYears  Jahre mit Carts in den gewählten Gruppen; bestimmt bei {@code ALL} den Jahresbereich
-     * @param settlementNames Namen der Ausgleichszahlungs-Kategorie, normalisiert über {@link #normalize}
+     * Ausgleichszahlungen erkennt der Rechner an der Verknüpfung {@code cart.settlement} (DIV-74), nicht am Kategorienamen.
      */
     public static StatisticsResult calculate(Collection<Cart> carts, Long userId, StatisticsPeriod period,
-                                             Integer year, Integer month, Collection<Integer> availableYears,
-                                             Set<String> settlementNames) {
+                                             Integer year, Integer month, Collection<Integer> availableYears) {
         Predicate<LocalDate> inPeriod = switch (period) {
             case MONTH -> date -> date.getYear() == year && date.getMonthValue() == month;
             case YEAR -> date -> date.getYear() == year;
@@ -66,12 +65,12 @@ public final class StatisticsCalculator {
 
         long totalCents = periodCarts.stream().mapToLong(cart -> toCents(cart.getAmount())).sum();
         long paidCents = paidCarts.stream().mapToLong(cart -> toCents(cart.getAmount())).sum();
-        long paidCartCount = countWithoutSettlements(paidCarts, settlementNames);
-        long groupCartCount = countWithoutSettlements(periodCarts, settlementNames);
+        long paidCartCount = countWithoutSettlements(paidCarts);
+        long groupCartCount = countWithoutSettlements(periodCarts);
         var group = new GroupResult(groupCartCount, averageCents(totalCents, groupCartCount),
-                timeline(periodCarts, period, year, month, availableYears), categories(periodCarts, settlementNames));
+                timeline(periodCarts, period, year, month, availableYears), categories(periodCarts));
         return new StatisticsResult(totalCents, paidCents, paidCartCount,
-                timeline(paidCarts, period, year, month, availableYears), categories(paidCarts, settlementNames), group);
+                timeline(paidCarts, period, year, month, availableYears), categories(paidCarts), group);
     }
 
     /** Vergleichsschlüssel für Kategorienamen: getrimmt, ohne Groß-/Kleinschreibung. */
@@ -88,10 +87,15 @@ public final class StatisticsCalculator {
         };
     }
 
+    /** Ausgleichszahlung (DIV-74): einer der beiden Carts eines Settlements, unabhängig von Kategoriename und Sprache. */
+    private static boolean isSettlement(Cart cart) {
+        return cart.getSettlement() != null;
+    }
+
     /** Anzahl der Carts ohne Ausgleichszahlungen (keine Einkäufe). */
-    private static long countWithoutSettlements(List<Cart> carts, Set<String> settlementNames) {
+    private static long countWithoutSettlements(List<Cart> carts) {
         return carts.stream()
-                .filter(cart -> !settlementNames.contains(normalize(cart.getCategory().getName())))
+                .filter(cart -> !isSettlement(cart))
                 .count();
     }
 
@@ -152,12 +156,12 @@ public final class StatisticsCalculator {
      * Netto je Kategoriename (normalisiert), alle Ausgleichszahlungs-Kategorien in einer Zeile. Angezeigt wird der
      * getrimmte Name der ersten Fundstelle (Carts nach Gruppen-ID, dann Cart-ID). Zeilen mit 0 entfallen.
      */
-    private static List<CategoryEntry> categories(List<Cart> carts, Set<String> settlementNames) {
+    private static List<CategoryEntry> categories(List<Cart> carts) {
         var rows = new LinkedHashMap<String, CategoryEntry>();
         for (var cart : carts) {
             var name = cart.getCategory().getName();
             var key = normalize(name);
-            boolean settlement = settlementNames.contains(key);
+            boolean settlement = isSettlement(cart);
             long cents = toCents(cart.getAmount());
             rows.merge(settlement ? "\0settlement" : key,
                     new CategoryEntry(name == null ? "" : name.trim(), cents, settlement),

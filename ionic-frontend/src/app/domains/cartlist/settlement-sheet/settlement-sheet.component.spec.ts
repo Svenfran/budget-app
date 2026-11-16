@@ -12,6 +12,7 @@ import { toIsoDay } from '../iso-day';
 import { Zeitraum } from '../new-edit-cart/model/gmh-zeitraum';
 import { CartService } from '../service/cart.service';
 import { settlementSheetModalOptions } from './settlement-sheet-options';
+import { SettlementEditData } from './settlement-form';
 import { SettlementDatePickerRef, SettlementSheetComponent } from './settlement-sheet.component';
 
 describe('SettlementSheetComponent (DIV-70)', () => {
@@ -162,6 +163,20 @@ describe('SettlementSheetComponent (DIV-70)', () => {
       component.form.controls.amount.markAsTouched();
       detect();
       expect(el().querySelector('.error-amount')?.textContent).toContain('global.errors.invalid_amount');
+    });
+
+    it('Betrag 0 sperrt „Speichern“ und zeigt nach Bedienung den Hinweis „größer als 0“ (DIV-74)', async () => {
+      component.form.patchValue({ amount: 0, memberId: anna.id });
+      component.form.controls.amount.markAsTouched();
+      detect();
+
+      expect(button('btn-save')!.disabled).toBeTrue();
+      const text = el().querySelector('.error-amount')?.textContent ?? '';
+      expect(text).toContain('domains.spendings.overlay.settlementpayment.amount_positive');
+      expect(text).not.toContain('global.errors.invalid_amount');
+
+      await component.save();
+      expect(addSettlementPayment).not.toHaveBeenCalled();
     });
 
     // Feedback Phase 2: ion-select meldet ionBlur (→ touched) schon beim Öffnen der Auswahl
@@ -406,5 +421,265 @@ describe('SettlementSheetComponent (DIV-70)', () => {
 
       expect(dirty()).toBeFalse();
     });
+  });
+});
+
+describe('SettlementSheetComponent – Edit-Modus (DIV-74)', () => {
+  let fixture: ComponentFixture<SettlementSheetComponent>;
+  let component: SettlementSheetComponent;
+  let modalCtrl: jasmine.SpyObj<ModalController>;
+  let addSettlementPayment: jasmine.Spy;
+  let updateSettlementPayment: jasmine.Spy;
+  let groupMembers: WritableSignal<GroupMembers>;
+  let activeGroupId: WritableSignal<number>;
+  let dirty: WritableSignal<boolean>;
+
+  const MODAL_ID = 'settlement-sheet-43';
+  const me = aLoggedInUser({ id: 50, name: 'Ich' });
+  const ben = aUser({ userName: 'Ben' });
+  const cleo = aUser({ userName: 'Cleo' });
+  const group = aGroup({ id: 7, name: 'WG', dateCreated: new Date('2025-01-01T12:00:00Z') });
+  const key = (suffix: string) => `domains.spendings.overlay.settlementpayment.${suffix}`;
+  const members = (list: { id: number; userName: string }[]): GroupMembers =>
+    ({ id: group.id, name: group.name, ownerId: me.id, ownerName: 'Ich', members: list });
+  const alsZahler = (receiver = ben): SettlementEditData => ({
+    id: 70, role: 'payer', payer: { id: me.id, userName: 'Ich' }, receiver, amount: 30, datePurchased: '2025-06-10',
+  });
+  const alsEmpfaenger = (): SettlementEditData => ({
+    id: 70, role: 'receiver', payer: ben, receiver: { id: me.id, userName: 'Ich' }, amount: 30, datePurchased: '2025-06-10',
+  });
+
+  const el = (): HTMLElement => fixture.nativeElement;
+  const detect = () => fixture.detectChanges();
+  const optionTexts = () => Array.from(el().querySelectorAll('ion-select-option')).map(o => o.textContent?.trim());
+
+  function create(settlement: SettlementEditData, mitglieder = [{ id: me.id, userName: 'Ich' }, ben, cleo]) {
+    modalCtrl = jasmine.createSpyObj<ModalController>('ModalController', ['dismiss']);
+    modalCtrl.dismiss.and.resolveTo(true);
+    addSettlementPayment = jasmine.createSpy('addSettlementPayment').and.resolveTo(true);
+    updateSettlementPayment = jasmine.createSpy('updateSettlementPayment').and.resolveTo(true);
+    groupMembers = signal(members(mitglieder));
+    activeGroupId = signal(group.id);
+    const session = signal(1);
+    dirty = signal(false);
+    TestBed.configureTestingModule({
+      declarations: [SettlementSheetComponent],
+      imports: [IonicModule.forRoot(), TranslateModule, ReactiveFormsModule],
+      providers: [
+        ...provideServiceTesting(),
+        { provide: ModalController, useValue: modalCtrl },
+        { provide: CartService, useValue: { addSettlementPayment, updateSettlementPayment } },
+        { provide: AuthService, useValue: authServiceStub(me) },
+        {
+          provide: GroupService, useValue: {
+            activeGroup: signal(group),
+            activeGroupId,
+            groupMembers,
+            groupMembershipHistory: signal<Zeitraum[]>([]),
+            getGroupMembers: jasmine.createSpy('getGroupMembers'),
+            getGroupMembershipHistoryForGroupAndUser: jasmine.createSpy('getHistory'),
+            sessionGuard: () => { const start = session(); return () => session() === start; },
+          },
+        },
+      ],
+    });
+    fixture = TestBed.createComponent(SettlementSheetComponent);
+    component = fixture.componentInstance;
+    component.modalId = MODAL_ID;
+    component.saving = signal(false);
+    component.dirty = dirty;
+    component.settlement = settlement;
+    detect();
+  }
+
+  beforeEach(() => {
+    jasmine.clock().install();
+    jasmine.clock().mockDate(REFERENCE_DATE);
+  });
+
+  afterEach(() => jasmine.clock().uninstall());
+
+  it('Zahler: Titel „bearbeiten“, vorbelegt mit Betrag, Empfänger und Datum, nicht dirty', () => {
+    create(alsZahler());
+
+    expect(el().querySelector('h2')?.textContent).toContain(key('title_edit'));
+    expect(el().querySelector('.sheet-subtitle')?.textContent).toContain(key('subtitle_edit'));
+    expect(component.form.getRawValue()).toEqual({ amount: 30, memberId: ben.id, datePurchased: '2025-06-10' });
+    expect(component.memberId.enabled).toBeTrue();
+    expect(dirty()).toBeFalse();
+  });
+
+  it('Zahler kann den Empfänger wechseln; save() ruft Update mit Settlement-Id und neuem Empfänger', async () => {
+    create(alsZahler());
+    component.form.patchValue({ memberId: cleo.id, amount: 45 });
+    detect();
+
+    await component.save();
+
+    expect(addSettlementPayment).not.toHaveBeenCalled();
+    expect(updateSettlementPayment).toHaveBeenCalledTimes(1);
+    const [dto, gruppe] = updateSettlementPayment.calls.mostRecent().args;
+    expect(dto).toEqual({ id: 70, amount: 45, groupId: 7, member: { id: cleo.id, userName: 'Cleo' }, datePurchased: new Date('2025-06-10') });
+    expect(gruppe).toEqual(group);
+    expect(modalCtrl.dismiss).toHaveBeenCalledOnceWith(undefined, 'saved', MODAL_ID);
+  });
+
+  it('Empfänger: Zahler als fester Text, keine Empfänger-Auswahl; Request trägt sich selbst als Empfänger', async () => {
+    create(alsEmpfaenger());
+
+    expect(el().querySelector('ion-select.select-member')).toBeNull();
+    expect(el().querySelector('.payer-name')?.textContent).toContain('Ben');
+    expect(component.memberId.disabled).toBeTrue();
+
+    component.form.patchValue({ amount: 20 });
+    await component.save();
+
+    expect(updateSettlementPayment.calls.mostRecent().args[0].member.id).toBe(me.id);
+    expect(component.memberId.disabled).toBeTrue();
+  });
+
+  it('Formular und „Speichern“ auch ohne aktuell auswählbare Gegenpartei (Gegenpartei hat die Gruppe verlassen)', () => {
+    create(alsEmpfaenger(), []);
+
+    expect(el().querySelector('.settlement-form')).not.toBeNull();
+    expect(el().querySelector('ion-button.btn-save')).not.toBeNull();
+    expect(el().querySelector('.no-members')).toBeNull();
+  });
+
+  it('Zahler: ausgetretener bisheriger Empfänger steht in der Auswahl und bleibt gewählt', () => {
+    const ausgetreten = aUser({ userName: 'Dora' });
+    create(alsZahler(ausgetreten), [{ id: me.id, userName: 'Ich' }, ben]);
+
+    expect(optionTexts()).toEqual(['Ben', 'Dora']);
+    expect(component.form.getRawValue().memberId).toBe(ausgetreten.id);
+  });
+
+  it('isCurrent des Updates wird nach Gruppenwechsel false', async () => {
+    create(alsZahler());
+    await component.save();
+    const isCurrent = updateSettlementPayment.calls.mostRecent().args[2] as () => boolean;
+
+    expect(isCurrent()).toBeTrue();
+    activeGroupId.set(8);
+    expect(isCurrent()).toBeFalse();
+  });
+
+  it('bleibt bei false vom Service mit den Eingaben offen', async () => {
+    create(alsZahler());
+    updateSettlementPayment.and.resolveTo(false);
+    component.form.patchValue({ amount: 99 });
+
+    await component.save();
+
+    expect(modalCtrl.dismiss).not.toHaveBeenCalled();
+    expect(component.form.getRawValue().amount).toBe(99);
+  });
+});
+
+describe('SettlementSheetComponent – Richtungsumschalter (DIV-74, Phase 5)', () => {
+  let fixture: ComponentFixture<SettlementSheetComponent>;
+  let component: SettlementSheetComponent;
+  let addSettlementPayment: jasmine.Spy;
+  let dirty: WritableSignal<boolean>;
+
+  const me = aLoggedInUser({ id: 50, name: 'Ich' });
+  const ben = aUser({ userName: 'Ben' });
+  const group = aGroup({ id: 7, name: 'WG', dateCreated: new Date('2025-01-01T12:00:00Z') });
+  const key = (suffix: string) => `domains.spendings.overlay.settlementpayment.${suffix}`;
+  const el = (): HTMLElement => fixture.nativeElement;
+  const segment = () => el().querySelector('ion-segment.direction-segment') as HTMLIonSegmentElement | null;
+
+  function create(settlement?: SettlementEditData) {
+    addSettlementPayment = jasmine.createSpy('addSettlementPayment').and.resolveTo(true);
+    dirty = signal(false);
+    const modalCtrl = jasmine.createSpyObj<ModalController>('ModalController', ['dismiss']);
+    modalCtrl.dismiss.and.resolveTo(true);
+    TestBed.configureTestingModule({
+      declarations: [SettlementSheetComponent],
+      imports: [IonicModule.forRoot(), TranslateModule, ReactiveFormsModule],
+      providers: [
+        ...provideServiceTesting(),
+        { provide: ModalController, useValue: modalCtrl },
+        { provide: CartService, useValue: { addSettlementPayment, updateSettlementPayment: jasmine.createSpy().and.resolveTo(true) } },
+        { provide: AuthService, useValue: authServiceStub(me) },
+        {
+          provide: GroupService, useValue: {
+            activeGroup: signal(group),
+            activeGroupId: signal(group.id),
+            groupMembers: signal<GroupMembers>({ id: group.id, name: group.name, ownerId: me.id, ownerName: 'Ich',
+              members: [{ id: me.id, userName: 'Ich' }, ben] }),
+            groupMembershipHistory: signal<Zeitraum[]>([]),
+            getGroupMembers: jasmine.createSpy('getGroupMembers'),
+            getGroupMembershipHistoryForGroupAndUser: jasmine.createSpy('getHistory'),
+            sessionGuard: () => () => true,
+          },
+        },
+      ],
+    });
+    fixture = TestBed.createComponent(SettlementSheetComponent);
+    component = fixture.componentInstance;
+    component.modalId = 'settlement-sheet-44';
+    component.saving = signal(false);
+    component.dirty = dirty;
+    component.settlement = settlement;
+    fixture.detectChanges();
+  }
+
+  beforeEach(() => {
+    jasmine.clock().install();
+    jasmine.clock().mockDate(REFERENCE_DATE);
+  });
+
+  afterEach(() => jasmine.clock().uninstall());
+
+  it('Anlegen: Umschalter sichtbar, Standard „Ich habe gezahlt an“, Platzhalter „An Mitglied“', () => {
+    create();
+
+    expect(segment()).not.toBeNull();
+    expect(segment()!.disabled).toBeFalse();
+    expect(component.direction()).toBe('paid');
+    expect(el().querySelector('.direction-paid')?.textContent).toContain(key('direction_paid'));
+    expect(el().querySelector('.direction-received')?.textContent).toContain(key('direction_received'));
+    expect(component.memberPlaceholderKey()).toBe(key('placeholder_member'));
+  });
+
+  it('„Ich habe erhalten von“: Gegenpartei wird Zahler, ich Empfänger; der Wechsel gilt als Eingabe', async () => {
+    create();
+    component.changeDirection('received');
+    component.form.setValue({ amount: 25, memberId: ben.id, datePurchased: '2025-06-10' });
+    fixture.detectChanges();
+
+    expect(dirty()).toBeTrue();
+    expect(component.memberPlaceholderKey()).toBe(key('placeholder_member_from'));
+
+    await component.save();
+
+    expect(addSettlementPayment).toHaveBeenCalledOnceWith({
+      payer: { id: ben.id, userName: 'Ben' }, amount: 25, groupId: 7, member: { id: me.id, userName: 'Ich' },
+      datePurchased: new Date('2025-06-10'),
+    });
+  });
+
+  it('„Ich habe gezahlt an“ sendet wie bisher keinen Zahler', async () => {
+    create();
+    component.changeDirection('received');
+    component.changeDirection('paid');
+    component.form.setValue({ amount: 25, memberId: ben.id, datePurchased: '2025-06-10' });
+
+    await component.save();
+
+    expect(addSettlementPayment.calls.mostRecent().args[0].payer).toBeUndefined();
+    expect(addSettlementPayment.calls.mostRecent().args[0].member.id).toBe(ben.id);
+  });
+
+  it('Edit-Modus: Richtung aus der Rolle, Umschalter gesperrt und ohne Wirkung', () => {
+    create({ id: 70, role: 'receiver', payer: ben, receiver: { id: me.id, userName: 'Ich' }, amount: 30,
+      datePurchased: '2025-06-10' });
+
+    expect(component.direction()).toBe('received');
+    expect(segment()!.disabled).toBeTrue();
+    component.changeDirection('paid');
+    expect(component.direction()).toBe('received');
+    expect(dirty()).toBeFalse();
   });
 });

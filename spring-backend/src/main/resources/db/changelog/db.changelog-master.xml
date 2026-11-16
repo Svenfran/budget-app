@@ -67,4 +67,8 @@
 
     <include context="dev" file="db/changelog/release-1.x/20261102120000-1_loadStatisticsTestData.xml" relativeToChangelogFile="false"/>
 
+    <include context="dev,test,prod" file="db/changelog/release-1.x/20261116120000-1_createSettlementTableAndLinkColumns.xml" relativeToChangelogFile="false"/>
+
+    <include context="dev,test,prod" file="db/changelog/release-1.x/20261116120000-2_linkExistingSettlementPayments.xml" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

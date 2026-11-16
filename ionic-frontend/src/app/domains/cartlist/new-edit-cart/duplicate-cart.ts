@@ -31,11 +31,11 @@ export function duplicateSource(
   cartId: number,
   groupId: number,
   userName: string | undefined,
-  isSettlement: (categoryName: string) => boolean,
 ): Cart | undefined {
   const cart = cartList.find(c => c.id === cartId);
   if (!cart || !userName) return undefined;
   if (cart.groupId !== groupId || cart.userDto?.userName !== userName || cart.deleted) return undefined;
-  if (isSettlement(cart.categoryDto.name)) return undefined;
+  // Ausgleichszahlungen (DIV-74: an der Verknüpfung erkannt) werden nur über das Settlement-Sheet angelegt
+  if (cart.settlementId) return undefined;
   return cart;
 }

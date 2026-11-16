@@ -1,4 +1,5 @@
 import { AbstractControl, ValidationErrors, ValidatorFn } from '@angular/forms';
+import { Cart } from '../model/cart';
 import { CartFilter } from '../model/cart-filter';
 import { toIsoDay } from '../iso-day';
 
@@ -74,4 +75,22 @@ function trimmedOrNull(text: string | null): string | null {
 
 function nonEmptyOrNull(values: string[] | null): string[] | null {
   return values && values.length > 0 ? [...values] : null;
+}
+
+/**
+ * Wendet einen Ausgabenfilter auf die vollständige Liste an (DIV-71; seit DIV-74 auch nach jeder erfolgreichen Änderung):
+ * Titel und Beschreibung als Teilstring ohne Groß-/Kleinschreibung, Kategorien und Ersteller exakt nach Name, Zeitraum
+ * nach Kalendertag wie in der Liste (beide Grenzen einschließlich). Leere Kriterien filtern nicht.
+ */
+export function applyCartFilter(carts: Cart[], cartFilter: CartFilter): Cart[] {
+  const startDay = cartFilter.startDate ? toIsoDay(cartFilter.startDate) : null;
+  const endDay = cartFilter.endDate ? toIsoDay(cartFilter.endDate) : null;
+  return carts.filter(cart =>
+    (cartFilter.title ? cart.title?.toLowerCase().includes(cartFilter.title.toLowerCase()) : true) &&
+    (cartFilter.description ? cart.description?.toLowerCase().includes(cartFilter.description.toLowerCase()) : true) &&
+    (cartFilter.category && cartFilter.category.length > 0 ? cartFilter.category.includes(cart.categoryDto.name) : true) &&
+    (cartFilter.userName && cartFilter.userName.length > 0 ? cartFilter.userName.includes(cart.userDto.userName) : true) &&
+    (startDay ? purchaseDayOf(cart.datePurchased) >= startDay : true) &&
+    (endDay ? purchaseDayOf(cart.datePurchased) <= endDay : true)
+  );
 }

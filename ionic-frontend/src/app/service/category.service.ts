@@ -5,7 +5,6 @@ import { HttpClient } from '@angular/common/http';
 import { Group } from '../model/group';
 import { AlertService } from './alert.service';
 import { TranslateService } from '@ngx-translate/core';
-import { SETTLEMENTPAYMENT_CATEGORIES } from '../constants/default-values';
 
 @Injectable({
   providedIn: 'root'
@@ -100,9 +99,4 @@ export class CategoryService {
       })
   };
 
-isSettlementpayment(category: string): boolean {
-  let pattern = new RegExp(SETTLEMENTPAYMENT_CATEGORIES.join('|')); 
-  let currentSettlementCategory = this.translate.instant('domains.spendings.settlement');
-  return (pattern.test(currentSettlementCategory) && SETTLEMENTPAYMENT_CATEGORIES.includes(category));
-}
 }

@@ -60,6 +60,12 @@ public class Cart implements Serializable {
     @JoinColumn(name = "template_id")
     private CartTemplate template; // falls aus Template erzeugt
 
+    // Ausgleichszahlung (DIV-74): gesetzt an beiden Carts eines Settlements, sonst null. Die Verknüpfung ändert sich
+    // nach dem Anlegen nicht mehr.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "settlement_id")
+    private Settlement settlement;
+
     public Cart(Long id, String title, String description, Double amount, Double averagePerMember, boolean isDeleted,
                 Date datePurchased, Date dateCreated, Date lastUpdate, Group group, User user, Category category, CartTemplate template) {
         this.id = id;
@@ -184,6 +190,14 @@ public class Cart implements Serializable {
         this.template = template;
     }
 
+    public Settlement getSettlement() {
+        return settlement;
+    }
+
+    public void setSettlement(Settlement settlement) {
+        this.settlement = settlement;
+    }
+
     @Override
     public String toString() {
         return "Cart{" +
@@ -200,6 +214,7 @@ public class Cart implements Serializable {
                 ", userId=" + (user == null ? null : user.getId()) +
                 ", categoryId=" + (category == null ? null : category.getId()) +
                 ", templateId=" + (template == null ? null : template.getId()) +
+                ", settlementId=" + (settlement == null ? null : settlement.getId()) +
                 '}';
     }
 }

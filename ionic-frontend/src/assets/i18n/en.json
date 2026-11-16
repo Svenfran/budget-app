@@ -106,7 +106,14 @@
                     "subtitle": "Record a payment to a member of the group.",
                     "btn_save": "Save",
                     "placeholder_member": "To member",
+                    "placeholder_member_from": "From member",
+                    "direction_paid": "I paid to",
+                    "direction_received": "I received from",
                     "amount": "Amount in €*",
+                    "amount_positive": "Amount must be greater than 0",
+                    "title_edit": "Edit repayment",
+                    "subtitle_edit": "Changes apply to both parties.",
+                    "paid_by": "Paid by",
                     "date": "Date*",
                     "btn_cancel": "Cancel",
                     "no_members": "No members available",
@@ -231,6 +238,23 @@
                 "header": "Date not in the period of membership",
                 "message_new_edit": "You were not a member of the group at the time selected. Please choose another date.",
                 "message_settlementpayment": "The user \"{{userName}}\" was not a member of the group at the time selected. Please choose another date."
+            },
+            "delete_settlement": {
+                "header": "Delete repayment:",
+                "message": "Do you really want to delete the repayment \"{{cartTitle}}\"? It will be removed for both parties."
+            },
+            "settlement_delete_failed": {
+                "header": "Repayment not deleted",
+                "message": "The repayment could not be deleted. Please try again."
+            },
+            "settlement_already_deleted": "The repayment has already been deleted.",
+            "settlement_update_failed": {
+                "header": "Repayment not saved",
+                "message": "The change could not be saved. Your input is kept, please try again."
+            },
+            "settlement_not_found": {
+                "header": "Repayment no longer exists",
+                "message": "The repayment has been deleted in the meantime. The list is being reloaded."
             },
             "settlement_failed": {
                 "header": "Repayment not saved",

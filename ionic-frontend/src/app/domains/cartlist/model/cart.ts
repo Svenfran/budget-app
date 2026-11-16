@@ -18,4 +18,6 @@ export interface Cart {
     templateUpdateSelected?: boolean;
     templateId?: number | null;
     hasTemplateChanged?: boolean;
+    /** Ausgleichszahlung (DIV-74): Id des Settlements an beiden Carts eines Paars, sonst null. */
+    settlementId?: number | null;
 }

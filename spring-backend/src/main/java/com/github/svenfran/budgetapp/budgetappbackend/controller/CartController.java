@@ -6,6 +6,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto;
 import com.github.svenfran.budgetapp.budgetappbackend.service.CartService;
 import com.github.svenfran.budgetapp.budgetappbackend.service.ExportService;
+import com.github.svenfran.budgetapp.budgetappbackend.service.SettlementService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -22,9 +23,12 @@ public class CartController {
 
     private final ExportService exportService;
 
-    public CartController(CartService cartService, ExportService exportService) {
+    private final SettlementService settlementService;
+
+    public CartController(CartService cartService, ExportService exportService, SettlementService settlementService) {
         this.cartService = cartService;
         this.exportService = exportService;
+        this.settlementService = settlementService;
     }
 
     @GetMapping("/carts/carts-by-groupid/{groupId}")
@@ -52,15 +56,30 @@ public class CartController {
     }
 
     @DeleteMapping("/carts/delete/{id}")
-    public ResponseEntity<CartDto> deleteCart(@PathVariable("id") Long id) throws UserNotFoundException, GroupNotFoundException, CartNotFoundException, NotOwnerOfCartException, NotOwnerOrMemberOfGroupException {
+    public ResponseEntity<CartDto> deleteCart(@PathVariable("id") Long id) throws UserNotFoundException, GroupNotFoundException, CartNotFoundException, NotOwnerOfCartException, NotOwnerOrMemberOfGroupException, SettlementCartNotEditableException {
         cartService.deleteCart(id);
         return new ResponseEntity<>(HttpStatus.OK);
     }
 
     @PostMapping("/carts/settlement-payment/add")
     public ResponseEntity<List<CartDto>> addSettlementPayment(@RequestBody SettlementPaymentDto settlementPaymentDto) throws Exception {
-        var payment = cartService.addSettlementPayment(settlementPaymentDto);
+        var payment = settlementService.addSettlementPayment(settlementPaymentDto);
         return new ResponseEntity<>(payment, HttpStatus.OK);
+    }
+
+    /** Ändert Betrag, Datum und (nur Zahler) Empfänger der Ausgleichszahlung; Antwort: beide Einkäufe (DIV-74). */
+    @PutMapping("/carts/settlement-payment/update")
+    public ResponseEntity<List<CartDto>> updateSettlementPayment(@RequestBody SettlementPaymentDto settlementPaymentDto) throws Exception {
+        var payment = settlementService.updateSettlementPayment(settlementPaymentDto);
+        return new ResponseEntity<>(payment, HttpStatus.OK);
+    }
+
+    /** Löscht die Ausgleichszahlung mit beiden Einkäufen (DIV-74). */
+    @DeleteMapping("/carts/settlement-payment/delete/{settlementId}")
+    public ResponseEntity<Void> deleteSettlementPayment(@PathVariable("settlementId") Long settlementId) throws UserNotFoundException,
+            SettlementNotFoundException, NotOwnerOrMemberOfGroupException, NotPartyOfSettlementException {
+        settlementService.deleteSettlementPayment(settlementId);
+        return new ResponseEntity<>(HttpStatus.OK);
     }
 
     /** Ausgabenexport (DIV-68): ohne groupId alle Gruppen des Nutzers; XLSX bzw. ZIP mit CSV-Dateien. */

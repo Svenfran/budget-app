@@ -15,9 +15,11 @@ import { CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
 import { exportDialogModalOptions } from './export-dialog/export-dialog-options';
 import { filterSheetModalOptions } from './filter-sheet/filter-sheet-options';
 import { FILTER_SHEET_APPLY_ROLE } from './filter-sheet/filter-sheet.component';
-import { purchaseDayOf } from './filter-sheet/cart-filter-form';
-import { toIsoDay } from './iso-day';
+import { applyCartFilter } from './filter-sheet/cart-filter-form';
 import { settlementSheetModalOptions } from './settlement-sheet/settlement-sheet-options';
+import { SettlementEditData, settlementEditData } from './settlement-sheet/settlement-form';
+import { AlertService } from 'src/app/service/alert.service';
+import { categoryLabel } from 'src/app/service/category-label';
 
 @Component({
   selector: 'app-cartlist',
@@ -54,7 +56,8 @@ export class CartlistPage implements OnInit {
     private overviewService: OverviewService,
     private categoryService: CategoryService,
     private modalCtrl: ModalController,
-    private translate: TranslateService
+    private translate: TranslateService,
+    private alertService: AlertService
   ) { 
     // Anzeige: hält den Gruppennamen aktuell (auch bei Umbenennung), ohne neu zu laden
     effect(() => {
@@ -81,7 +84,17 @@ export class CartlistPage implements OnInit {
       }
       this.cartVisible = false;
     });
-  
+    // Aktiven Filter nach jeder erfolgreichen Änderung neu anwenden (DIV-74, Review F-001): Die Services ersetzen bzw.
+    // ergänzen Einträge in der gefilterten Liste, ohne die Filterkriterien zu prüfen – ein bearbeiteter Einkauf blieb sonst
+    // sichtbar, obwohl er nicht mehr passt. Grundlage ist die vollständige Liste; Chip und Filter bleiben erhalten.
+    effect(() => {
+      this.cartService.cartUpdated();
+      untracked(() => {
+        if (this.filterMode()) {
+          this.cartList.set(applyCartFilter(this.initCartList(), this.cartFilter));
+        }
+      });
+    });
   }
 
   ngOnInit() {
@@ -129,10 +142,6 @@ export class CartlistPage implements OnInit {
     }
   }
 
-  isSettlementpayment(category: string): boolean {
-    return this.categoryService.isSettlementpayment(category);
-  }
-
   resetFilterParams() {
     this.filterMode.set(false);
     this.filterTerm.set("");
@@ -162,6 +171,10 @@ export class CartlistPage implements OnInit {
 
   onDeleteCart(cart: Cart, slidingItem: IonItemSliding) {
     slidingItem.close();
+    if (cart.settlementId) {
+      this.onDeleteSettlement(cart);
+      return;
+    }
     this.alertCtrl.create({
       header: this.translate.instant('alerts.cart.delete.header'),
       message: this.translate.instant('alerts.cart.delete.message', { cartTitle: cart.title }),
@@ -183,9 +196,54 @@ export class CartlistPage implements OnInit {
     }).then(alertEl => alertEl.present());
   }
 
+  /**
+   * Ausgleichszahlung löschen (DIV-74): immer beide Einkäufe über den Settlement-Endpoint. Gruppe und Anmelde-Sitzung
+   * werden beim Bestätigen festgehalten; eine Antwort nach einem Wechsel verwirft der Service.
+   */
+  private onDeleteSettlement(cart: Cart) {
+    this.alertCtrl.create({
+      header: this.translate.instant('alerts.cart.delete_settlement.header'),
+      message: this.translate.instant('alerts.cart.delete_settlement.message', { cartTitle: cart.title }),
+      buttons: [{
+        text: this.translate.instant('alerts.cart.delete.cancel'),
+        role: 'cancel'
+      }, {
+        text: this.translate.instant('alerts.cart.delete.ok'),
+        handler: () => {
+          const group = this.groupService.activeGroup();
+          const sameSession = this.groupService.sessionGuard();
+          const isCurrent = () => this.groupService.activeGroupId() === group.id && sameSession();
+          this.cartService.deleteSettlementPayment(cart.settlementId!, group, isCurrent);
+        }
+      }]
+    }).then(alertEl => alertEl.present());
+  }
+
+  /**
+   * Wischaktion „Bearbeiten“: normale Einkäufe im Formular, Einkäufe einer Ausgleichszahlung im Settlement-Sheet
+   * (DIV-74), vorbelegt aus dem Cart-Paar der vollständigen Liste. Fehlt der Partner-Cart (veraltete Liste), wird still
+   * neu geladen und ein Hinweis gezeigt.
+   */
   editCart(cart: Cart, slidingItem: IonItemSliding) {
     slidingItem.close();
-    this.router.navigate(['domains', 'tabs', 'cartlist', 'new-edit', cart.id?.toString()]);
+    if (!cart.settlementId) {
+      this.router.navigate(['domains', 'tabs', 'cartlist', 'new-edit', cart.id?.toString()]);
+      return;
+    }
+    const settlement = settlementEditData(cart, this.initCartList());
+    if (!settlement) {
+      const group = this.groupService.activeGroup();
+      const sameSession = this.groupService.sessionGuard();
+      this.alertService.showErrorAlert(
+        this.translate.instant('alerts.cart.settlement_not_found.header'),
+        this.translate.instant('alerts.cart.settlement_not_found.message')
+      );
+      this.cartService.getCartListByGroupId(group, true, undefined, {
+        silent: true, isCurrent: () => this.groupService.activeGroupId() === group.id && sameSession(),
+      });
+      return;
+    }
+    this.openSettlementSheet(settlement);
   }
 
   /** Sliding-Aktion „Duplizieren“ (DIV-73): Neuanlage mit den Werten dieser Ausgabe, angelegt wird erst beim Speichern. */
@@ -201,15 +259,24 @@ export class CartlistPage implements OnInit {
     await modal.present();
   }
 
-  onFilter(action: string, filterTerm: string) {
+  /** Schnellfilter per Tipp auf die Kategorie eines Einkaufs: Chip mit dem Anzeigenamen der Kategorie (DIV-74). */
+  onFilterCategory(cart: Cart) {
+    this.onFilter('category', cart.categoryDto.name, categoryLabel(cart.categoryDto, key => this.translate.instant(key)));
+  }
+
+  /**
+   * Schnellfilter per Tipp auf Ersteller oder Kategorie. Gefiltert wird über den gespeicherten Wert; `label` ist nur die
+   * Anzeige im Chip (DIV-74: die Settlement-Kategorie in der App-Sprache).
+   */
+  onFilter(action: string, filterTerm: string, label: string = filterTerm) {
     this.cartFilter = {};
     if (!this.filterMode()) {
       this.filterMode.set(true);
-      this.cartList.update(carts => carts.filter(cart => 
+      this.cartList.update(carts => carts.filter(cart =>
         action === "user" ? cart.userDto.userName === filterTerm : cart.categoryDto.name === filterTerm)
       );
       action === "user" ? this.cartFilter.userName = [filterTerm] : this.cartFilter.category = [filterTerm];
-      this.filterTerm.set(filterTerm);
+      this.filterTerm.set(label);
     } else {
       // this.cartService.getCartListByGroupId(this.activeGroup);
       this.resetFilterParams();
@@ -228,7 +295,7 @@ export class CartlistPage implements OnInit {
    * erst nach Erfolg; `saving` sperrt das Schließen, solange der Request läuft. Bei geänderten Eingaben (`dirty`) fragt
    * das Schließen über X, Backdrop oder Hardware-Back vorher nach (confirmDiscard).
    */
-  async openSettlementSheet() {
+  async openSettlementSheet(settlement?: SettlementEditData) {
     const saving = signal(false);
     const dirty = signal(false);
     const modal = await this.modalCtrl.create(settlementSheetModalOptions({
@@ -236,6 +303,7 @@ export class CartlistPage implements OnInit {
       dirty,
       confirmDiscard: () => this.confirmDiscard(),
       dismiss: modalId => this.modalCtrl.dismiss(undefined, 'cancel', modalId),
+      settlement,
     }));
     await modal.present();
   }
@@ -297,22 +365,12 @@ export class CartlistPage implements OnInit {
       return;
     }
 
-    // Zeitraum nach Kalendertag, wie die Liste ihn anzeigt (purchaseDayOf), beide Grenzen einschließlich. Ein Vergleich
-    // mit Uhrzeit schloss Carts am Enddatum aus („bis“ war lokale Mitternacht).
-    const startDay = cartFilter.startDate ? toIsoDay(cartFilter.startDate) : null;
-    const endDay = cartFilter.endDate ? toIsoDay(cartFilter.endDate) : null;
-
+    // Zeitraum nach Kalendertag, wie die Liste ihn anzeigt (purchaseDayOf), beide Grenzen einschließlich – siehe
+    // applyCartFilter. Ein Vergleich mit Uhrzeit schloss Carts am Enddatum aus („bis“ war lokale Mitternacht).
     this.filterTerm.set('');
-    this.cartList.set(this.initCartList());
-    this.cartList.update(carts =>
-      carts.filter(cart =>
-        (cartFilter.title ? cart.title?.toLowerCase().includes(cartFilter.title.toLowerCase()) : true) &&
-        (cartFilter.description ? cart.description?.toLowerCase().includes(cartFilter.description.toLowerCase()) : true) &&
-        (cartFilter.category && cartFilter.category.length > 0 ? cartFilter.category.includes(cart.categoryDto.name) : true) &&
-        (cartFilter.userName && cartFilter.userName.length > 0 ? cartFilter.userName.includes(cart.userDto.userName) : true) &&
-        (startDay ? purchaseDayOf(cart.datePurchased) >= startDay : true) &&
-        (endDay ? purchaseDayOf(cart.datePurchased) <= endDay : true)
-    ))
+    // Merken, damit der Filter nach jeder erfolgreichen Änderung neu angewendet werden kann (DIV-74)
+    this.cartFilter = cartFilter;
+    this.cartList.set(applyCartFilter(this.initCartList(), cartFilter));
 
     this.filterMode.set(true);
   }

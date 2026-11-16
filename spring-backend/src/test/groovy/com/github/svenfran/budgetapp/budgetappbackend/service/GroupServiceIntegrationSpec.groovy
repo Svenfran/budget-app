@@ -4,6 +4,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.dto.AddGroupMemberDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.ChangeGroupOwnerDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.GroupDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.RemoveGroupMemberDto
+import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOfGroupException
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
@@ -12,6 +13,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.repository.CartTemplateRep
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CategoryRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupMembershipHistoryRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository
+import com.github.svenfran.budgetapp.budgetappbackend.repository.SettlementRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingItemRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingListRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingPurchaseRepository
@@ -20,6 +22,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpe
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.context.i18n.LocaleContextHolder
 
 import java.time.LocalDate
 
@@ -41,6 +44,8 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
     @Autowired ShoppingItemRepository shoppingItemRepository
     @Autowired ShoppingPurchaseRepository shoppingPurchaseRepository
     @Autowired UserRepository userRepository
+    @Autowired SettlementService settlementService
+    @Autowired SettlementRepository settlementRepository
 
     def "Neuberechnung setzt den Durchschnitt pro Mitglied auf 0, wenn zum Kaufdatum niemand Mitglied ist"() {
         given: "Owner und Ben sind seit REFERENCE_DATE - 1 Jahr Mitglied"
@@ -614,6 +619,71 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
         memberIds(andereGroupId) == [benId]
         historie(andereGroupId, benId) == [[MEMBER, REFERENCE_DATE.minusYears(1), null]]
         cartRepository.findById(andererCart.id).present
+    }
+
+    def "Gruppe mit Ausgleichszahlung löschen entfernt Settlement und beide Einkäufe; die Ausgleichszahlung einer anderen Gruppe bleibt"() {
+        given: "DIV-74: cart.settlement_id verweist auf settlement, die Gruppe muss sich trotzdem löschen lassen"
+        LocaleContextHolder.setLocale(Locale.GERMAN)
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def andereWg = fixtures.group(owner: wg.owner, members: [ben])
+        def (groupId, andereGroupId) = [wg.group.id, andereWg.group.id]
+        flushAndClear()
+        loginAs(wg.owner)
+        def carts = settlementService.addSettlementPayment(
+                new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), DateUtils.toDate(REFERENCE_DATE)))
+        def andereCarts = settlementService.addSettlementPayment(
+                new SettlementPaymentDto(20d, andereGroupId, new UserDto(id: ben.id), DateUtils.toDate(REFERENCE_DATE)))
+        def (settlementId, andereSettlementId) = [carts[0].settlementId, andereCarts[0].settlementId]
+        flushAndClear()
+        LOG.info('Szenario: Gruppe {} (Owner {} angemeldet, Ben {}) mit Settlement {} (Carts {}); Gruppe {} mit Settlement {} (Carts {})',
+                groupId, wg.owner.id, ben.id, settlementId, carts*.id, andereGroupId, andereSettlementId, andereCarts*.id)
+
+        when:
+        groupService.deleteGroup(groupId)
+        flushAndClear()
+        def settlementVorhanden = settlementRepository.existsById(settlementId)
+        def verbliebeneCarts = (carts + andereCarts)*.id.findAll { cartRepository.existsById(it) }
+        def andereSettlementVorhanden = settlementRepository.existsById(andereSettlementId)
+        LOG.info('groupService.deleteGroup(Gruppe {}) -> Settlement {} vorhanden {}, anderes Settlement vorhanden {}, verbliebene Carts {}',
+                groupId, settlementId, settlementVorhanden, andereSettlementVorhanden, verbliebeneCarts)
+
+        then:
+        !groupRepository.existsById(groupId)
+        !settlementVorhanden
+        verbliebeneCarts == andereCarts*.id
+        andereSettlementVorhanden
+
+        cleanup:
+        LocaleContextHolder.resetLocaleContext()
+    }
+
+    def "Standardgruppe enthält genau eine gekennzeichnete Settlement-Kategorie (Locale #locale)"() {
+        given:
+        LocaleContextHolder.setLocale(locale)
+        def anna = fixtures.user()
+        flushAndClear()
+        LOG.info('Szenario: neuer Nutzer {}, Locale {}', anna.id, locale)
+
+        when:
+        groupService.createDefaultGroup(anna)
+        flushAndClear()
+        def groupId = groupRepository.findGroupsByOwnerOrderById(userRepository.findById(anna.id).get()).first().id
+        def kategorien = categoryRepository.findAllByGroup_IdOrderByName(groupId)
+        LOG.info('groupService.createDefaultGroup(Nutzer {}) -> Gruppe {}, Kategorien {}, gekennzeichnet {}', anna.id, groupId,
+                kategorien*.name, kategorien.findAll { it.settlement }*.name)
+
+        then:
+        kategorien.size() == 7
+        kategorien.findAll { it.settlement }*.name == [name]
+
+        cleanup:
+        LocaleContextHolder.resetLocaleContext()
+
+        where:
+        locale         || name
+        Locale.GERMAN  || 'Ausgleichszahlung'
+        Locale.ENGLISH || 'Repayment'
     }
 
     def "Gruppe löschen entfernt ihre Einkaufshistorie, auch die gelöschter Listen; die Historie anderer Gruppen bleibt"() {

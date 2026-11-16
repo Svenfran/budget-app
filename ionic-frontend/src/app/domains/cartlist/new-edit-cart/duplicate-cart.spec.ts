@@ -24,28 +24,28 @@ describe('duplicateFormValues (DIV-73)', () => {
 
 describe('duplicateSource (DIV-73)', () => {
   const ich = aUser({ userName: 'Anna' });
-  const keineAusgleichszahlung = () => false;
   const eigener = aCart({ id: 1, groupId: 5, userDto: ich });
 
   it('liefert einen eigenen, regulären Cart der aktiven Gruppe', () => {
-    expect(duplicateSource([eigener], 1, 5, 'Anna', keineAusgleichszahlung)).toBe(eigener);
+    expect(duplicateSource([eigener], 1, 5, 'Anna')).toBe(eigener);
   });
 
   it('liefert auch einen wiederkehrenden Cart als Vorlage', () => {
     const wiederkehrend = aCart({ id: 2, groupId: 5, userDto: ich, recurrenceType: RECURRENCE_TYPE.WEEKLY,
       hasActiveTemplate: true });
 
-    expect(duplicateSource([wiederkehrend], 2, 5, 'Anna', keineAusgleichszahlung)).toBe(wiederkehrend);
+    expect(duplicateSource([wiederkehrend], 2, 5, 'Anna')).toBe(wiederkehrend);
   });
 
   const abgelehnt: [string, () => ReturnType<typeof duplicateSource>][] = [
-    ['unbekannte ID', () => duplicateSource([eigener], 99, 5, 'Anna', keineAusgleichszahlung)],
-    ['Cart eines anderen Mitglieds', () => duplicateSource([eigener], 1, 5, 'Ben', keineAusgleichszahlung)],
-    ['ohne angemeldeten Nutzer', () => duplicateSource([eigener], 1, 5, undefined, keineAusgleichszahlung)],
-    ['Cart einer anderen Gruppe', () => duplicateSource([eigener], 1, 6, 'Anna', keineAusgleichszahlung)],
-    ['Ausgleichszahlung', () => duplicateSource([eigener], 1, 5, 'Anna', () => true)],
+    ['unbekannte ID', () => duplicateSource([eigener], 99, 5, 'Anna')],
+    ['Cart eines anderen Mitglieds', () => duplicateSource([eigener], 1, 5, 'Ben')],
+    ['ohne angemeldeten Nutzer', () => duplicateSource([eigener], 1, 5, undefined)],
+    ['Cart einer anderen Gruppe', () => duplicateSource([eigener], 1, 6, 'Anna')],
+    ['Ausgleichszahlung (DIV-74: an settlementId erkannt, Kategoriename egal)', () =>
+      duplicateSource([aCart({ id: 7, groupId: 5, userDto: ich, settlementId: 70, categoryDto: aCategory({ name: 'Rückzahlungen' }) })], 7, 5, 'Anna')],
     ['Cart eines entfernten Mitglieds', () =>
-      duplicateSource([aCart({ id: 3, groupId: 5, userDto: ich, deleted: true })], 3, 5, 'Anna', keineAusgleichszahlung)],
+      duplicateSource([aCart({ id: 3, groupId: 5, userDto: ich, deleted: true })], 3, 5, 'Anna')],
   ];
   abgelehnt.forEach(([fall, call]) => {
     it(`liefert keine Vorlage: ${fall}`, () => {
@@ -53,12 +53,9 @@ describe('duplicateSource (DIV-73)', () => {
     });
   });
 
-  it('übergibt der Ausgleichszahlungs-Erkennung den Kategorienamen', () => {
-    const isSettlement = jasmine.createSpy('isSettlement').and.returnValue(false);
-    const cart = aCart({ id: 4, groupId: 5, userDto: ich, categoryDto: aCategory({ name: 'Drogerie' }) });
+  it('ein unverknüpfter Cart in einer Kategorie namens „Ausgleichszahlung“ ist duplizierbar (DIV-74)', () => {
+    const cart = aCart({ id: 4, groupId: 5, userDto: ich, categoryDto: aCategory({ name: 'Ausgleichszahlung' }) });
 
-    duplicateSource([cart], 4, 5, 'Anna', isSettlement);
-
-    expect(isSettlement).toHaveBeenCalledOnceWith('Drogerie');
+    expect(duplicateSource([cart], 4, 5, 'Anna')).toBe(cart);
   });
 });

@@ -1,12 +1,19 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service
 
+import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto
+import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto
+import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
+import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartTemplateRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository
+import com.github.svenfran.budgetapp.budgetappbackend.repository.SettlementRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingPurchaseRepository
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
+import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.context.i18n.LocaleContextHolder
 
 import java.time.LocalDate
 
@@ -18,6 +25,9 @@ class UserProfileServiceIntegrationSpec extends IntegrationSpec {
     @Autowired CartTemplateRepository cartTemplateRepository
     @Autowired GroupRepository groupRepository
     @Autowired ShoppingPurchaseRepository shoppingPurchaseRepository
+    @Autowired SettlementService settlementService
+    @Autowired SettlementRepository settlementRepository
+    @Autowired CartRepository cartRepository
 
     def "Konto löschen als Owner löst delete-group für die eigene Gruppe mit den aktiven Mitgliedern aus"() {
         given:
@@ -39,6 +49,39 @@ class UserProfileServiceIntegrationSpec extends IntegrationSpec {
                 { it*.userId as Set == [ownerId, benId] as Set },
                 { it.id == groupId })
         0 * notificationService._
+    }
+
+    def "Konto löschen als Owner einer Gruppe mit Ausgleichszahlung löscht Gruppe, Settlement und beide Einkäufe"() {
+        given: "DIV-74: cart.settlement_id verweist auf settlement"
+        LocaleContextHolder.setLocale(Locale.GERMAN)
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def (groupId, ownerId) = [wg.group.id, wg.owner.id]
+        flushAndClear()
+        loginAs(wg.owner)
+        def carts = settlementService.addSettlementPayment(
+                new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE)))
+        def settlementId = carts[0].settlementId
+        flushAndClear()
+        LOG.info('Szenario: Nutzer {} (angemeldet) ist Owner von Gruppe {} mit Mitglied {} und Settlement {} (Carts {})',
+                ownerId, groupId, ben.id, settlementId, carts*.id)
+
+        when:
+        userProfileService.deleteUserProfile(ownerId)
+        flushAndClear()
+        def gruppeVorhanden = groupRepository.existsById(groupId)
+        def settlementVorhanden = settlementRepository.existsById(settlementId)
+        def verbliebeneCarts = carts*.id.findAll { cartRepository.existsById(it) }
+        LOG.info('userProfileService.deleteUserProfile(Nutzer {}) -> Gruppe vorhanden {}, Settlement vorhanden {}, verbliebene Carts {}',
+                ownerId, gruppeVorhanden, settlementVorhanden, verbliebeneCarts)
+
+        then:
+        !gruppeVorhanden
+        !settlementVorhanden
+        verbliebeneCarts.isEmpty()
+
+        cleanup:
+        LocaleContextHolder.resetLocaleContext()
     }
 
     def "Konto löschen als Owner löscht die Einkaufshistorie seiner Gruppe; Gruppen, in denen er Mitglied ist, behalten ihre"() {

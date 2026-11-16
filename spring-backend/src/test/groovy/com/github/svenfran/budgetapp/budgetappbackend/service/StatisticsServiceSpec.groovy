@@ -2,7 +2,6 @@ package com.github.svenfran.budgetapp.budgetappbackend.service
 
 import com.github.svenfran.budgetapp.budgetappbackend.constants.StatisticsPeriod
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.InvalidStatisticsRequestException
-import com.github.svenfran.budgetapp.budgetappbackend.helper.Translator
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository
 import org.springframework.security.crypto.password.PasswordEncoder
@@ -19,7 +18,7 @@ class StatisticsServiceSpec extends Specification {
 
     def dataLoaderService = Mock(DataLoaderService)
     def service = new StatisticsService(dataLoaderService, new VerificationService(Mock(PasswordEncoder), Mock(UserRepository)),
-            Mock(GroupService), Mock(SpendingsOverviewService), Mock(CartRepository), Mock(Translator))
+            Mock(GroupService), Mock(SpendingsOverviewService), Mock(CartRepository))
 
     def "getStatistics läuft in einer lesenden Transaktion mit REPEATABLE_READ"() {
         when:
