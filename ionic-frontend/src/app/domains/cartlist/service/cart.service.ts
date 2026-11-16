@@ -12,6 +12,7 @@ import { firstValueFrom } from 'rxjs';
 import { FileExportService } from 'src/app/service/file-export.service';
 import { ExportOptions } from '../model/export-options';
 import { exportFileName, exportMimeType } from './export-file';
+import { LoadOptions } from 'src/app/model/load-options';
 
 @Injectable({
   providedIn: 'root'
@@ -25,6 +26,7 @@ export class CartService {
   private updateCartUrl = `${this.apiBaseUrl}/api/carts/update`;
   private exportUrl = `${this.apiBaseUrl}/api/carts/export`;
   private settlementPaymentUrl = `${this.apiBaseUrl}/api/carts/settlement-payment/add`;
+  private deleteSettlementPaymentUrl = `${this.apiBaseUrl}/api/carts/settlement-payment/delete`;
   
   public cartList: WritableSignal<Cart[]> = signal<Cart[]>([]);
   public initCartList: WritableSignal<Cart[]> = signal<Cart[]>([]);
@@ -44,7 +46,12 @@ export class CartService {
     this.cartUpdated.set(this.cartUpdated() + 1)
   }
 
-  getCartListByGroupId(group: Group, refresh?: boolean, onComplete?: () => void): void {
+  /**
+   * Lädt die Einkäufe der Gruppe in beide Listen. Ohne Optionen wie bisher (Fehler leert beide Listen).
+   * `options.silent`: bei einem Fehler bleibt der bisherige Stand (stilles Neuladen, DIV-74);
+   * `options.isCurrent`: eine Antwort nach Gruppen- oder Sitzungswechsel wird verworfen.
+   */
+  getCartListByGroupId(group: Group, refresh?: boolean, onComplete?: () => void, options: LoadOptions = {}): void {
     if (group.flag?.includes(INIT_VALUES.DEFAULT)) {
       this.cartList.set([]);
       this.initCartList.set([]);
@@ -52,16 +59,24 @@ export class CartService {
       return;
     };
 
+    const isCurrent = options.isCurrent ?? (() => true);
     this.http
       .get<Cart[]>(`${this.cartlistUrl}/${group.id}`)
       .subscribe({
         next: (result) => {
-          this.cartList.set(result || []);
-          this.initCartList.set(result || []);
+          if (isCurrent()) {
+            this.cartList.set(result || []);
+            this.initCartList.set(result || []);
+          }
           onComplete?.();
-          if (refresh) this.triggerUpdate();
+          if (refresh && isCurrent()) this.triggerUpdate();
         },
         error: (err) => {
+          if (options.silent || !isCurrent()) {
+            console.warn('Error fetching cartlist, keeping current state:', err);
+            onComplete?.();
+            return;
+          }
           console.error('Error fetching cartlist:', err);
           this.cartList.set([]);
           this.initCartList.set([]);
@@ -219,6 +234,40 @@ export class CartService {
           console.error('Error deleting cart:', err);
         }
       })
+  }
+
+  /**
+   * Ausgleichszahlung mit beiden Einkäufen löschen (DIV-74). Nach Erfolg verschwinden alle Einkäufe mit dieser
+   * `settlementId` aus beiden Listen. 404: Die Ausgleichszahlung ist schon weg – kein Fehler-Alert, nur ein Hinweis und
+   * stilles Neuladen der Liste. Andere Fehler lassen den State unverändert und zeigen einen Alert.
+   *
+   * @param group Gruppe, zu der die Ausgleichszahlung gehört (für das Neuladen)
+   * @param isCurrent false, sobald Gruppe oder Anmelde-Sitzung gewechselt haben: die Antwort wird dann verworfen
+   */
+  deleteSettlementPayment(settlementId: number, group: Group, isCurrent: () => boolean): void {
+    this.http
+      .delete<void>(`${this.deleteSettlementPaymentUrl}/${settlementId}`)
+      .subscribe({
+        next: () => {
+          if (!isCurrent()) return;
+          this.cartList.update(carts => carts.filter(cart => cart.settlementId !== settlementId));
+          this.initCartList.update(carts => carts.filter(cart => cart.settlementId !== settlementId));
+          this.triggerUpdate();
+        },
+        error: (err) => {
+          console.error('Error deleting settlement payment:', err);
+          if (!isCurrent()) return;
+          if (err?.status === 404) {
+            this.alertService.showToast(this.translate.instant('alerts.cart.settlement_already_deleted'));
+            this.getCartListByGroupId(group, true, undefined, { silent: true, isCurrent });
+            return;
+          }
+          this.alertService.showErrorAlert(
+            this.translate.instant('alerts.cart.settlement_delete_failed.header'),
+            this.translate.instant('alerts.cart.settlement_delete_failed.message')
+          );
+        }
+      });
   }
 
   /**

@@ -56,7 +56,7 @@ public class CartController {
     }
 
     @DeleteMapping("/carts/delete/{id}")
-    public ResponseEntity<CartDto> deleteCart(@PathVariable("id") Long id) throws UserNotFoundException, GroupNotFoundException, CartNotFoundException, NotOwnerOfCartException, NotOwnerOrMemberOfGroupException {
+    public ResponseEntity<CartDto> deleteCart(@PathVariable("id") Long id) throws UserNotFoundException, GroupNotFoundException, CartNotFoundException, NotOwnerOfCartException, NotOwnerOrMemberOfGroupException, SettlementCartNotEditableException {
         cartService.deleteCart(id);
         return new ResponseEntity<>(HttpStatus.OK);
     }
@@ -65,6 +65,14 @@ public class CartController {
     public ResponseEntity<List<CartDto>> addSettlementPayment(@RequestBody SettlementPaymentDto settlementPaymentDto) throws Exception {
         var payment = settlementService.addSettlementPayment(settlementPaymentDto);
         return new ResponseEntity<>(payment, HttpStatus.OK);
+    }
+
+    /** Löscht die Ausgleichszahlung mit beiden Einkäufen (DIV-74). */
+    @DeleteMapping("/carts/settlement-payment/delete/{settlementId}")
+    public ResponseEntity<Void> deleteSettlementPayment(@PathVariable("settlementId") Long settlementId) throws UserNotFoundException,
+            SettlementNotFoundException, NotOwnerOrMemberOfGroupException, NotPartyOfSettlementException {
+        settlementService.deleteSettlementPayment(settlementId);
+        return new ResponseEntity<>(HttpStatus.OK);
     }
 
     /** Ausgabenexport (DIV-68): ohne groupId alle Gruppen des Nutzers; XLSX bzw. ZIP mit CSV-Dateien. */

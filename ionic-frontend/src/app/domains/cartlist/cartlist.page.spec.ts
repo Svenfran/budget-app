@@ -305,6 +305,114 @@ describe('CartlistPage – Ausgleichszahlung', () => {
   });
 });
 
+// DIV-74: Einkäufe einer Ausgleichszahlung werden nicht über das normale Formular bearbeitet und immer paarweise über den
+// Settlement-Endpoint gelöscht. Template ausgeblendet – geprüft werden die Methoden hinter den Wischaktionen.
+describe('CartlistPage – Wischaktionen bei Ausgleichszahlungen (DIV-74)', () => {
+  let page: CartlistPage;
+  let groupService: GroupService;
+  let session: BehaviorSubject<User | null>;
+  let alertCtrl: jasmine.SpyObj<AlertController>;
+  let cartService: { deleteCart: jasmine.Spy; deleteSettlementPayment: jasmine.Spy };
+  const slidingItem = () => jasmine.createSpyObj<IonItemSliding>('IonItemSliding', ['close']);
+  const settlementCart = aCart({ id: 11, title: 'Ausgleichszahlung an Ben', settlementId: 70 });
+  const normalCart = aCart({ id: 12, title: 'Pizza' });
+
+  /** Optionen des zuletzt erzeugten Alerts und der Handler des „Ja“-Buttons. */
+  const lastAlert = () => {
+    const options = alertCtrl.create.calls.mostRecent().args[0]!;
+    const ok = (options.buttons as { role?: string; handler?: () => void }[]).find(b => b.role !== 'cancel')!;
+    return { options, confirm: () => ok.handler!() };
+  };
+
+  beforeEach(() => {
+    session = new BehaviorSubject<User | null>(null);
+    const auth = authServiceStub(null);
+    (Object.getOwnPropertyDescriptor(auth, 'user')!.get as jasmine.Spy).and.returnValue(session);
+    const alertEl = jasmine.createSpyObj<HTMLIonAlertElement>('HTMLIonAlertElement', ['present']);
+    alertEl.present.and.resolveTo();
+    alertCtrl = jasmine.createSpyObj<AlertController>('AlertController', ['create']);
+    alertCtrl.create.and.resolveTo(alertEl);
+    cartService = {
+      deleteCart: jasmine.createSpy('deleteCart'),
+      deleteSettlementPayment: jasmine.createSpy('deleteSettlementPayment'),
+    };
+    TestBed.configureTestingModule({
+      declarations: [CartlistPage],
+      imports: [IonicModule.forRoot()],
+      providers: [
+        ...provideServiceTesting(),
+        {
+          provide: CartService, useValue: {
+            ...cartService, cartList: signal<Cart[]>([]), initCartList: signal<Cart[]>([]), cartUpdated: signal(0),
+            sum: computed(() => 0), count: computed(() => 0), getCartListByGroupId: jasmine.createSpy('load'),
+          },
+        },
+        { provide: OverviewService, useValue: { overviewRefresh: signal(0) } },
+        { provide: CategoryService, useValue: { categoryUpdate: signal(0) } },
+        { provide: StorageService, useValue: storageServiceFake() },
+        { provide: AuthService, useValue: auth },
+        { provide: AlertService, useValue: alertServiceSpy() },
+        { provide: AlertController, useValue: alertCtrl },
+      ],
+    });
+    TestBed.overrideTemplate(CartlistPage, '');
+    groupService = TestBed.inject(GroupService);
+    session.next(aLoggedInUser({ id: 7 }));
+    groupService.setActiveGroup(aGroup({ id: 3, name: 'WG' }));
+    const fixture = TestBed.createComponent(CartlistPage);
+    fixture.detectChanges();
+    page = fixture.componentInstance;
+  });
+
+  it('„Bearbeiten“ gibt es nur für normale Einkäufe, nicht für Einkäufe einer Ausgleichszahlung', () => {
+    expect(page.isEditableInForm(normalCart)).toBeTrue();
+    expect(page.isEditableInForm(settlementCart)).toBeFalse();
+  });
+
+  it('Löschen eines Einkaufs einer Ausgleichszahlung fragt eigens nach und löscht das Paar über den Settlement-Endpoint', async () => {
+    const translate = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
+    const item = slidingItem();
+
+    page.onDeleteCart(settlementCart, item);
+    await Promise.resolve();
+    const { options, confirm } = lastAlert();
+    confirm();
+
+    expect(item.close).toHaveBeenCalled();
+    expect(options.header).toBe('alerts.cart.delete_settlement.header');
+    expect(translate).toHaveBeenCalledWith('alerts.cart.delete_settlement.message', { cartTitle: 'Ausgleichszahlung an Ben' });
+    expect(cartService.deleteSettlementPayment).toHaveBeenCalledOnceWith(70, jasmine.objectContaining({ id: 3 }),
+      jasmine.any(Function));
+    expect(cartService.deleteCart).not.toHaveBeenCalled();
+  });
+
+  it('isCurrent des Löschens wird nach Gruppenwechsel oder neuer Anmelde-Sitzung false', async () => {
+    page.onDeleteCart(settlementCart, slidingItem());
+    await Promise.resolve();
+    lastAlert().confirm();
+    const isCurrent = cartService.deleteSettlementPayment.calls.mostRecent().args[2] as () => boolean;
+
+    expect(isCurrent()).toBeTrue();
+    groupService.setActiveGroup(aGroup({ id: 4, name: 'Andere' }));
+    expect(isCurrent()).toBeFalse();
+
+    groupService.setActiveGroup(aGroup({ id: 3, name: 'WG' }));
+    expect(isCurrent()).toBeTrue();
+    session.next(null);
+    session.next(aLoggedInUser({ id: 7 }));
+    expect(isCurrent()).toBeFalse();
+  });
+
+  it('Löschen eines normalen Einkaufs bleibt beim bisherigen Endpoint', async () => {
+    page.onDeleteCart(normalCart, slidingItem());
+    await Promise.resolve();
+    const { options } = lastAlert();
+
+    expect(options.header).toBe('alerts.cart.delete.header');
+    expect(cartService.deleteSettlementPayment).not.toHaveBeenCalled();
+  });
+});
+
 // DIV-71: Charakterisierung der bestehenden Filterlogik vor dem Umbau auf das Filter-Bottom-Sheet. filterCarts, onFilter
 // und deleteFilter bleiben unverändert; Anzahl und Summe rechnet der Fake wie CartService aus cartList.
 describe('CartlistPage – Filter (Bestand)', () => {

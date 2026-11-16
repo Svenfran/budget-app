@@ -1,16 +1,21 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service
 
+import com.github.svenfran.budgetapp.budgetappbackend.dto.RemoveGroupMemberDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Settlement
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.DatePurchasedNotWithinMembershipPeriodException
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.InvalidSettlementPaymentException
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOrMemberOfGroupException
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotPartyOfSettlementException
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.SettlementNotFoundException
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CategoryRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupMembershipHistoryRepository
+import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.SettlementRepository
+import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
 import org.slf4j.Logger
@@ -35,6 +40,9 @@ class SettlementServiceIntegrationSpec extends IntegrationSpec {
     @Autowired CartRepository cartRepository
     @Autowired CategoryRepository categoryRepository
     @Autowired GroupMembershipHistoryRepository membershipRepository
+    @Autowired GroupRepository groupRepository
+    @Autowired UserRepository userRepository
+    @Autowired GroupService groupService
 
     def cleanup() {
         LocaleContextHolder.resetLocaleContext()
@@ -288,6 +296,129 @@ class SettlementServiceIntegrationSpec extends IntegrationSpec {
         'Empfänger-Id fehlt'    | 30d    | 'Ben'   | false      | false          | true             | false     || "'member.id'"
         'Datum fehlt'           | 30d    | 'Ben'   | false      | false          | false            | true      || "'datePurchased'"
         'Zahler gleich Empfänger' | 30d  | 'selbst' | false     | false          | false            | false     || 'must differ'
+    }
+
+    // ----- Löschen (Phase 2) -----
+
+    def "#rolle löscht die Ausgleichszahlung: Settlement und beide Einkäufe sind weg, andere Einkäufe bleiben"() {
+        given:
+        LocaleContextHolder.setLocale(Locale.GERMAN)
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def normal = fixtures.cart(wg, title: 'Pizza', amount: 20d)
+        flushAndClear()
+        loginAs(wg.owner)
+        def paar = settlementService.addSettlementPayment(
+                new SettlementPaymentDto(30d, wg.group.id, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE)))
+        def settlementId = paar[0].settlementId
+        flushAndClear()
+        def loeschender = rolle == 'Zahler' ? wg.owner : ben
+        loginAs(loeschender)
+        LOG.info('Szenario: Gruppe {}, Owner {} zahlt an Ben {}; Settlement {} mit Carts {}, normaler Einkauf {}; User {} ({}) löscht',
+                wg.group.id, wg.owner.id, ben.id, settlementId, paar*.id, normal.id, loeschender.id, rolle)
+
+        when:
+        settlementService.deleteSettlementPayment(settlementId)
+        flushAndClear()
+        def settlementVorhanden = settlementRepository.existsById(settlementId)
+        def verbliebeneCarts = cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id)*.id
+        LOG.info('settlementService.deleteSettlementPayment({}) -> Settlement vorhanden {}, verbliebene Carts {}', settlementId,
+                settlementVorhanden, verbliebeneCarts)
+
+        then:
+        0 * notificationService._
+        !settlementVorhanden
+        verbliebeneCarts == [normal.id]
+
+        where:
+        rolle << ['Zahler', 'Empfänger']
+    }
+
+    def "#fall darf die Ausgleichszahlung nicht löschen, Settlement und beide Einkäufe bleiben"() {
+        given: "Owner zahlt an Ben; Cleo ist weiteres Mitglied, Fremder kein Mitglied"
+        LocaleContextHolder.setLocale(Locale.GERMAN)
+        def ben = fixtures.user()
+        def cleo = fixtures.user()
+        def fremder = fixtures.user()
+        def wg = fixtures.group(members: [ben, cleo])
+        flushAndClear()
+        loginAs(wg.owner)
+        def paar = settlementService.addSettlementPayment(
+                new SettlementPaymentDto(30d, wg.group.id, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE)))
+        def settlementId = paar[0].settlementId
+        if (fall == 'Entfernter Empfänger') {
+            entferne(wg.group.id, ben.id)
+        }
+        flushAndClear()
+        def handelnder = [Dritter: cleo, 'Nicht-Mitglied': fremder, 'Entfernter Empfänger': ben][fall]
+        loginAs(userRepository.findById(handelnder.id).get())
+        LOG.info('Szenario: Gruppe {}, Owner {} zahlt an Ben {}, Cleo {}, Fremder {}; Settlement {}; User {} ({}) löscht, erwartet {}',
+                wg.group.id, wg.owner.id, ben.id, cleo.id, fremder.id, settlementId, handelnder.id, fall, erwartet.simpleName)
+
+        when:
+        settlementService.deleteSettlementPayment(settlementId)
+
+        then:
+        thrown(erwartet)
+        settlementRepository.existsById(settlementId)
+        paar.every { cartRepository.existsById(it.id) }
+
+        where:
+        fall                   || erwartet
+        'Dritter'              || NotPartyOfSettlementException
+        'Nicht-Mitglied'       || NotOwnerOrMemberOfGroupException
+        'Entfernter Empfänger' || NotOwnerOrMemberOfGroupException
+    }
+
+    def "Hat der Empfänger die Gruppe verlassen, darf der Zahler die Ausgleichszahlung löschen (A8)"() {
+        given:
+        LocaleContextHolder.setLocale(Locale.GERMAN)
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        flushAndClear()
+        loginAs(wg.owner)
+        def paar = settlementService.addSettlementPayment(
+                new SettlementPaymentDto(30d, wg.group.id, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE)))
+        def settlementId = paar[0].settlementId
+        entferne(wg.group.id, ben.id)
+        flushAndClear()
+        loginAs(userRepository.findById(wg.owner.id).get())
+        LOG.info('Szenario: Gruppe {}, Owner {} zahlte an Ben {}, Ben ist nicht mehr Mitglied; Settlement {}; Owner löscht',
+                wg.group.id, wg.owner.id, ben.id, settlementId)
+
+        when:
+        settlementService.deleteSettlementPayment(settlementId)
+        flushAndClear()
+        def settlementVorhanden = settlementRepository.existsById(settlementId)
+        def verbliebeneCarts = paar*.id.findAll { cartRepository.existsById(it) }
+        LOG.info('settlementService.deleteSettlementPayment({}) -> Settlement vorhanden {}, verbliebene Carts {}', settlementId,
+                settlementVorhanden, verbliebeneCarts)
+
+        then:
+        !settlementVorhanden
+        verbliebeneCarts.isEmpty()
+    }
+
+    def "Löschen einer unbekannten Ausgleichszahlung wirft SettlementNotFoundException"() {
+        given:
+        def wg = fixtures.group()
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet); Settlement -1 existiert nicht', wg.group.id, wg.owner.id)
+
+        when:
+        LOG.info('settlementService.deleteSettlementPayment(-1), erwartet SettlementNotFoundException')
+        settlementService.deleteSettlementPayment(-1L)
+
+        then:
+        thrown(SettlementNotFoundException)
+    }
+
+    /** Entfernt ein Mitglied über GroupService wie die App (beendet die Mitgliedschaft, markiert seine Einkäufe). */
+    private void entferne(Long groupId, Long memberId) {
+        loginAs(groupRepository.findById(groupId).get().owner)
+        groupService.removeMemberFromGroup(new RemoveGroupMemberDto(id: groupId, member: new UserDto(id: memberId)))
+        LOG.info('groupService.removeMemberFromGroup(Gruppe {}, User {}) aufgerufen', groupId, memberId)
     }
 
     private List<Settlement> settlementsDerGruppe(Long groupId) {

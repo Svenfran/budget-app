@@ -233,6 +233,15 @@
                 "message_new_edit": "Du warst zu dem gewählten Zeitpunkt kein Mitglied der Gruppe. Bitte wähle ein anderes Datum.",
                 "message_settlementpayment": "Der Nutzer \"{{userName}}\" war zu dem gewählten Zeitpunkt kein Mitglied der Gruppe. Bitte wähle ein anderes Datum."
             },
+            "delete_settlement": {
+                "header": "Ausgleichszahlung löschen:",
+                "message": "Möchtest du die Ausgleichszahlung \"{{cartTitle}}\" wirklich löschen? Sie wird für beide Beteiligten entfernt."
+            },
+            "settlement_delete_failed": {
+                "header": "Ausgleichszahlung nicht gelöscht",
+                "message": "Die Ausgleichszahlung konnte nicht gelöscht werden. Bitte versuche es erneut."
+            },
+            "settlement_already_deleted": "Die Ausgleichszahlung wurde bereits gelöscht.",
             "settlement_failed": {
                 "header": "Ausgleichszahlung nicht gespeichert",
                 "message": "Die Ausgleichszahlung konnte nicht gespeichert werden. Deine Eingaben bleiben erhalten, bitte versuche es erneut."

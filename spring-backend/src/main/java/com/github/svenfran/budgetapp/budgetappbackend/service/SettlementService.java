@@ -83,6 +83,23 @@ public class SettlementService {
         return List.of(new CartDto(payerCart), new CartDto(receiverCart));
     }
 
+    /**
+     * Löscht ein Settlement mit beiden Carts. Erlaubt für Zahler und Empfänger, solange der Handelnde aktuell Teil der
+     * Gruppe ist (Plan A8: auch wenn die andere Partei die Gruppe verlassen hat). Das Settlement wird zuerst gesperrt,
+     * damit ein gleichzeitiges Ändern oder Löschen wartet und danach den neuen Stand sieht.
+     */
+    @Transactional
+    public void deleteSettlementPayment(Long settlementId) throws UserNotFoundException, SettlementNotFoundException,
+            NotOwnerOrMemberOfGroupException, NotPartyOfSettlementException {
+        var user = dataLoaderService.getAuthenticatedUser();
+        var settlement = dataLoaderService.loadSettlementForUpdate(settlementId);
+        verificationService.verifyIsPartOfGroup(user, settlement.getGroup());
+        verificationService.verifyIsPartyOfSettlement(user, settlement);
+        // Carts zuerst: cart.settlement_id verweist auf settlement
+        cartRepository.deleteAll(cartRepository.findBySettlementIdOrderByIdAsc(settlement.getId()));
+        settlementRepository.delete(settlement);
+    }
+
     private void verifyPartiesWereMembersAt(Group group, User payer, User receiver, Date date)
             throws DatePurchasedNotWithinMembershipPeriodException {
         verificationService.verifyDatePurchasedWithinMembershipPeriod(

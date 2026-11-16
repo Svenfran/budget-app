@@ -66,12 +66,14 @@ public class CartService {
     }
 
     @Transactional
-    public CartDto addCart(@Validated CartDto cartDto) throws UserNotFoundException, CategoryNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, DatePurchasedNotWithinMembershipPeriodException {
+    public CartDto addCart(@Validated CartDto cartDto) throws UserNotFoundException, CategoryNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, DatePurchasedNotWithinMembershipPeriodException, SettlementCategoryNotAllowedException {
         var user = dataLoaderService.getAuthenticatedUser();
         var category = dataLoaderService.loadCategory(cartDto.getCategoryDto().getId());
         var group = dataLoaderService.loadGroup(cartDto.getGroupId());
         var gmh = dataLoaderService.loadMembershipHistoryForGroupAndUser(group.getId(), user.getId());
         verificationService.verifyIsPartOfGroup(user, group);
+        // Ausgleichszahlungen nur über SettlementService (DIV-74)
+        verificationService.verifyCategoryIsNotSettlement(category);
         verificationService.verifyDatePurchasedWithinMembershipPeriod(gmh, cartDto.getDatePurchased());
         var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(cartDto.getDatePurchased(), group.getId());
         var cart = cartDtoMapper.cartDtoToEntity(cartDto, category, user, group, groupMemberCount);
@@ -83,25 +85,32 @@ public class CartService {
     }
 
     @Transactional
-    public CartDto updateCart(@Validated CartDto cartDto) throws UserNotFoundException, CategoryNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, DatePurchasedNotWithinMembershipPeriodException, CartNotFoundException, NotOwnerOfCartException {
+    public CartDto updateCart(@Validated CartDto cartDto) throws UserNotFoundException, CategoryNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, DatePurchasedNotWithinMembershipPeriodException, CartNotFoundException, NotOwnerOfCartException, SettlementCartNotEditableException, SettlementCategoryNotAllowedException {
         var user = dataLoaderService.getAuthenticatedUser();
         var cart = dataLoaderService.loadCart(cartDto.getId());
         var group = dataLoaderService.loadGroup(cartDto.getGroupId());
         var gmh = dataLoaderService.loadMembershipHistoryForGroupAndUser(group.getId(), user.getId());
         verificationService.verifyIsPartOfGroup(user, group);
         verificationService.verifyIsOwnerOfCart(user, cart);
+        // Ausgleichszahlungen nur über SettlementService (DIV-74): weder Settlement-Carts noch die Settlement-Kategorie
+        verificationService.verifyCartIsNotSettlement(cart);
         verificationService.verifyDatePurchasedWithinMembershipPeriod(gmh, cartDto.getDatePurchased());
         var category = dataLoaderService.loadCategory(cartDto.getCategoryDto().getId());
+        verificationService.verifyCategoryIsNotSettlement(category);
         var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(cartDto.getDatePurchased(), group.getId());
         return updateCartAndTemplateIfValid(cart, cartDto, user, group, category, groupMemberCount);
     }
 
-    public void deleteCart(Long id) throws UserNotFoundException, CartNotFoundException, GroupNotFoundException, NotOwnerOfCartException, NotOwnerOrMemberOfGroupException {
+    // Transaktional (DIV-74): Template-Deaktivierung und Löschen gemeinsam
+    @Transactional
+    public void deleteCart(Long id) throws UserNotFoundException, CartNotFoundException, GroupNotFoundException, NotOwnerOfCartException, NotOwnerOrMemberOfGroupException, SettlementCartNotEditableException {
         var user = dataLoaderService.getAuthenticatedUser();
         var cart = dataLoaderService.loadCart(id);
         var group = dataLoaderService.loadGroup(cart.getGroup().getId());
         verificationService.verifyIsPartOfGroup(user, group);
         verificationService.verifyIsOwnerOfCart(user, cart);
+        // Ausgleichszahlungen nur paarweise über SettlementService löschen (DIV-74)
+        verificationService.verifyCartIsNotSettlement(cart);
         deactivateCartTemplateIfCartDeleted(cart);
         cartRepository.deleteById(id);
     }

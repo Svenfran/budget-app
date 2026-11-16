@@ -312,6 +312,122 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
         endpoint << ['PUT /api/carts/update', 'POST /api/carts/settlement-payment/add']
     }
 
+    // ----- DIV-74: Schutz der Ausgleichszahlungen, Paar-Löschen -----
+
+    def "#endpoint auf den Einkauf einer Ausgleichszahlung: 409, das Paar bleibt"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def paar = json(addSettlement(wg.owner, [amount: 30, groupId: wg.group.id, member: [id: ben.id], datePurchased: '2025-06-15']))
+        def zahlerCart = paar[0]
+        def ausfuehren = {
+            endpoint == 'PUT /api/carts/update'
+                    ? send(put('/api/carts/update'), user: wg.owner, body: zahlerCart + [amount: 99])
+                    : deleteCart(wg.owner, zahlerCart.id as Long)
+        }
+        LOG.info('Szenario: Gruppe {}, Owner {} zahlte 30.00 an Ben {}; Settlement {} mit Carts {}', wg.group.id, wg.owner.id,
+                ben.id, zahlerCart.settlementId, paar*.id)
+
+        when:
+        def response = ausfuehren()
+        LOG.info('Antwort: {} {}', response.status, response.contentAsString)
+        def carts = json(send(get('/api/carts/carts-by-groupid/{id}', wg.group.id), user: wg.owner))
+
+        then:
+        response.status == 409
+        response.contentAsString.contains('settlement endpoints')
+        carts*.amount as Set == [30, -30] as Set
+
+        where:
+        endpoint << ['PUT /api/carts/update', 'DELETE /api/carts/delete/{id}']
+    }
+
+    def "Settlement-Kategorie bei #endpoint: 400"() {
+        given:
+        def wg = fixtures.group()
+        def kategorie = fixtures.category(wg, name: 'Ausgleichszahlung', settlement: true)
+        def cart = fixtures.cart(wg, title: 'Pizza', amount: 20d)
+        def body = [title: 'Pizza', amount: 20, datePurchased: '2025-06-15', groupId: wg.group.id, categoryDto: [id: kategorie.id]]
+        def request = endpoint == 'POST /api/carts/add' ? post('/api/carts/add') : put('/api/carts/update')
+        if (endpoint == 'PUT /api/carts/update') body.id = cart.id
+        LOG.info('Szenario: Gruppe {}, Owner {}, Settlement-Kategorie {}, Einkauf {}', wg.group.id, wg.owner.id, kategorie.id, cart.id)
+
+        when:
+        def response = send(request, user: wg.owner, body: body)
+        LOG.info('Antwort: {} {}', response.status, response.contentAsString)
+
+        then:
+        response.status == 400
+        response.contentAsString.contains('cannot be used for regular carts')
+
+        where:
+        endpoint << ['POST /api/carts/add', 'PUT /api/carts/update']
+    }
+
+    def "Ausgleichszahlung löschen als #rolle: 200, beide Einkäufe sind weg"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def paar = json(addSettlement(wg.owner, [amount: 30, groupId: wg.group.id, member: [id: ben.id], datePurchased: '2025-06-15']))
+        def settlementId = paar[0].settlementId as Long
+        def loeschender = rolle == 'Zahler' ? wg.owner : ben
+        LOG.info('Szenario: Gruppe {}, Owner {} zahlte an Ben {}; Settlement {}; User {} ({}) löscht', wg.group.id, wg.owner.id,
+                ben.id, settlementId, loeschender.id, rolle)
+
+        when:
+        def response = deleteSettlement(loeschender, settlementId)
+        def carts = json(send(get('/api/carts/carts-by-groupid/{id}', wg.group.id), user: wg.owner))
+        LOG.info('Antwort: {}; Einkäufe danach {}', response.status, carts*.id)
+
+        then:
+        response.status == 200
+        carts.isEmpty()
+
+        where:
+        rolle << ['Zahler', 'Empfänger']
+    }
+
+    def "Ausgleichszahlung löschen: #fall"() {
+        given:
+        def ben = fixtures.user()
+        def cleo = fixtures.user()
+        def wg = fixtures.group(members: [ben, cleo])
+        def paar = json(addSettlement(wg.owner, [amount: 30, groupId: wg.group.id, member: [id: ben.id], datePurchased: '2025-06-15']))
+        def settlementId = fall == 'unbekannte Id: 404' ? -1L : paar[0].settlementId as Long
+        LOG.info('Szenario: Gruppe {}, Owner {} zahlte an Ben {}, Cleo {}; Settlement {}; Cleo löscht', wg.group.id, wg.owner.id,
+                ben.id, cleo.id, settlementId)
+
+        when:
+        def response = deleteSettlement(cleo, settlementId)
+        LOG.info('Antwort: {} {}', response.status, response.contentAsString)
+
+        then:
+        response.status == status
+
+        where:
+        fall                              || status
+        'Dritter Mitglied: 403'           || 403
+        'unbekannte Id: 404'              || 404
+    }
+
+    def "Kategorien als JSON enthalten das Settlement-Kennzeichen"() {
+        given:
+        def wg = fixtures.group()
+        def kategorie = fixtures.category(wg, name: 'Ausgleichszahlung', settlement: true)
+        def (standardId, settlementId) = [wg.category.id, kategorie.id]
+        LOG.info('Szenario: Gruppe {}, Owner {}, Standardkategorie {}, Settlement-Kategorie {}', wg.group.id, wg.owner.id,
+                standardId, settlementId)
+
+        when:
+        def response = send(get('/api/groups/categories/{id}', wg.group.id), user: wg.owner)
+        def body = json(response)
+        LOG.info('Antwort: {}', body.collect { [it.id, it.settlement] })
+
+        then:
+        response.status == 200
+        body.collectEntries { [(it.id as Long): it.settlement] } == [(standardId): false, (settlementId): true]
+    }
+
     // ----- DIV-68: Ausgabenexport GET /api/carts/export -----
 
     def "Export #format #umfang: 200 mit Content-Type und erwarteter Datei-Struktur, ohne fremde Gruppe"() {
@@ -452,6 +568,10 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
 
     private MockHttpServletResponse deleteCart(User user, Long cartId) {
         send(delete('/api/carts/delete/{id}', cartId), user: user)
+    }
+
+    private MockHttpServletResponse deleteSettlement(User user, Long settlementId) {
+        send(delete('/api/carts/settlement-payment/delete/{id}', settlementId), user: user)
     }
 
     /** Accept-Language de: Titel und Kategoriename der Ausgleichszahlung sind lokalisiert. */

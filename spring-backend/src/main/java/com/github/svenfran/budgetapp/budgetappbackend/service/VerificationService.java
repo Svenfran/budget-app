@@ -188,6 +188,30 @@ public class VerificationService {
         }
     }
 
+    /** Settlement-Carts ändern sich nur über die Settlement-Endpunkte (DIV-74). */
+    public void verifyCartIsNotSettlement(Cart cart) throws SettlementCartNotEditableException {
+        if (cart.getSettlement() != null) {
+            throw new SettlementCartNotEditableException("Cart with Id " + cart.getId()
+                    + " belongs to a settlement payment and can only be changed via the settlement endpoints");
+        }
+    }
+
+    /** Die Settlement-Kategorie ist für normale Einkäufe gesperrt (DIV-74). */
+    public void verifyCategoryIsNotSettlement(Category category) throws SettlementCategoryNotAllowedException {
+        if (category.isSettlement()) {
+            throw new SettlementCategoryNotAllowedException("The settlement category with Id " + category.getId()
+                    + " cannot be used for regular carts");
+        }
+    }
+
+    /** Ändern und Löschen einer Ausgleichszahlung dürfen nur Zahler und Empfänger (DIV-74). */
+    public void verifyIsPartyOfSettlement(User user, Settlement settlement) throws NotPartyOfSettlementException {
+        if (!(user.getId().equals(settlement.getPayer().getId()) || user.getId().equals(settlement.getReceiver().getId()))) {
+            throw new NotPartyOfSettlementException("User with ID " + user.getId()
+                    + " is neither payer nor receiver of settlement " + settlement.getId());
+        }
+    }
+
     private static void requireSettlementField(Object value, String field) throws InvalidSettlementPaymentException {
         if (value == null) {
             throw new InvalidSettlementPaymentException("Settlement payment field '" + field + "' is required");

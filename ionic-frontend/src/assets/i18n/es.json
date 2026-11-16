@@ -233,6 +233,15 @@
                 "message_new_edit": "No eras miembro del grupo en la fecha seleccionada. Por favor elige otra fecha.",
                 "message_settlementpayment": "El usuario \"{{userName}}\" no era miembro del grupo en la fecha seleccionada. Por favor elige otra fecha."
             },
+            "delete_settlement": {
+                "header": "Eliminar repago:",
+                "message": "¿Seguro que quieres eliminar el repago \"{{cartTitle}}\"? Se eliminará para ambas partes."
+            },
+            "settlement_delete_failed": {
+                "header": "Repago no eliminado",
+                "message": "No se pudo eliminar el repago. Por favor, inténtalo de nuevo."
+            },
+            "settlement_already_deleted": "El repago ya ha sido eliminado.",
             "settlement_failed": {
                 "header": "Repago no guardado",
                 "message": "No se pudo guardar el repago. Tus datos se han conservado, por favor inténtalo de nuevo."

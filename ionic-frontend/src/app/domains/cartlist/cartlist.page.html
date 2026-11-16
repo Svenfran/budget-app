@@ -123,7 +123,7 @@
                     color="secondary" [attr.aria-label]="'domains.spendings.duplicate' | translate">
                   <ion-icon name="copy-outline" slot="icon-only"></ion-icon>
                 </ion-item-option>
-                <ion-item-option (click)="editCart(cart, slidingItem)" color="secondary"
+                <ion-item-option *ngIf="isEditableInForm(cart)" (click)="editCart(cart, slidingItem)" color="secondary"
                     [attr.aria-label]="'domains.spendings.edit' | translate">
                   <ion-icon name="create-outline" slot="icon-only"></ion-icon>
                 </ion-item-option>

@@ -48,16 +48,10 @@ export class NewEditCartPage implements OnInit {
   public formCategories = signal<CategoryDto[] | null>(null);
   public categoriesLoaded = computed(() => this.formCategories() !== null);
   /**
-   * Auswählbare Kategorien: Neuanlage und Duplizieren ohne die Ausgleichszahlungs-Kategorie (DIV-73, Ausgleichszahlungen
-   * nur über das eigene Sheet); Bearbeiten mit allen, damit eine bestehende Ausgleichszahlung ihre Kategorie behält.
-   * `isAddMode` steht ab ngOnInit fest, also vor dem ersten Laden der Kategorien.
+   * Auswählbare Kategorien: immer ohne die Settlement-Kategorie (DIV-74, per Kennzeichen). Ausgleichszahlungen entstehen
+   * und ändern sich nur über das Settlement-Sheet; das Backend lehnt die Kategorie für normale Einkäufe ab.
    */
-  public selectableCategories = computed(() => {
-    const categories = this.formCategories() ?? [];
-    return this.isAddMode
-      ? categories.filter(cat => !this.categoryService.isSettlementpayment(cat.name))
-      : categories;
-  });
+  public selectableCategories = computed(() => (this.formCategories() ?? []).filter(cat => !cat.settlement));
   public activeGroup = this.groupService.activeGroup();
   public cartList = this.cartService.cartList;
   public zeitraeume = this.groupService.groupMembershipHistory;
@@ -98,6 +92,12 @@ export class NewEditCartPage implements OnInit {
 
     this.cartId = this.route.snapshot.paramMap.get('id');
     this.isAddMode = !this.cartId;
+
+    // Ausgleichszahlungen nicht über das normale Formular bearbeiten (DIV-74), z. B. bei direktem Aufruf der URL
+    if (!this.isAddMode && this.cartList().find(c => c.id === +this.cartId!)?.settlementId) {
+      this.router.navigate(['domains', 'tabs', 'cartlist']);
+      return;
+    }
 
     this.authService.user.subscribe(user => {
       if (user) this.user = user;

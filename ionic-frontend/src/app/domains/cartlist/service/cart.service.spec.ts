@@ -77,6 +77,35 @@ describe('CartService', () => {
       expect(onComplete).toHaveBeenCalledTimes(1);
     });
 
+    it('behält mit silent bei einem Ladefehler den bisherigen Stand (DIV-74)', () => {
+      const cartList = [aCart({ id: 1 })];
+      const initCartList = [aCart({ id: 1 }), aCart({ id: 2 })];
+      service.cartList.set(cartList);
+      service.initCartList.set(initCartList);
+      const onComplete = jasmine.createSpy('onComplete');
+
+      service.getCartListByGroupId(aGroup({ id: 7 }), false, onComplete, { silent: true });
+      http.expectOne(`${api}/carts-by-groupid/7`).flush('Server error', { status: 500, statusText: 'Server Error' });
+
+      expect(service.cartList()).toEqual(cartList);
+      expect(service.initCartList()).toEqual(initCartList);
+      expect(onComplete).toHaveBeenCalledTimes(1);
+    });
+
+    it('verwirft eine Antwort, die nach einem Gruppen- oder Sitzungswechsel eintrifft (isCurrent, DIV-74)', () => {
+      const aktuell = [aCart({ id: 9 })];
+      service.cartList.set(aktuell);
+      service.initCartList.set(aktuell);
+      const updatesBefore = service.cartUpdated();
+
+      service.getCartListByGroupId(aGroup({ id: 7 }), true, undefined, { isCurrent: () => false });
+      http.expectOne(`${api}/carts-by-groupid/7`).flush([aCart({ id: 1 })]);
+
+      expect(ids(service.cartList())).toEqual([9]);
+      expect(ids(service.initCartList())).toEqual([9]);
+      expect(service.cartUpdated()).toBe(updatesBefore);
+    });
+
     it('leert für die Platzhalter-Gruppe beide Listen ohne Request', () => {
       service.cartList.set([aCart()]);
       service.initCartList.set([aCart(), aCart()]);
@@ -267,6 +296,100 @@ describe('CartService', () => {
       expect(service.initCartList()).toEqual(initCartList);
       expect(service.cartUpdated()).toBe(updatesBefore);
       expect(alerts.showErrorAlert).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('deleteSettlementPayment (DIV-74)', () => {
+    const group = aGroup({ id: 7 });
+    const paar = () => [aCart({ id: 1, settlementId: 70 }), aCart({ id: 2, settlementId: 70 })];
+
+    it('entfernt nach dem Löschen beide Einkäufe des Settlements aus beiden Listen und meldet die Änderung', () => {
+      service.cartList.set([...paar(), aCart({ id: 3 })]);
+      service.initCartList.set([...paar(), aCart({ id: 3 }), aCart({ id: 4, settlementId: 71 })]);
+      const updatesBefore = service.cartUpdated();
+
+      service.deleteSettlementPayment(70, group, () => true);
+      const req = http.expectOne(`${api}/settlement-payment/delete/70`);
+      expect(req.request.method).toBe('DELETE');
+      req.flush(null);
+
+      expect(ids(service.cartList())).toEqual([3]);
+      expect(ids(service.initCartList())).toEqual([3, 4]);
+      expect(service.cartUpdated()).toBe(updatesBefore + 1);
+      expect(alerts.showErrorAlert).not.toHaveBeenCalled();
+    });
+
+    it('lässt beide Listen bei einem Fehler unverändert und zeigt den Lösch-Alert', () => {
+      const cartList = [...paar(), aCart({ id: 3 })];
+      service.cartList.set(cartList);
+      service.initCartList.set(cartList);
+      const updatesBefore = service.cartUpdated();
+
+      service.deleteSettlementPayment(70, group, () => true);
+      http.expectOne(`${api}/settlement-payment/delete/70`).flush('Server error', { status: 500, statusText: 'Server Error' });
+
+      expect(service.cartList()).toEqual(cartList);
+      expect(service.initCartList()).toEqual(cartList);
+      expect(service.cartUpdated()).toBe(updatesBefore);
+      expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(
+        'alerts.cart.settlement_delete_failed.header', 'alerts.cart.settlement_delete_failed.message');
+      expect(alerts.showToast).not.toHaveBeenCalled();
+    });
+
+    it('404: kein Fehler-Alert, Hinweis „bereits gelöscht“ und stilles Neuladen der Liste', () => {
+      service.cartList.set(paar());
+      service.initCartList.set(paar());
+
+      service.deleteSettlementPayment(70, group, () => true);
+      http.expectOne(`${api}/settlement-payment/delete/70`)
+        .flush('Settlement with Id 70 not found', { status: 404, statusText: 'Not Found' });
+
+      expect(alerts.showErrorAlert).not.toHaveBeenCalled();
+      expect(alerts.showToast).toHaveBeenCalledOnceWith('alerts.cart.settlement_already_deleted');
+      http.expectOne(`${api}/carts-by-groupid/7`).flush([aCart({ id: 5 })]);
+      expect(ids(service.cartList())).toEqual([5]);
+      expect(ids(service.initCartList())).toEqual([5]);
+    });
+
+    it('404: scheitert auch das stille Neuladen, bleibt der bisherige Stand erhalten', () => {
+      service.cartList.set(paar());
+      service.initCartList.set(paar());
+
+      service.deleteSettlementPayment(70, group, () => true);
+      http.expectOne(`${api}/settlement-payment/delete/70`).flush('not found', { status: 404, statusText: 'Not Found' });
+      http.expectOne(`${api}/carts-by-groupid/7`).flush('Server error', { status: 500, statusText: 'Server Error' });
+
+      expect(ids(service.cartList())).toEqual([1, 2]);
+      expect(ids(service.initCartList())).toEqual([1, 2]);
+      expect(alerts.showErrorAlert).not.toHaveBeenCalled();
+    });
+
+    [
+      { fall: 'Erfolg', antwort: () => null, status: undefined },
+      { fall: 'Fehler 500', antwort: () => 'Server error', status: 500 },
+      { fall: '404', antwort: () => 'not found', status: 404 },
+    ].forEach(({ fall, antwort, status }) => {
+      it(`verwirft die Antwort (${fall}) nach Gruppen- oder Sitzungswechsel: kein State-Update, kein Alert, kein Neuladen`, () => {
+        const cartList = paar();
+        service.cartList.set(cartList);
+        service.initCartList.set(cartList);
+        const updatesBefore = service.cartUpdated();
+
+        service.deleteSettlementPayment(70, group, () => false);
+        const req = http.expectOne(`${api}/settlement-payment/delete/70`);
+        if (status) {
+          req.flush(antwort(), { status, statusText: 'Error' });
+        } else {
+          req.flush(antwort());
+        }
+
+        http.expectNone(`${api}/carts-by-groupid/7`);
+        expect(service.cartList()).toEqual(cartList);
+        expect(service.initCartList()).toEqual(cartList);
+        expect(service.cartUpdated()).toBe(updatesBefore);
+        expect(alerts.showErrorAlert).not.toHaveBeenCalled();
+        expect(alerts.showToast).not.toHaveBeenCalled();
+      });
     });
   });
 

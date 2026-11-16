@@ -2,13 +2,19 @@ package com.github.svenfran.budgetapp.budgetappbackend.service
 
 import com.github.svenfran.budgetapp.budgetappbackend.constants.RecurrenceType
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto
+import com.github.svenfran.budgetapp.budgetappbackend.dto.CategoryDto
+import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto
+import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto
 import com.github.svenfran.budgetapp.budgetappbackend.entity.CartTemplate
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.DatePurchasedNotWithinMembershipPeriodException
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOfCartException
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOrMemberOfGroupException
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.SettlementCartNotEditableException
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.SettlementCategoryNotAllowedException
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartTemplateRepository
+import com.github.svenfran.budgetapp.budgetappbackend.repository.CategoryRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupMembershipHistoryRepository
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.Fixtures.GroupScenario
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
@@ -16,6 +22,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.context.i18n.LocaleContextHolder
 
 import java.time.LocalDate
 
@@ -29,6 +36,9 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
     @Autowired CartRepository cartRepository
     @Autowired CartTemplateRepository templateRepository
     @Autowired GroupMembershipHistoryRepository membershipRepository
+    @Autowired SettlementService settlementService
+    @Autowired CategoryService categoryService
+    @Autowired CategoryRepository categoryRepository
 
     def "Bearbeiten #originalRecurrenceType -> #updatedRecurrenceType mit Titel '#newTitle' (Template-Update: #updateSelected) hinterlässt aktive Templates #expectedActiveTypes"() {
         given:
@@ -1041,6 +1051,99 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         then:
         thrown(NotOwnerOrMemberOfGroupException)
         cartRepository.findById(cartId).isPresent()
+    }
+
+    // ----- Schutz der Ausgleichszahlungen (DIV-74) -----
+
+    def "Bearbeiten des Einkaufs einer Ausgleichszahlung durch den #rolle wird abgelehnt, das Paar bleibt unverändert"() {
+        given: "Owner zahlt 30.00 an Ben; der Einkauf des #rolle soll über den normalen Endpunkt auf 99.00 geändert werden"
+        LocaleContextHolder.setLocale(Locale.GERMAN)
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        flushAndClear()
+        loginAs(wg.owner)
+        def paar = settlementService.addSettlementPayment(
+                new SettlementPaymentDto(30d, wg.group.id, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE)))
+        flushAndClear()
+        def eigener = rolle == 'Zahler' ? paar[0] : paar[1]
+        def bearbeiter = rolle == 'Zahler' ? wg.owner : ben
+        def dto = new CartDto(cartRepository.findById(eigener.id).get())
+        dto.amount = 99d
+        flushAndClear()
+        loginAs(bearbeiter)
+        LOG.info('Szenario: Gruppe {}, Owner {} zahlt an Ben {}; Settlement {} mit Carts {}; User {} ({}) bearbeitet Cart {}',
+                wg.group.id, wg.owner.id, ben.id, eigener.settlementId, paar*.id, bearbeiter.id, rolle, eigener.id)
+
+        when:
+        LOG.info('cartService.updateCart(Cart {}: amount 99.00), erwartet SettlementCartNotEditableException', eigener.id)
+        cartService.updateCart(dto)
+
+        then:
+        thrown(SettlementCartNotEditableException)
+        paar.collect { cartRepository.findById(it.id).get().amount } == [30d, -30d]
+
+        cleanup:
+        LocaleContextHolder.resetLocaleContext()
+
+        where:
+        rolle << ['Zahler', 'Empfänger']
+    }
+
+    def "Löschen des Einkaufs einer Ausgleichszahlung über den normalen Endpunkt wird abgelehnt, beide Einkäufe bleiben"() {
+        given:
+        LocaleContextHolder.setLocale(Locale.GERMAN)
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        flushAndClear()
+        loginAs(wg.owner)
+        def paar = settlementService.addSettlementPayment(
+                new SettlementPaymentDto(30d, wg.group.id, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE)))
+        flushAndClear()
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet) zahlt an Ben {}; Settlement {} mit Carts {}', wg.group.id,
+                wg.owner.id, ben.id, paar[0].settlementId, paar*.id)
+
+        when:
+        LOG.info('cartService.deleteCart(Cart {}), erwartet SettlementCartNotEditableException', paar[0].id)
+        cartService.deleteCart(paar[0].id)
+
+        then:
+        thrown(SettlementCartNotEditableException)
+        paar.every { cartRepository.existsById(it.id) }
+
+        cleanup:
+        LocaleContextHolder.resetLocaleContext()
+    }
+
+    def "Settlement-Kategorie für einen normalen Einkauf (#vorgang) wird abgelehnt, nichts gespeichert"() {
+        given: "Regression Review 2, F-001: auch nachdem addCategory mit der Id dieser Kategorie aufgerufen wurde"
+        def wg = fixtures.group()
+        def settlementKategorie = fixtures.category(wg, name: 'Ausgleichszahlung', settlement: true)
+        def cart = fixtures.cart(wg, title: 'Pizza', amount: 20d)
+        def (groupId, kategorieId, cartId) = [wg.group.id, settlementKategorie.id, cart.id]
+        flushAndClear()
+        loginAs(wg.owner)
+        categoryService.addCategory(new CategoryDto(id: kategorieId, name: 'Überschreiben?', groupId: groupId))
+        flushAndClear()
+        def kategorieDto = TestData.categoryDto(categoryRepository.findById(kategorieId).get())
+        def dto = vorgang == 'Neuanlage'
+                ? TestData.cartDto(groupId: groupId, categoryDto: kategorieDto, title: 'Pizza')
+                : new CartDto(cartRepository.findById(cartId).get()).with { it.categoryDto = kategorieDto; it }
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), Settlement-Kategorie {} (nach addCategory mit ihrer Id), Einkauf {}; {}',
+                groupId, wg.owner.id, kategorieId, cartId, vorgang)
+
+        when:
+        LOG.info('cartService.{}(Kategorie {}), erwartet SettlementCategoryNotAllowedException',
+                vorgang == 'Neuanlage' ? 'addCart' : 'updateCart', kategorieId)
+        vorgang == 'Neuanlage' ? cartService.addCart(dto) : cartService.updateCart(dto)
+
+        then:
+        thrown(SettlementCategoryNotAllowedException)
+        categoryRepository.findById(kategorieId).get().settlement
+        cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(groupId)*.id == [cartId]
+        cartRepository.findById(cartId).get().category.id == wg.category.id
+
+        where:
+        vorgang << ['Neuanlage', 'Bearbeitung']
     }
 
     private CartTemplate activeTemplate(GroupScenario wg) {

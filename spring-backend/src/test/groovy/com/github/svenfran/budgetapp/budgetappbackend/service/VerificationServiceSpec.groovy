@@ -455,6 +455,59 @@ class VerificationServiceSpec extends Specification {
         'sind verschiedene Personen: akzeptiert' | 2L          || false
     }
 
+    def "Einkauf mit Ausgleichszahlung ist über normale Endpunkte gesperrt, ohne erlaubt"() {
+        when:
+        service.verifyCartIsNotSettlement(TestData.cart(id: 5L, settlement: TestData.settlement(id: 70L)))
+
+        then:
+        def e = thrown(SettlementCartNotEditableException)
+        e.message.contains('Cart with Id 5')
+
+        when:
+        service.verifyCartIsNotSettlement(TestData.cart(id: 6L))
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "Settlement-Kategorie ist für normale Einkäufe gesperrt, andere Kategorien nicht"() {
+        when:
+        service.verifyCategoryIsNotSettlement(TestData.category(id: 20L, settlement: true))
+
+        then:
+        thrown(SettlementCategoryNotAllowedException)
+
+        when:
+        service.verifyCategoryIsNotSettlement(TestData.category(id: 21L))
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "#rolle #ergebnis Ausgleichszahlung ändern oder löschen"() {
+        given:
+        def settlement = TestData.settlement(id: 70L, payer: TestData.user(id: 1L), receiver: TestData.user(id: 2L))
+        def user = TestData.user(id: userId)
+
+        when:
+        def abgelehnt = false
+        try {
+            service.verifyIsPartyOfSettlement(user, settlement)
+        } catch (NotPartyOfSettlementException ignored) {
+            abgelehnt = true
+        }
+
+        then:
+        abgelehnt == erwartetAbgelehnt
+
+        where:
+        rolle        | userId || erwartetAbgelehnt
+        'Zahler'     | 1L     || false
+        'Empfänger'  | 2L     || false
+        'Dritter'    | 3L     || true
+        ergebnis = erwartetAbgelehnt ? 'darf keine' : 'darf die'
+    }
+
     /** BindingResult wie nach @Valid, mit genau einem Feldfehler (Fehlercode beliebig). */
     private static BindingResult bindingResultMitFehlerAn(Object dto, String feld) {
         def bindingResult = new BeanPropertyBindingResult(dto, "request")

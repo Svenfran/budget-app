@@ -162,6 +162,10 @@ export class CartlistPage implements OnInit {
 
   onDeleteCart(cart: Cart, slidingItem: IonItemSliding) {
     slidingItem.close();
+    if (cart.settlementId) {
+      this.onDeleteSettlement(cart);
+      return;
+    }
     this.alertCtrl.create({
       header: this.translate.instant('alerts.cart.delete.header'),
       message: this.translate.instant('alerts.cart.delete.message', { cartTitle: cart.title }),
@@ -181,6 +185,34 @@ export class CartlistPage implements OnInit {
         }
       }]
     }).then(alertEl => alertEl.present());
+  }
+
+  /**
+   * Ausgleichszahlung löschen (DIV-74): immer beide Einkäufe über den Settlement-Endpoint. Gruppe und Anmelde-Sitzung
+   * werden beim Bestätigen festgehalten; eine Antwort nach einem Wechsel verwirft der Service.
+   */
+  private onDeleteSettlement(cart: Cart) {
+    this.alertCtrl.create({
+      header: this.translate.instant('alerts.cart.delete_settlement.header'),
+      message: this.translate.instant('alerts.cart.delete_settlement.message', { cartTitle: cart.title }),
+      buttons: [{
+        text: this.translate.instant('alerts.cart.delete.cancel'),
+        role: 'cancel'
+      }, {
+        text: this.translate.instant('alerts.cart.delete.ok'),
+        handler: () => {
+          const group = this.groupService.activeGroup();
+          const sameSession = this.groupService.sessionGuard();
+          const isCurrent = () => this.groupService.activeGroupId() === group.id && sameSession();
+          this.cartService.deleteSettlementPayment(cart.settlementId!, group, isCurrent);
+        }
+      }]
+    }).then(alertEl => alertEl.present());
+  }
+
+  /** Wischaktion „Bearbeiten“ über das normale Formular: nicht für Einkäufe einer Ausgleichszahlung (DIV-74). */
+  isEditableInForm(cart: Cart): boolean {
+    return !cart.settlementId;
   }
 
   editCart(cart: Cart, slidingItem: IonItemSliding) {

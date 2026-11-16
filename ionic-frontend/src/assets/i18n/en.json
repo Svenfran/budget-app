@@ -233,6 +233,15 @@
                 "message_new_edit": "You were not a member of the group at the time selected. Please choose another date.",
                 "message_settlementpayment": "The user \"{{userName}}\" was not a member of the group at the time selected. Please choose another date."
             },
+            "delete_settlement": {
+                "header": "Delete repayment:",
+                "message": "Do you really want to delete the repayment \"{{cartTitle}}\"? It will be removed for both parties."
+            },
+            "settlement_delete_failed": {
+                "header": "Repayment not deleted",
+                "message": "The repayment could not be deleted. Please try again."
+            },
+            "settlement_already_deleted": "The repayment has already been deleted.",
             "settlement_failed": {
                 "header": "Repayment not saved",
                 "message": "The repayment could not be saved. Your entries have been kept, please try again."
