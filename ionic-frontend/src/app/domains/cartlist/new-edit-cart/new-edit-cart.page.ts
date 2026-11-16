@@ -263,8 +263,7 @@ export class NewEditCartPage implements OnInit {
   private findDuplicateSource(): Cart | undefined {
     const duplicateOf = this.route.snapshot.queryParamMap.get('duplicateOf');
     if (!duplicateOf) return undefined;
-    return duplicateSource(this.cartList(), +duplicateOf, this.activeGroup.id, this.user?.name,
-      name => this.categoryService.isSettlementpayment(name));
+    return duplicateSource(this.cartList(), +duplicateOf, this.activeGroup.id, this.user?.name);
   }
 
   /** Nach dem Laden: eine vorbelegte, in der Gruppe nicht (mehr) vorhandene Kategorie leeren, Pflichtmeldung zeigen. */

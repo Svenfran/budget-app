@@ -13,7 +13,6 @@ import com.github.svenfran.budgetapp.budgetappbackend.exceptions.InvalidStatisti
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOrMemberOfGroupException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.StatisticsCalculator;
-import com.github.svenfran.budgetapp.budgetappbackend.helper.Translator;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -21,7 +20,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.*;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.github.svenfran.budgetapp.budgetappbackend.helper.CostShareCalculator.toEuro;
@@ -36,26 +34,20 @@ import static com.github.svenfran.budgetapp.budgetappbackend.helper.CostShareCal
 @Service
 public class StatisticsService {
 
-    private static final String SETTLEMENT_CATEGORY_KEY = "categories.default.settlement";
-    private static final List<Locale> SETTLEMENT_LOCALES =
-            List.of(Locale.GERMAN, Locale.ENGLISH, Locale.forLanguageTag("es"));
-
     private final DataLoaderService dataLoaderService;
     private final VerificationService verificationService;
     private final GroupService groupService;
     private final SpendingsOverviewService spendingsOverviewService;
     private final CartRepository cartRepository;
-    private final Translator translator;
 
     public StatisticsService(DataLoaderService dataLoaderService, VerificationService verificationService,
                              GroupService groupService, SpendingsOverviewService spendingsOverviewService,
-                             CartRepository cartRepository, Translator translator) {
+                             CartRepository cartRepository) {
         this.dataLoaderService = dataLoaderService;
         this.verificationService = verificationService;
         this.groupService = groupService;
         this.spendingsOverviewService = spendingsOverviewService;
         this.cartRepository = cartRepository;
-        this.translator = translator;
     }
 
     /**
@@ -84,7 +76,7 @@ public class StatisticsService {
         var effectiveYear = period == StatisticsPeriod.ALL ? null : year;
         var effectiveMonth = period == StatisticsPeriod.MONTH ? month : null;
         var result = StatisticsCalculator.calculate(carts, user.getId(), period, effectiveYear, effectiveMonth,
-                availableYears, settlementNames());
+                availableYears);
 
         var dto = new StatisticsDto();
         dto.setGroupId(groupId);
@@ -153,11 +145,5 @@ public class StatisticsService {
             return List.of(group);
         }
         return groupService.getDistinctGroupsByMemberOrOwner();
-    }
-
-    private Set<String> settlementNames() {
-        return SETTLEMENT_LOCALES.stream()
-                .map(locale -> StatisticsCalculator.normalize(translator.translate(SETTLEMENT_CATEGORY_KEY, null, locale)))
-                .collect(Collectors.toSet());
     }
 }

@@ -69,10 +69,6 @@ public class DataLoaderService {
         return categoryRepository.findAllByGroup_IdOrderByName(groupId);
     }
 
-    public Category loadCategoryByGroupAndName(Group group, String categoryName) {
-        return categoryRepository.findCategoryByGroupAndName(group, categoryName);
-    }
-
     /** Settlement mit Zeilensperre laden (DIV-74); als erster Zugriff auf das Settlement in der Transaktion aufrufen. */
     public Settlement loadSettlementForUpdate(Long settlementId) throws SettlementNotFoundException {
         return settlementRepository.findByIdForUpdate(settlementId)

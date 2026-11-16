@@ -16,8 +16,6 @@ public interface CategoryRepository extends CrudRepository<Category, Long> {
 
     Optional<Category> findById(Long id);
 
-    Category findCategoryByGroupAndName(Group group, String name);
-
     /** Settlement-Kategorie der Gruppe (DIV-74); bei mehreren gekennzeichneten die mit der kleinsten Id. */
     Optional<Category> findFirstByGroupAndSettlementTrueOrderByIdAsc(Group group);
 

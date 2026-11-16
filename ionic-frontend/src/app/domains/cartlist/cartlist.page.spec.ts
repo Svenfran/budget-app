@@ -842,12 +842,14 @@ describe('CartlistPage – Filter-Sheet', () => {
 });
 
 // DIV-73: Sliding-Aktion „Duplizieren“. Navigation ohne Template; Sichtbarkeit und Reihenfolge der Aktionen im echten
-// Template mit echter Ausgleichszahlungs-Erkennung (Übersetzung von domains.spendings.settlement gesetzt).
+// Template. DIV-74: Ausgleichszahlungen werden an der `settlementId` erkannt, nicht am Kategorienamen.
 describe('CartlistPage – Sliding-Aktionen (DIV-73)', () => {
   const anna = aUser({ userName: 'Anna' });
   const ben = aUser({ userName: 'Ben' });
   const eigener = aCart({ id: 11, title: 'Eigener Einkauf', userDto: anna, categoryDto: aCategory({ name: 'Lebensmittel' }) });
-  const ausgleich = aCart({ id: 12, title: 'Ausgleich an Ben', userDto: anna,
+  const ausgleich = aCart({ id: 12, title: 'Ausgleich an Ben', userDto: anna, settlementId: 70,
+    categoryDto: aCategory({ name: 'Rückzahlungen' }) });
+  const namensgleich = aCart({ id: 14, title: 'Unverknüpft', userDto: anna,
     categoryDto: aCategory({ name: 'Ausgleichszahlung' }) });
   const fremder = aCart({ id: 13, title: 'Bens Einkauf', userDto: ben, categoryDto: aCategory({ name: 'Lebensmittel' }) });
 
@@ -927,7 +929,7 @@ describe('CartlistPage – Sliding-Aktionen (DIV-73)', () => {
 
     beforeEach(async () => {
       setup(true);
-      cartList.set([eigener, ausgleich, fremder]);
+      cartList.set([eigener, ausgleich, namensgleich, fremder]);
       fixture.detectChanges();
       // Virtual Scroll rendert die Zeilen erst nach dem nächsten Animation Frame
       await new Promise(resolve => requestAnimationFrame(resolve));
@@ -942,6 +944,16 @@ describe('CartlistPage – Sliding-Aktionen (DIV-73)', () => {
 
     it('eigene Ausgleichszahlung: kein Duplizieren, Bearbeiten und Löschen wie bisher (FA5)', () => {
       expect(optionsByTitle()['Ausgleich an Ben']).toEqual(['Bearbeiten', 'Löschen']);
+    });
+
+    it('Ausgleichszahlungs-Icon an der settlementId, auch in umbenannter Kategorie; unverknüpfter Cart zeigt Kürzel (DIV-74)', () => {
+      const sliding = (title: string) => Array.from(fixture.nativeElement.querySelectorAll('ion-item-sliding') as NodeListOf<HTMLElement>)
+        .find(s => s.querySelector('h2.titlestyle')!.textContent!.trim() === title)!;
+
+      expect(sliding('Ausgleich an Ben').querySelector('.category-circle ion-icon[name="swap-horizontal-outline"]')).not.toBeNull();
+      expect(sliding('Unverknüpft').querySelector('.category-circle ion-icon')).toBeNull();
+      expect(sliding('Unverknüpft').querySelector('.category-circle p')!.textContent!.trim()).toBe('AU');
+      expect(optionsByTitle()['Unverknüpft']).toEqual(['Duplizieren', 'Bearbeiten', 'Löschen']);
     });
 
     it('fremde Ausgabe: keine Aktionen (Z2)', () => {

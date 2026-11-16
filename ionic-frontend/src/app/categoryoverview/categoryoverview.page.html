@@ -39,8 +39,8 @@
             <ion-item [lines]="i === categories().length - 1 ? 'none' : 'inset'">
               <ion-avatar slot="start">
                 <div class="category-circle">
-                  <p *ngIf="!isSettlementpayment(cat.name)">{{ cat.name.substring(0, 2) | uppercase }}</p>
-                  <ion-icon *ngIf="isSettlementpayment(cat.name)" name="swap-horizontal-outline" color="medium"></ion-icon>
+                  <p *ngIf="!cat.settlement">{{ cat.name.substring(0, 2) | uppercase }}</p>
+                  <ion-icon *ngIf="cat.settlement" name="swap-horizontal-outline" color="medium"></ion-icon>
                 </div>
               </ion-avatar>
               <ion-label (click)="onUpdateCategory(cat)">

@@ -66,7 +66,6 @@ describe('NewEditCartPage', () => {
           categories: sharedCategories,
           getCategoriesByGroup: (_group: unknown, onComplete: (result: CategoryDto[] | null) => void) =>
             categoryCallbacks.push(onComplete),
-          isSettlementpayment: (name: string) => name === 'Ausgleichszahlung',
         } },
         { provide: GroupService, useValue: {
           activeGroup: signal(aGroup({ id: GROUP_ID, dateCreated: new Date('2024-01-01T00:00:00Z') })),

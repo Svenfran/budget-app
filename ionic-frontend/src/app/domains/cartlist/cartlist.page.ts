@@ -132,10 +132,6 @@ export class CartlistPage implements OnInit {
     }
   }
 
-  isSettlementpayment(category: string): boolean {
-    return this.categoryService.isSettlementpayment(category);
-  }
-
   resetFilterParams() {
     this.filterMode.set(false);
     this.filterTerm.set("");
