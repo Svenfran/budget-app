@@ -6,6 +6,8 @@ import java.util.Date;
 
 public class SettlementPaymentDto {
 
+    // Settlement-Id, nur beim Bearbeiten (DIV-74). member ist immer der Empfänger; groupId wird beim Bearbeiten ignoriert.
+    private Long id;
     private Double amount;
     @NotNull
     private Long groupId;
@@ -20,6 +22,14 @@ public class SettlementPaymentDto {
     }
 
     public SettlementPaymentDto() {
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
     }
 
     public Double getAmount() {

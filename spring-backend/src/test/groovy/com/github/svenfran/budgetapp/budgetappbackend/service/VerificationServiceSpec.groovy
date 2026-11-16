@@ -455,6 +455,58 @@ class VerificationServiceSpec extends Specification {
         'sind verschiedene Personen: akzeptiert' | 2L          || false
     }
 
+    def "Bearbeiten: fehlendes Pflichtfeld #feld wird vor jedem Laden abgelehnt, groupId ist nicht nötig"() {
+        given:
+        def dto = new SettlementPaymentDto(30d, null, new UserDto(id: 2L), DateUtils.toDate(TestData.REFERENCE_DATE))
+        dto.id = 70L
+        aendern(dto)
+
+        when:
+        def abgelehnt = null
+        try {
+            service.verifyValidSettlementPaymentForUpdate(dto)
+        } catch (InvalidSettlementPaymentException e) {
+            abgelehnt = e.message
+        }
+
+        then:
+        abgelehnt == (feld ? "Settlement payment field '$feld' is required".toString() : null)
+
+        where:
+        feld            | aendern
+        null            | { SettlementPaymentDto d -> }
+        'id'            | { SettlementPaymentDto d -> d.id = null }
+        'member'        | { SettlementPaymentDto d -> d.member = null }
+        'member.id'     | { SettlementPaymentDto d -> d.member.id = null }
+        'datePurchased' | { SettlementPaymentDto d -> d.datePurchased = null }
+        'amount'        | { SettlementPaymentDto d -> d.amount = null }
+    }
+
+    def "Empfänger ändern: #fall"() {
+        given:
+        def zahler = TestData.user(id: 1L)
+        def empfaenger = TestData.user(id: 2L)
+        def settlement = TestData.settlement(id: 70L, payer: zahler, receiver: empfaenger)
+        def handelnder = TestData.user(id: handelnderId)
+
+        when:
+        def abgelehnt = false
+        try {
+            service.verifyMayChangeReceiver(handelnder, settlement, TestData.user(id: neuerEmpfaengerId))
+        } catch (ReceiverChangeNotAllowedException ignored) {
+            abgelehnt = true
+        }
+
+        then:
+        abgelehnt == erwartetAbgelehnt
+
+        where:
+        fall                                          | handelnderId | neuerEmpfaengerId || erwartetAbgelehnt
+        'Zahler wechselt den Empfänger: erlaubt'      | 1L           | 3L                || false
+        'Empfänger wechselt den Empfänger: abgelehnt' | 2L           | 3L                || true
+        'Empfänger behält sich als Empfänger: erlaubt' | 2L          | 2L                || false
+    }
+
     def "Einkauf mit Ausgleichszahlung ist über normale Endpunkte gesperrt, ohne erlaubt"() {
         when:
         service.verifyCartIsNotSettlement(TestData.cart(id: 5L, settlement: TestData.settlement(id: 70L)))

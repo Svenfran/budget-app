@@ -1,10 +1,10 @@
 import { FormControl } from '@angular/forms';
 import { Init } from 'src/app/constants/default-values';
 import { GroupMembers } from 'src/app/groupmembers/model/groupmembers-dto';
-import { aUser } from 'src/testing/test-data';
+import { aCart, aUser } from 'src/testing/test-data';
 import { Zeitraum } from '../new-edit-cart/model/gmh-zeitraum';
 import {
-  AMOUNT_VALIDATORS, isDaySelectable, settlementRecipients, toSettlementPaymentDto,
+  AMOUNT_VALIDATORS, editRecipients, isDaySelectable, settlementEditData, settlementRecipients, toSettlementPaymentDto,
 } from './settlement-form';
 
 describe('settlement-form (DIV-70)', () => {
@@ -134,6 +134,65 @@ describe('settlement-form (DIV-70)', () => {
     ['abc', '1,5', '1.', '1.2.3'].forEach(value => {
       it(`lehnt ${JSON.stringify(value)} ab`, () => {
         expect(errorsOf(value)?.['pattern']).toBeDefined();
+      });
+    });
+  });
+
+  describe('Edit-Modus (DIV-74)', () => {
+    const ben = aUser({ userName: 'Ben' });
+
+    it('toSettlementPaymentDto trägt im Edit-Modus die Settlement-Id, member bleibt der Empfänger', () => {
+      const dto = toSettlementPaymentDto({ amount: 30, memberId: ben.id, datePurchased: '2025-06-10' }, 7, [ben], 70);
+
+      expect(dto).toEqual({
+        id: 70, amount: 30, groupId: 7, member: { id: ben.id, userName: 'Ben' }, datePurchased: new Date('2025-06-10'),
+      });
+    });
+
+    describe('settlementEditData', () => {
+      const zahlerCart = aCart({ id: 1, amount: 30, userDto: anna, settlementId: 70, datePurchased: '2025-06-10' as unknown as Date });
+      const empfaengerCart = aCart({ id: 2, amount: -30, userDto: ben, settlementId: 70, datePurchased: '2025-06-10' as unknown as Date });
+      const andere = aCart({ id: 3, amount: 12, userDto: anna, settlementId: 71 });
+
+      it('aus dem eigenen Zahler-Cart: Rolle Zahler, Parteien aus dem Paar, Betrag positiv, ISO-Tag', () => {
+        expect(settlementEditData(zahlerCart, [andere, empfaengerCart, zahlerCart])).toEqual({
+          id: 70, role: 'payer', payer: { id: anna.id, userName: 'Anna' }, receiver: { id: ben.id, userName: 'Ben' },
+          amount: 30, datePurchased: '2025-06-10',
+        });
+      });
+
+      it('aus dem eigenen Empfänger-Cart: Rolle Empfänger, Zahler ist der User des positiven Carts', () => {
+        const data = settlementEditData(empfaengerCart, [zahlerCart, empfaengerCart]);
+
+        expect(data?.role).toBe('receiver');
+        expect(data?.payer.id).toBe(anna.id);
+        expect(data?.receiver.id).toBe(ben.id);
+        expect(data?.amount).toBe(30);
+      });
+
+      it('nutzt auch einen als gelöscht markierten Partner-Cart (Gegenpartei hat die Gruppe verlassen)', () => {
+        const ausgetreten = { ...empfaengerCart, deleted: true };
+
+        expect(settlementEditData(zahlerCart, [zahlerCart, ausgetreten])?.receiver.id).toBe(ben.id);
+      });
+
+      it('ohne Partner-Cart (veraltete Liste) oder ohne Settlement: undefined', () => {
+        expect(settlementEditData(zahlerCart, [zahlerCart, andere])).toBeUndefined();
+        expect(settlementEditData(aCart({ id: 9 }), [aCart({ id: 9 })])).toBeUndefined();
+      });
+    });
+
+    describe('editRecipients', () => {
+      it('lässt die Liste unverändert, wenn der bisherige Empfänger noch auswählbar ist', () => {
+        expect(editRecipients([owner, anna], anna)).toEqual([owner, anna]);
+      });
+
+      it('ergänzt einen ausgetretenen bisherigen Empfänger, damit er gewählt bleibt', () => {
+        expect(editRecipients([owner], anna)).toEqual([owner, anna]);
+      });
+
+      it('zeigt den bisherigen Empfänger auch, wenn sonst niemand auswählbar ist', () => {
+        expect(editRecipients([], anna)).toEqual([anna]);
       });
     });
   });

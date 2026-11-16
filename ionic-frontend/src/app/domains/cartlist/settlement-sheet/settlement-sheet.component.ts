@@ -9,7 +9,8 @@ import { LanguageService } from 'src/app/service/language.service';
 import { formatDisplayDate, isoDayOf, toIsoDay } from '../iso-day';
 import { CartService } from '../service/cart.service';
 import {
-  AMOUNT_VALIDATORS, isDaySelectable, SettlementFormValue, settlementRecipients, toSettlementPaymentDto,
+  AMOUNT_VALIDATORS, editRecipients, isDaySelectable, SettlementEditData, SettlementFormValue, settlementRecipients,
+  toSettlementPaymentDto,
 } from './settlement-form';
 
 /** Rolle, mit der das Sheet nach erfolgreichem Speichern schließt. */
@@ -41,11 +42,23 @@ export class SettlementSheetComponent implements OnInit {
   @Input() saving!: WritableSignal<boolean>;
   /** Eingaben geändert: die Schließ-Sperre fragt dann vor dem Verwerfen nach (settlementSheetModalOptions). */
   @Input() dirty!: WritableSignal<boolean>;
+  /**
+   * Bestehende Ausgleichszahlung (DIV-74): mit Wert öffnet das Sheet im Edit-Modus, vorbelegt aus dem Cart-Paar. Die
+   * Parteien kommen von hier, nicht aus der aktuellen Mitgliederliste – so bleibt die Zahlung auch bearbeitbar, wenn
+   * die Gegenpartei die Gruppe verlassen hat. Der Empfänger ist nur für den Zahler änderbar.
+   */
+  @Input() settlement?: SettlementEditData;
 
   readonly group = this.groupService.activeGroup();
   readonly currentLang = this.langService.currentLang;
   readonly userId = signal<number | undefined>(undefined);
   readonly recipients = computed(() => settlementRecipients(this.groupService.groupMembers(), this.userId()));
+  /** Auswahlliste im Edit-Modus des Zahlers: aktuelle Empfänger plus der bisherige (ggf. ausgetretene) Empfänger. */
+  readonly selectableRecipients = computed(() => this.settlement
+    ? editRecipients(this.recipients(), this.settlement.receiver)
+    : this.recipients());
+  /** Antwort noch gültig? Im Edit-Modus beim Öffnen festgehalten (aktive Gruppe und Anmelde-Sitzung). */
+  private isCurrent: () => boolean = () => true;
   readonly openPicker = signal(false);
   /** Auswahl der Empfänger wurde geöffnet und wieder geschlossen (siehe showMemberError). */
   readonly memberSelectClosed = signal(false);
@@ -74,6 +87,19 @@ export class SettlementSheetComponent implements OnInit {
     this.groupService.getGroupMembers(this.group.id);
     this.groupService.getGroupMembershipHistoryForGroupAndUser(this.group);
 
+    if (this.settlement) {
+      // Vorbelegung vor dem Abonnieren der Formular-Events: macht das Formular nicht dirty
+      this.form.setValue({
+        amount: this.settlement.amount,
+        memberId: this.settlement.receiver.id,
+        datePurchased: this.settlement.datePurchased,
+      });
+      if (this.settlement.role === 'receiver') this.memberId.disable();
+      const groupId = this.group.id;
+      const sameSession = this.groupService.sessionGuard();
+      this.isCurrent = () => this.groupService.activeGroupId() === groupId && sameSession();
+    }
+
     // Über form.events statt valueChanges: das Datum wird per setValue() und danach markAsDirty() gesetzt; beim
     // Wert-Event ist das Formular noch pristine, erst das Pristine-Event zeigt die Änderung (Codex-Review 1, F-001).
     // Startwerte (Datum heute) sind vorher gesetzt und machen das Formular nicht dirty.
@@ -99,15 +125,29 @@ export class SettlementSheetComponent implements OnInit {
     return this.memberId.invalid && (this.memberId.dirty || this.memberSelectClosed());
   }
 
+  /** Formular und „Speichern“ anzeigen: im Edit-Modus immer, sonst nur mit auswählbarem Empfänger (wie bisher). */
+  showForm(): boolean {
+    return !!this.settlement || this.recipients().length > 0;
+  }
+
+  /** Empfänger-Auswahl nur bei Neuanlage und für den Zahler; der Empfänger sieht den Zahler als festen Text. */
+  canSelectReceiver(): boolean {
+    return this.settlement?.role !== 'receiver';
+  }
+
   async save() {
     if (this.form.invalid || this.saving()) return;
-    const dto = toSettlementPaymentDto(this.form.getRawValue() as SettlementFormValue, this.group.id, this.recipients());
+    const recipients = this.settlement ? [...this.selectableRecipients(), this.settlement.receiver] : this.recipients();
+    const dto = toSettlementPaymentDto(this.form.getRawValue() as SettlementFormValue, this.group.id, recipients,
+      this.settlement?.id);
 
     this.saving.set(true);
     this.form.disable({ emitEvent: false });
     let ok = false;
     try {
-      ok = await this.cartService.addSettlementPayment(dto);
+      ok = this.settlement
+        ? await this.cartService.updateSettlementPayment(dto, this.group, this.isCurrent)
+        : await this.cartService.addSettlementPayment(dto);
     } catch (err) {
       // Der Service weist laut Vertrag nie zurück; falls doch, bleibt das Sheet wie bei einem Fehler offen.
       console.error('Error saving settlement payment:', err);
@@ -115,6 +155,7 @@ export class SettlementSheetComponent implements OnInit {
       // zuerst zurücksetzen: canDismiss liest dasselbe Signal und würde das Schließen sonst blockieren
       this.saving.set(false);
       this.form.enable({ emitEvent: false });
+      if (this.settlement?.role === 'receiver') this.memberId.disable({ emitEvent: false });
     }
     if (ok) {
       await this.modalCtrl.dismiss(undefined, SETTLEMENT_SHEET_SAVED_ROLE, this.modalId);

@@ -18,9 +18,20 @@ describe('settlementSheetModalOptions (DIV-70)', () => {
     const options = settlementSheetModalOptions(shared);
 
     expect(options.component).toBe(SettlementSheetComponent);
-    expect(options.componentProps).toEqual({ modalId: options.id, saving: shared.saving, dirty: shared.dirty });
+    expect(options.componentProps).toEqual({ modalId: options.id, saving: shared.saving, dirty: shared.dirty, settlement: undefined });
     expect(options.componentProps?.['saving']).toBe(shared.saving);
     expect(options.componentProps?.['dirty']).toBe(shared.dirty);
+  });
+
+  it('reicht die Daten einer bestehenden Ausgleichszahlung an das Sheet durch (Edit-Modus, DIV-74)', () => {
+    const settlement = {
+      id: 70, role: 'payer' as const, payer: { id: 1, userName: 'Anna' }, receiver: { id: 2, userName: 'Ben' },
+      amount: 30, datePurchased: '2025-06-10',
+    };
+
+    const options = settlementSheetModalOptions(state({ settlement }));
+
+    expect(options.componentProps?.['settlement']).toBe(settlement);
   });
 
   // wie der Ausgabenfilter (DIV-71): inhaltshoch, ohne Breakpoints und Griff (kein Mitziehen beim Bedienen)

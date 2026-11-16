@@ -459,6 +459,101 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
                 [-4.33d, -2.33d, -1d, 1d, 2.33d, 4.33d, 10d]
     }
 
+    def "DIV-74 AC8: Anlegen, Ändern, Empfängerwechsel und Löschen einer Ausgleichszahlung lassen Unbeteiligte unverändert"() {
+        given: "Anna (Owner), Ben, Cleo, Dora; Anna bezahlt 40 € → Anna +30, alle anderen −10 (Beträge restlos teilbar: angezeigt = exakt)"
+        def (anna, ben, cleo, dora) = (1..4).collect { fixtures.user() }
+        def (annaId, benId, cleoId, doraId) = [anna, ben, cleo, dora]*.id
+        def wg = fixtures.group(owner: anna, members: [ben, cleo, dora])
+        fixtures.cart(wg, user: anna, amount: 40d, averagePerMember: 10d, datePurchased: DateUtils.toDate(TestData.REFERENCE_DATE))
+        flushAndClear()
+        def start = diffs(annaId, wg)
+        LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {}, Cleo {}, Dora {}; Anna zahlt 40 am {}; Salden {}', wg.group.id,
+                annaId, benId, cleoId, doraId, TestData.REFERENCE_DATE, start)
+
+        when: "Ben zahlt Anna 8,00 €"
+        loginAs(userRepository.findById(benId).get())
+        def settlementId = settlementService.addSettlementPayment(new SettlementPaymentDto(8d, wg.group.id, new UserDto(id: annaId),
+                DateUtils.toDate(TestData.REFERENCE_DATE)))[0].settlementId
+        flushAndClear()
+        def nachAnlage = diffs(annaId, wg)
+        LOG.info('settlementService.addSettlementPayment(Ben -> Anna 8.00) -> Salden {}', nachAnlage)
+
+        then: "nur Anna und Ben verschieben sich, Cleo und Dora unverändert, Summe 0"
+        nachAnlage == [(annaId): 22d, (benId): -2d, (cleoId): -10d, (doraId): -10d]
+        nachAnlage.values().sum() == 0d
+
+        when: "Ben ändert auf 12,00 € und einen Tag früher"
+        loginAs(userRepository.findById(benId).get())
+        settlementService.updateSettlementPayment(aenderung(settlementId, 12d, annaId, TestData.REFERENCE_DATE.minusDays(1)))
+        flushAndClear()
+        def nachAenderung = diffs(annaId, wg)
+        LOG.info('settlementService.updateSettlementPayment(12.00, Vortag) -> Salden {}', nachAenderung)
+
+        then:
+        nachAenderung == [(annaId): 18d, (benId): 2d, (cleoId): -10d, (doraId): -10d]
+
+        when: "Ben (Zahler) wechselt den Empfänger zu Cleo"
+        loginAs(userRepository.findById(benId).get())
+        settlementService.updateSettlementPayment(aenderung(settlementId, 12d, cleoId, TestData.REFERENCE_DATE.minusDays(1)))
+        flushAndClear()
+        def nachWechsel = diffs(annaId, wg)
+        LOG.info('settlementService.updateSettlementPayment(Empfänger -> Cleo) -> Salden {}', nachWechsel)
+
+        then: "Anna ist nicht mehr beteiligt und hat wieder ihren Ausgangssaldo; der neue Empfänger Cleo ist beteiligt; Dora unverändert"
+        nachWechsel == [(annaId): 30d, (benId): 2d, (cleoId): -22d, (doraId): -10d]
+
+        when: "Ben löscht die Ausgleichszahlung"
+        loginAs(userRepository.findById(benId).get())
+        settlementService.deleteSettlementPayment(settlementId)
+        flushAndClear()
+        def nachLoeschen = diffs(annaId, wg)
+        LOG.info('settlementService.deleteSettlementPayment({}) -> Salden {}', settlementId, nachLoeschen)
+
+        then: "alle wieder im Ausgangszustand"
+        nachLoeschen == start
+    }
+
+    /**
+     * DIV-74, Entscheidung D-001 (Option B): AC8 gilt für die exakten Salden. Die bestehende centgenaue Rundung (DIV-38,
+     * CostShareCalculator.roundBalances: Gleichstand → Schuldner zuerst, dann kleinere User-ID) kann den angezeigten
+     * Saldo eines Unbeteiligten um höchstens einen Cent verschieben, wenn ein Settlement die Vorzeichen der beteiligten
+     * Salden umdreht. Dieser Test hält das bestehende Verhalten fest (Gegenbeispiel aus codex-review-3.md); eine stabilere
+     * Rundung ist als eigenes Ticket vorgeschlagen.
+     */
+    def "DIV-74 AC8 (dokumentierter Rundungsfall): angezeigter Saldo eines Unbeteiligten verschiebt sich um genau einen Cent"() {
+        given: "Anna < Ben < Cleo; Anna bezahlt 0,02 € für alle drei → exakt Anna +4/3, Ben −2/3, Cleo −2/3 Cent"
+        def anna = fixtures.user()
+        def ben = fixtures.user()
+        def cleo = fixtures.user()
+        def (annaId, benId, cleoId) = [anna, ben, cleo]*.id
+        assert annaId < benId && benId < cleoId
+        def wg = fixtures.group(owner: anna, members: [ben, cleo])
+        fixtures.cart(wg, user: anna, amount: 0.02d, averagePerMember: 0.02d / 3, datePurchased: DateUtils.toDate(TestData.REFERENCE_DATE))
+        flushAndClear()
+        def vorher = diffs(annaId, wg)
+        LOG.info('Szenario: Gruppe {}, Anna {}, Ben {}, Cleo {}; Anna zahlt 0.02; Salden vorher {}', wg.group.id, annaId, benId,
+                cleoId, vorher)
+
+        when: "Cleo zahlt Anna 1,00 €"
+        loginAs(userRepository.findById(cleoId).get())
+        settlementService.addSettlementPayment(new SettlementPaymentDto(1d, wg.group.id, new UserDto(id: annaId),
+                DateUtils.toDate(TestData.REFERENCE_DATE)))
+        flushAndClear()
+        def nachher = diffs(annaId, wg)
+        LOG.info('settlementService.addSettlementPayment(Cleo -> Anna 1.00) -> Salden {}', nachher)
+
+        then: "Ben ist unbeteiligt, sein exakter Saldo bleibt −2/3 Cent, angezeigt 0,00 → −0,01 (Rundung DIV-38)"
+        vorher == [(annaId): 0.01d, (benId): 0d, (cleoId): -0.01d]
+        nachher == [(annaId): -0.98d, (benId): -0.01d, (cleoId): 0.99d]
+        Math.abs(Math.round((nachher[benId] - vorher[benId]) * 100)) <= 1
+    }
+
+    private static SettlementPaymentDto aenderung(Long settlementId, Double betrag, Long empfaengerId, LocalDate datum) {
+        def dto = new SettlementPaymentDto(betrag, null, new UserDto(id: empfaengerId), DateUtils.toDate(datum))
+        dto.id = settlementId
+        dto
+    }
+
     def "Beträge mit mehr als zwei Nachkommastellen werden je Cart auf Cent gerundet (D3)"() {
         given:
         def anna = fixtures.user(name: 'Anna')

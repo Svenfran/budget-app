@@ -3,6 +3,8 @@ import { GroupMembers } from 'src/app/groupmembers/model/groupmembers-dto';
 import { UserDto } from 'src/app/model/user-dto';
 import { Zeitraum } from '../new-edit-cart/model/gmh-zeitraum';
 import { SettlementPaymentDto } from '../model/settlement-payment-dto';
+import { Cart } from '../model/cart';
+import { purchaseDayOf } from '../filter-sheet/cart-filter-form';
 
 /**
  * Formularlogik der Ausgleichszahlung (DIV-70), verhaltensgleich aus der früheren SettlementPaymentPage übernommen.
@@ -54,15 +56,62 @@ export function isDaySelectable(isoDay: string, zeitraeume: Zeitraum[], userId: 
 /**
  * Request der Ausgleichszahlung. `datePurchased` ist wie bisher Mitternacht UTC des gewählten Tages. Ist der Empfänger
  * nicht mehr in `recipients` (Liste inzwischen neu geladen), bleibt sein Name leer; das Backend prüft die Mitgliedschaft.
+ * Mit `settlementId` (Edit-Modus, DIV-74) trägt der Request die Id des Settlements; `member` bleibt der Empfänger.
  */
-export function toSettlementPaymentDto(value: SettlementFormValue, groupId: number, recipients: UserDto[]): SettlementPaymentDto {
+export function toSettlementPaymentDto(value: SettlementFormValue, groupId: number, recipients: UserDto[],
+                                       settlementId?: number): SettlementPaymentDto {
   const recipient = recipients.find(member => member.id === value.memberId);
   return {
+    ...(settlementId !== undefined ? { id: settlementId } : {}),
     amount: value.amount,
     groupId,
     member: { id: value.memberId, userName: recipient?.userName ?? '' },
     datePurchased: new Date(value.datePurchased),
   };
+}
+
+/** Bestehende Ausgleichszahlung für den Edit-Modus des Sheets (DIV-74), aus dem Cart-Paar der Liste. */
+export interface SettlementEditData {
+  /** Id des Settlements. */
+  id: number;
+  /** Rolle des angemeldeten Nutzers: sein Cart ist der positive (Zahler) bzw. negative (Empfänger). */
+  role: 'payer' | 'receiver';
+  payer: UserDto;
+  receiver: UserDto;
+  /** Betrag > 0. */
+  amount: number;
+  /** ISO-Tag `YYYY-MM-DD`. */
+  datePurchased: string;
+}
+
+/**
+ * Edit-Daten aus einem eigenen Cart einer Ausgleichszahlung und dem Partner-Cart mit derselben `settlementId` in
+ * `carts` (auch wenn der Partner-Cart als gelöscht markiert ist). Zahler ist der User des positiven Carts, Empfänger der
+ * des negativen. `undefined`, wenn der Cart zu keinem Settlement gehört oder der Partner fehlt (veraltete Liste).
+ */
+export function settlementEditData(cart: Cart, carts: Cart[]): SettlementEditData | undefined {
+  if (!cart.settlementId) return undefined;
+  const partner = carts.find(c => c.settlementId === cart.settlementId && c.id !== cart.id);
+  if (!partner) return undefined;
+  const ownIsPayer = cart.amount > 0;
+  const [payerCart, receiverCart] = ownIsPayer ? [cart, partner] : [partner, cart];
+  return {
+    id: cart.settlementId,
+    role: ownIsPayer ? 'payer' : 'receiver',
+    payer: { id: payerCart.userDto.id, userName: payerCart.userDto.userName },
+    receiver: { id: receiverCart.userDto.id, userName: receiverCart.userDto.userName },
+    amount: Math.abs(cart.amount),
+    datePurchased: purchaseDayOf(cart.datePurchased),
+  };
+}
+
+/**
+ * Wählbare Empfänger im Edit-Modus des Zahlers (DIV-74): die aktuellen Empfänger plus der bisherige Empfänger, falls er
+ * die Gruppe inzwischen verlassen hat. So bleibt die Ausgleichszahlung bearbeitbar; nur ein neu gewählter Empfänger
+ * muss aktuell Mitglied sein (prüft das Backend).
+ */
+export function editRecipients(recipients: UserDto[], currentReceiver: UserDto): UserDto[] {
+  return recipients.some(r => r.id === currentReceiver.id) ? recipients : [...recipients, currentReceiver];
 }
 
 function utcDay(value: Date | string): string {

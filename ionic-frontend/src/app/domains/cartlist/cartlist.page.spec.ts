@@ -305,16 +305,25 @@ describe('CartlistPage – Ausgleichszahlung', () => {
   });
 });
 
-// DIV-74: Einkäufe einer Ausgleichszahlung werden nicht über das normale Formular bearbeitet und immer paarweise über den
-// Settlement-Endpoint gelöscht. Template ausgeblendet – geprüft werden die Methoden hinter den Wischaktionen.
+// DIV-74: Einkäufe einer Ausgleichszahlung werden im Settlement-Sheet bearbeitet (nicht im normalen Formular) und immer
+// paarweise über den Settlement-Endpoint gelöscht. Template ausgeblendet – geprüft werden die Methoden hinter den Wischaktionen.
 describe('CartlistPage – Wischaktionen bei Ausgleichszahlungen (DIV-74)', () => {
   let page: CartlistPage;
   let groupService: GroupService;
   let session: BehaviorSubject<User | null>;
   let alertCtrl: jasmine.SpyObj<AlertController>;
+  let modalCtrl: jasmine.SpyObj<ModalController>;
+  let alerts: jasmine.SpyObj<AlertService>;
+  let initCartList: WritableSignal<Cart[]>;
+  let load: jasmine.Spy;
   let cartService: { deleteCart: jasmine.Spy; deleteSettlementPayment: jasmine.Spy };
   const slidingItem = () => jasmine.createSpyObj<IonItemSliding>('IonItemSliding', ['close']);
-  const settlementCart = aCart({ id: 11, title: 'Ausgleichszahlung an Ben', settlementId: 70 });
+  const anna = aUser({ userName: 'Anna' });
+  const ben = aUser({ userName: 'Ben' });
+  const settlementCart = aCart({ id: 11, title: 'Ausgleichszahlung an Ben', amount: 30, userDto: anna, settlementId: 70,
+    datePurchased: '2025-06-10' as unknown as Date });
+  const partnerCart = aCart({ id: 13, title: 'Ausgleichszahlung von Anna', amount: -30, userDto: ben, settlementId: 70,
+    datePurchased: '2025-06-10' as unknown as Date });
   const normalCart = aCart({ id: 12, title: 'Pizza' });
 
   /** Optionen des zuletzt erzeugten Alerts und der Handler des „Ja“-Buttons. */
@@ -336,6 +345,13 @@ describe('CartlistPage – Wischaktionen bei Ausgleichszahlungen (DIV-74)', () =
       deleteCart: jasmine.createSpy('deleteCart'),
       deleteSettlementPayment: jasmine.createSpy('deleteSettlementPayment'),
     };
+    modalCtrl = jasmine.createSpyObj<ModalController>('ModalController', ['create', 'dismiss']);
+    const modal = jasmine.createSpyObj<HTMLIonModalElement>('HTMLIonModalElement', ['present']);
+    modal.present.and.resolveTo();
+    modalCtrl.create.and.resolveTo(modal);
+    alerts = alertServiceSpy();
+    initCartList = signal<Cart[]>([]);
+    load = jasmine.createSpy('load');
     TestBed.configureTestingModule({
       declarations: [CartlistPage],
       imports: [IonicModule.forRoot()],
@@ -343,16 +359,17 @@ describe('CartlistPage – Wischaktionen bei Ausgleichszahlungen (DIV-74)', () =
         ...provideServiceTesting(),
         {
           provide: CartService, useValue: {
-            ...cartService, cartList: signal<Cart[]>([]), initCartList: signal<Cart[]>([]), cartUpdated: signal(0),
-            sum: computed(() => 0), count: computed(() => 0), getCartListByGroupId: jasmine.createSpy('load'),
+            ...cartService, cartList: signal<Cart[]>([]), initCartList, cartUpdated: signal(0),
+            sum: computed(() => 0), count: computed(() => 0), getCartListByGroupId: load,
           },
         },
         { provide: OverviewService, useValue: { overviewRefresh: signal(0) } },
         { provide: CategoryService, useValue: { categoryUpdate: signal(0) } },
         { provide: StorageService, useValue: storageServiceFake() },
         { provide: AuthService, useValue: auth },
-        { provide: AlertService, useValue: alertServiceSpy() },
+        { provide: AlertService, useValue: alerts },
         { provide: AlertController, useValue: alertCtrl },
+        { provide: ModalController, useValue: modalCtrl },
       ],
     });
     TestBed.overrideTemplate(CartlistPage, '');
@@ -364,9 +381,47 @@ describe('CartlistPage – Wischaktionen bei Ausgleichszahlungen (DIV-74)', () =
     page = fixture.componentInstance;
   });
 
-  it('„Bearbeiten“ gibt es nur für normale Einkäufe, nicht für Einkäufe einer Ausgleichszahlung', () => {
-    expect(page.isEditableInForm(normalCart)).toBeTrue();
-    expect(page.isEditableInForm(settlementCart)).toBeFalse();
+  it('„Bearbeiten“ eines normalen Einkaufs öffnet das Formular', () => {
+    const navigate = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
+
+    page.editCart(normalCart, slidingItem());
+
+    expect(navigate).toHaveBeenCalledOnceWith(['domains', 'tabs', 'cartlist', 'new-edit', '12']);
+    expect(modalCtrl.create).not.toHaveBeenCalled();
+  });
+
+  it('„Bearbeiten“ einer Ausgleichszahlung öffnet das Settlement-Sheet im Edit-Modus, vorbelegt aus dem Cart-Paar', async () => {
+    const navigate = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
+    initCartList.set([normalCart, partnerCart, settlementCart]);
+
+    page.editCart(settlementCart, slidingItem());
+    await Promise.resolve();
+
+    expect(navigate).not.toHaveBeenCalled();
+    expect(modalCtrl.create).toHaveBeenCalledTimes(1);
+    const options = modalCtrl.create.calls.mostRecent().args[0];
+    expect(options.component).toBe(SettlementSheetComponent);
+    expect(options.componentProps?.['settlement']).toEqual({
+      id: 70, role: 'payer', payer: { id: anna.id, userName: 'Anna' }, receiver: { id: ben.id, userName: 'Ben' },
+      amount: 30, datePurchased: '2025-06-10',
+    });
+  });
+
+  it('„Bearbeiten“ ohne Partner-Cart (veraltete Liste): Hinweis und stilles Neuladen, kein Sheet', () => {
+    initCartList.set([settlementCart]);
+
+    page.editCart(settlementCart, slidingItem());
+
+    expect(modalCtrl.create).not.toHaveBeenCalled();
+    expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(
+      'alerts.cart.settlement_not_found.header', 'alerts.cart.settlement_not_found.message');
+    const [gruppe, refresh, , options] = load.calls.mostRecent().args;
+    expect(gruppe.id).toBe(3);
+    expect(refresh).toBeTrue();
+    expect(options.silent).toBeTrue();
+    expect(options.isCurrent()).toBeTrue();
+    groupService.setActiveGroup(aGroup({ id: 4, name: 'Andere' }));
+    expect(options.isCurrent()).toBeFalse();
   });
 
   it('Löschen eines Einkaufs einer Ausgleichszahlung fragt eigens nach und löscht das Paar über den Settlement-Endpoint', async () => {

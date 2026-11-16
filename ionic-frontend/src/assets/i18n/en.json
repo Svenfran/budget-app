@@ -108,6 +108,9 @@
                     "placeholder_member": "To member",
                     "amount": "Amount in €*",
                     "amount_positive": "Amount must be greater than 0",
+                    "title_edit": "Edit repayment",
+                    "subtitle_edit": "Changes apply to both parties.",
+                    "paid_by": "Paid by",
                     "date": "Date*",
                     "btn_cancel": "Cancel",
                     "no_members": "No members available",
@@ -242,6 +245,14 @@
                 "message": "The repayment could not be deleted. Please try again."
             },
             "settlement_already_deleted": "The repayment has already been deleted.",
+            "settlement_update_failed": {
+                "header": "Repayment not saved",
+                "message": "The change could not be saved. Your input is kept, please try again."
+            },
+            "settlement_not_found": {
+                "header": "Repayment no longer exists",
+                "message": "The repayment has been deleted in the meantime. The list is being reloaded."
+            },
             "settlement_failed": {
                 "header": "Repayment not saved",
                 "message": "The repayment could not be saved. Your entries have been kept, please try again."

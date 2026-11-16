@@ -26,7 +26,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * Das Frontend erkennt Fehlerfälle am Text der Backend-Meldung. Jede ausgewertete Meldung hat einen API-Test.
  * <pre>
  * #   Frontend-Stelle                                Erwartet (Status, Text)                      Test
- * M1  cart.service.ts (add/update/settlement)        400 'not within membership period'           CartControllerApiSpec (alle drei)
+ * M1  cart.service.ts (add/update/settlement add+update) 400 'not within membership period'        CartControllerApiSpec (alle vier)
  * M2  group.service.ts addMemberToGroup              404 enthält gesendete E-Mail                 GroupControllerApiSpec
  * M3  group.service.ts addMemberToGroup              403 'New member equals group owner'          GroupControllerApiSpec
  * M4  group.service.ts addMemberToGroup              403 'Member already exists'                  GroupControllerApiSpec
@@ -410,6 +410,61 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
         'unbekannte Id: 404'              || 404
     }
 
+    def "Ausgleichszahlung bearbeiten als #rolle: 200 mit beiden Einkäufen, Ids bleiben"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def paar = json(addSettlement(wg.owner, [amount: 30, groupId: wg.group.id, member: [id: ben.id], datePurchased: '2025-06-15']))
+        def settlementId = paar[0].settlementId as Long
+        def bearbeiter = rolle == 'Zahler' ? wg.owner : ben
+        LOG.info('Szenario: Gruppe {}, Owner {} zahlte 30.00 an Ben {}; Settlement {}, Carts {}; {} {} ändert auf 42.50', wg.group.id,
+                wg.owner.id, ben.id, settlementId, paar*.id, rolle, bearbeiter.id)
+
+        when:
+        def response = updateSettlement(bearbeiter, [id: settlementId, amount: 42.5, member: [id: ben.id], datePurchased: '2025-06-10'])
+        def result = json(response)
+        LOG.info('Antwort: {} Ids {}, Beträge {}, settlementIds {}', response.status, result*.id, result*.amount, result*.settlementId)
+
+        then:
+        response.status == 200
+        result*.id == paar*.id
+        result*.amount == [42.5, -42.5]
+        result*.settlementId == [settlementId, settlementId]
+
+        where:
+        rolle << ['Zahler', 'Empfänger']
+    }
+
+    def "Ausgleichszahlung bearbeiten: #fall"() {
+        given:
+        def ben = fixtures.user()
+        def cleo = fixtures.user()
+        def wg = fixtures.group(members: [ben, cleo])
+        def paar = json(addSettlement(wg.owner, [amount: 30, groupId: wg.group.id, member: [id: ben.id], datePurchased: '2025-06-15']))
+        def settlementId = paar[0].settlementId as Long
+        def nutzer = [owner: wg.owner, ben: ben, cleo: cleo]
+        def body = [id: settlementId, amount: 30, member: [id: nutzer[empfaenger].id], datePurchased: '2025-06-15'] + aenderung
+        LOG.info('Szenario: Gruppe {}, Owner {} zahlte an Ben {}, Cleo {}; Settlement {}; {} sendet {}', wg.group.id, wg.owner.id,
+                ben.id, cleo.id, settlementId, handelnder, body)
+
+        when:
+        def response = updateSettlement(nutzer[handelnder], body)
+        LOG.info('Antwort: {} {}', response.status, response.contentAsString)
+
+        then:
+        response.status == status
+        response.contentAsString.contains(meldung)
+
+        where:
+        fall                                        | handelnder | empfaenger | aenderung                     || status | meldung
+        'Empfänger wechselt den Empfänger: 403'     | 'ben'      | 'cleo'     | [:]                           || 403    | 'Only the payer'
+        'Dritter Mitglied: 403'                     | 'cleo'     | 'ben'      | [:]                           || 403    | 'neither payer nor receiver'
+        'unbekannte Id: 404'                        | 'owner'    | 'ben'      | [id: -1]                      || 404    | 'Settlement with Id -1 not found'
+        'Betrag 0: 400'                             | 'owner'    | 'ben'      | [amount: 0]                   || 400    | 'greater than 0'
+        'fehlende Id: 400'                          | 'owner'    | 'ben'      | [id: null]                    || 400    | "'id'"
+        'Datum vor der Mitgliedschaft: 400 (M1)'    | 'owner'    | 'ben'      | [datePurchased: '2020-01-01'] || 400    | 'not within membership period'
+    }
+
     def "Kategorien als JSON enthalten das Settlement-Kennzeichen"() {
         given:
         def wg = fixtures.group()
@@ -568,6 +623,11 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
 
     private MockHttpServletResponse deleteCart(User user, Long cartId) {
         send(delete('/api/carts/delete/{id}', cartId), user: user)
+    }
+
+    /** Accept-Language de: die neu erzeugten Titel sind lokalisiert. */
+    private MockHttpServletResponse updateSettlement(User user, Map body) {
+        send(put('/api/carts/settlement-payment/update').header('Accept-Language', 'de'), user: user, body: body)
     }
 
     private MockHttpServletResponse deleteSettlement(User user, Long settlementId) {

@@ -63,7 +63,8 @@ public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionH
             NotMemberOfGroupException.class,
             NotOwnerOrMemberOfGroupException.class,
             NotOwnerOfCartException.class,
-            NotPartyOfSettlementException.class
+            NotPartyOfSettlementException.class,
+            ReceiverChangeNotAllowedException.class
     })
     protected ResponseEntity<Object> handleForbidden(Exception ex, WebRequest request) {
         return buildResponse(ex, HttpStatus.FORBIDDEN);

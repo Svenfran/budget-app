@@ -247,6 +247,10 @@ public class GroupService {
     }
 
     public void setIsDeletedForCart(Group group, User member, boolean delete) {
+        // DIV-74 (A11): Dieser Weg und calculateAveragePerMember schreiben Carts komplett zurück. Erst alle Settlements der
+        // Gruppe sperren, dann Carts laden – sonst könnte ein gleichzeitig geändertes Settlement-Paar mit Altwerten
+        // überschrieben werden. Alle Aufrufer rufen diese Methode vor calculateAveragePerMember auf.
+        settlementRepository.lockAllByGroupId(group.getId());
         var cartsOfMember = cartRepository.findCartsByGroupAndUser(group, member);
         if (!cartsOfMember.isEmpty()) {
             cartsOfMember.forEach(cart -> cart.setDeleted(delete));

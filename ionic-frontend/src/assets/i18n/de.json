@@ -108,6 +108,9 @@
                     "placeholder_member": "An Mitglied",
                     "amount": "Betrag in €*",
                     "amount_positive": "Betrag muss größer als 0 sein",
+                    "title_edit": "Ausgleichszahlung bearbeiten",
+                    "subtitle_edit": "Änderungen gelten für beide Beteiligten.",
+                    "paid_by": "Gezahlt von",
                     "date": "Datum*",
                     "btn_cancel": "Abbrechen",
                     "no_members": "Keine Mitglieder vorhanden",
@@ -242,6 +245,14 @@
                 "message": "Die Ausgleichszahlung konnte nicht gelöscht werden. Bitte versuche es erneut."
             },
             "settlement_already_deleted": "Die Ausgleichszahlung wurde bereits gelöscht.",
+            "settlement_update_failed": {
+                "header": "Ausgleichszahlung nicht gespeichert",
+                "message": "Die Änderung konnte nicht gespeichert werden. Deine Eingaben bleiben erhalten, bitte versuche es erneut."
+            },
+            "settlement_not_found": {
+                "header": "Ausgleichszahlung nicht mehr vorhanden",
+                "message": "Die Ausgleichszahlung wurde inzwischen gelöscht. Die Liste wird neu geladen."
+            },
             "settlement_failed": {
                 "header": "Ausgleichszahlung nicht gespeichert",
                 "message": "Die Ausgleichszahlung konnte nicht gespeichert werden. Deine Eingaben bleiben erhalten, bitte versuche es erneut."

@@ -67,6 +67,13 @@ public class CartController {
         return new ResponseEntity<>(payment, HttpStatus.OK);
     }
 
+    /** Ändert Betrag, Datum und (nur Zahler) Empfänger der Ausgleichszahlung; Antwort: beide Einkäufe (DIV-74). */
+    @PutMapping("/carts/settlement-payment/update")
+    public ResponseEntity<List<CartDto>> updateSettlementPayment(@RequestBody SettlementPaymentDto settlementPaymentDto) throws Exception {
+        var payment = settlementService.updateSettlementPayment(settlementPaymentDto);
+        return new ResponseEntity<>(payment, HttpStatus.OK);
+    }
+
     /** Löscht die Ausgleichszahlung mit beiden Einkäufen (DIV-74). */
     @DeleteMapping("/carts/settlement-payment/delete/{settlementId}")
     public ResponseEntity<Void> deleteSettlementPayment(@PathVariable("settlementId") Long settlementId) throws UserNotFoundException,

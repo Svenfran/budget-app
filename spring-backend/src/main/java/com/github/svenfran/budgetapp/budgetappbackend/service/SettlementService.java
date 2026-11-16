@@ -84,6 +84,54 @@ public class SettlementService {
     }
 
     /**
+     * Ändert Betrag, Datum und – nur durch den Zahler – den Empfänger eines Settlements und setzt beide Carts daraus neu
+     * (Ids bleiben, Titel werden in Request-Sprache neu erzeugt). Der Zahler ist nicht änderbar. Das Settlement wird
+     * zuerst gesperrt: gleichzeitige Änderungen laufen nacheinander, das Paar ist danach immer vollständig das Ergebnis
+     * einer der Änderungen (Last-Write-Wins auf das ganze Paar). Alle Prüfungen laufen vor dem ersten Write.
+     *
+     * @return Zahler-Cart, dann Empfänger-Cart
+     */
+    @Transactional
+    public List<CartDto> updateSettlementPayment(SettlementPaymentDto dto) throws UserNotFoundException,
+            InvalidSettlementPaymentException, SettlementNotFoundException, NotOwnerOrMemberOfGroupException,
+            NotPartyOfSettlementException, ReceiverChangeNotAllowedException, DatePurchasedNotWithinMembershipPeriodException {
+        var user = dataLoaderService.getAuthenticatedUser();
+        verificationService.verifyValidSettlementPaymentForUpdate(dto);
+        var settlement = dataLoaderService.loadSettlementForUpdate(dto.getId());
+        var group = settlement.getGroup();
+        verificationService.verifyIsPartOfGroup(user, group);
+        verificationService.verifyIsPartyOfSettlement(user, settlement);
+
+        var payer = settlement.getPayer();
+        var receiverChanged = !dto.getMember().getId().equals(settlement.getReceiver().getId());
+        var receiver = receiverChanged ? dataLoaderService.loadUser(dto.getMember().getId()) : settlement.getReceiver();
+        if (receiverChanged) {
+            verificationService.verifyMayChangeReceiver(user, settlement, receiver);
+            verificationService.verifyPayerIsNotReceiver(payer, receiver);
+            verificationService.verifyIsPartOfGroup(receiver, group);
+        }
+        verifyPartiesWereMembersAt(group, payer, receiver, dto.getDatePurchased());
+
+        var carts = cartRepository.findBySettlementIdOrderByIdAsc(settlement.getId());
+        var payerCart = carts.stream().filter(c -> c.getUser().getId().equals(payer.getId())).findFirst().orElse(null);
+        var receiverCart = carts.stream().filter(c -> c != payerCart).findFirst().orElse(null);
+        if (carts.size() != 2 || payerCart == null || receiverCart == null) {
+            throw new IllegalStateException("Settlement " + settlement.getId() + " has no consistent cart pair ("
+                    + carts.size() + " carts)");
+        }
+
+        settlement.setAmount(dto.getAmount());
+        settlement.setDatePurchased(dto.getDatePurchased());
+        settlement.setReceiver(receiver);
+        if (receiverChanged) {
+            // Neuer Empfänger ist aktuell Teil der Gruppe; ein Altwert eines entfernten Empfängers gilt nicht mehr
+            receiverCart.setDeleted(false);
+        }
+        projectCarts(settlement, payerCart, receiverCart, payerCart.getCategory());
+        return List.of(new CartDto(payerCart), new CartDto(receiverCart));
+    }
+
+    /**
      * Löscht ein Settlement mit beiden Carts. Erlaubt für Zahler und Empfänger, solange der Handelnde aktuell Teil der
      * Gruppe ist (Plan A8: auch wenn die andere Partei die Gruppe verlassen hat). Das Settlement wird zuerst gesperrt,
      * damit ein gleichzeitiges Ändern oder Löschen wartet und danach den neuen Stand sieht.

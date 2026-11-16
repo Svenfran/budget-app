@@ -7,6 +7,7 @@ import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
 
 import javax.persistence.LockModeType;
+import java.util.List;
 import java.util.Optional;
 
 public interface SettlementRepository extends CrudRepository<Settlement, Long> {
@@ -19,6 +20,15 @@ public interface SettlementRepository extends CrudRepository<Settlement, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select s from Settlement s where s.id = :id")
     Optional<Settlement> findByIdForUpdate(@Param("id") Long id);
+
+    /**
+     * Sperrt alle Settlements einer Gruppe (SELECT … FOR UPDATE, nach Id sortiert). Für Schreibwege, die Carts der Gruppe
+     * vollständig zurückschreiben (Mitgliedschaftsänderungen, DIV-74 A11): vor dem Laden der Carts aufrufen, damit kein
+     * Settlement-Cart mit veralteten Werten überschrieben wird. Reihenfolge überall: erst Settlement-Sperre, dann Carts.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select s from Settlement s where s.group.id = :groupId order by s.id")
+    List<Settlement> lockAllByGroupId(@Param("groupId") Long groupId);
 
     /**
      * Löscht alle Settlements einer Gruppe (Gruppe löschen). Abgeleitete Löschmethode: lädt und entfernt die Entities

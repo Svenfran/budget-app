@@ -173,6 +173,26 @@ public class VerificationService {
         verifyValidSettlementAmount(dto.getAmount());
     }
 
+    /**
+     * Request-Struktur beim Bearbeiten einer Ausgleichszahlung (DIV-74): id, Empfänger, Betrag, Datum. groupId wird nicht
+     * geprüft, maßgeblich ist die Gruppe des Settlements. Vor jedem Loader aufrufen.
+     */
+    public void verifyValidSettlementPaymentForUpdate(SettlementPaymentDto dto) throws InvalidSettlementPaymentException {
+        if (dto == null) throw new InvalidSettlementPaymentException("Settlement payment is required");
+        requireSettlementField(dto.getId(), "id");
+        requireSettlementField(dto.getMember(), "member");
+        requireSettlementField(dto.getMember().getId(), "member.id");
+        requireSettlementField(dto.getDatePurchased(), "datePurchased");
+        verifyValidSettlementAmount(dto.getAmount());
+    }
+
+    /** Den Empfänger darf nur der Zahler ändern, sonst könnte sich der Empfänger selbst herausnehmen (DIV-74). */
+    public void verifyMayChangeReceiver(User user, Settlement settlement, User newReceiver) throws ReceiverChangeNotAllowedException {
+        if (!newReceiver.getId().equals(settlement.getReceiver().getId()) && !user.getId().equals(settlement.getPayer().getId())) {
+            throw new ReceiverChangeNotAllowedException("Only the payer may change the receiver of settlement " + settlement.getId());
+        }
+    }
+
     /** Betrag einer Ausgleichszahlung: Pflicht, größer als 0 und höchstens zwei Nachkommastellen (Cent). */
     public void verifyValidSettlementAmount(Double amount) throws InvalidSettlementPaymentException {
         requireSettlementField(amount, "amount");

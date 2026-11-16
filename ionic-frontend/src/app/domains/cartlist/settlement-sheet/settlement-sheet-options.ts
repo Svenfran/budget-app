@@ -1,6 +1,7 @@
 import { WritableSignal } from '@angular/core';
 import { ModalOptions } from '@ionic/angular';
 import { SETTLEMENT_SHEET_SAVED_ROLE, SettlementSheetComponent } from './settlement-sheet.component';
+import { SettlementEditData } from './settlement-form';
 
 /** Zustand, den der Öffner erzeugt und mit dem Sheet teilt (die Schließ-Sperre liest dieselben Signale). */
 export interface SettlementSheetState {
@@ -12,6 +13,8 @@ export interface SettlementSheetState {
   confirmDiscard: () => Promise<boolean>;
   /** Schließt genau dieses Sheet (Modal-ID), nachdem „Verwerfen“ bestätigt wurde. */
   dismiss: (modalId: string) => Promise<boolean>;
+  /** Bestehende Ausgleichszahlung: öffnet das Sheet im Edit-Modus (DIV-74). */
+  settlement?: SettlementEditData;
 }
 
 /** Laufende Nummer für eindeutige Modal-IDs der Ausgleichszahlungs-Sheets. */
@@ -44,7 +47,7 @@ export function settlementSheetModalOptions(state: SettlementSheetState): ModalO
   return {
     id,
     component: SettlementSheetComponent,
-    componentProps: { modalId: id, saving: state.saving, dirty: state.dirty },
+    componentProps: { modalId: id, saving: state.saving, dirty: state.dirty, settlement: state.settlement },
     cssClass: ['bottom-sheet', 'bottom-sheet-auto', 'settlement-sheet'],
     canDismiss: async (_data?: unknown, role?: string) => {
       if (state.saving()) return false;

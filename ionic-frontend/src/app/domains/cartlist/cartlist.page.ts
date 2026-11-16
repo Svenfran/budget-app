@@ -18,6 +18,8 @@ import { FILTER_SHEET_APPLY_ROLE } from './filter-sheet/filter-sheet.component';
 import { purchaseDayOf } from './filter-sheet/cart-filter-form';
 import { toIsoDay } from './iso-day';
 import { settlementSheetModalOptions } from './settlement-sheet/settlement-sheet-options';
+import { SettlementEditData, settlementEditData } from './settlement-sheet/settlement-form';
+import { AlertService } from 'src/app/service/alert.service';
 
 @Component({
   selector: 'app-cartlist',
@@ -54,7 +56,8 @@ export class CartlistPage implements OnInit {
     private overviewService: OverviewService,
     private categoryService: CategoryService,
     private modalCtrl: ModalController,
-    private translate: TranslateService
+    private translate: TranslateService,
+    private alertService: AlertService
   ) { 
     // Anzeige: hält den Gruppennamen aktuell (auch bei Umbenennung), ohne neu zu laden
     effect(() => {
@@ -210,14 +213,31 @@ export class CartlistPage implements OnInit {
     }).then(alertEl => alertEl.present());
   }
 
-  /** Wischaktion „Bearbeiten“ über das normale Formular: nicht für Einkäufe einer Ausgleichszahlung (DIV-74). */
-  isEditableInForm(cart: Cart): boolean {
-    return !cart.settlementId;
-  }
-
+  /**
+   * Wischaktion „Bearbeiten“: normale Einkäufe im Formular, Einkäufe einer Ausgleichszahlung im Settlement-Sheet
+   * (DIV-74), vorbelegt aus dem Cart-Paar der vollständigen Liste. Fehlt der Partner-Cart (veraltete Liste), wird still
+   * neu geladen und ein Hinweis gezeigt.
+   */
   editCart(cart: Cart, slidingItem: IonItemSliding) {
     slidingItem.close();
-    this.router.navigate(['domains', 'tabs', 'cartlist', 'new-edit', cart.id?.toString()]);
+    if (!cart.settlementId) {
+      this.router.navigate(['domains', 'tabs', 'cartlist', 'new-edit', cart.id?.toString()]);
+      return;
+    }
+    const settlement = settlementEditData(cart, this.initCartList());
+    if (!settlement) {
+      const group = this.groupService.activeGroup();
+      const sameSession = this.groupService.sessionGuard();
+      this.alertService.showErrorAlert(
+        this.translate.instant('alerts.cart.settlement_not_found.header'),
+        this.translate.instant('alerts.cart.settlement_not_found.message')
+      );
+      this.cartService.getCartListByGroupId(group, true, undefined, {
+        silent: true, isCurrent: () => this.groupService.activeGroupId() === group.id && sameSession(),
+      });
+      return;
+    }
+    this.openSettlementSheet(settlement);
   }
 
   /** Sliding-Aktion „Duplizieren“ (DIV-73): Neuanlage mit den Werten dieser Ausgabe, angelegt wird erst beim Speichern. */
@@ -260,7 +280,7 @@ export class CartlistPage implements OnInit {
    * erst nach Erfolg; `saving` sperrt das Schließen, solange der Request läuft. Bei geänderten Eingaben (`dirty`) fragt
    * das Schließen über X, Backdrop oder Hardware-Back vorher nach (confirmDiscard).
    */
-  async openSettlementSheet() {
+  async openSettlementSheet(settlement?: SettlementEditData) {
     const saving = signal(false);
     const dirty = signal(false);
     const modal = await this.modalCtrl.create(settlementSheetModalOptions({
@@ -268,6 +288,7 @@ export class CartlistPage implements OnInit {
       dirty,
       confirmDiscard: () => this.confirmDiscard(),
       dismiss: modalId => this.modalCtrl.dismiss(undefined, 'cancel', modalId),
+      settlement,
     }));
     await modal.present();
   }

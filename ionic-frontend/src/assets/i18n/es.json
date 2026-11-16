@@ -108,6 +108,9 @@
                     "placeholder_member": "Al miembro",
                     "amount": "Importe en €*",
                     "amount_positive": "El importe debe ser mayor que 0",
+                    "title_edit": "Editar repago",
+                    "subtitle_edit": "Los cambios se aplican a ambas partes.",
+                    "paid_by": "Pagado por",
                     "date": "Fecha*",
                     "btn_cancel": "Cancelar",
                     "no_members": "No hay miembros disponibles",
@@ -242,6 +245,14 @@
                 "message": "No se pudo eliminar el repago. Por favor, inténtalo de nuevo."
             },
             "settlement_already_deleted": "El repago ya ha sido eliminado.",
+            "settlement_update_failed": {
+                "header": "Repago no guardado",
+                "message": "No se pudo guardar el cambio. Tus datos se conservan, por favor, inténtalo de nuevo."
+            },
+            "settlement_not_found": {
+                "header": "El repago ya no existe",
+                "message": "El repago se ha eliminado mientras tanto. La lista se está recargando."
+            },
             "settlement_failed": {
                 "header": "Repago no guardado",
                 "message": "No se pudo guardar el repago. Tus datos se han conservado, por favor inténtalo de nuevo."
