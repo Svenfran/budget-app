@@ -87,7 +87,7 @@
           <ion-list *ngIf="!isLoading && cartList().length > 0">
             <ion-item-sliding *cdkVirtualFor="let cart of cartList(), let i = index" #slidingItem>
               <ion-item [lines]="i === cartList().length - 1 ? 'none' : 'inset'"  [disabled]="cart.deleted === true">
-                <ion-avatar slot="start" (click)="onFilter('category', cart.categoryDto.name)">
+                <ion-avatar slot="start" (click)="onFilterCategory(cart)">
                   <div class="category-circle">
                     <p *ngIf="!cart.settlementId">{{ cart.categoryDto.name.substring(0, 2) | uppercase }}</p>
                     <ion-icon *ngIf="cart.settlementId" name="swap-horizontal-outline" color="medium"></ion-icon>

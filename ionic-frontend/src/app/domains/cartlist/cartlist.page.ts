@@ -20,6 +20,7 @@ import { toIsoDay } from './iso-day';
 import { settlementSheetModalOptions } from './settlement-sheet/settlement-sheet-options';
 import { SettlementEditData, settlementEditData } from './settlement-sheet/settlement-form';
 import { AlertService } from 'src/app/service/alert.service';
+import { categoryLabel } from 'src/app/service/category-label';
 
 @Component({
   selector: 'app-cartlist',
@@ -249,15 +250,24 @@ export class CartlistPage implements OnInit {
     await modal.present();
   }
 
-  onFilter(action: string, filterTerm: string) {
+  /** Schnellfilter per Tipp auf die Kategorie eines Einkaufs: Chip mit dem Anzeigenamen der Kategorie (DIV-74). */
+  onFilterCategory(cart: Cart) {
+    this.onFilter('category', cart.categoryDto.name, categoryLabel(cart.categoryDto, key => this.translate.instant(key)));
+  }
+
+  /**
+   * Schnellfilter per Tipp auf Ersteller oder Kategorie. Gefiltert wird über den gespeicherten Wert; `label` ist nur die
+   * Anzeige im Chip (DIV-74: die Settlement-Kategorie in der App-Sprache).
+   */
+  onFilter(action: string, filterTerm: string, label: string = filterTerm) {
     this.cartFilter = {};
     if (!this.filterMode()) {
       this.filterMode.set(true);
-      this.cartList.update(carts => carts.filter(cart => 
+      this.cartList.update(carts => carts.filter(cart =>
         action === "user" ? cart.userDto.userName === filterTerm : cart.categoryDto.name === filterTerm)
       );
       action === "user" ? this.cartFilter.userName = [filterTerm] : this.cartFilter.category = [filterTerm];
-      this.filterTerm.set(filterTerm);
+      this.filterTerm.set(label);
     } else {
       // this.cartService.getCartListByGroupId(this.activeGroup);
       this.resetFilterParams();

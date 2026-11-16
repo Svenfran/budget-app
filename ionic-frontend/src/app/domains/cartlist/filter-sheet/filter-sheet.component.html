@@ -44,7 +44,7 @@
                     [placeholder]="'domains.spendings.overlay.filter.placeholder_category' | translate"
                     [attr.aria-label]="'domains.spendings.overlay.filter.placeholder_category' | translate"
                     [interfaceOptions]="{ header: ('domains.spendings.overlay.filter.placeholder_category' | translate) }">
-          <ion-select-option *ngFor="let category of categoryList()" [value]="category.name">{{ category.name }}</ion-select-option>
+          <ion-select-option *ngFor="let category of categoryList()" [value]="category.name">{{ label(category) }}</ion-select-option>
         </ion-select>
       </ion-item>
       <ion-item lines="none" class="filter-field">

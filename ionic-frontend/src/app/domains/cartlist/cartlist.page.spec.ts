@@ -661,6 +661,28 @@ describe('CartlistPage – Filter (Bestand)', () => {
     expect(sum()).toBe(52);
   });
 
+  it('Schnellfilter Kategorie per Tipp: normale Kategorie mit ihrem Namen im Chip', () => {
+    page.onFilterCategory(aCart({ categoryDto: lebensmittel }));
+
+    expect(page.filterTerm()).toBe('Lebensmittel');
+    expect(page.cartFilter).toEqual({ category: ['Lebensmittel'] });
+  });
+
+  it('Schnellfilter Settlement-Kategorie (DIV-74): Chip in der App-Sprache, gefiltert wird über den gespeicherten Namen', () => {
+    const ausgleich = aCategory({ name: 'Ausgleichszahlung', settlement: true });
+    const zahlung = aCart({ title: 'Ausgleichszahlung an Ben', amount: 20, categoryDto: ausgleich, settlementId: 70 });
+    initCartList.set([...initCartList(), zahlung]);
+    cartList.set(initCartList());
+    spyOn(TestBed.inject(TranslateService), 'instant').and.callFake(
+      ((key: string) => key === 'domains.spendings.settlement' ? 'Repayment' : key) as never);
+
+    page.onFilterCategory(zahlung);
+
+    expect(page.filterTerm()).toBe('Repayment');
+    expect(page.cartFilter).toEqual({ category: ['Ausgleichszahlung'] });
+    expect(titles()).toEqual(['Ausgleichszahlung an Ben']);
+  });
+
   it('Schnellfilter Ersteller: belegt cartFilter.userName vor; erneuter Tipp hebt ihn auf', () => {
     page.onFilter('user', 'Anna');
 
