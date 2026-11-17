@@ -928,4 +928,119 @@ describe('GroupService – Antwort nach Sitzungswechsel (DIV-58)', () => {
       expect(ids(service.groupOverviewList())).toEqual([1, 2]);
     });
   });
+
+  // DIV-60: gleiche Sitzungsprüfung für Mitglieder und Mitgliedschaftszeiträume
+  describe('getGroupMembers', () => {
+    const membersUrl = `${environment.apiBaseUrl}/api/groups/members/1`;
+    const membersOf = (ownerName: string): GroupMembers =>
+      ({ id: 1, name: 'WG', ownerName, ownerId: 1, members: [aUser()] });
+
+    it('verwirft eine Antwort, die nach dem Logout eintrifft', () => {
+      login(7);
+      service.getGroupMembers(1);
+      const request = http.expectOne(membersUrl);
+
+      logout();
+      request.flush(membersOf('Anna'));
+
+      expect(service.groupMembers()).toEqual(Init.DEFAULT_GROUP_MEMBERS);
+    });
+
+    it('lässt die Mitglieder des neuen Nutzers stehen, wenn die alte Antwort danach eintrifft', () => {
+      login(7);
+      service.getGroupMembers(1);
+      const oldRequest = http.expectOne(membersUrl);
+      logout();
+      login(8);
+      const membersOfNew = membersOf('Ben');
+      service.groupMembers.set(membersOfNew);
+
+      oldRequest.flush(membersOf('Anna'));
+
+      expect(service.groupMembers()).toBe(membersOfNew);
+    });
+
+    it('setzt keinen Platzhalter über die Mitglieder der neuen Sitzung, wenn eine alte Anfrage danach fehlschlägt', () => {
+      login(7);
+      service.getGroupMembers(1);
+      const oldRequest = http.expectOne(membersUrl);
+      logout();
+      login(8);
+      const membersOfNew = membersOf('Ben');
+      service.groupMembers.set(membersOfNew);
+
+      oldRequest.flush('Server error', serverError);
+
+      expect(service.groupMembers()).toBe(membersOfNew);
+    });
+
+    it('übernimmt die Antwort bei erneuter Emission desselben Nutzers (gleiche Sitzung)', () => {
+      login(7);
+      service.getGroupMembers(1);
+      const request = http.expectOne(membersUrl);
+
+      login(7);
+      const loaded = membersOf('Anna');
+      request.flush(loaded);
+
+      expect(service.groupMembers()).toEqual(loaded);
+    });
+  });
+
+  describe('getGroupMembershipHistoryForGroupAndUser', () => {
+    const historyUrl = `${environment.apiBaseUrl}/api/groups/history-by-group-and-user/1`;
+    const group = aGroup({ id: 1 });
+    const historyOf = (userId: number): Zeitraum[] =>
+      [{ startDate: REFERENCE_DATE, endDate: REFERENCE_DATE, groupId: 1, userId }];
+
+    it('verwirft eine Antwort, die nach dem Logout eintrifft', () => {
+      login(7);
+      service.getGroupMembershipHistoryForGroupAndUser(group);
+      const request = http.expectOne(historyUrl);
+
+      logout();
+      request.flush(historyOf(7));
+
+      expect(service.groupMembershipHistory()).toEqual([]);
+    });
+
+    it('lässt die Zeiträume des neuen Nutzers stehen, wenn die alte Antwort danach eintrifft', () => {
+      login(7);
+      service.getGroupMembershipHistoryForGroupAndUser(group);
+      const oldRequest = http.expectOne(historyUrl);
+      logout();
+      login(8);
+      const historyOfNew = historyOf(8);
+      service.groupMembershipHistory.set(historyOfNew);
+
+      oldRequest.flush(historyOf(7));
+
+      expect(service.groupMembershipHistory()).toBe(historyOfNew);
+    });
+
+    it('leert die Zeiträume der neuen Sitzung nicht, wenn eine alte Anfrage danach fehlschlägt', () => {
+      login(7);
+      service.getGroupMembershipHistoryForGroupAndUser(group);
+      const oldRequest = http.expectOne(historyUrl);
+      logout();
+      login(8);
+      const historyOfNew = historyOf(8);
+      service.groupMembershipHistory.set(historyOfNew);
+
+      oldRequest.flush('Server error', serverError);
+
+      expect(service.groupMembershipHistory()).toBe(historyOfNew);
+    });
+
+    it('übernimmt die Antwort bei erneuter Emission desselben Nutzers (gleiche Sitzung)', () => {
+      login(7);
+      service.getGroupMembershipHistoryForGroupAndUser(group);
+      const request = http.expectOne(historyUrl);
+
+      login(7);
+      request.flush(historyOf(7));
+
+      expect(service.groupMembershipHistory()).toEqual(historyOf(7));
+    });
+  });
 });

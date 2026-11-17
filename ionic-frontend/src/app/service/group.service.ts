@@ -91,7 +91,8 @@ export class GroupService {
 
   /**
    * Prüfung „noch dieselbe Anmelde-Sitzung wie jetzt?“ – für `LoadOptions.isCurrent` beim stillen Resync (DIV-36) und
-   * Standard von `getGroupsForSideNav`/`getGroupsForOverview` (DIV-58). Setzt voraus, dass `session` vor dem Start des
+   * Standard von `getGroupsForSideNav`/`getGroupsForOverview` (DIV-58) sowie `getGroupMembers`/
+   * `getGroupMembershipHistoryForGroupAndUser` (DIV-60). Setzt voraus, dass `session` vor dem Start des
    * Requests hochgezählt wurde: Der Konstruktor abonniert `authService.user` vor `AppComponent.initUser()`, das bei
    * einer Emission lädt.
    */
@@ -307,14 +308,22 @@ export class GroupService {
       })
   }
 
-  getGroupMembershipHistoryForGroupAndUser(group: Group): void {
+  /**
+   * Lädt die Mitgliedschaftszeiträume des Nutzers in der Gruppe. Wertet von `options` nur `isCurrent` aus (Standard:
+   * Sitzungsprüfung, DIV-60); `silent` wird ignoriert, weil kein Aufrufer es braucht – ein Fehler leert die Liste.
+   */
+  getGroupMembershipHistoryForGroupAndUser(group: Group, options: LoadOptions = {}): void {
+    // Antworten aus einer inzwischen beendeten Anmelde-Sitzung verwerfen (DIV-60)
+    const isCurrent = options.isCurrent ?? this.sessionGuard();
     this.http
       .get<Zeitraum[]>(`${this.gmhUrl}/${group.id}`)
       .subscribe({
         next: (result) => {
+          if (!isCurrent()) return;
           this.groupMembershipHistory.set(result || []);
         },
         error: (err) => {
+          if (!isCurrent()) return;
           console.error("Error fetching group membership history:", err);
           this.groupMembershipHistory.set([]);
         }
@@ -353,13 +362,15 @@ export class GroupService {
   }
 
   getGroupMembers(groupId: number, options: LoadOptions = {}): void {
+    // Antworten aus einer inzwischen beendeten Anmelde-Sitzung verwerfen (DIV-60)
+    const isCurrent = options.isCurrent ?? this.sessionGuard();
     this.http
       .get<GroupMembers>(`${this.groupMembersUrl}/${groupId}`)
       .subscribe({
         next: (result) => {
           // still: nur übernehmen, wenn inzwischen keine andere Mitgliederliste geöffnet wurde
           if (options.silent && this.groupMembers().id !== groupId) return;
-          if (options.isCurrent?.() === false) return;
+          if (!isCurrent()) return;
           this.groupMembers.set(result);
         },
         error: (err) => {
@@ -367,6 +378,7 @@ export class GroupService {
             console.warn("Silent resync of group members failed:", err);
             return;
           }
+          if (!isCurrent()) return;
           console.error("Error fetching group members:", err);
           this.groupMembers.set(Init.DEFAULT_GROUP_MEMBERS);
         }
