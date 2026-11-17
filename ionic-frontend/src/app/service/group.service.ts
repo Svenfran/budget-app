@@ -74,6 +74,7 @@ export class GroupService {
         this.groupsSideNav.set([]);
         this.groupOverviewList.set([]);
         this.groupMembers.set(Init.DEFAULT_GROUP_MEMBERS);
+        this.groupMembershipHistory.set([]);
         this.hasNoGroups.set(false);
       }
       const userId = user?.id ?? null;

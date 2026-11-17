@@ -6,6 +6,7 @@ import { BehaviorSubject } from 'rxjs';
 import { AuthService } from 'src/app/auth/auth.service';
 import { User } from 'src/app/auth/user';
 import { Init } from 'src/app/constants/default-values';
+import { Zeitraum } from 'src/app/domains/cartlist/new-edit-cart/model/gmh-zeitraum';
 import { GroupMembers } from 'src/app/groupmembers/model/groupmembers-dto';
 import { GroupOverview } from 'src/app/groupoverview/model/group-overview';
 import { Group } from 'src/app/model/group';
@@ -661,14 +662,16 @@ describe('GroupService – Anmelde-Sitzung (DIV-36)', () => {
     const sideNav = [group];
     const overview: GroupOverview[] = [{ id: 5, name: 'WG', dateCreated: group.dateCreated, ownerName: 'Anna', memberCount: 2 }];
     const members: GroupMembers = { id: 5, name: 'WG', ownerName: 'Anna', ownerId: 7, members: [aUser({ id: 8 })] };
+    const history: Zeitraum[] = [{ startDate: REFERENCE_DATE, endDate: REFERENCE_DATE, groupId: 5, userId: 7 }];
     service.groupsSideNav.set(sideNav);
     service.groupOverviewList.set(overview);
     service.groupMembers.set(members);
+    service.groupMembershipHistory.set(history);
     service.hasNoGroups.set(true);
-    return { sideNav, overview, members };
+    return { sideNav, overview, members, history };
   }
 
-  it('setzt beim Logout Seitenleiste, Übersicht, Mitglieder und hasNoGroups zurück (DIV-59)', () => {
+  it('setzt beim Logout Seitenleiste, Übersicht, Mitglieder, Mitgliedschaftszeiträume und hasNoGroups zurück (DIV-59)', () => {
     session.next(aLoggedInUser({ id: 7 }));
     givenGroupDataOfUser();
 
@@ -677,18 +680,20 @@ describe('GroupService – Anmelde-Sitzung (DIV-36)', () => {
     expect(service.groupsSideNav()).withContext('Seitenleiste').toEqual([]);
     expect(service.groupOverviewList()).withContext('Übersicht').toEqual([]);
     expect(service.groupMembers()).withContext('Mitglieder').toEqual(Init.DEFAULT_GROUP_MEMBERS);
+    expect(service.groupMembershipHistory()).withContext('Mitgliedschaftszeiträume').toEqual([]);
     expect(service.hasNoGroups()).withContext('hasNoGroups').toBeFalse();
   });
 
   it('leert bei erneuter Emission desselben Nutzers nichts (z. B. setUserData)', () => {
     session.next(aLoggedInUser({ id: 7 }));
-    const { sideNav, overview, members } = givenGroupDataOfUser();
+    const { sideNav, overview, members, history } = givenGroupDataOfUser();
 
     session.next(aLoggedInUser({ id: 7, name: 'Anna B.' }));
 
     expect(service.groupsSideNav()).withContext('Seitenleiste').toEqual(sideNav);
     expect(service.groupOverviewList()).withContext('Übersicht').toEqual(overview);
     expect(service.groupMembers()).withContext('Mitglieder').toEqual(members);
+    expect(service.groupMembershipHistory()).withContext('Mitgliedschaftszeiträume').toEqual(history);
     expect(service.hasNoGroups()).withContext('hasNoGroups').toBeTrue();
   });
 });
