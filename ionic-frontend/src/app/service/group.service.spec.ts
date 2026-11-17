@@ -654,6 +654,43 @@ describe('GroupService – Anmelde-Sitzung (DIV-36)', () => {
 
     expect(service.activeGroup()).toEqual(Init.DEFAULT_GROUP);
   });
+
+  /** Gruppendaten des angemeldeten Nutzers, abweichend von allen Startwerten. */
+  function givenGroupDataOfUser() {
+    const group = aGroup({ id: 5, name: 'WG' });
+    const sideNav = [group];
+    const overview: GroupOverview[] = [{ id: 5, name: 'WG', dateCreated: group.dateCreated, ownerName: 'Anna', memberCount: 2 }];
+    const members: GroupMembers = { id: 5, name: 'WG', ownerName: 'Anna', ownerId: 7, members: [aUser({ id: 8 })] };
+    service.groupsSideNav.set(sideNav);
+    service.groupOverviewList.set(overview);
+    service.groupMembers.set(members);
+    service.hasNoGroups.set(true);
+    return { sideNav, overview, members };
+  }
+
+  it('setzt beim Logout Seitenleiste, Übersicht, Mitglieder und hasNoGroups zurück (DIV-59)', () => {
+    session.next(aLoggedInUser({ id: 7 }));
+    givenGroupDataOfUser();
+
+    session.next(null);
+
+    expect(service.groupsSideNav()).withContext('Seitenleiste').toEqual([]);
+    expect(service.groupOverviewList()).withContext('Übersicht').toEqual([]);
+    expect(service.groupMembers()).withContext('Mitglieder').toEqual(Init.DEFAULT_GROUP_MEMBERS);
+    expect(service.hasNoGroups()).withContext('hasNoGroups').toBeFalse();
+  });
+
+  it('leert bei erneuter Emission desselben Nutzers nichts (z. B. setUserData)', () => {
+    session.next(aLoggedInUser({ id: 7 }));
+    const { sideNav, overview, members } = givenGroupDataOfUser();
+
+    session.next(aLoggedInUser({ id: 7, name: 'Anna B.' }));
+
+    expect(service.groupsSideNav()).withContext('Seitenleiste').toEqual(sideNav);
+    expect(service.groupOverviewList()).withContext('Übersicht').toEqual(overview);
+    expect(service.groupMembers()).withContext('Mitglieder').toEqual(members);
+    expect(service.hasNoGroups()).withContext('hasNoGroups').toBeTrue();
+  });
 });
 
 describe('GroupService – Antwort nach Sitzungswechsel (DIV-58)', () => {
