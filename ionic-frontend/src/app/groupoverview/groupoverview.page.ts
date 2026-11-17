@@ -1,4 +1,5 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, DestroyRef, OnInit } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { GroupService } from '../service/group.service';
 import { User } from '../auth/user';
 import { AuthService } from '../auth/auth.service';
@@ -35,11 +36,13 @@ export class GroupoverviewPage implements OnInit {
     private modalCtrl: ModalController,
     private router: Router,
     private alertService: AlertService,
-    private translate: TranslateService
+    private translate: TranslateService,
+    private destroyRef: DestroyRef
   ) {}
 
   ngOnInit() {
-    this.authService.user.pipe().subscribe(user => {
+    // Abo endet mit der Seite, sonst lädt jede frühere Instanz bei jeder Nutzer-Emission mit (DIV-60)
+    this.authService.user.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(user => {
       // Logout: kein Request ohne Token, der Fehler würde sonst die Übersicht leeren (DIV-60)
       if (!user) return;
       this.user = user;

@@ -1,4 +1,5 @@
-import { Component, Input, OnInit } from '@angular/core';
+import { Component, DestroyRef, Input, OnInit } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { GroupService } from '../service/group.service';
 import { AuthService } from '../auth/auth.service';
 import { User } from '../auth/user';
@@ -37,12 +38,15 @@ export class GroupmembersPage implements OnInit {
     private modalCtrl: ModalController,
     private fb: FormBuilder,
     private alertCtrl: AlertController,
-    private translate: TranslateService
+    private translate: TranslateService,
+    private destroyRef: DestroyRef
   ) {}
 
   ngOnInit() {
-    this.authService.user.pipe().subscribe(user => {
-      if (user) this.user = user;
+    // Abo endet mit dem Modal; bei Logout kein Request ohne Token (DIV-60)
+    this.authService.user.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(user => {
+      if (!user) return;
+      this.user = user;
       this.groupService.getGroupMembers(this.groupId);
     });
 

@@ -101,6 +101,7 @@ describe('GroupoverviewPage – Gruppe auswählen', () => {
 describe('GroupoverviewPage – Laden der Übersicht (DIV-60)', () => {
   let session: BehaviorSubject<User | null>;
   let loadOverview: jasmine.Spy;
+  let fixture: ComponentFixture<GroupoverviewPage>;
 
   const login = (id: number) => session.next(aLoggedInUser({ id }));
   const logout = () => session.next(null);
@@ -121,7 +122,8 @@ describe('GroupoverviewPage – Laden der Übersicht (DIV-60)', () => {
     });
     loadOverview = spyOn(TestBed.inject(GroupService), 'getGroupsForOverview');
     login(7);
-    TestBed.createComponent(GroupoverviewPage).detectChanges();
+    fixture = TestBed.createComponent(GroupoverviewPage);
+    fixture.detectChanges();
   });
 
   it('lädt die Übersicht bei angemeldetem Nutzer', () => {
@@ -139,5 +141,13 @@ describe('GroupoverviewPage – Laden der Übersicht (DIV-60)', () => {
     login(8);
 
     expect(loadOverview).toHaveBeenCalledTimes(2);
+  });
+
+  it('lädt nach dem Verlassen der Seite bei einem Login nicht mehr (Abo beendet)', () => {
+    fixture.destroy();
+
+    login(8);
+
+    expect(loadOverview).toHaveBeenCalledTimes(1);
   });
 });
