@@ -3,11 +3,15 @@
  * Ohne Optionen verhalten sich die Ladefunktionen wie bisher; Ausnahme ist die Sitzungsprüfung (siehe `isCurrent`).
  */
 export interface LoadOptions {
-  /** Kein Leeren und kein Platzhalter bei Fehlern (alter Stand bleibt, nur `console.warn`). */
+  /**
+   * Kein Leeren und kein Platzhalter bei Fehlern (alter Stand bleibt, nur `console.warn`). Nicht jede Ladefunktion
+   * unterstützt es (z. B. `getGroupMembershipHistoryForGroupAndUser` ignoriert es) – siehe Doku der Funktion.
+   */
   silent?: boolean;
   /**
    * Wird beim Eintreffen der Antwort geprüft; `false` = überholt (Nutzer oder Gruppe gewechselt), Antwort verwerfen.
-   * Ohne Angabe prüfen `getGroupsForSideNav`/`getGroupsForOverview` die Anmelde-Sitzung beim Start des Requests (DIV-58).
+   * Ohne Angabe prüfen `getGroupsForSideNav`/`getGroupsForOverview` (DIV-58) sowie `getGroupMembers`/
+   * `getGroupMembershipHistoryForGroupAndUser` (DIV-60) die Anmelde-Sitzung beim Start des Requests.
    */
   isCurrent?: () => boolean;
 }
