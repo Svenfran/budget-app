@@ -3,7 +3,9 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { IonicModule, IonItemSliding } from '@ionic/angular';
 import { TranslateModule } from '@ngx-translate/core';
+import { BehaviorSubject } from 'rxjs';
 import { AuthService } from 'src/app/auth/auth.service';
+import { User } from 'src/app/auth/user';
 import { AlertService } from 'src/app/service/alert.service';
 import { GroupService } from 'src/app/service/group.service';
 import { StorageService } from 'src/app/service/storage.service';
@@ -92,5 +94,50 @@ describe('GroupoverviewPage – Gruppe auswählen', () => {
     expect(item.close).toHaveBeenCalled();
     expect(groupService.activeGroupId()).toBe(wg.id);
     expect(markedNames()).toEqual(['WG']);
+  });
+});
+
+// DIV-60: Die Übersicht lädt nur bei angemeldetem Nutzer, nicht bei der Logout-Emission (`null`).
+describe('GroupoverviewPage – Laden der Übersicht (DIV-60)', () => {
+  let session: BehaviorSubject<User | null>;
+  let loadOverview: jasmine.Spy;
+
+  const login = (id: number) => session.next(aLoggedInUser({ id }));
+  const logout = () => session.next(null);
+
+  beforeEach(() => {
+    session = new BehaviorSubject<User | null>(null);
+    const auth = authServiceStub(null);
+    (Object.getOwnPropertyDescriptor(auth, 'user')!.get as jasmine.Spy).and.returnValue(session);
+    TestBed.configureTestingModule({
+      declarations: [GroupoverviewPage],
+      imports: [IonicModule.forRoot(), TranslateModule],
+      providers: [
+        ...provideServiceTesting(),
+        { provide: StorageService, useValue: storageServiceFake() },
+        { provide: AuthService, useValue: auth },
+        { provide: AlertService, useValue: alertServiceSpy() },
+      ],
+    });
+    loadOverview = spyOn(TestBed.inject(GroupService), 'getGroupsForOverview');
+    login(7);
+    TestBed.createComponent(GroupoverviewPage).detectChanges();
+  });
+
+  it('lädt die Übersicht bei angemeldetem Nutzer', () => {
+    expect(loadOverview).toHaveBeenCalledTimes(1);
+  });
+
+  it('startet bei Logout keinen Request', () => {
+    logout();
+
+    expect(loadOverview).toHaveBeenCalledTimes(1);
+  });
+
+  it('lädt nach erneutem Login wieder', () => {
+    logout();
+    login(8);
+
+    expect(loadOverview).toHaveBeenCalledTimes(2);
   });
 });

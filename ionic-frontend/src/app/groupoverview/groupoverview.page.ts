@@ -40,7 +40,9 @@ export class GroupoverviewPage implements OnInit {
 
   ngOnInit() {
     this.authService.user.pipe().subscribe(user => {
-      if (user) this.user = user;
+      // Logout: kein Request ohne Token, der Fehler würde sonst die Übersicht leeren (DIV-60)
+      if (!user) return;
+      this.user = user;
       this.groupService.getGroupsForOverview();
     })
   }
