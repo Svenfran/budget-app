@@ -69,6 +69,13 @@ export class GroupService {
         // Logout: aktive Gruppe zurücksetzen (den Storage-Eintrag löscht AuthService.logout()), damit während der
         // Abmeldung keine Tab-Page für die alte Gruppe lädt (DIV-36).
         this.activeGroup.set(Init.DEFAULT_GROUP);
+        // Gruppenlisten und Mitglieder ebenfalls leeren, damit ein danach angemeldeter Nutzer bis zum Eintreffen
+        // seiner eigenen Antworten nicht die Daten des abgemeldeten Nutzers sieht (DIV-59).
+        this.groupsSideNav.set([]);
+        this.groupOverviewList.set([]);
+        this.groupMembers.set(Init.DEFAULT_GROUP_MEMBERS);
+        this.groupMembershipHistory.set([]);
+        this.hasNoGroups.set(false);
       }
       const userId = user?.id ?? null;
       if (userId !== this.sessionUserId) {
