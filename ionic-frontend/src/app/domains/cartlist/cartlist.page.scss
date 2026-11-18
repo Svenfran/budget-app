@@ -5,6 +5,7 @@
     font-size: small;
     .cart-name-date {
         display: flex;
+        flex-shrink: 0; // Datum nie verdrängen (DIV-79)
     }
 }
 
@@ -12,6 +13,26 @@
     display: flex;
     align-items: center;
     gap: 0.25rem;
+    // Füllt den Platz bis zum Datum. contain: inline-size, damit der (nowrap-)Name nicht in die Inhaltsbreite eingeht:
+    // der CDK-Wrapper ist absolut positioniert und richtet sich nach ihr – ein langer Name machte sonst die ganze Liste
+    // breiter als den Bildschirm (versteckt durch overflow-x, Datum außerhalb).
+    flex: 1 1 0;
+    min-width: 0;
+    contain: inline-size;
+    margin-right: 0.5rem; // Abstand zum Datum, auch bei gekürztem Namen
+
+    ion-icon {
+        flex-shrink: 0;
+    }
+}
+
+// Mitgliedsname einzeilig, lange Namen per Ellipsis (DIV-79, statt slice im Template); Zeilenhöhe bleibt gleich
+.cart-user {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .category-circle {

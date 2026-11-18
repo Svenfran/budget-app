@@ -12,6 +12,7 @@ import { AlertService } from 'src/app/service/alert.service';
 import { CategoryService } from 'src/app/service/category.service';
 import { GroupService } from 'src/app/service/group.service';
 import { StorageService } from 'src/app/service/storage.service';
+import { RECURRENCE_TYPE } from 'src/app/constants/recurrence-type';
 import { ionicReady } from 'src/testing/ionic-ready';
 import { aCart, aCategory, aGroup, aLoggedInUser, aUser } from 'src/testing/test-data';
 import { alertServiceSpy, authServiceStub, provideServiceTesting, storageServiceFake } from 'src/testing/test-providers';
@@ -1487,4 +1488,88 @@ describe('CartlistPage – Zusammenfassung und Filterzeile (DIV-79)', () => {
     expect(host.clientHeight).toBeLessThan(before);
     expect(check).toHaveBeenCalled();
   });
+});
+
+// DIV-79 Phase 4: Mitgliedsname in der Liste ungekürzt im DOM, gekürzt nur per CSS-Ellipsis – Wiederholungs-Icon und
+// Datum bleiben sichtbar, der Tipp auf den Namen filtert weiter nach dem Mitglied.
+describe('CartlistPage – Mitgliedsname in der Liste (DIV-79)', () => {
+  const ownName = 'Annabelle-Sophie Maximiliane Mustermann-Lüdenscheid';
+  const otherName = 'Bartholomäus Friedrich Beispielmann-Oberhausen';
+  const recurring = { recurrenceType: RECURRENCE_TYPE.MONTHLY, hasActiveTemplate: true, deleted: false };
+  const own = aCart({ title: 'Miete', userDto: aUser({ userName: ownName }), categoryDto: aCategory({ name: 'Wohnen' }),
+    ...recurring });
+  const other = aCart({ title: 'Strom', userDto: aUser({ userName: otherName }), categoryDto: aCategory({ name: 'Wohnen' }),
+    ...recurring });
+
+  let fixture: ComponentFixture<CartlistPage>;
+  let page: CartlistPage;
+  const root = () => fixture.nativeElement as HTMLElement;
+  const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
+  /** Zeile einer Ausgabe anhand ihres Titels. */
+  const row = (title: string) => Array.from(root().querySelectorAll('ion-item-sliding'))
+    .find(sliding => sliding.querySelector('h2.titlestyle')!.textContent!.trim() === title) as HTMLElement;
+
+  beforeEach(async () => {
+    const cartList = signal<Cart[]>([]);
+    TestBed.configureTestingModule({
+      declarations: [CartlistPage],
+      imports: [IonicModule.forRoot(), ScrollingModule, TranslateModule, RouterModule, ScientificCurrencyPipe],
+      providers: [
+        ...provideServiceTesting(),
+        {
+          provide: CartService, useValue: {
+            cartList, initCartList: signal<Cart[]>([]), cartUpdated: signal(0),
+            sum: computed(() => 0), count: computed(() => cartList().length),
+            getCartListByGroupId: jasmine.createSpy('load')
+              .and.callFake((_group: unknown, _refresh: boolean, onComplete?: () => void) => onComplete?.()),
+          },
+        },
+        { provide: OverviewService, useValue: { overviewRefresh: signal(0) } },
+        { provide: StorageService, useValue: storageServiceFake() },
+        { provide: AuthService, useValue: authServiceStub(aLoggedInUser({ name: ownName })) },
+        { provide: AlertService, useValue: alertServiceSpy() },
+      ],
+    });
+    TestBed.inject(GroupService).setActiveGroup(aGroup({ id: 3, name: 'WG' }));
+    fixture = TestBed.createComponent(CartlistPage);
+    page = fixture.componentInstance;
+    // schmales Gerät, Seite als Flex-Spalte wie in der App (ion-page setzt dort der Router-Outlet)
+    root().classList.add('ion-page');
+    root().style.cssText = 'position: fixed; top: 0; left: 0; width: 320px; height: 640px;';
+    fixture.detectChanges();
+    cartList.set([own, other]);
+    fixture.detectChanges();
+    // Virtual Scroll rendert die Zeilen erst nach dem nächsten Animation Frame
+    await nextFrame();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await ionicReady(root());
+    await nextFrame();
+  });
+
+  for (const [kind, title, name] of [['eigener', 'Miete', ownName], ['fremder', 'Strom', otherName]]) {
+    it(`${kind} langer Name: ungekürzt im DOM, per CSS gekürzt, Wiederholungs-Icon und Datum bleiben sichtbar`, () => {
+      const user = row(title).querySelector('.cart-user') as HTMLElement;
+      const icon = row(title).querySelector('.cart-repeat ion-icon[name="repeat"]') as HTMLElement;
+      const date = row(title).querySelector('.cart-name-date') as HTMLElement;
+
+      expect(user.textContent!.trim()).toBe(name);
+      expect(user.textContent).not.toContain('...');
+      // gekürzt wird nur die Darstellung (Ellipsis): Inhalt breiter als die sichtbare Box
+      expect(user.scrollWidth).toBeGreaterThan(user.clientWidth);
+      // Icon und Datum nicht verdrängt: Icon vollständig links vom Datum, Datum mit voller Breite
+      expect(icon.getBoundingClientRect().width).toBeGreaterThan(0);
+      expect(icon.getBoundingClientRect().right).toBeLessThanOrEqual(date.getBoundingClientRect().left);
+      expect(date.scrollWidth).toBeLessThanOrEqual(date.clientWidth);
+    });
+
+    it(`${kind} langer Name: Tipp filtert weiterhin nach dem Mitglied`, () => {
+      const filter = spyOn(page, 'onFilter');
+
+      (row(title).querySelector('.cart-user') as HTMLElement).click();
+
+      expect(filter).toHaveBeenCalledOnceWith('user', name);
+    });
+  }
 });
