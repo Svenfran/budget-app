@@ -174,11 +174,10 @@
                 "loading": "Aktualisiere Gruppe..."
             },
             "delete": {
-                "header": "Gruppe löschen:",
-                "message": "Möchtest du die Gruppe \"{{groupName}}\" wirklich löschen inkl. aller Ausgaben und Kategorien?",
-                "cancel": "Nein",
-                "ok": "Ja",
-                "loading": "Lösche Gruppe..."
+                "header": "Gruppe löschen?",
+                "message": "Möchtest du die Gruppe „{{groupName}}“ wirklich löschen? Dabei werden alle Ausgaben, Ausgleichszahlungen, Einkaufslisten, Kategorien und weiteren Gruppendaten endgültig entfernt.",
+                "cancel": "Abbrechen",
+                "ok": "Löschen"
             },
             "add_member": {
                 "header": "Mitglied hinzufügen:",
@@ -490,6 +489,15 @@
         "empty": "Keine Gruppen vorhanden.",
         "group": {
             "members": "Mitglieder:"
+        },
+        "menu": {
+            "more_actions": "Weitere Aktionen",
+            "members": "Mitglieder verwalten",
+            "members_hint": "Mitglieder anzeigen, Admin festlegen und Mitglieder hinzufügen",
+            "edit": "Gruppe bearbeiten",
+            "edit_hint": "Namen ändern",
+            "delete": "Gruppe löschen",
+            "delete_hint": "Gruppe und alle Daten endgültig entfernen"
         },
         "group_members": {
             "title": "Gruppenmitglieder",

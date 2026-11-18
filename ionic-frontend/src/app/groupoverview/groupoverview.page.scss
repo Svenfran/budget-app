@@ -1,25 +1,65 @@
 // Aktive Gruppe (DIV-72): Akzentbalken links in der Primärfarbe, leicht abgesetzter Hintergrund. Die Tönung leitet sich
-// aus der Textfarbe ab (Hell: dunkler, Dunkel: heller) und liegt über dem normalen Item-Hintergrund: Der Hintergrund
-// muss deckend bleiben, sonst scheinen die Slide-Aktionen von ion-item-sliding durch das Item hindurch.
+// aus der Textfarbe ab (Hell: dunkler, Dunkel: heller) und liegt über dem normalen Item-Hintergrund; der Hintergrund
+// bleibt deckend (stammt aus der Sliding-Zeit, DIV-80 hat die Sliding-Aktionen durch das ⋮-Menü ersetzt).
 ion-item.active-group {
     --background: linear-gradient(rgba(var(--ion-text-color-rgb, 0, 0, 0), 0.06), rgba(var(--ion-text-color-rgb, 0, 0, 0), 0.06)),
         var(--ion-item-background, var(--ion-background-color, #fff));
 
-    // Balken als Inset-Schatten am inneren Element: liegt über dessen deckendem Hintergrund und gleitet mit dem Item
+    // Balken als Inset-Schatten am inneren Element: liegt über dessen deckendem Hintergrund
     &::part(native) {
         box-shadow: inset 3px 0 0 var(--ion-color-primary);
     }
+}
+
+// Lange Namen dürfen die Zeile nicht verbreitern (FA9): das Label schrumpft, der ⋮-Button nicht
+.group-item ion-label {
+    min-width: 0;
 }
 
 .group-details {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 0.5rem;
     font-size: small;
     .group-members {
         display: flex;
+        flex-shrink: 0;
     }
+    // Admin-Name nur per CSS gekürzt, der volle Text bleibt im DOM (DIV-79-Konvention, vorher `slice` im Template)
     .admin {
-        margin-right: 0.5rem;
+        display: flex;
+        min-width: 0;
+        white-space: nowrap;
+    }
+    .admin-name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}
+
+// ⋮ am Gruppeneintrag (DIV-80): feste, ausreichend große Touch-Fläche, das Icon schrumpft nicht
+.group-menu-button {
+    flex-shrink: 0;
+    min-width: 44px;
+    min-height: 44px;
+    margin-inline-start: 4px;
+    --padding-start: 8px;
+    --padding-end: 8px;
+}
+
+// ⋮-Menü wie in der Einkaufsliste; breiter für die Hinweiszeilen, auf schmalen Displays höchstens Bildschirmbreite
+ion-popover.group-menu {
+    --width: min(18rem, calc(100vw - 2rem));
+    --box-shadow: none;
+
+    ion-icon[slot='start'] {
+        flex-shrink: 0;
+        margin-inline-end: 0.75rem;
+    }
+
+    ion-label p {
+        color: var(--ion-color-medium);
     }
 }

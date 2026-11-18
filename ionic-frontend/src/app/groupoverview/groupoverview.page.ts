@@ -3,16 +3,14 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { GroupService } from '../service/group.service';
 import { User } from '../auth/user';
 import { AuthService } from '../auth/auth.service';
-import { AlertController, IonItemSliding, LoadingController, ModalController } from '@ionic/angular';
+import { AlertController, LoadingController, ModalController } from '@ionic/angular';
 import { Group } from '../model/group';
-import { NewMemberDto } from './model/new-member-dto';
 import { GroupOverview } from './model/group-overview';
 import { GroupmembersPage } from '../groupmembers/groupmembers.page';
 import { INIT_NUMBERS } from '../constants/default-values';
 import { Router } from '@angular/router';
-import { EmailValidator } from '../Validator/email-validator';
-import { AlertService } from '../service/alert.service';
 import { TranslateService } from '@ngx-translate/core';
+import { isGroupAdmin } from './group-permissions';
 
 @Component({
   selector: 'app-groupoverview',
@@ -27,6 +25,10 @@ export class GroupoverviewPage implements OnInit {
   /** markiert die aktive Gruppe in der Liste */
   public activeGroupId = this.groupService.activeGroupId;
   public user: User | undefined;
+  /** ⋮-Menü (DIV-80): ein Popover für alle Gruppen. */
+  public menuOpen = false;
+  public menuEvent: Event | undefined;
+  private menuGroupId: number | null = null;
 
   constructor(
     private groupService: GroupService,
@@ -35,7 +37,6 @@ export class GroupoverviewPage implements OnInit {
     private loadingCtrl: LoadingController,
     private modalCtrl: ModalController,
     private router: Router,
-    private alertService: AlertService,
     private translate: TranslateService,
     private destroyRef: DestroyRef
   ) {}
@@ -61,15 +62,37 @@ export class GroupoverviewPage implements OnInit {
    * Setzt die angeklickte Gruppe aktiv; die Liste markiert sie. Bewusst ohne Navigation (DIV-72) – zurück geht es über
    * den Zurück-Button der Seite.
    */
-  async onSelectGroup(group: GroupOverview, slidingItem: IonItemSliding) {
-    // Ist das Item gerade aufgeswiped, nur schließen statt auswählen
-    if (await slidingItem.getOpenAmount() !== 0) {
-      slidingItem.close();
-      return;
-    }
+  onSelectGroup(group: GroupOverview) {
     if (this.activeGroupId() !== group.id) {
       this.groupService.setActiveGroup(group);
     }
+  }
+
+  /** Gruppenadmin (per User-ID, DIV-80): nur er sieht „Gruppe bearbeiten“ und „Gruppe löschen“. */
+  isAdmin(group: GroupOverview): boolean {
+    return isGroupAdmin(group, this.user);
+  }
+
+  /** ⋮ am Gruppeneintrag (DIV-80): öffnet das Aktionsmenü, ohne die Gruppe auszuwählen. */
+  openGroupMenu(event: Event, group: GroupOverview) {
+    event.stopPropagation();
+    this.menuGroupId = group.id;
+    this.menuEvent = event;
+    this.menuOpen = true;
+  }
+
+  closeGroupMenu() {
+    this.menuOpen = false;
+  }
+
+  /** Gruppe des offenen Menüs aus der aktuellen Liste (kann per Live-Event inzwischen verschwunden sein). */
+  menuGroup(): GroupOverview | undefined {
+    return this.groupOverviewList().find(group => group.id === this.menuGroupId);
+  }
+
+  /** Menüpunkt „Mitglieder verwalten“ (bis zum Mitglieder-Sheet in Phase 5 die bisherige Mitgliederliste). */
+  onManageMembers(group: GroupOverview) {
+    this.showGroupMembers(group.id, group.ownerName);
   }
 
   onCreateGroup() {
@@ -111,8 +134,7 @@ export class GroupoverviewPage implements OnInit {
     }));
   }
 
-  onUpdateGroup(group: Group, slidingItem: IonItemSliding) {
-    slidingItem.close();
+  onUpdateGroup(group: Group) {
     this.alertCtrl.create({
       header: this.translate.instant("alerts.group.edit.header"),
       buttons: [{
@@ -151,9 +173,12 @@ export class GroupoverviewPage implements OnInit {
     }));
   }
 
-  onDeleteGroup(group: Group, slidingItem: IonItemSliding) {
-    slidingItem.close();
-    this.alertCtrl.create({
+  /**
+   * Menüpunkt „Gruppe löschen“: direkt die Sicherheitsabfrage (DIV-80, FA6) mit Gruppenname und Folgen; gelöscht wird
+   * nur über den destruktiven Button.
+   */
+  onDeleteGroup(group: Group): Promise<void> {
+    return this.alertCtrl.create({
       header: this.translate.instant("alerts.group.delete.header"),
       message: this.translate.instant("alerts.group.delete.message", {groupName: group.name}),
       buttons: [{
@@ -161,6 +186,9 @@ export class GroupoverviewPage implements OnInit {
         role: "cancel"
       }, {
         text: this.translate.instant("alerts.group.delete.ok"),
+        role: "destructive",
+        // Ionic färbt `destructive` nur im iOS-Stil; die Danger-Farbe kommt aus global.scss
+        cssClass: "alert-button-danger",
         handler: () => {
           this.deleteGroup(group);
         }
@@ -180,61 +208,7 @@ export class GroupoverviewPage implements OnInit {
     }
   }
 
-  onAddMember(group: Group, slidingItem: IonItemSliding) {
-    slidingItem.close();
-    this.alertCtrl.create({
-      header: this.translate.instant("alerts.group.add_member.header"),
-      buttons: [{
-        text: this.translate.instant("alerts.group.add_member.cancel"),
-        role: "cancel"
-      }, {
-        text: this.translate.instant("alerts.group.add_member.ok"),
-        handler: (data) => {
-          this.loadingCtrl.create({
-            message: this.translate.instant("alerts.group.add_member.loading")
-          }).then(loadingEl => {
-            if (!data) return;
-            const trimmedEmail = data.memberEmail.trim();
-            if (EmailValidator.isNotValid(trimmedEmail)) {
-              let header = this.translate.instant("alerts.group.add_member.error_message_page.header");
-              let message = this.translate.instant("alerts.group.add_member.error_message_page.message");
-              this.alertService.showErrorAlert(header, message);
-              return
-            }
-
-            let newMember: NewMemberDto = {
-              id: group.id,
-              name: group.name,
-              newMemberEmail: trimmedEmail
-            }
-            // Fehler kommen als i18n-Key zurück (DIV-80); bis zum Mitglieder-Sheet weiter als Toast wie bisher
-            this.groupService.addMemberToGroup(newMember).then(result => {
-              if (!result.ok) this.alertService.showToast(this.translate.instant(result.errorKey));
-            });
-            loadingEl.dismiss();
-          })
-        }
-      }],
-      inputs: [
-        {
-          placeholder: this.translate.instant("alerts.group.add_member.placeholder"),
-          name: "memberEmail",
-          type: "email",
-          attributes: {
-            maxlength: INIT_NUMBERS.MAX_LENGTH
-          }
-        }
-      ]
-    }).then(alertEl => alertEl.present().then(() => {
-      const inputField = document.querySelector("ion-alert input") as HTMLElement;
-      if (inputField) {
-        inputField.focus();
-      }
-    }));
-  }
-
-  async showGroupMembers(groupId: number, groupOwnerName: string, slidingItem: IonItemSliding) {
-    slidingItem.close();
+  async showGroupMembers(groupId: number, groupOwnerName: string) {
     const modal = this.modalCtrl.create({
       component: GroupmembersPage,
       componentProps: {

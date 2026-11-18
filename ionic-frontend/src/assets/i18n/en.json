@@ -174,11 +174,10 @@
                 "loading": "Update group..."
             },
             "delete": {
-                "header": "Delete group:",
-                "message": "Do you really want to delete the group \"{{groupName}}\" including all expenses and categories?",
-                "cancel": "No",
-                "ok": "Yes",
-                "loading": "Delete group..."
+                "header": "Delete group?",
+                "message": "Do you really want to delete the group \"{{groupName}}\"? All expenses, settlement payments, shopping lists, categories and other group data will be permanently removed.",
+                "cancel": "Cancel",
+                "ok": "Delete"
             },
             "add_member": {
                 "header": "Add member:",
@@ -490,6 +489,15 @@
         "empty": "No groups available!",
         "group": {
             "members": "Members:"
+        },
+        "menu": {
+            "more_actions": "More actions",
+            "members": "Manage members",
+            "members_hint": "Show members, set the admin and add members",
+            "edit": "Edit group",
+            "edit_hint": "Change name",
+            "delete": "Delete group",
+            "delete_hint": "Permanently remove the group and all its data"
         },
         "group_members": {
             "title": "Group members",

@@ -2,14 +2,15 @@ import { Location } from '@angular/common';
 import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
-import { IonicModule, IonItemSliding } from '@ionic/angular';
-import { TranslateModule } from '@ngx-translate/core';
+import { AlertController, IonicModule } from '@ionic/angular';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { BehaviorSubject } from 'rxjs';
 import { AuthService } from 'src/app/auth/auth.service';
 import { User } from 'src/app/auth/user';
 import { AlertService } from 'src/app/service/alert.service';
 import { GroupService } from 'src/app/service/group.service';
 import { StorageService } from 'src/app/service/storage.service';
+import { ionicReady } from 'src/testing/ionic-ready';
 import { aGroup, aGroupOverview, aLoggedInUser } from 'src/testing/test-data';
 import { alertServiceSpy, authServiceStub, provideServiceTesting, storageServiceFake } from 'src/testing/test-providers';
 import { GroupoverviewPage } from './groupoverview.page';
@@ -26,13 +27,6 @@ describe('GroupoverviewPage – Gruppe auswählen', () => {
   const haushalt = overview(1, 'Haushalt');
   const wg = overview(2, 'WG');
   const urlaub = overview(3, 'Urlaub');
-  /** Item-Ersatz: `openAmount` > 0 = aufgeswiped */
-  const slidingItem = (openAmount = 0) => {
-    const item = jasmine.createSpyObj<IonItemSliding>('IonItemSliding', ['getOpenAmount', 'close']);
-    item.getOpenAmount.and.resolveTo(openAmount);
-    item.close.and.resolveTo();
-    return item;
-  };
   const markedNames = () => Array.from<HTMLElement>(fixture.nativeElement.querySelectorAll('ion-item.active-group'))
     .map(item => item.querySelector('h2')!.textContent!.trim());
 
@@ -61,13 +55,13 @@ describe('GroupoverviewPage – Gruppe auswählen', () => {
     expect(fixture.nativeElement.querySelector('ion-item.active-group').getAttribute('aria-current')).toBe('true');
   });
 
-  it('Klick setzt die Gruppe aktiv, verschiebt die Markierung und navigiert nicht', async () => {
+  it('Klick setzt die Gruppe aktiv, verschiebt die Markierung und navigiert nicht', () => {
     const router = TestBed.inject(Router);
     const navigate = spyOn(router, 'navigate');
     const navigateByUrl = spyOn(router, 'navigateByUrl');
     const back = spyOn(TestBed.inject(Location), 'back');
 
-    await page.onSelectGroup(urlaub, slidingItem());
+    page.onSelectGroup(urlaub);
     fixture.detectChanges();
 
     expect(groupService.activeGroupId()).toBe(urlaub.id);
@@ -77,33 +71,62 @@ describe('GroupoverviewPage – Gruppe auswählen', () => {
     expect(back).not.toHaveBeenCalled();
   });
 
-  it('Klick auf die bereits aktive Gruppe setzt sie nicht erneut', async () => {
+  it('Klick auf die bereits aktive Gruppe setzt sie nicht erneut', () => {
     const setActive = spyOn(groupService, 'setActiveGroup').and.callThrough();
 
-    await page.onSelectGroup(wg, slidingItem());
+    page.onSelectGroup(wg);
 
     expect(setActive).not.toHaveBeenCalled();
     expect(groupService.activeGroupId()).toBe(wg.id);
   });
 
-  it('ein aufgeswiptes Item wird nur geschlossen, die aktive Gruppe bleibt', async () => {
-    const item = slidingItem(40);
+  it('hat keine Sliding-Aktionen mehr, sondern je Gruppe einen ⋮-Button (DIV-80)', () => {
+    const host = fixture.nativeElement as HTMLElement;
 
-    await page.onSelectGroup(haushalt, item);
-    fixture.detectChanges();
-
-    expect(item.close).toHaveBeenCalled();
-    expect(groupService.activeGroupId()).toBe(wg.id);
-    expect(markedNames()).toEqual(['WG']);
+    expect(host.querySelector('ion-item-sliding')).toBeNull();
+    expect(host.querySelectorAll('ion-item.group-item .group-menu-button').length).toBe(3);
   });
 });
 
-// DIV-80: Admin-Aktionen per User-ID, nicht per Name – ein gleichnamiges Mitglied ist kein Admin.
-describe('GroupoverviewPage – Admin-Erkennung per ID (DIV-80)', () => {
+// DIV-80: ⋮-Menü je Gruppe mit Admin-Erkennung per User-ID (ein gleichnamiges Mitglied ist kein Admin)
+describe('GroupoverviewPage – Gruppenmenü (DIV-80)', () => {
   let fixture: ComponentFixture<GroupoverviewPage>;
+  let page: GroupoverviewPage;
+  let groupService: GroupService;
   const me = aLoggedInUser({ name: 'Anna' });
+  // fremde Gruppe, deren Admin zufällig genauso heißt wie der Nutzer
+  const fremd = aGroupOverview({ id: 1, name: 'Fremd', ownerName: 'Anna', ownerId: me.id + 1000 });
+  const eigene = aGroupOverview({ id: 2, name: 'Eigene', ownerName: 'Anna', ownerId: me.id });
 
-  beforeEach(() => {
+  const host = () => fixture.nativeElement as HTMLElement;
+  const popover = () => document.querySelector('ion-popover.group-menu') as HTMLIonPopoverElement | null;
+  const menuepunkte = () => Array.from(popover()?.querySelectorAll('ion-item') ?? []) as HTMLIonItemElement[];
+  const punkt = (cls: string) => popover()!.querySelector(`ion-item.${cls}`) as HTMLIonItemElement;
+
+  /** Tippt auf ⋮ der Gruppe und wartet, bis Ionic das Popover samt Inhalt dargestellt hat (Muster Einkaufsliste). */
+  const menuOeffnen = async (index: number) => {
+    (host().querySelectorAll('.group-menu-button')[index] as HTMLElement).click();
+    fixture.detectChanges();
+    for (let i = 0; i < 100 && menuepunkte().length === 0; i++) {
+      await new Promise(resolve => setTimeout(resolve, 20));
+      fixture.detectChanges();
+    }
+    expect(menuepunkte().length).toBeGreaterThan(0);
+  };
+
+  // Ionic hängt das dargestellte Popover außerhalb der Fixture ein: schließen und entfernen
+  const aufraeumen = async () => {
+    for (const el of Array.from(document.querySelectorAll('ion-popover.group-menu')) as HTMLIonPopoverElement[]) {
+      await el.dismiss().catch(() => undefined);
+      el.remove();
+    }
+    for (const el of Array.from(document.querySelectorAll('ion-alert')) as HTMLIonAlertElement[]) {
+      await el.dismiss().catch(() => undefined);
+      el.remove();
+    }
+  };
+
+  beforeEach(async () => {
     TestBed.configureTestingModule({
       declarations: [GroupoverviewPage],
       imports: [IonicModule.forRoot(), TranslateModule],
@@ -114,23 +137,132 @@ describe('GroupoverviewPage – Admin-Erkennung per ID (DIV-80)', () => {
         { provide: AlertService, useValue: alertServiceSpy() },
       ],
     });
-    const groupService = TestBed.inject(GroupService);
+    groupService = TestBed.inject(GroupService);
     spyOn(groupService, 'getGroupsForOverview');
-    groupService.groupOverviewList.set([
-      // fremde Gruppe, deren Admin zufällig genauso heißt wie der Nutzer
-      aGroupOverview({ id: 1, name: 'Fremd', ownerName: 'Anna', ownerId: me.id + 1000 }),
-      aGroupOverview({ id: 2, name: 'Eigene', ownerName: 'Anna', ownerId: me.id }),
-    ]);
+    groupService.groupOverviewList.set([fremd, eigene]);
+    groupService.setActiveGroup(aGroup({ id: fremd.id, name: fremd.name }));
     fixture = TestBed.createComponent(GroupoverviewPage);
+    page = fixture.componentInstance;
     fixture.detectChanges();
+    await ionicReady(host());
   });
 
-  it('zeigt Bearbeiten/Löschen/Hinzufügen nur in der Gruppe, deren ownerId der Nutzer ist', () => {
-    const adminActions = Array.from<HTMLElement>(fixture.nativeElement.querySelectorAll('ion-item-sliding'))
-      .map(item => item.querySelectorAll('ion-item-option').length);
+  afterEach(aufraeumen);
 
-    // je Gruppe: Mitglieder (alle) + 3 Admin-Aktionen
-    expect(adminActions).toEqual([1, 4]);
+  it('Admin sieht „Mitglieder verwalten“, „Gruppe bearbeiten“ und „Gruppe löschen“', async () => {
+    await menuOeffnen(1);
+
+    expect(menuepunkte().map(item => item.className.match(/menu-\w+/)![0]))
+      .toEqual(['menu-members', 'menu-edit', 'menu-delete']);
+    expect(menuepunkte().map(item => item.querySelector('h3')!.textContent!.trim()))
+      .toEqual(['groups.menu.members', 'groups.menu.edit', 'groups.menu.delete']);
+  });
+
+  it('Mitglied (auch bei gleichem Namen wie der Admin) sieht nur „Mitglieder verwalten“', async () => {
+    await menuOeffnen(0);
+
+    expect(menuepunkte().map(item => item.className.match(/menu-\w+/)![0])).toEqual(['menu-members']);
+  });
+
+  it('Tipp auf ⋮ wählt die Gruppe nicht aus', async () => {
+    const setActive = spyOn(groupService, 'setActiveGroup').and.callThrough();
+
+    await menuOeffnen(1);
+
+    expect(setActive).not.toHaveBeenCalled();
+    expect(groupService.activeGroupId()).toBe(fremd.id);
+  });
+
+  it('„Gruppe bearbeiten“ öffnet die Bearbeitung genau dieser Gruppe', async () => {
+    const update = spyOn(page, 'onUpdateGroup');
+
+    await menuOeffnen(1);
+    punkt('menu-edit').click();
+
+    expect(update).toHaveBeenCalledOnceWith(eigene);
+  });
+
+  it('„Mitglieder verwalten“ öffnet die Mitglieder genau dieser Gruppe', async () => {
+    const members = spyOn(page, 'showGroupMembers').and.resolveTo();
+
+    await menuOeffnen(1);
+    punkt('menu-members').click();
+
+    expect(members).toHaveBeenCalledOnceWith(eigene.id, eigene.ownerName);
+  });
+
+  it('„Gruppe löschen“ öffnet direkt die Sicherheitsabfrage mit Gruppenname; gelöscht wird nur über „Löschen“', async () => {
+    const translate = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
+    // Alert nur als Stub: ein echtes Overlay würde nach dem Test noch erscheinen und Layout-Tests anderer Specs verdecken
+    const present = jasmine.createSpy('present').and.resolveTo();
+    const create = spyOn(TestBed.inject(AlertController), 'create')
+      .and.resolveTo({ present } as unknown as HTMLIonAlertElement);
+    const deleteGroup = spyOn(groupService, 'deleteGroup').and.resolveTo(true);
+
+    await menuOeffnen(1);
+    punkt('menu-delete').click();
+    expect(create).toHaveBeenCalledTimes(1);
+    await create.calls.mostRecent().returnValue;
+    await new Promise(resolve => setTimeout(resolve));
+    expect(present).toHaveBeenCalled();
+
+    expect(translate).toHaveBeenCalledWith('alerts.group.delete.message', { groupName: 'Eigene' });
+    const buttons = create.calls.mostRecent().args[0]!.buttons as { role?: string; cssClass?: string; handler?: () => void }[];
+    expect(buttons.map(b => b.role)).toEqual(['cancel', 'destructive']);
+    expect(buttons[1].cssClass).toBe('alert-button-danger');
+    expect(buttons[0].handler).toBeUndefined();
+    expect(deleteGroup).not.toHaveBeenCalled();
+
+    buttons[1].handler!();
+    expect(deleteGroup).toHaveBeenCalledOnceWith(eigene);
+  });
+});
+
+// DIV-80: Lange Namen verbreitern die Zeile nicht, der ⋮-Button behält seine Touch-Fläche.
+describe('GroupoverviewPage – Layout langer Namen (DIV-80)', () => {
+  let fixture: ComponentFixture<GroupoverviewPage>;
+  const WIDTH = 320;
+
+  beforeEach(async () => {
+    TestBed.configureTestingModule({
+      declarations: [GroupoverviewPage],
+      imports: [IonicModule.forRoot(), TranslateModule],
+      providers: [
+        ...provideServiceTesting(),
+        { provide: StorageService, useValue: storageServiceFake() },
+        { provide: AuthService, useValue: authServiceStub(aLoggedInUser()) },
+        { provide: AlertService, useValue: alertServiceSpy() },
+      ],
+    });
+    const groupService = TestBed.inject(GroupService);
+    spyOn(groupService, 'getGroupsForOverview');
+    groupService.groupOverviewList.set([aGroupOverview({
+      name: 'Eine sehr lange Gruppenbezeichnung ohne Ende, die mehrere Zeilen braucht',
+      ownerName: 'Maximiliane-Alexandra von Hohenzollern-Sigmaringen',
+      memberCount: 12,
+    })]);
+    fixture = TestBed.createComponent(GroupoverviewPage);
+    const root = fixture.nativeElement as HTMLElement;
+    root.classList.add('ion-page');
+    Object.assign(root.style, { position: 'fixed', top: '0', left: '0', width: `${WIDTH}px`, height: '640px' });
+    fixture.detectChanges();
+    await ionicReady(root);
+    await new Promise(resolve => requestAnimationFrame(resolve));
+  });
+
+  it('kein horizontaler Überlauf; Admin-Name per Ellipsis gekürzt, voller Text im DOM; ⋮ mindestens 44 px', () => {
+    const root = fixture.nativeElement as HTMLElement;
+    const item = root.querySelector('ion-item.group-item') as HTMLElement;
+    const adminName = root.querySelector('.admin-name') as HTMLElement;
+    const button = root.querySelector('.group-menu-button') as HTMLElement;
+
+    expect(item.getBoundingClientRect().right).toBeLessThanOrEqual(WIDTH + 0.5);
+    expect(button.getBoundingClientRect().right).toBeLessThanOrEqual(WIDTH + 0.5);
+    expect(button.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
+    expect(button.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(adminName.textContent!.trim()).toBe('Maximiliane-Alexandra von Hohenzollern-Sigmaringen');
+    expect(getComputedStyle(adminName).textOverflow).toBe('ellipsis');
+    expect(adminName.scrollWidth).toBeGreaterThan(adminName.clientWidth);
   });
 });
 
