@@ -1237,3 +1237,254 @@ describe('CartlistPage – Header (DIV-79)', () => {
     expect(actions.querySelector('ion-popover')!.getAttribute('trigger')).toBe('cartlist-popover-button');
   });
 });
+
+// DIV-79 Phase 3: Zusammenfassung (Bezeichnung, Anzahl, Summe) und Filterzeile (Filter-Schaltfläche, Chip mit „×“) mit
+// echtem Template. CartService-Fake wie „Filter (Bestand)“: Anzahl und Summe werden aus der gefilterten Liste berechnet.
+// Die Filterlogik selbst bleibt unverändert und ist dort abgedeckt; hier zählt, was angezeigt wird.
+describe('CartlistPage – Zusammenfassung und Filterzeile (DIV-79)', () => {
+  let page: CartlistPage;
+  let fixture: ComponentFixture<CartlistPage>;
+  let cartList: WritableSignal<Cart[]>;
+  let initCartList: WritableSignal<Cart[]>;
+
+  const sven = aUser({ userName: 'Sven' });
+  const anna = aUser({ userName: 'Anna' });
+  const lebensmittel = aCategory({ name: 'Lebensmittel' });
+  const drogerie = aCategory({ name: 'Drogerie' });
+  const edeka = aCart({ title: 'Edeka', amount: 40, userDto: sven, categoryDto: lebensmittel });
+  const rossmann = aCart({ title: 'Rossmann', amount: 10.5, userDto: anna, categoryDto: drogerie });
+  const markt = aCart({ title: 'Markt', amount: 12, userDto: anna, categoryDto: lebensmittel });
+  const alle = [edeka, rossmann, markt];
+  const noFilter = { title: null, description: null, category: null, startDate: null, endDate: null, userName: null };
+
+  const root = () => fixture.nativeElement as HTMLElement;
+  /** Text eines Elements, geschützte Leerzeichen (Intl-Währungsformat) als normale Leerzeichen. */
+  const plain = (value: string) => value.replace(/ /g, ' ').trim();
+  const text = (selector: string) => plain(root().querySelector(selector)?.textContent ?? '');
+  const label = () => text('.spendings-summary__label');
+  const count = () => text('.spendings-summary__count');
+  const sum = () => text('.spendings-summary__sum');
+  const chip = () => root().querySelector('.spendings-filter__chip');
+  const chipRemove = () => root().querySelector('.spendings-filter__chip-remove') as HTMLButtonElement;
+  const filterButton = () => root().querySelector('.spendings-filter__button') as HTMLButtonElement;
+  /** Aktiver Filter: Schaltfläche gefüllt statt umrandet. */
+  const filterActive = () => filterButton().classList.contains('spendings-filter__button--active');
+  const render = () => fixture.detectChanges();
+  const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
+
+  beforeEach(async () => {
+    cartList = signal<Cart[]>([]);
+    initCartList = signal<Cart[]>([]);
+    const countSignal = computed(() => cartList().length);
+    const sumSignal = computed(() => cartList().reduce((s, c) => s + (+c.amount), 0));
+    TestBed.configureTestingModule({
+      declarations: [CartlistPage],
+      imports: [IonicModule.forRoot(), ScrollingModule, TranslateModule, RouterModule, ScientificCurrencyPipe],
+      providers: [
+        ...provideServiceTesting(),
+        {
+          provide: CartService, useValue: {
+            cartList, initCartList, cartUpdated: signal(0), sum: sumSignal, count: countSignal,
+            getCartListByGroupId: jasmine.createSpy('load')
+              .and.callFake((_group: unknown, _refresh: boolean, onComplete?: () => void) => onComplete?.()),
+          },
+        },
+        { provide: OverviewService, useValue: { overviewRefresh: signal(0) } },
+        { provide: StorageService, useValue: storageServiceFake() },
+        { provide: AuthService, useValue: authServiceStub(aLoggedInUser({ name: 'Anna' })) },
+        { provide: AlertService, useValue: alertServiceSpy() },
+      ],
+    });
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('de', { domains: { spendings: {
+      total: 'Gesamt', filter: 'Filter', filter_active: 'Filter aktiv', remove_filter: 'Filter entfernen',
+      count_one: '{{count}} Ausgabe', count_other: '{{count}} Ausgaben',
+    } } });
+    translate.use('de');
+    TestBed.inject(GroupService).setActiveGroup(aGroup({ id: 3, name: 'WG' }));
+    fixture = TestBed.createComponent(CartlistPage);
+    page = fixture.componentInstance;
+    // schmales Gerät mit definierter Fläche (für die Höhenmessung im letzten Test); ion-page setzt in der App der
+    // Router-Outlet: Seite als Flex-Spalte, ion-content erhält die Höhe unter dem Header
+    root().classList.add('ion-page');
+    root().style.cssText = 'position: fixed; top: 0; left: 0; width: 320px; height: 640px;';
+    render();
+    initCartList.set(alle);
+    cartList.set(alle);
+    render();
+    await ionicReady(root());
+  });
+
+  it('ohne Filter: „Gesamt“, Anzahl und Summe der ganzen Liste, Filter-Schaltfläche nicht aktiv, kein Chip (AC 9)', () => {
+    expect(label()).toBe('Gesamt');
+    expect(count()).toBe('3 Ausgaben');
+    expect(sum()).toBe('62,50 €');
+    expect(filterActive()).toBeFalse();
+    expect(chip()).toBeNull();
+  });
+
+  it('Schnellfilter Kategorie: Bezeichnung, gefilterte Werte, Chip mit Bezeichnung, Schaltfläche aktiv (AC 6, 9)', () => {
+    page.onFilterCategory(edeka);
+    render();
+
+    expect(label()).toBe('Lebensmittel');
+    expect(count()).toBe('2 Ausgaben');
+    expect(sum()).toBe('52,00 €');
+    expect(text('.spendings-filter__chip-label')).toBe('Lebensmittel');
+    expect(filterActive()).toBeTrue();
+  });
+
+  it('Schnellfilter Mitglied: langer Name ungekürzt in Bezeichnung und Chip (Kürzung nur per CSS) (AC 6)', () => {
+    const longName = 'Maximiliane Mustermann-Lüdenscheid';
+    const baumarkt = aCart({ title: 'Baumarkt', amount: 7.25, userDto: aUser({ userName: longName }), categoryDto: drogerie });
+    initCartList.set([...alle, baumarkt]);
+    cartList.set([...alle, baumarkt]);
+
+    page.onFilter('user', longName);
+    render();
+
+    expect(label()).toBe(longName);
+    expect(text('.spendings-filter__chip-label')).toBe(longName);
+    expect(count()).toBe('1 Ausgabe');
+    expect(sum()).toBe('7,25 €');
+  });
+
+  it('Sheet-Filter mit einem Kriterium: „Gesamt“, Chip „Filter aktiv“, Singular bei einer Ausgabe (AC 7, 9)', () => {
+    page.filterCarts({ ...noFilter, category: ['Drogerie'] });
+    render();
+
+    expect(label()).toBe('Gesamt');
+    expect(count()).toBe('1 Ausgabe');
+    expect(sum()).toBe('10,50 €');
+    expect(text('.spendings-filter__chip-label')).toBe('Filter aktiv');
+    expect(filterActive()).toBeTrue();
+  });
+
+  it('kombinierter Sheet-Filter (Kategorie und Mitglied): „Gesamt“ und gefilterte Werte (AC 8, 9)', () => {
+    page.filterCarts({ ...noFilter, category: ['Lebensmittel'], userName: ['Anna'] });
+    render();
+
+    expect(label()).toBe('Gesamt');
+    expect(count()).toBe('1 Ausgabe');
+    expect(sum()).toBe('12,00 €');
+    expect(text('.spendings-filter__chip-label')).toBe('Filter aktiv');
+  });
+
+  it('Schaltfläche und „×“ optisch 32px, Tippfläche 44px: 5px über und unter dem Element trifft der Tipp noch (AC 11)', async () => {
+    page.onFilterCategory(edeka);
+    render();
+    // Chip und sein Icon entstehen erst jetzt: Hydration und Layout abwarten, bevor gemessen wird
+    await ionicReady(root());
+    await nextFrame();
+    for (const element of [filterButton(), chipRemove()]) {
+      const box = element.getBoundingClientRect();
+      const x = box.left + box.width / 2;
+      expect(box.height).toBe(32);
+      expect(element.contains(document.elementFromPoint(x, box.top - 5))).withContext('oberhalb').toBeTrue();
+      expect(element.contains(document.elementFromPoint(x, box.bottom + 5))).withContext('unterhalb').toBeTrue();
+    }
+  });
+
+  it('Filter-Schaltfläche öffnet das bestehende Filter-Sheet (AC 10)', () => {
+    const open = spyOn(page, 'openFilterSheet').and.resolveTo();
+
+    filterButton().click();
+
+    expect(open).toHaveBeenCalledTimes(1);
+  });
+
+  it('„×“ im Chip hebt den Filter auf: kein Chip, vollständige Liste (AC 11)', () => {
+    page.onFilterCategory(edeka);
+    render();
+    expect(chipRemove().getAttribute('aria-label')).toBe('Filter entfernen');
+
+    chipRemove().click();
+    render();
+
+    expect(chip()).toBeNull();
+    expect(label()).toBe('Gesamt');
+    expect(count()).toBe('3 Ausgaben');
+    expect(sum()).toBe('62,50 €');
+    expect(filterActive()).toBeFalse();
+  });
+
+  it('Filter ohne Treffer: 0 Ausgaben, 0,00 €, Chip bleibt; danach „×“ → vollständige Liste', () => {
+    page.filterCarts({ ...noFilter, title: 'gibt es nicht' });
+    render();
+    expect(count()).toBe('0 Ausgaben');
+    expect(sum()).toBe('0,00 €');
+    expect(chip()).not.toBeNull();
+
+    chipRemove().click();
+    render();
+
+    expect(count()).toBe('3 Ausgaben');
+    expect(sum()).toBe('62,50 €');
+  });
+
+  it('große, negative und sehr große Beträge erscheinen vollständig (AC 5)', () => {
+    const pipe = new ScientificCurrencyPipe();
+    expect(plain(pipe.transform(999999.99))).toBe('999.999,99 €');
+    for (const amount of [999999.99, -999999.99, 123456789]) {
+      cartList.set([aCart({ amount, userDto: sven, categoryDto: lebensmittel })]);
+      render();
+      expect(sum()).toBe(plain(pipe.transform(amount)));
+    }
+  });
+
+  it('Zusammenfassung und Filterzeile liegen genau über der Listenspalte (schmal und breit, z. B. im Browser)', async () => {
+    const columns = () => {
+      const toolbarCol = root().querySelector('.spendings-toolbar ion-col')!.getBoundingClientRect();
+      const listCol = root().querySelector('cdk-virtual-scroll-viewport')!.closest('ion-col')!.getBoundingClientRect();
+      return { toolbarCol, listCol };
+    };
+    // Der md-Breakpoint von ion-col (768px) hängt an der Fensterbreite, nicht an der Fixture: dafür das Karma-iframe
+    // vorübergehend verbreitern (wie im Drag-&-Drop-Block der Einkaufsliste die Höhe)
+    const frame = window.frameElement as HTMLElement | null;
+    const frameWidth = frame?.style.width ?? '';
+    try {
+      for (const width of [320, 1000]) {
+        if (frame) frame.style.width = `${width + 100}px`;
+        root().style.width = `${width}px`;
+        // ion-col rechnet seine Breite bei window-resize neu und rendert im nächsten Frame
+        window.dispatchEvent(new Event('resize'));
+        render();
+        await nextFrame();
+        await nextFrame();
+        const { toolbarCol, listCol } = columns();
+        expect(toolbarCol.width).withContext(`${width}px`).toBeGreaterThan(0);
+        expect(toolbarCol.left).withContext(`${width}px`).toBeCloseTo(listCol.left, 0);
+        expect(toolbarCol.right).withContext(`${width}px`).toBeCloseTo(listCol.right, 0);
+        if (width === 1000 && window.innerWidth >= 768) {
+          // im Browser: halbe Breite, zentriert – nicht über die ganze Seite
+          expect(toolbarCol.width).toBeLessThan(width * 0.6);
+        }
+      }
+      expect(window.innerWidth).withContext('md-Breakpoint im Test erreicht').toBeGreaterThanOrEqual(768);
+    } finally {
+      if (frame) frame.style.width = frameWidth;
+    }
+  });
+
+  it('Chip mit langer Bezeichnung lässt den Header wachsen → die Liste wird neu gemessen', async () => {
+    const lang = aCategory({ name: 'Lebensmittel und Haushaltswaren vom Wochenmarkt' });
+    const carts = [aCart({ amount: 3, userDto: sven, categoryDto: lang }), ...alle];
+    initCartList.set(carts);
+    cartList.set(carts);
+    render();
+    await nextFrame();
+    render();
+    const host = root().querySelector('.ion-content-scroll-host') as HTMLElement;
+    const check = spyOn(page.viewport!, 'checkViewportSize').and.callThrough();
+    const before = host.clientHeight;
+
+    page.onFilterCategory(carts[0]);
+    render();
+    await nextFrame();
+    await nextFrame();
+
+    // Voraussetzung: bei 320 px Breite ändert der Chip tatsächlich die Höhe (Filterzeile bricht um)
+    expect(host.clientHeight).toBeLessThan(before);
+    expect(check).toHaveBeenCalled();
+  });
+});
