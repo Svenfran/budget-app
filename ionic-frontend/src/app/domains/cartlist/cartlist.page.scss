@@ -26,7 +26,8 @@
     }
 }
 
-// Mitgliedsname einzeilig, lange Namen per Ellipsis (DIV-79, statt slice im Template); Zeilenhöhe bleibt gleich
+// Mitgliedsname einzeilig, lange Namen per Ellipsis (DIV-79, statt slice im Template); Zeilenhöhe bleibt gleich.
+// Gilt auch für gelöschte/entfernte Nutzer (kursiv mit Zusatz), damit deren Zeile nicht umbricht.
 .cart-user {
     display: block;
     min-width: 0;

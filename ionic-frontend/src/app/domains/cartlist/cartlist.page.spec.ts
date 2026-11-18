@@ -1500,6 +1500,10 @@ describe('CartlistPage – Mitgliedsname in der Liste (DIV-79)', () => {
     ...recurring });
   const other = aCart({ title: 'Strom', userDto: aUser({ userName: otherName }), categoryDto: aCategory({ name: 'Wohnen' }),
     ...recurring });
+  // aus der Gruppe entfernte Person (Phase 5): kursiv mit Zusatz „(entfernt)“
+  const removedName = 'Konstantin Wilhelm Ausgetreten-Langenberg';
+  const removed = aCart({ title: 'Kino', userDto: aUser({ userName: removedName }), categoryDto: aCategory({ name: 'Freizeit' }),
+    deleted: true });
 
   let fixture: ComponentFixture<CartlistPage>;
   let page: CartlistPage;
@@ -1530,6 +1534,9 @@ describe('CartlistPage – Mitgliedsname in der Liste (DIV-79)', () => {
         { provide: AlertService, useValue: alertServiceSpy() },
       ],
     });
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('de', { global: { user: { removed: 'Nutzer entfernt' } } });
+    translate.use('de');
     TestBed.inject(GroupService).setActiveGroup(aGroup({ id: 3, name: 'WG' }));
     fixture = TestBed.createComponent(CartlistPage);
     page = fixture.componentInstance;
@@ -1537,7 +1544,7 @@ describe('CartlistPage – Mitgliedsname in der Liste (DIV-79)', () => {
     root().classList.add('ion-page');
     root().style.cssText = 'position: fixed; top: 0; left: 0; width: 320px; height: 640px;';
     fixture.detectChanges();
-    cartList.set([own, other]);
+    cartList.set([own, other, removed]);
     fixture.detectChanges();
     // Virtual Scroll rendert die Zeilen erst nach dem nächsten Animation Frame
     await nextFrame();
@@ -1572,4 +1579,16 @@ describe('CartlistPage – Mitgliedsname in der Liste (DIV-79)', () => {
       expect(filter).toHaveBeenCalledOnceWith('user', name);
     });
   }
+  it('entfernte Person mit langem Namen: einzeilig per Ellipsis gekürzt wie aktive Mitglieder, Datum sichtbar (Phase 5)', () => {
+    const user = row('Kino').querySelector('.cart-user') as HTMLElement;
+    const date = row('Kino').querySelector('.cart-name-date') as HTMLElement;
+    const activeUser = row('Strom').querySelector('.cart-user') as HTMLElement;
+
+    expect(user.querySelector('em')!.textContent!.trim()).toBe(`${removedName} (entfernt)`);
+    expect(user.scrollWidth).toBeGreaterThan(user.clientWidth);
+    // eine Zeile wie bei aktiven Mitgliedern statt Umbruch
+    expect(user.getBoundingClientRect().height).toBe(activeUser.getBoundingClientRect().height);
+    expect(user.getBoundingClientRect().right).toBeLessThanOrEqual(date.getBoundingClientRect().left);
+    expect(date.scrollWidth).toBeLessThanOrEqual(date.clientWidth);
+  });
 });

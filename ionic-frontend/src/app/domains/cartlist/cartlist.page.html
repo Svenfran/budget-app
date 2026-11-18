@@ -126,7 +126,7 @@
                         <strong>{{ cart.userDto.userName }}</strong>
                       </ion-text>
                       <ion-icon *ngIf="cart.recurrenceType !== 'NONE' && cart.hasActiveTemplate === true && cart.deleted === false" name="repeat" slot="icon-only" color="medium" title="wiederkehrend"></ion-icon>
-                      <ion-text *ngIf="cart.deleted === true" (click)="onFilter('user', cart.userDto.userName)" color="medium" >
+                      <ion-text *ngIf="cart.deleted === true" (click)="onFilter('user', cart.userDto.userName)" color="medium" class="cart-user">
                         <em>{{ cart.userDto.userName.includes('DELETED') ? ('global.user.deleted' | translate) : cart.userDto.userName + getTranslationKey() }}</em>
                       </ion-text>
                     </div>
