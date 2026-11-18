@@ -203,6 +203,13 @@
                 "message": "Möchtest du das Mitglied \"{{memberName}}\" wirklich aus der Gruppe \"{{group}}\" entfernen inkl. aller gespeicherten Ausgaben?",
                 "cancel": "Nein",
                 "ok": "Ja"
+            },
+            "error": {
+                "add_group": "Die Gruppe konnte nicht erstellt werden.",
+                "update_group": "Die Gruppe konnte nicht gespeichert werden.",
+                "delete_group": "Die Gruppe konnte nicht gelöscht werden.",
+                "remove_member": "Das Mitglied konnte nicht entfernt werden.",
+                "change_owner": "Der Gruppenadmin konnte nicht geändert werden."
             }
         },
         "category": {

@@ -203,6 +203,13 @@
                 "message": "Do you really want to remove the member \"{{memberName}}\" from the group \"{{group}}\" including all saved expenses?",
                 "cancel": "No",
                 "ok": "Yes"
+            },
+            "error": {
+                "add_group": "The group could not be created.",
+                "update_group": "The group could not be saved.",
+                "delete_group": "The group could not be deleted.",
+                "remove_member": "The member could not be removed.",
+                "change_owner": "The group admin could not be changed."
             }
         },
         "category": {

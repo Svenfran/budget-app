@@ -22,9 +22,6 @@ export class GroupmembersPage implements OnInit {
   @Input() groupOwnerName!: string;
 
   public groupMembers = this.groupService.groupMembers;
-  public activeGroup = this.groupService.activeGroup;
-  public groupsSideNav = this.groupService.groupsSideNav;
-  public groupOverviewList = this.groupService.groupOverviewList;
   public user!: User;
   public isSelected: boolean = false;
   public isNotVisible: boolean = true;
@@ -63,34 +60,11 @@ export class GroupmembersPage implements OnInit {
       return;
     }
     
+    // Mitgliederliste und Übersicht ändert der Service erst nach Erfolg (DIV-80)
     if (this.newOwner) {
       this.groupService.changeGroupOwner(this.newOwner);
-
-      this.groupMembers.update(group => {
-        // Den aktuellen Owner speichern, bevor er ersetzt wird
-        const previousOwner: UserDto = { id: group.ownerId, userName: group.ownerName };
-      
-        return {
-          ...group,
-          ownerName: this.newOwner!.newOwner.userName,
-          ownerId: this.newOwner!.newOwner.id,
-          members: [
-            ...group.members.filter(member => member.id !== this.newOwner!.newOwner.id),
-            previousOwner
-          ]
-        };
-      });
-      
-      this.groupOverviewList.update(groups => {
-        return groups.map(group =>
-          group.id === this.newOwner?.groupId 
-            ? { ...group, ownerName: this.newOwner?.newOwner.userName }
-            : group
-        );
-      });
-      
     }
-    
+
     this.modalCtrl.dismiss();
   }
 
@@ -133,21 +107,9 @@ export class GroupmembersPage implements OnInit {
       }, {
         text: this.translate.instant("alerts.group.remove_member.ok"),
         handler: () => {
+          // Mitgliederliste, Übersicht und ggf. aktive Gruppe ändert der Service erst nach Erfolg (DIV-80)
           this.groupService.removeMemberFromGroup(memberToRemove);
-          this.groupMembers.update(group => {
-            return { ...group, members: group.members.filter(m => m.id !== member.id) };
-          });
-
-          if (this.user?.id === member.id) {
-            this.groupOverviewList.update(groups => {
-              return groups.filter(g => g.id !== groupWithMembers.id);  
-            });
-            this.groupsSideNav.update(groups => {
-              return groups.filter(g => g.id !== groupWithMembers.id);
-            });
-            this.groupService.updateActiveGroup(this.groupsSideNav(), this.activeGroup());
-          };
-        } 
+        }
       }]
     }).then(alertEl => alertEl.present());
 

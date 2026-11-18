@@ -1,4 +1,4 @@
-import { HttpTestingController } from '@angular/common/http/testing';
+import { HttpTestingController, TestRequest } from '@angular/common/http/testing';
 import { effect } from '@angular/core';
 import { fakeAsync, flushMicrotasks, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
@@ -23,6 +23,7 @@ describe('GroupService', () => {
   let alerts: jasmine.SpyObj<AlertService>;
   let storage: StorageService;
   let navigate: jasmine.Spy;
+  let me: User;
   const api = `${environment.apiBaseUrl}/api/groups`;
   const notOwnerOfGroup = 'User with Id 5 is not the owner of the Group';
   const forbidden = { status: 403, statusText: 'Forbidden' };
@@ -47,12 +48,13 @@ describe('GroupService', () => {
   beforeEach(() => {
     alerts = alertServiceSpy();
     storage = storageServiceFake();
+    me = aLoggedInUser({ name: 'Anna' });
     TestBed.configureTestingModule({
       providers: [
         ...provideServiceTesting(),
         { provide: AlertService, useValue: alerts },
         { provide: StorageService, useValue: storage },
-        { provide: AuthService, useValue: authServiceStub(aLoggedInUser({ name: 'Anna' })) },
+        { provide: AuthService, useValue: authServiceStub(me) },
       ],
     });
     service = TestBed.inject(GroupService);
@@ -322,6 +324,46 @@ describe('GroupService', () => {
       expect(service.groupMembers()).toEqual(Init.DEFAULT_GROUP_MEMBERS);
     });
 
+    // DIV-80: Ladezustand des Mitglieder-Sheets
+    describe('getGroupMembers – Ergebnis', () => {
+      it('meldet true, wenn die Antwort übernommen wurde', async () => {
+        const result = service.getGroupMembers(1);
+        http.expectOne(`${api}/members/1`).flush(someMembers());
+
+        expect(await result).toBeTrue();
+      });
+
+      it('meldet false bei einem Fehler (Zustand wie bisher Platzhalter)', async () => {
+        const result = service.getGroupMembers(1);
+        http.expectOne(`${api}/members/1`).flush(notOwnerOfGroup, forbidden);
+
+        expect(await result).toBeFalse();
+        expect(service.groupMembers()).toEqual(Init.DEFAULT_GROUP_MEMBERS);
+      });
+
+      it('meldet false und lässt den Zustand unverändert, wenn isCurrent die Antwort verwirft', async () => {
+        const current = someMembers({ id: 2 });
+        service.groupMembers.set(current);
+
+        const result = service.getGroupMembers(1, { isCurrent: () => false });
+        http.expectOne(`${api}/members/1`).flush(someMembers({ id: 1 }));
+
+        expect(await result).toBeFalse();
+        expect(service.groupMembers()).toBe(current);
+      });
+
+      it('meldet false bei einem Netzwerkfehler, der von isCurrent verworfen wird, ohne den Zustand zu ändern', async () => {
+        const current = someMembers({ id: 2 });
+        service.groupMembers.set(current);
+
+        const result = service.getGroupMembers(1, { isCurrent: () => false });
+        http.expectOne(`${api}/members/1`).error(new ProgressEvent('error'));
+
+        expect(await result).toBeFalse();
+        expect(service.groupMembers()).toBe(current);
+      });
+    });
+
     it('lädt die Mitgliedschaftszeiträume des Nutzers in der Gruppe', () => {
       const history = [{ startDate: REFERENCE_DATE, endDate: REFERENCE_DATE, groupId: 1, userId: 2 }];
 
@@ -342,21 +384,23 @@ describe('GroupService', () => {
   });
 
   describe('addGroup', () => {
-    it('fügt die neue Gruppe nach dem Speichern in beide Listen ein und macht sie aktiv', () => {
+    it('fügt die neue Gruppe nach dem Speichern in beide Listen ein und macht sie aktiv', async () => {
       const { sideNav, overview } = givenGroups();
       const newGroup = aGroup({ id: undefined, name: 'Verein' });
 
-      service.addGroup(newGroup);
+      const result = service.addGroup(newGroup);
       const req = http.expectOne(`${api}/add`);
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual(newGroup);
       req.flush({ ...newGroup, id: 4 });
 
       const created = { id: 4, name: 'Verein', dateCreated: newGroup.dateCreated };
+      expect(await result).toBeTrue();
       expect(service.groupsSideNav()).toEqual([...sideNav, created]);
       expect(service.groupOverviewList()).toEqual([...overview, { ...created, ownerName: 'Anna', memberCount: 0 }]);
       expect(service.activeGroup()).toEqual(created);
       expect(navigate).not.toHaveBeenCalled();
+      expect(alerts.showToast).not.toHaveBeenCalled();
     });
 
     it('wechselt nach dem Anlegen der ersten Gruppe von no-group zur Übersicht', () => {
@@ -369,17 +413,26 @@ describe('GroupService', () => {
       expect(navigate).toHaveBeenCalledWith('/domains/tabs/overview', { replaceUrl: true });
     });
 
-    it('lässt beide Listen und die aktive Gruppe bei einem Fehler unverändert', () => {
+    it('lässt beide Listen und die aktive Gruppe bei einem Fehler unverändert, meldet false und zeigt einen Hinweis', async () => {
       const { wg, sideNav, overview } = givenGroups();
       service.activeGroup.set(wg);
 
-      service.addGroup(aGroup({ id: undefined }), 'no-group');
+      const result = service.addGroup(aGroup({ id: undefined }), 'no-group');
       http.expectOne(`${api}/add`).flush('Server error', { status: 500, statusText: 'Server Error' });
 
+      expect(await result).toBeFalse();
       expect(service.groupsSideNav()).toEqual(sideNav);
       expect(service.groupOverviewList()).toEqual(overview);
       expect(service.activeGroup()).toBe(wg);
       expect(navigate).not.toHaveBeenCalled();
+      expect(alerts.showToast).toHaveBeenCalledOnceWith('alerts.group.error.add_group');
+    });
+
+    it('meldet bei einem Netzwerkfehler false (weist nicht zurück)', async () => {
+      const result = service.addGroup(aGroup({ id: undefined }));
+      http.expectOne(`${api}/add`).error(new ProgressEvent('error'));
+
+      expect(await result).toBeFalse();
     });
   });
 
@@ -389,12 +442,13 @@ describe('GroupService', () => {
       service.activeGroup.set(wg);
       const renamed = { ...wg, name: 'Wohngemeinschaft' };
 
-      service.updateGroup(renamed);
+      const result = service.updateGroup(renamed);
       const req = http.expectOne(`${api}/update`);
       expect(req.request.method).toBe('PUT');
       expect(req.request.body).toEqual(renamed);
       req.flush(renamed);
 
+      expect(await result).toBeTrue();
       expect(service.groupsSideNav()).toEqual([renamed, urlaub]);
       expect(service.groupOverviewList()).toEqual([{ ...overview[0], name: 'Wohngemeinschaft' }, overview[1], overview[2]]);
       expect(service.activeGroup()).toEqual(jasmine.objectContaining({ id: 1, name: 'Wohngemeinschaft' }));
@@ -412,16 +466,18 @@ describe('GroupService', () => {
       expect(service.activeGroup()).toBe(wg);
     });
 
-    it('lässt beide Listen bei einem Fehler unverändert', () => {
+    it('lässt beide Listen bei einem Fehler unverändert, meldet false und zeigt einen Hinweis', async () => {
       const { wg, sideNav, overview } = givenGroups();
       service.activeGroup.set(wg);
 
-      service.updateGroup({ ...wg, name: 'Wohngemeinschaft' });
+      const result = service.updateGroup({ ...wg, name: 'Wohngemeinschaft' });
       http.expectOne(`${api}/update`).flush(notOwnerOfGroup, forbidden);
 
+      expect(await result).toBeFalse();
       expect(service.groupsSideNav()).toEqual(sideNav);
       expect(service.groupOverviewList()).toEqual(overview);
       expect(service.activeGroup()).toBe(wg);
+      expect(alerts.showToast).toHaveBeenCalledOnceWith('alerts.group.error.update_group');
     });
 
     it('ein Fehler verwirft keine zwischenzeitliche Änderung (z. B. Live-Event), Regression DIV-1', () => {
@@ -443,11 +499,12 @@ describe('GroupService', () => {
       const { wg, urlaub } = givenGroups();
       service.activeGroup.set(wg);
 
-      service.deleteGroup(wg);
+      const result = service.deleteGroup(wg);
       const req = http.expectOne(`${api}/delete/1`);
       expect(req.request.method).toBe('DELETE');
       req.flush(null);
 
+      expect(await result).toBeTrue();
       expect(ids(service.groupsSideNav())).toEqual([2]);
       expect(ids(service.groupOverviewList())).toEqual([2, 3]);
       expect(service.activeGroup()).toEqual(jasmine.objectContaining({ id: 2, name: urlaub.name }));
@@ -468,126 +525,199 @@ describe('GroupService', () => {
       expect(service.activeGroup()).toEqual(Init.DEFAULT_GROUP);
     });
 
-    it('lässt beide Listen und die aktive Gruppe bei einem Fehler unverändert', () => {
+    it('lässt beide Listen und die aktive Gruppe bei einem Fehler unverändert, meldet false und zeigt einen Hinweis', async () => {
       const { wg, sideNav, overview } = givenGroups();
       service.activeGroup.set(wg);
 
-      service.deleteGroup(wg);
+      const result = service.deleteGroup(wg);
       http.expectOne(`${api}/delete/1`).flush(notOwnerOfGroup, forbidden);
 
+      expect(await result).toBeFalse();
       expect(service.groupsSideNav()).toEqual(sideNav);
       expect(service.groupOverviewList()).toEqual(overview);
       expect(service.activeGroup()).toBe(wg);
+      expect(alerts.showToast).toHaveBeenCalledOnceWith('alerts.group.error.delete_group');
     });
   });
 
   describe('addMemberToGroup', () => {
     const newMember = { id: 1, name: 'WG', newMemberEmail: 'Neu@Example.com' };
 
-    it('aktualisiert nach dem Hinzufügen die Mitgliederzahl, meldet Erfolg und die Änderung', () => {
+    it('aktualisiert nach dem Hinzufügen Mitgliederzahl und geladene Mitgliederliste, meldet Erfolg und die Änderung', async () => {
       const { overview } = givenGroups();
+      service.groupMembers.set(someMembers({ id: 1, members: [aUser()] }));
       const updatesBefore = service.memberUpdated();
+      const newMembers = [aUser(), aUser(), aUser(), aUser()];
 
-      service.addMemberToGroup(newMember);
+      const result = service.addMemberToGroup(newMember);
       const req = http.expectOne(`${api}/add-new-member`);
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual(newMember);
-      req.flush(someMembers({ id: 1, members: [aUser(), aUser(), aUser(), aUser()] }));
+      req.flush(someMembers({ id: 1, members: newMembers }));
 
+      expect(await result).toEqual({ ok: true });
       expect(service.groupOverviewList()).toEqual([{ ...overview[0], memberCount: 4 }, overview[1], overview[2]]);
-      expect(alerts.showToast).toHaveBeenCalledWith('alerts.group.add_member.error_message_service.message_success');
+      expect(service.groupMembers().members).toEqual(newMembers);
+      expect(alerts.showToast).toHaveBeenCalledOnceWith('alerts.group.add_member.error_message_service.message_success');
       expect(service.memberUpdated()).toBe(updatesBefore + 1);
     });
 
+    it('lässt eine geladene Mitgliederliste einer anderen Gruppe unverändert', async () => {
+      givenGroups();
+      const other = someMembers({ id: 2 });
+      service.groupMembers.set(other);
+
+      const result = service.addMemberToGroup(newMember);
+      http.expectOne(`${api}/add-new-member`).flush(someMembers({ id: 1, members: [aUser(), aUser()] }));
+
+      await result;
+      expect(service.groupMembers()).toBe(other);
+    });
+
+    // Fehlertext-Vertrag M2–M4: exakter Backend-Text als Body (Groovydoc CartControllerApiSpec)
     [
       { name: 'unbekannte E-Mail', status: 404, body: 'User with email Neu@Example.com not found', key: 'message_no_exists' },
       { name: 'Eigentümer als Mitglied', status: 403, body: 'New member equals group owner', key: 'message_admin_is_member' },
       { name: 'bereits Mitglied', status: 403, body: 'Member already exists', key: 'message_already_member' },
       { name: 'anderer Fehler', status: 403, body: notOwnerOfGroup, key: 'message_default' },
     ].forEach(c => {
-      it(`lässt die Übersicht bei einem Fehler (${c.name}) unverändert und zeigt den passenden Hinweis`, () => {
+      it(`lässt den Zustand bei einem Fehler (${c.name}) unverändert und liefert den passenden Fehler-Key ohne Fehler-Toast`, async () => {
         const { overview } = givenGroups();
+        const members = someMembers({ id: 1 });
+        service.groupMembers.set(members);
         const updatesBefore = service.memberUpdated();
 
-        service.addMemberToGroup(newMember);
+        const result = service.addMemberToGroup(newMember);
         http.expectOne(`${api}/add-new-member`).flush(c.body, { status: c.status, statusText: 'Error' });
 
+        expect(await result).toEqual({ ok: false, errorKey: `alerts.group.add_member.error_message_service.${c.key}` });
         expect(service.groupOverviewList()).toEqual(overview);
+        expect(service.groupMembers()).toBe(members);
         expect(service.memberUpdated()).toBe(updatesBefore);
-        expect(alerts.showToast).toHaveBeenCalledOnceWith(`alerts.group.add_member.error_message_service.${c.key}`);
+        expect(alerts.showToast).not.toHaveBeenCalled();
+      });
+    });
+
+    // DIV-80, Codex F-001: ein Body ohne Text darf die Zuordnung nicht abbrechen lassen
+    [
+      { name: 'Netzwerkfehler', fail: (req: TestRequest) => req.error(new ProgressEvent('error')) },
+      { name: 'Objekt-Body', fail: (req: TestRequest) => req.flush({ message: 'Member already exists' }, { status: 403, statusText: 'Forbidden' }) },
+      { name: 'leerer Body', fail: (req: TestRequest) => req.flush(null, { status: 500, statusText: 'Server Error' }) },
+    ].forEach(c => {
+      it(`liefert bei ${c.name} den Standard-Fehler-Key und weist nicht zurück`, async () => {
+        const result = service.addMemberToGroup(newMember);
+        c.fail(http.expectOne(`${api}/add-new-member`));
+
+        expect(await result).toEqual({ ok: false, errorKey: 'alerts.group.add_member.error_message_service.message_default' });
       });
     });
   });
 
   describe('removeMemberFromGroup', () => {
-    const removeMember = () => ({ id: 1, name: 'WG', member: aUser() });
+    const removeMember = (member = aUser()) => ({ id: 1, name: 'WG', member });
 
-    it('aktualisiert nach dem Entfernen die Mitgliederzahl und meldet die Änderung', () => {
-      const { overview } = givenGroups();
+    it('aktualisiert nach dem Entfernen Mitgliederzahl und geladene Mitgliederliste und meldet die Änderung', async () => {
+      const { overview, sideNav } = givenGroups();
+      const remaining = [aUser()];
+      service.groupMembers.set(someMembers({ id: 1, members: [...remaining, aUser()] }));
       const updatesBefore = service.memberUpdated();
       const dto = removeMember();
 
-      service.removeMemberFromGroup(dto);
+      const result = service.removeMemberFromGroup(dto);
       const req = http.expectOne(`${api}/remove-member-from-group`);
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual(dto);
-      req.flush(someMembers({ id: 1, members: [aUser()] }));
+      req.flush(someMembers({ id: 1, members: remaining }));
 
+      expect(await result).toBeTrue();
       expect(service.groupOverviewList()).toEqual([{ ...overview[0], memberCount: 1 }, overview[1], overview[2]]);
+      expect(service.groupsSideNav()).toEqual(sideNav);
+      expect(service.groupMembers().members).toEqual(remaining);
       expect(service.memberUpdated()).toBe(updatesBefore + 1);
       expect(navigate).not.toHaveBeenCalled();
     });
 
-    it('leitet nach dem Entfernen zu no-group, wenn die Übersicht leer ist', () => {
-      service.groupOverviewList.set([]);
+    it('entfernt die Gruppe nach dem eigenen Austritt aus Seitenleiste und Übersicht und wechselt die aktive Gruppe', async () => {
+      const { wg, urlaub } = givenGroups();
+      service.activeGroup.set(wg);
 
-      service.removeMemberFromGroup(removeMember());
+      const result = service.removeMemberFromGroup(removeMember({ id: me.id, userName: me.name }));
       http.expectOne(`${api}/remove-member-from-group`).flush(someMembers({ id: 1, members: [] }));
 
+      expect(await result).toBeTrue();
+      expect(ids(service.groupsSideNav())).toEqual([urlaub.id]);
+      expect(ids(service.groupOverviewList())).toEqual([2, 3]);
+      expect(service.activeGroupId()).toBe(urlaub.id);
+      expect(navigate).not.toHaveBeenCalled();
+    });
+
+    it('leitet nach dem eigenen Austritt aus der letzten Gruppe zu no-group', async () => {
+      const only = aGroup({ id: 1 });
+      service.groupsSideNav.set([only]);
+      service.groupOverviewList.set([anOverview(only)]);
+      service.activeGroup.set(only);
+
+      const result = service.removeMemberFromGroup(removeMember({ id: me.id, userName: me.name }));
+      http.expectOne(`${api}/remove-member-from-group`).flush(someMembers({ id: 1, members: [] }));
+
+      expect(await result).toBeTrue();
+      expect(service.groupOverviewList()).toEqual([]);
+      expect(service.activeGroup()).toEqual(Init.DEFAULT_GROUP);
+      expect(service.hasNoGroups()).toBeTrue();
       expect(navigate).toHaveBeenCalledWith('/no-group', { replaceUrl: true });
     });
 
-    it('lässt Übersicht, Mitglieder und Zähler bei einem Fehler unverändert', () => {
+    it('lässt Übersicht, Mitglieder und Zähler bei einem Fehler unverändert, meldet false und zeigt einen Hinweis', async () => {
       const { overview } = givenGroups();
       const members = someMembers();
       service.groupMembers.set(members);
       const updatesBefore = service.memberUpdated();
 
-      service.removeMemberFromGroup(removeMember());
+      const result = service.removeMemberFromGroup(removeMember());
       http.expectOne(`${api}/remove-member-from-group`).flush(notOwnerOfGroup, forbidden);
 
+      expect(await result).toBeFalse();
       expect(service.groupOverviewList()).toEqual(overview);
       expect(service.groupMembers()).toBe(members);
       expect(service.memberUpdated()).toBe(updatesBefore);
       expect(navigate).not.toHaveBeenCalled();
+      expect(alerts.showToast).toHaveBeenCalledOnceWith('alerts.group.error.remove_member');
     });
   });
 
   describe('changeGroupOwner', () => {
-    const dto = () => ({ newOwner: aUser(), groupId: 1 });
+    it('sendet den neuen Eigentümer und übernimmt ihn erst danach in Mitgliederliste und Übersicht', async () => {
+      const { overview } = givenGroups();
+      const ben = aUser({ userName: 'Ben' });
+      const members = someMembers({ id: 1, ownerId: me.id, ownerName: 'Anna', members: [ben] });
+      service.groupMembers.set(members);
+      const body = { newOwner: ben, groupId: 1 };
 
-    it('sendet den neuen Eigentümer', () => {
-      const body = dto();
-
-      service.changeGroupOwner(body);
+      const result = service.changeGroupOwner(body);
+      expect(service.groupMembers()).toBe(members);
       const req = http.expectOne(`${api}/change-groupowner`);
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual(body);
       req.flush(null);
+
+      expect(await result).toBeTrue();
+      expect(service.groupMembers()).toEqual({ ...members, ownerId: ben.id, ownerName: 'Ben', members: [{ id: me.id, userName: 'Anna' }] });
+      expect(service.groupOverviewList()).toEqual([{ ...overview[0], ownerName: 'Ben' }, overview[1], overview[2]]);
     });
 
-    it('ändert bei einem Fehler keinen Zustand und zeigt keinen Hinweis', () => {
+    it('ändert bei einem Fehler keinen Zustand, meldet false und zeigt einen Hinweis', async () => {
       const { sideNav, overview } = givenGroups();
       const members = someMembers();
       service.groupMembers.set(members);
 
-      service.changeGroupOwner(dto());
+      const result = service.changeGroupOwner({ newOwner: aUser(), groupId: 1 });
       http.expectOne(`${api}/change-groupowner`).flush(notOwnerOfGroup, forbidden);
 
+      expect(await result).toBeFalse();
       expect(service.groupsSideNav()).toEqual(sideNav);
       expect(service.groupOverviewList()).toEqual(overview);
       expect(service.groupMembers()).toBe(members);
-      expect(alerts.showToast).not.toHaveBeenCalled();
+      expect(alerts.showToast).toHaveBeenCalledOnceWith('alerts.group.error.change_owner');
       expect(alerts.showErrorAlert).not.toHaveBeenCalled();
     });
   });

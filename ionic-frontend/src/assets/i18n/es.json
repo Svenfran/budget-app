@@ -203,6 +203,13 @@
                 "message": "¿Deseas eliminar al miembro \"{{memberName}}\" del grupo \"{{group}}\" incluyendo todos los gastos guardados?",
                 "cancel": "No",
                 "ok": "Sí"
+            },
+            "error": {
+                "add_group": "No se pudo crear el grupo.",
+                "update_group": "No se pudo guardar el grupo.",
+                "delete_group": "No se pudo eliminar el grupo.",
+                "remove_member": "No se pudo eliminar al miembro.",
+                "change_owner": "No se pudo cambiar el administrador del grupo."
             }
         },
         "category": {

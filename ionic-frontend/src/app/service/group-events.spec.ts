@@ -1,6 +1,6 @@
 import { aGroup, aUser } from 'src/testing/test-data';
 import { GroupMembers } from '../groupmembers/model/groupmembers-dto';
-import { applyOwnerChange, renameGroup } from './group-events';
+import { applyMembersChange, applyOwnerChange, renameGroup } from './group-events';
 
 describe('group-events', () => {
   describe('renameGroup', () => {
@@ -18,6 +18,35 @@ describe('group-events', () => {
 
       expect(renameGroup([wg], { id: 999, name: 'Unbekannt' })).toEqual([wg]);
       expect(renameGroup([], { id: 999, name: 'Unbekannt' })).toEqual([]);
+    });
+  });
+
+  // DIV-80: Antwort/Event von Hinzufügen und Entfernen in der geladenen Mitgliederliste
+  describe('applyMembersChange', () => {
+    const loaded = (): GroupMembers =>
+      ({ id: 10, name: 'WG', ownerId: 20, ownerName: 'Anna', members: [aUser({ id: 30 })] });
+
+    it('übernimmt Owner und Mitglieder aus dem neuen Stand der geladenen Gruppe', () => {
+      const current = loaded();
+      const newMembers = [aUser({ id: 30 }), aUser({ id: 40 })];
+
+      const result = applyMembersChange(current, { ...current, name: 'Ignoriert', members: newMembers });
+
+      expect(result).toEqual({ ...current, members: newMembers });
+    });
+
+    it('ändert eine geladene Liste einer anderen Gruppe nicht (gleiche Referenz)', () => {
+      const current = loaded();
+
+      expect(applyMembersChange(current, { ...current, id: 11, members: [] })).toBe(current);
+    });
+
+    it('ist bei doppeltem Event idempotent', () => {
+      const update = { ...loaded(), members: [aUser({ id: 40 })] };
+
+      const once = applyMembersChange(loaded(), update);
+
+      expect(applyMembersChange(once, update)).toEqual(once);
     });
   });
 

@@ -1,4 +1,5 @@
 import { Location } from '@angular/common';
+import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { IonicModule, IonItemSliding } from '@ionic/angular';
@@ -94,6 +95,71 @@ describe('GroupoverviewPage – Gruppe auswählen', () => {
     expect(item.close).toHaveBeenCalled();
     expect(groupService.activeGroupId()).toBe(wg.id);
     expect(markedNames()).toEqual(['WG']);
+  });
+});
+
+// DIV-80: Nach dem Löschen der letzten Gruppe geht es erst nach erfolgreicher Antwort zu no-group.
+describe('GroupoverviewPage – letzte Gruppe löschen (DIV-80)', () => {
+  let page: GroupoverviewPage;
+  let groupService: GroupService;
+  let http: HttpTestingController;
+  let navigate: jasmine.Spy;
+  const only: GroupOverview = { id: 1, name: 'Haushalt', dateCreated: new Date(2025, 0, 1), ownerName: 'Anna', memberCount: 0 };
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      declarations: [GroupoverviewPage],
+      imports: [IonicModule.forRoot(), TranslateModule],
+      providers: [
+        ...provideServiceTesting(),
+        { provide: StorageService, useValue: storageServiceFake() },
+        { provide: AuthService, useValue: authServiceStub(aLoggedInUser()) },
+        { provide: AlertService, useValue: alertServiceSpy() },
+      ],
+    });
+    groupService = TestBed.inject(GroupService);
+    http = TestBed.inject(HttpTestingController);
+    spyOn(groupService, 'getGroupsForOverview');
+    navigate = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
+    groupService.groupsSideNav.set([aGroup({ id: only.id, name: only.name })]);
+    groupService.groupOverviewList.set([only]);
+    page = TestBed.createComponent(GroupoverviewPage).componentInstance;
+  });
+
+  afterEach(() => http.verify());
+
+  it('navigiert vor der Antwort nicht und nach Erfolg zu no-group', async () => {
+    const done = page.deleteGroup(only);
+    expect(navigate).not.toHaveBeenCalled();
+
+    http.expectOne(req => req.url.endsWith('/api/groups/delete/1')).flush(null);
+    await done;
+
+    expect(groupService.hasNoGroups()).toBeTrue();
+    expect(navigate).toHaveBeenCalledOnceWith(['/no-group'], { replaceUrl: true });
+  });
+
+  it('navigiert bei einem Fehler nicht und lässt die Gruppe stehen', async () => {
+    const done = page.deleteGroup(only);
+    http.expectOne(req => req.url.endsWith('/api/groups/delete/1'))
+      .flush('User with Id 5 is not the owner of the Group', { status: 403, statusText: 'Forbidden' });
+    await done;
+
+    expect(navigate).not.toHaveBeenCalled();
+    expect(groupService.hasNoGroups()).toBeFalse();
+    expect(groupService.groupOverviewList()).toEqual([only]);
+  });
+
+  it('navigiert nach dem Löschen nicht, wenn weitere Gruppen bleiben', async () => {
+    const other: GroupOverview = { ...only, id: 2, name: 'WG' };
+    groupService.groupOverviewList.set([only, other]);
+
+    const done = page.deleteGroup(only);
+    http.expectOne(req => req.url.endsWith('/api/groups/delete/1')).flush(null);
+    await done;
+
+    expect(navigate).not.toHaveBeenCalled();
+    expect(groupService.groupOverviewList()).toEqual([other]);
   });
 });
 

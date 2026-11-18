@@ -162,20 +162,22 @@ export class GroupoverviewPage implements OnInit {
       }, {
         text: this.translate.instant("alerts.group.delete.ok"),
         handler: () => {
-          this.loadingCtrl.create({
-            message: this.translate.instant("alerts.group.delete.loading")
-          }).then(loadingEl => {
-            this.groupService.deleteGroup(group);
-            loadingEl.dismiss();
-            // Redirect to no-group page if last group is deleted
-            if (this.groupOverviewList().length === 1 && this.groupOverviewList()[0].id === group.id) {
-              this.groupService.hasNoGroups.set(true);
-              this.router.navigate(['/no-group'], { replaceUrl: true });
-            }
-          })
+          this.deleteGroup(group);
         }
       }]
     }).then(alertEl => alertEl.present());
+  }
+
+  /**
+   * Löscht die Gruppe nach der Bestätigung. War es die letzte, geht es erst nach erfolgreichem Löschen zu no-group
+   * (DIV-80; vorher schon vor der Antwort, ein Fehler ließ den Nutzer dann ohne Gruppe dort stehen).
+   */
+  async deleteGroup(group: Group) {
+    const deleted = await this.groupService.deleteGroup(group);
+    if (deleted && this.groupOverviewList().length === 0) {
+      this.groupService.hasNoGroups.set(true);
+      this.router.navigate(['/no-group'], { replaceUrl: true });
+    }
   }
 
   onAddMember(group: Group, slidingItem: IonItemSliding) {
@@ -205,7 +207,10 @@ export class GroupoverviewPage implements OnInit {
               name: group.name,
               newMemberEmail: trimmedEmail
             }
-            this.groupService.addMemberToGroup(newMember);
+            // Fehler kommen als i18n-Key zurück (DIV-80); bis zum Mitglieder-Sheet weiter als Toast wie bisher
+            this.groupService.addMemberToGroup(newMember).then(result => {
+              if (!result.ok) this.alertService.showToast(this.translate.instant(result.errorKey));
+            });
             loadingEl.dismiss();
           })
         }

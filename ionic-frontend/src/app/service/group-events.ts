@@ -13,6 +13,16 @@ export function renameGroup<T extends { id: number; name: string }>(groups: T[],
 }
 
 /**
+ * Neuer Mitgliederstand einer Gruppe (Antwort von Hinzufügen/Entfernen bzw. dessen WebSocket-Event, DIV-80) in der
+ * geladenen Mitgliederliste – nur, wenn sie zur betroffenen Gruppe gehört. Übernimmt den vollständigen Stand (kein
+ * Delta), ein doppeltes Event ändert daher nichts mehr.
+ */
+export function applyMembersChange(groupMembers: GroupMembers, data: GroupMembers): GroupMembers {
+  if (groupMembers.id !== data.id) return groupMembers;
+  return { ...groupMembers, ownerName: data.ownerName, ownerId: data.ownerId, members: data.members };
+}
+
+/**
  * Owner-Wechsel in der geladenen Mitgliederliste – nur, wenn sie zur betroffenen Gruppe gehört. Der neue Owner verlässt
  * die Mitglieder, der bisherige wird mit seiner User-ID (`ownerId`) Mitglied. Ist der neue Owner bereits Owner (Resync
  * lieferte schon den neuen Stand oder das Event kommt doppelt), bleibt die Liste unverändert.
