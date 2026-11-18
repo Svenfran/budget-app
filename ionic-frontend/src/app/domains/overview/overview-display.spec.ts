@@ -17,8 +17,15 @@ describe('overview-display', () => {
       expect(userDisplayName('USER DELETED', DELETED_LABEL)).toBe(DELETED_LABEL);
     });
 
-    it('zeigt bei entfernten Mitgliedern nur das erste Wort', () => {
+    it('entfernt bei entfernten Mitgliedern nur den Marker', () => {
       expect(userDisplayName('Max REMOVED', DELETED_LABEL)).toBe('Max');
+    });
+
+    // Regression: früher nur das erste Wort – ein (z. B. um den Nachnamen) geänderter Name eines entfernten Mitglieds
+    // sah in der Übersicht wie der alte aus, während die Ausgabenliste ihn vollständig zeigte
+    it('zeigt den vollständigen, mehrwortigen Namen eines entfernten Mitglieds', () => {
+      expect(userDisplayName('Montse García López REMOVED', DELETED_LABEL)).toBe('Montse García López');
+      expect(userInitials(userDisplayName('Montse García REMOVED', DELETED_LABEL))).toBe('MG');
     });
 
     it('behandelt beide Marker als gelöscht', () => {

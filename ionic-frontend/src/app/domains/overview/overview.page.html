@@ -3,11 +3,18 @@
     <ion-buttons slot="start">
       <ion-menu-button menu="m1"></ion-menu-button>
     </ion-buttons>
-    <ion-title>{{ 'domains.overview.title' | translate }}</ion-title>
+    <ion-title>
+      <!-- Titel und Gruppe als ein Button zur Gruppenübersicht: kompakt und volle Touch-Fläche ohne Abschneiden -->
+      <button type="button" class="page-title" routerLink="/groupoverview"
+          [attr.aria-label]="('domains.overview.title' | translate) + ', ' + ('global.change_group' | translate: { name: activeGroup.name })">
+        <span class="page-title__text">{{ 'domains.overview.title' | translate }}</span>
+        <span class="page-title__group group-name">
+          <span class="page-title__group-name">{{ activeGroup.name }}</span>
+          <ion-icon name="chevron-down-outline" aria-hidden="true"></ion-icon>
+        </span>
+      </button>
+    </ion-title>
     <ion-buttons slot="primary">
-      <ion-text class="ion-padding group-name" routerLink="/groupoverview">
-        <small>{{ getShortGroupName(activeGroup.name) }}</small>
-      </ion-text>
       <ion-button id="popover-button" [class.hide]="availableYears().length === 0">
         <ion-icon name="ellipsis-vertical"></ion-icon>
       </ion-button>

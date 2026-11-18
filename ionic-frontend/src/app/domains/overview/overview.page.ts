@@ -145,10 +145,6 @@ export class OverviewPage implements OnInit {
     return userInitials(this.getUserDisplayName(userName));
   }
 
-  getShortGroupName(groupName: string): string {
-    return groupName.length > 20 ? `${groupName.slice(0, 20)}...` : groupName;
-  }
-
   getSpendingsOverview(year: number) {
     this.segment = 'month';
     this.isLoading = true;

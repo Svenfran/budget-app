@@ -1,4 +1,4 @@
-import { Component, effect, OnInit, signal, untracked, ViewChild } from '@angular/core';
+import { Component, DestroyRef, effect, ElementRef, inject, OnInit, signal, untracked, ViewChild } from '@angular/core';
 import { CartService } from './service/cart.service';
 import { GroupService } from 'src/app/service/group.service';
 import { User } from 'src/app/auth/user';
@@ -28,8 +28,11 @@ import { categoryLabel } from 'src/app/service/category-label';
   standalone: false
 })
 export class CartlistPage implements OnInit {
-  @ViewChild('viewport', { static: false }) viewport!: CdkVirtualScrollViewport;
-  
+  @ViewChild('viewport', { static: false }) viewport?: CdkVirtualScrollViewport;
+  /** Stabiler Scroll-Container der Liste (DIV-79), immer vorhanden – der Viewport darf darin neu entstehen. */
+  @ViewChild('scrollHost', { static: true }) scrollHost?: ElementRef<HTMLElement>;
+  private readonly destroyRef = inject(DestroyRef);
+
   public cartList = this.cartService.cartList;
   public initCartList = this.cartService.initCartList;
   public activeGroup = this.groupService.activeGroup();
@@ -44,7 +47,6 @@ export class CartlistPage implements OnInit {
   public cartFilter: CartFilter = {};
   public cartVisible: boolean = false;
   public isAtTop: boolean = true;
-  public viewportInitialized: boolean = false;
 
   constructor(
     private cartService: CartService,
@@ -101,25 +103,28 @@ export class CartlistPage implements OnInit {
     this.authService.user.subscribe(user => {
       if (user) this.user = user;
     })
+    this.observeScrollHostSize();
   }
 
-  ngAfterViewChecked() {
-  if (this.viewport && !this.viewportInitialized) {
-    this.viewportInitialized = true;
-
-    this.viewport.elementScrolled().subscribe(() => {
-      const scrollOffset = this.viewport.measureScrollOffset();
-      this.isAtTop = scrollOffset <= 100;
-    });
+  /**
+   * Das CDK misst die Größe des Scroll-Containers nur bei window-resize/orientationchange neu. Ändert sich die Höhe ohne
+   * Fenster-Resize (Header wächst, Filter-Chip, Sprachwechsel), würde es mit veralteter Höhe rendern (DIV-79). Der
+   * Container ist stabil; gemessen wird jeweils der aktuelle Viewport (fehlt im Lade-/Leerzustand).
+   */
+  private observeScrollHostSize() {
+    const host = this.scrollHost?.nativeElement;
+    if (!host) return; // nur ohne Template (Komponententests der Seitenlogik)
+    const observer = new ResizeObserver(() => this.viewport?.checkViewportSize());
+    observer.observe(host);
+    this.destroyRef.onDestroy(() => observer.disconnect());
   }
-}
-  
-  onScrollChange() {
-    setTimeout(() => {
-      if (!this.viewport) return;
-      const offset = this.viewport.measureScrollOffset();
-      this.isAtTop = offset <= 100;
-    }, 50);
+
+  /**
+   * Scroll-Handler im Template (innerhalb der Angular-Zone, damit `[disabled]` des Refreshers aktualisiert wird): Pull-to-
+   * Refresh nur nahe am Listenanfang, nicht beim Hochscrollen mitten in der Liste.
+   */
+  onHostScroll() {
+    this.isAtTop = (this.scrollHost?.nativeElement.scrollTop ?? 0) <= 100;
   }
 
   getTranslationKey() {

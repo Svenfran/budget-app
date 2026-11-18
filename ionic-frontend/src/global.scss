@@ -110,6 +110,55 @@ ion-modal.date-picker-modal ion-datetime {
   font-weight: 600;
 }
 
+// Zweizeiliger Seitentitel der Tabs (DIV-79): Titel und darunter die aktive Gruppe bilden zusammen einen Button zur
+// Gruppenübersicht. So ist die Touch-Fläche (≥ 44px) ohne Leerraum und ohne negativen Margin erreicht – den würde der
+// Wrapper von ion-title (Shadow DOM, nowrap/overflow: hidden, von außen nicht erreichbar) abschneiden (Codex-Review
+// F-002). Kürzung nur per CSS, keine festen Breiten (große Systemschrift).
+.page-title {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  line-height: 1.2;
+  text-align: start;
+  white-space: normal;
+  cursor: pointer;
+}
+
+.page-title__text {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.page-title__group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: 100%;
+  color: var(--ion-color-medium);
+  font-size: 0.875rem;
+  font-weight: 600;
+
+  ion-icon {
+    flex-shrink: 0;
+  }
+}
+
+.page-title__group-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .alert-wrapper.sc-ion-alert-md {
   --border-radius: 8px;
 }
