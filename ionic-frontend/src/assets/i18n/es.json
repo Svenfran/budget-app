@@ -174,15 +174,6 @@
                 "ok": "Eliminar"
             },
             "add_member": {
-                "header": "Agregar miembro:",
-                "cancel": "Cancelar",
-                "ok": "OK",
-                "loading": "Agregando miembro...",
-                "placeholder": "dirección de email",
-                "error_message_page": {
-                    "header": "Dirección de email inválida",
-                    "message": "Por favor ingresa una dirección de email válida."
-                },
                 "error_message_service": {
                     "message_success": "Usuario agregado al grupo.",
                     "message_no_exists": "El usuario no existe.",
@@ -196,6 +187,12 @@
                 "message": "¿Deseas eliminar al miembro \"{{memberName}}\" del grupo \"{{group}}\" incluyendo todos los gastos guardados?",
                 "cancel": "No",
                 "ok": "Sí"
+            },
+            "change_owner": {
+                "header": "¿Hacer administrador?",
+                "message": "¿Debe \"{{memberName}}\" ser administrador del grupo \"{{group}}\"? Perderás tus derechos de administrador.",
+                "cancel": "Cancelar",
+                "ok": "Hacer administrador"
             },
             "error": {
                 "add_group": "No se pudo crear el grupo.",
@@ -503,10 +500,24 @@
             "btn_create": "Crear",
             "btn_save": "Guardar"
         },
-        "group_members": {
-            "title": "Miembros del grupo",
-            "change_admin": "Cambiar admin del grupo",
-            "no_members": "No hay miembros."
+        "members_sheet": {
+            "title": "Gestionar miembros",
+            "add_title": "Añadir miembro",
+            "btn_add_member": "Añadir miembro",
+            "section_members": "MIEMBROS",
+            "admin_badge": "Admin",
+            "no_members": "Todavía no hay más miembros.",
+            "make_admin": "Hacer administrador",
+            "remove": "Eliminar miembro",
+            "member_actions": "Acciones para {{memberName}}",
+            "email_label": "Correo electrónico",
+            "btn_cancel": "Cancelar",
+            "btn_add": "Añadir",
+            "btn_close": "Cerrar",
+            "email_invalid": "Introduce un correo electrónico válido.",
+            "admin_hint": "El administrador del grupo puede eliminar miembros, cambiar el administrador y añadir nuevos miembros.",
+            "load_error": "No se pudieron cargar los miembros.",
+            "btn_retry": "Reintentar"
         }
     },
     "carts": {

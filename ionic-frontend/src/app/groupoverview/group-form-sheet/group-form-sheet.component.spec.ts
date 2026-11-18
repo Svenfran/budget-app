@@ -2,7 +2,7 @@ import { signal, WritableSignal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ReactiveFormsModule } from '@angular/forms';
 import { IonicModule, ModalController } from '@ionic/angular';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { GroupService } from 'src/app/service/group.service';
 import { ionicReady } from 'src/testing/ionic-ready';
 import { aGroupOverview } from 'src/testing/test-data';
@@ -183,6 +183,12 @@ describe('GroupFormSheetComponent (DIV-80)', () => {
     const longName = 'Eine außerordentlich lange Gruppenbezeichnung, die auf kleinen Displays umbrechen muss';
 
     beforeEach(async () => {
+      // Ohne Loader zeigt die Pipe den Schlüssel (unumbrechbar lang); für die Breite zählen die echten Texte
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation('de', { groups: { form_sheet: {
+        title_edit: 'Gruppe bearbeiten', name_label: 'Gruppenname', btn_cancel: 'Abbrechen', btn_save: 'Speichern',
+      } } }, true);
+      translate.use('de');
       create('edit', aGroupOverview({ id: 9, name: longName }));
       overview.set([component.group!]);
       const root = el();
@@ -192,7 +198,7 @@ describe('GroupFormSheetComponent (DIV-80)', () => {
       await new Promise(resolve => requestAnimationFrame(resolve));
     });
 
-    it('kein horizontaler Überlauf; Abbrechen und Speichern nebeneinander mit mindestens 44 px Höhe', () => {
+    it('kein horizontaler Überlauf; Footer wie der Ausgabenfilter: auf schmalem Display „Speichern“ über „Abbrechen“', () => {
       const root = el();
       const cancel = button('btn-cancel').getBoundingClientRect();
       const save = button('btn-save').getBoundingClientRect();
@@ -200,9 +206,10 @@ describe('GroupFormSheetComponent (DIV-80)', () => {
       expect(root.scrollWidth).toBeLessThanOrEqual(WIDTH);
       expect(el().querySelector('.sheet-subtitle')!.getBoundingClientRect().right).toBeLessThanOrEqual(WIDTH + 0.5);
       expect(save.right).toBeLessThanOrEqual(WIDTH + 0.5);
-      expect(cancel.right).toBeLessThanOrEqual(save.left);
-      expect(cancel.height).toBeGreaterThanOrEqual(44);
-      expect(save.height).toBeGreaterThanOrEqual(44);
+      expect(cancel.right).toBeLessThanOrEqual(WIDTH + 0.5);
+      // wrap-reverse wie im Filter-Sheet: die Hauptaktion steht oben
+      expect(save.bottom).toBeLessThanOrEqual(cancel.top + 0.5);
+      expect(button('btn-cancel').getAttribute('fill')).toBe('clear');
     });
   });
 });

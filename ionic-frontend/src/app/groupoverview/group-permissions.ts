@@ -8,3 +8,20 @@
 export function isGroupAdmin(group: { ownerId: number }, user: { id: number } | null | undefined): boolean {
   return !!user && group.ownerId === user.id;
 }
+
+export interface MemberActions {
+  /** „Zum Admin machen“: nur der Admin, für ein anderes Mitglied. */
+  makeAdmin: boolean;
+  /** „Mitglied entfernen“: der Admin für jedes Mitglied, ein Mitglied nur für sich selbst (Backend: verifyIsOwnerOrMemberToRemove). */
+  remove: boolean;
+}
+
+/**
+ * Aktionen, die der Nutzer im Mitglieder-Sheet für ein Mitglied hat (wie bisher in GroupmembersPage). Die Admin-Zeile
+ * selbst hat nie Aktionen: Der Admin wechselt nur über „Zum Admin machen“ bei einem anderen Mitglied.
+ */
+export function memberActions(group: { ownerId: number }, userId: number | null | undefined, memberId: number): MemberActions {
+  if (userId == null || memberId === group.ownerId) return { makeAdmin: false, remove: false };
+  const admin = group.ownerId === userId;
+  return { makeAdmin: admin, remove: admin || memberId === userId };
+}

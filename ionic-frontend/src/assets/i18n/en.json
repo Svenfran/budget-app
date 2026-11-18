@@ -174,15 +174,6 @@
                 "ok": "Delete"
             },
             "add_member": {
-                "header": "Add member:",
-                "cancel": "Cancel",
-                "ok": "OK",
-                "loading": "Add member...",
-                "placeholder": "E-mail address",
-                "error_message_page": {
-                    "header": "Incorrect e-mail address!",
-                    "message": "Please enter a valid e-mail address."
-                },
                 "error_message_service": {
                     "message_success": "User has been added to the group.",
                     "message_no_exists": "User does not exist.",
@@ -196,6 +187,12 @@
                 "message": "Do you really want to remove the member \"{{memberName}}\" from the group \"{{group}}\" including all saved expenses?",
                 "cancel": "No",
                 "ok": "Yes"
+            },
+            "change_owner": {
+                "header": "Make admin?",
+                "message": "Should \"{{memberName}}\" become admin of the group \"{{group}}\"? You will lose your admin rights.",
+                "cancel": "Cancel",
+                "ok": "Make admin"
             },
             "error": {
                 "add_group": "The group could not be created.",
@@ -503,10 +500,24 @@
             "btn_create": "Create",
             "btn_save": "Save"
         },
-        "group_members": {
-            "title": "Group members",
-            "change_admin": "Change group admin",
-            "no_members": "No members available!"
+        "members_sheet": {
+            "title": "Manage members",
+            "add_title": "Add member",
+            "btn_add_member": "Add member",
+            "section_members": "MEMBERS",
+            "admin_badge": "Admin",
+            "no_members": "No other members yet.",
+            "make_admin": "Make admin",
+            "remove": "Remove member",
+            "member_actions": "Actions for {{memberName}}",
+            "email_label": "Email address",
+            "btn_cancel": "Cancel",
+            "btn_add": "Add",
+            "btn_close": "Close",
+            "email_invalid": "Please enter a valid email address.",
+            "admin_hint": "The group admin can remove members, change the admin and add new members.",
+            "load_error": "The members could not be loaded.",
+            "btn_retry": "Try again"
         }
     },
     "carts": {

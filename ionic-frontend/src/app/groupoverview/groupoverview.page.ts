@@ -6,12 +6,13 @@ import { AuthService } from '../auth/auth.service';
 import { AlertController, ModalController } from '@ionic/angular';
 import { Group } from '../model/group';
 import { GroupOverview } from './model/group-overview';
-import { GroupmembersPage } from '../groupmembers/groupmembers.page';
 import { Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
 import { isGroupAdmin } from './group-permissions';
 import { GroupFormSheetMode } from './group-form-sheet/group-form-sheet.component';
 import { groupFormSheetModalOptions } from './group-form-sheet/group-form-sheet-options';
+import { MembersSheetView } from './members-sheet/members-sheet.component';
+import { membersSheetModalOptions } from './members-sheet/members-sheet-options';
 
 @Component({
   selector: 'app-groupoverview',
@@ -90,9 +91,18 @@ export class GroupoverviewPage implements OnInit {
     return this.groupOverviewList().find(group => group.id === this.menuGroupId);
   }
 
-  /** Menüpunkt „Mitglieder verwalten“ (bis zum Mitglieder-Sheet in Phase 5 die bisherige Mitgliederliste). */
-  onManageMembers(group: GroupOverview) {
-    this.showGroupMembers(group.id, group.ownerName);
+  /**
+   * Menüpunkt „Mitglieder verwalten“: Bottom Sheet mit Mitgliederliste und „Mitglied hinzufügen“ in einem (DIV-80,
+   * ersetzt GroupmembersPage). `saving` und `view` teilt das Sheet mit seiner Schließ-Sperre.
+   */
+  async onManageMembers(group: GroupOverview) {
+    const modal = await this.modalCtrl.create(membersSheetModalOptions({
+      groupId: group.id,
+      groupName: group.name,
+      saving: signal(false),
+      view: signal<MembersSheetView>('list'),
+    }));
+    await modal.present();
   }
 
   /** `+` im Header: Bottom Sheet „Gruppe hinzufügen“ (DIV-80, ersetzt den Alert). */
@@ -149,23 +159,4 @@ export class GroupoverviewPage implements OnInit {
       this.router.navigate(['/no-group'], { replaceUrl: true });
     }
   }
-
-  async showGroupMembers(groupId: number, groupOwnerName: string) {
-    const modal = this.modalCtrl.create({
-      component: GroupmembersPage,
-      componentProps: {
-        'groupId': groupId,
-        'groupOwnerName': groupOwnerName
-      }
-    });
-
-    (await modal).onWillDismiss().then(groupWithMembers => {
-      if (!groupWithMembers.data) {
-        return;
-      }
-    })
-
-    return (await modal).present();
-  }
-
 }

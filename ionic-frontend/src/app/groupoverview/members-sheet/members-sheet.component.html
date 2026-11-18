@@ -1,0 +1,117 @@
+<!-- Ein Sheet, zwei Ansichten (DIV-80, FA4): Mitgliederliste und „Mitglied hinzufügen“. Aufbau wie die übrigen Sheets:
+     Kopf und Footer fest, nur der Mittelteil scrollt. Basis-Style: src/theme/bottom-sheet.scss. -->
+<div class="members-sheet">
+  <div class="sheet-top">
+    <div class="sheet-header">
+      <ion-icon [name]="view() === 'add' ? 'person-add-outline' : 'people-outline'" color="primary" aria-hidden="true"></ion-icon>
+      <div class="sheet-title">
+        <h2>{{ (view() === 'add' ? 'groups.members_sheet.add_title' : 'groups.members_sheet.title') | translate }}</h2>
+        <p class="sheet-subtitle">{{ groupName }}</p>
+      </div>
+      <ion-button fill="clear" color="medium" class="btn-close" (click)="close()" [disabled]="saving()"
+                  [attr.aria-label]="'groups.members_sheet.btn_close' | translate">
+        <ion-icon name="close" slot="icon-only"></ion-icon>
+      </ion-button>
+    </div>
+  </div>
+
+  <!-- Ansicht 1: Mitgliederliste -->
+  <ng-container *ngIf="view() === 'list'">
+    <div class="sheet-body">
+      <div class="load-state" *ngIf="loadState() === 'loading' || (loadState() === 'loaded' && !members())">
+        <ion-spinner name="crescent" color="primary"></ion-spinner>
+      </div>
+
+      <div class="load-state load-error" *ngIf="loadState() === 'error'" role="alert">
+        <p>{{ 'groups.members_sheet.load_error' | translate }}</p>
+        <ion-button fill="outline" class="btn-retry" (click)="load()">
+          <ion-icon name="refresh-outline" slot="start"></ion-icon>
+          {{ 'groups.members_sheet.btn_retry' | translate }}
+        </ion-button>
+      </div>
+
+      <ng-container *ngIf="members()">
+        <!-- Größe wie „Exportieren“ im Export-Sheet: volle Breite, Standardhöhe -->
+        <ion-button *ngIf="isAdmin()" expand="block" class="btn-add-member" (click)="openAdd()" [disabled]="saving()">
+          <ion-icon name="person-add-outline" slot="start"></ion-icon>
+          {{ 'groups.members_sheet.btn_add_member' | translate }}
+        </ion-button>
+
+        <ion-list lines="inset" class="member-list">
+          <ion-list-header>
+            <ion-label color="medium">{{ 'groups.members_sheet.section_members' | translate }}</ion-label>
+          </ion-list-header>
+          <ion-item *ngFor="let member of rows(); let last = last" class="member-row" [lines]="last ? 'none' : 'inset'">
+            <ion-icon name="person-outline" slot="start" aria-hidden="true"></ion-icon>
+            <ion-label>
+              <!-- Namen nur per CSS gekürzt, der volle Text bleibt im DOM (DIV-79-Konvention) -->
+              <span class="member-name">{{ member.userName }}</span>
+            </ion-label>
+            <!-- Admin-Kennzeichnung: kleines, getöntes Label (Text, nicht nur Farbe) statt kräftigem ion-badge -->
+            <span *ngIf="isOwner(member)" slot="end" class="admin-badge">{{ 'groups.members_sheet.admin_badge' | translate }}</span>
+            <ion-button *ngIf="hasActions(member)" slot="end" fill="clear" color="medium" class="member-menu-button"
+                        (click)="openMemberMenu($event, member)" [disabled]="saving()"
+                        [attr.aria-label]="'groups.members_sheet.member_actions' | translate: { memberName: member.userName }">
+              <ion-icon name="ellipsis-vertical" slot="icon-only"></ion-icon>
+            </ion-button>
+          </ion-item>
+        </ion-list>
+        <p class="no-members" *ngIf="rows().length <= 1">{{ 'groups.members_sheet.no_members' | translate }}</p>
+
+        <div class="admin-hint">
+          <ion-icon name="information-circle-outline" aria-hidden="true"></ion-icon>
+          <span>{{ 'groups.members_sheet.admin_hint' | translate }}</span>
+        </div>
+      </ng-container>
+
+      <!-- ⋮-Menü eines Mitglieds: kleines Kontextmenü, kein weiteres Sheet -->
+      <ion-popover class="member-menu" [isOpen]="memberMenuOpen" [event]="memberMenuEvent" (didDismiss)="closeMemberMenu()"
+                   [dismissOnSelect]="true" side="bottom" alignment="end">
+        <ng-template>
+          <ion-content>
+            <ion-list lines="none" *ngIf="menuMember() as member">
+              <ion-item *ngIf="actionsFor(member).makeAdmin" class="menu-make-admin" [button]="true" [detail]="false"
+                        (click)="makeAdmin(member)">
+                <ion-icon name="shield-checkmark-outline" slot="start" aria-hidden="true"></ion-icon>
+                <ion-label class="ion-text-wrap">{{ 'groups.members_sheet.make_admin' | translate }}</ion-label>
+              </ion-item>
+              <ion-item *ngIf="actionsFor(member).remove" class="menu-remove" [button]="true" [detail]="false"
+                        (click)="removeMember(member)">
+                <ion-icon name="person-remove-outline" color="danger" slot="start" aria-hidden="true"></ion-icon>
+                <ion-label class="ion-text-wrap" color="danger">{{ 'groups.members_sheet.remove' | translate }}</ion-label>
+              </ion-item>
+            </ion-list>
+          </ion-content>
+        </ng-template>
+      </ion-popover>
+    </div>
+  </ng-container>
+
+  <!-- Ansicht 2: Mitglied hinzufügen (selbes Sheet) -->
+  <ng-container *ngIf="view() === 'add'">
+    <!-- Kein <form>-Element: Enter fügt über submitAdd() hinzu, das während des Requests gesperrt ist. -->
+    <div class="sheet-body">
+      <ion-item lines="none" class="member-email-field">
+        <ion-input [formControl]="email" class="member-email-input" type="email" inputmode="email" autocomplete="email"
+                   enterkeyhint="send" labelPlacement="stacked" [maxlength]="maxLength"
+                   [label]="'groups.members_sheet.email_label' | translate"
+                   (ionInput)="onEmailInput()" (keyup.enter)="submitAdd()"></ion-input>
+      </ion-item>
+      <p class="field-error error-email" *ngIf="addError() as error" role="alert">{{ error | translate }}</p>
+    </div>
+
+    <!-- Footer wie im Ausgabenfilter (DIV-71): Nebenaktion als Text-Button, Hauptaktion breiter mit Icon -->
+    <div class="sheet-footer">
+      <div class="sheet-actions">
+        <ion-button fill="clear" color="medium" class="btn-cancel" (click)="cancelAdd()" [disabled]="saving()">
+          {{ 'groups.members_sheet.btn_cancel' | translate }}
+        </ion-button>
+        <ion-button class="btn-add" (click)="submitAdd()" [disabled]="saving()">
+          <ion-spinner *ngIf="saving()" name="crescent" slot="start"></ion-spinner>
+          <ion-icon *ngIf="!saving()" name="person-add-outline" slot="start"></ion-icon>
+          {{ 'groups.members_sheet.btn_add' | translate }}
+        </ion-button>
+      </div>
+    </div>
+  </ng-container>
+</div>

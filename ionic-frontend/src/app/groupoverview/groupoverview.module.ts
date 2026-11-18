@@ -9,6 +9,7 @@ import { GroupoverviewPageRoutingModule } from './groupoverview-routing.module';
 import { GroupoverviewPage } from './groupoverview.page';
 import { TranslateModule } from '@ngx-translate/core';
 import { GroupFormSheetComponent } from './group-form-sheet/group-form-sheet.component';
+import { MembersSheetComponent } from './members-sheet/members-sheet.component';
 
 @NgModule({
   imports: [
@@ -19,6 +20,6 @@ import { GroupFormSheetComponent } from './group-form-sheet/group-form-sheet.com
     GroupoverviewPageRoutingModule,
     TranslateModule
   ],
-  declarations: [GroupoverviewPage, GroupFormSheetComponent]
+  declarations: [GroupoverviewPage, GroupFormSheetComponent, MembersSheetComponent]
 })
 export class GroupoverviewPageModule {}

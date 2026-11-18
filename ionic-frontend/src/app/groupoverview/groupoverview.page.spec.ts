@@ -15,6 +15,7 @@ import { aGroup, aGroupOverview, aLoggedInUser } from 'src/testing/test-data';
 import { alertServiceSpy, authServiceStub, provideServiceTesting, storageServiceFake } from 'src/testing/test-providers';
 import { GroupFormSheetComponent } from './group-form-sheet/group-form-sheet.component';
 import { GroupoverviewPage } from './groupoverview.page';
+import { MembersSheetComponent } from './members-sheet/members-sheet.component';
 import { GroupOverview } from './model/group-overview';
 
 // DIV-72: Ein Klick auf eine Gruppe setzt sie nur aktiv (ohne Navigation); die Liste markiert die aktive Gruppe.
@@ -199,13 +200,21 @@ describe('GroupoverviewPage – Gruppenmenü (DIV-80)', () => {
     expect(update).toHaveBeenCalledOnceWith(eigene);
   });
 
-  it('„Mitglieder verwalten“ öffnet die Mitglieder genau dieser Gruppe', async () => {
-    const members = spyOn(page, 'showGroupMembers').and.resolveTo();
+  it('„Mitglieder verwalten“ öffnet das Mitglieder-Sheet genau dieser Gruppe in der Listenansicht', async () => {
+    // Modal nur als Stub: ein echtes Overlay würde spätere Layout-Tests verdecken
+    const modal = { present: jasmine.createSpy('present').and.resolveTo() };
+    const create = spyOn(TestBed.inject(ModalController), 'create').and.resolveTo(modal as unknown as HTMLIonModalElement);
 
     await menuOeffnen(1);
     punkt('menu-members').click();
+    await create.calls.mostRecent().returnValue;
+    await new Promise(resolve => setTimeout(resolve));
 
-    expect(members).toHaveBeenCalledOnceWith(eigene.id, eigene.ownerName);
+    const options = create.calls.mostRecent().args[0];
+    expect(options.component).toBe(MembersSheetComponent);
+    expect(options.componentProps).toEqual(jasmine.objectContaining({ groupId: eigene.id, groupName: 'Eigene' }));
+    expect(options.componentProps!['view']()).toBe('list');
+    expect(modal.present).toHaveBeenCalled();
   });
 
   it('„Gruppe löschen“ öffnet direkt die Sicherheitsabfrage mit Gruppenname; gelöscht wird nur über „Löschen“', async () => {
