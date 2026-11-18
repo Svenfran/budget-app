@@ -1075,7 +1075,9 @@ describe('CartlistPage – Scroll-Host (DIV-79)', () => {
     TestBed.inject(GroupService).setActiveGroup(aGroup({ id: 3, name: 'WG' }));
     fixture = TestBed.createComponent(CartlistPage);
     page = fixture.componentInstance;
-    // wie in der App füllt die Seite den Viewport (ion-content und Scroll-Host haben 100 % Höhe)
+    // wie in der App füllt die Seite den Viewport; ion-page setzt dort der Router-Outlet (Seite als Flex-Spalte,
+    // ion-content erhält die Resthöhe unter dem Header)
+    root().classList.add('ion-page');
     root().style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 600px;';
     fixture.detectChanges();
     await ionicReady(root());
@@ -1100,6 +1102,10 @@ describe('CartlistPage – Scroll-Host (DIV-79)', () => {
     await showList(3);
     expect(hosts().length).toBe(1);
     expect(host()).toBe(loadingHost);
+    // füllt genau den Platz unter dem Header bis zum Seitenende (keine feste Höhe mehr)
+    const headerBottom = root().querySelector('ion-header')!.getBoundingClientRect().bottom;
+    expect(host().getBoundingClientRect().top).toBeCloseTo(headerBottom, 0);
+    expect(host().getBoundingClientRect().bottom).toBeCloseTo(root().getBoundingClientRect().bottom, 0);
     const firstViewport = viewportElement();
     expect(firstViewport).not.toBeNull();
     expect(host().contains(firstViewport)).toBeTrue();
@@ -1169,7 +1175,7 @@ describe('CartlistPage – Header (DIV-79)', () => {
   let fixture: ComponentFixture<CartlistPage>;
   let groupService: GroupService;
   const root = () => fixture.nativeElement as HTMLElement;
-  const groupButton = () => root().querySelector('ion-title button.group-name') as HTMLButtonElement;
+  const groupButton = () => root().querySelector('ion-title button.page-title') as HTMLButtonElement;
 
   beforeEach(() => {
     const cartList = signal<Cart[]>([]);
@@ -1207,7 +1213,9 @@ describe('CartlistPage – Header (DIV-79)', () => {
   it('Titel und darunter der volle Gruppenname (kein slice), Button mit beschreibendem aria-label (AC 1, 2)', () => {
     expect(root().querySelector('ion-title .page-title__text')!.textContent!.trim()).toBe('Ausgaben');
     expect(groupButton().querySelector('.page-title__group-name')!.textContent!.trim()).toBe(longName);
-    expect(groupButton().getAttribute('aria-label')).toBe(`Gruppe wechseln, aktuell: ${longName}`);
+    // Titel und Gruppe bilden einen Button; das aria-label nennt Seite und Aktion
+    expect(groupButton().querySelector('.page-title__text')!.textContent!.trim()).toBe('Ausgaben');
+    expect(groupButton().getAttribute('aria-label')).toBe(`Ausgaben, Gruppe wechseln, aktuell: ${longName}`);
     expect(groupButton().querySelector('ion-icon')!.getAttribute('name')).toBe('chevron-down-outline');
   });
 
@@ -1226,6 +1234,22 @@ describe('CartlistPage – Header (DIV-79)', () => {
     fixture.detectChanges();
 
     expect(groupButton().querySelector('.page-title__group-name')!.textContent!.trim()).toBe('Neue WG');
+  });
+
+  // Codex-Review F-002: der Wrapper von ion-title schneidet per overflow: hidden ab – gemessen wird die tatsächlich
+  // treffbare Fläche, nicht nur die Box (gemeinsames Styling in global.scss, gilt für alle drei Tabs)
+  it('Gruppen-Button: volle 44px Tippfläche, auch am oberen und unteren Rand treffbar (AC 2)', async () => {
+    root().classList.add('ion-page');
+    root().style.cssText = 'position: fixed; top: 0; left: 0; width: 360px; height: 640px;';
+    fixture.detectChanges();
+    await ionicReady(root());
+    await new Promise(resolve => requestAnimationFrame(resolve));
+
+    const box = groupButton().getBoundingClientRect();
+    const x = box.left + Math.min(box.width / 2, 20);
+    expect(box.height).toBeGreaterThanOrEqual(44);
+    expect(groupButton().contains(document.elementFromPoint(x, box.top + 2))).withContext('oberer Rand').toBeTrue();
+    expect(groupButton().contains(document.elementFromPoint(x, box.bottom - 2))).withContext('unterer Rand').toBeTrue();
   });
 
   it('rechts nur noch „+“ und Overflow-Menü, kein Gruppenname (AC 3)', () => {

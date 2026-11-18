@@ -87,7 +87,7 @@ describe('ShoppinglistPage – Gruppenwechsel und Umbenennung', () => {
     fixture.detectChanges();
 
     const root = fixture.nativeElement as HTMLElement;
-    const groupButton = root.querySelector('ion-title button.group-name')!;
+    const groupButton = root.querySelector('ion-title button.page-title')!;
     expect(groupButton.querySelector('.page-title__group-name')!.textContent!.trim()).toBe(longName);
     expect(root.querySelector('ion-title .page-title__text')!.textContent!.trim()).toBe('domains.shoppinglists.title');
     const actions = root.querySelector('ion-buttons[slot="primary"]')!;

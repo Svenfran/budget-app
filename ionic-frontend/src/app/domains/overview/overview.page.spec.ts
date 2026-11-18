@@ -80,7 +80,7 @@ describe('OverviewPage – Header (DIV-79)', () => {
   let fixture: ComponentFixture<OverviewPage>;
   let groupService: GroupService;
   const root = () => fixture.nativeElement as HTMLElement;
-  const groupButton = () => root().querySelector('ion-title button.group-name') as HTMLButtonElement;
+  const groupButton = () => root().querySelector('ion-title button.page-title') as HTMLButtonElement;
 
   beforeEach(() => {
     const overviewService = {
