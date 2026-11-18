@@ -12,6 +12,7 @@ import { AlertService } from 'src/app/service/alert.service';
 import { CategoryService } from 'src/app/service/category.service';
 import { GroupService } from 'src/app/service/group.service';
 import { StorageService } from 'src/app/service/storage.service';
+import { ionicReady } from 'src/testing/ionic-ready';
 import { aCart, aCategory, aGroup, aLoggedInUser, aUser } from 'src/testing/test-data';
 import { alertServiceSpy, authServiceStub, provideServiceTesting, storageServiceFake } from 'src/testing/test-providers';
 import { OverviewService } from '../overview/service/overview.service';
@@ -1023,5 +1024,139 @@ describe('CartlistPage – Sliding-Aktionen (DIV-73)', () => {
     it('fremde Ausgabe: keine Aktionen (Z2)', () => {
       expect(optionsByTitle()['Bens Einkauf']).toEqual([]);
     });
+  });
+});
+
+// DIV-79 Phase 1: Liste und Refresher hängen an einem stabilen Scroll-Container statt an einer festen Viewport-Höhe.
+// Geprüft wird die Anbindung (ein Container, Neumessung, isAtTop) – die Geometrie selbst nur über die Größenänderung.
+describe('CartlistPage – Scroll-Host (DIV-79)', () => {
+  let cartList: WritableSignal<Cart[]>;
+  let fixture: ComponentFixture<CartlistPage>;
+  let page: CartlistPage;
+  let finishLoading: () => void;
+
+  const carts = (count: number) => Array.from({ length: count }, (_, i) =>
+    aCart({ title: `Einkauf ${i}`, userDto: aUser({ userName: 'Ben' }), categoryDto: aCategory({ name: 'Lebensmittel' }) }));
+  const root = () => fixture.nativeElement as HTMLElement;
+  const hosts = () => root().querySelectorAll('.ion-content-scroll-host');
+  const host = () => hosts()[0] as HTMLElement;
+  const viewportElement = () => root().querySelector('cdk-virtual-scroll-viewport');
+  /** ResizeObserver meldet sich nach dem nächsten Layout; zwei Frames reichen sicher. */
+  const nextFrames = async () => {
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    await new Promise(resolve => requestAnimationFrame(resolve));
+  };
+
+  beforeEach(async () => {
+    cartList = signal<Cart[]>([]);
+    TestBed.configureTestingModule({
+      declarations: [CartlistPage],
+      imports: [IonicModule.forRoot(), ScrollingModule, TranslateModule, RouterModule, ScientificCurrencyPipe],
+      providers: [
+        ...provideServiceTesting(),
+        {
+          provide: CartService, useValue: {
+            cartList, initCartList: signal<Cart[]>([]), cartUpdated: signal(0),
+            sum: computed(() => 0), count: computed(() => cartList().length),
+            // Laden bleibt offen, bis der Test es abschließt (Wechsel Laden → Liste)
+            getCartListByGroupId: jasmine.createSpy('load')
+              .and.callFake((_group: unknown, _refresh: boolean, onComplete?: () => void) => {
+                finishLoading = () => onComplete?.();
+              }),
+          },
+        },
+        { provide: OverviewService, useValue: { overviewRefresh: signal(0) } },
+        { provide: StorageService, useValue: storageServiceFake() },
+        { provide: AuthService, useValue: authServiceStub(aLoggedInUser({ name: 'Anna' })) },
+        { provide: AlertService, useValue: alertServiceSpy() },
+      ],
+    });
+    TestBed.inject(GroupService).setActiveGroup(aGroup({ id: 3, name: 'WG' }));
+    fixture = TestBed.createComponent(CartlistPage);
+    page = fixture.componentInstance;
+    // wie in der App füllt die Seite den Viewport (ion-content und Scroll-Host haben 100 % Höhe)
+    root().style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 600px;';
+    fixture.detectChanges();
+    await ionicReady(root());
+  });
+
+  /** Lädt die Liste fertig und wartet, bis der Viewport sie gemessen und gerendert hat. */
+  async function showList(count: number) {
+    cartList.set(carts(count));
+    if (page.isLoading) finishLoading();
+    fixture.detectChanges();
+    await nextFrames();
+    fixture.detectChanges();
+    await fixture.whenStable();
+  }
+
+  it('genau ein Scroll-Container, derselbe beim Wechsel Laden → Liste → leer → Liste (Refresher bleibt angebunden)', async () => {
+    expect(page.isLoading).toBeTrue();
+    expect(hosts().length).toBe(1);
+    const loadingHost = host();
+    expect(viewportElement()).toBeNull();
+
+    await showList(3);
+    expect(hosts().length).toBe(1);
+    expect(host()).toBe(loadingHost);
+    const firstViewport = viewportElement();
+    expect(firstViewport).not.toBeNull();
+    expect(host().contains(firstViewport)).toBeTrue();
+
+    cartList.set([]);
+    fixture.detectChanges();
+    expect(viewportElement()).toBeNull();
+    expect(host()).toBe(loadingHost);
+
+    await showList(3);
+    expect(host()).toBe(loadingHost);
+    expect(viewportElement()).not.toBeNull();
+    expect(viewportElement()).not.toBe(firstViewport);
+  });
+
+  it('Höhenänderung ohne Fenster-Resize misst den jeweils aktuellen Viewport neu', async () => {
+    await showList(3);
+    const first = page.viewport!;
+    const firstCheck = spyOn(first, 'checkViewportSize').and.callThrough();
+
+    const before = host().clientHeight;
+    root().style.height = '400px';
+    await nextFrames();
+    expect(host().clientHeight).not.toBe(before);
+    expect(firstCheck).toHaveBeenCalled();
+
+    // Viewport wird neu erzeugt (leer → Liste): gemessen wird der neue, nicht mehr der alte
+    cartList.set([]);
+    fixture.detectChanges();
+    await showList(3);
+    const second = page.viewport!;
+    expect(second).not.toBe(first);
+    const secondCheck = spyOn(second, 'checkViewportSize').and.callThrough();
+    firstCheck.calls.reset();
+
+    root().style.height = '500px';
+    await nextFrames();
+    expect(secondCheck).toHaveBeenCalled();
+    expect(firstCheck).not.toHaveBeenCalled();
+  });
+
+  it('isAtTop folgt dem Scroll-Offset des Containers und steuert disabled des Refreshers', async () => {
+    await showList(60);
+    const refresher = root().querySelector('ion-refresher') as HTMLIonRefresherElement;
+    expect(page.isAtTop).toBeTrue();
+    expect(refresher.disabled).toBeFalse();
+
+    host().scrollTop = 500;
+    expect(host().scrollTop).toBeGreaterThan(100); // Voraussetzung: Liste ist höher als der Container
+    host().dispatchEvent(new Event('scroll'));
+    fixture.detectChanges();
+    expect(page.isAtTop).toBeFalse();
+    expect(refresher.disabled).toBeTrue();
+
+    host().scrollTop = 0;
+    host().dispatchEvent(new Event('scroll'));
+    fixture.detectChanges();
+    expect(page.isAtTop).toBeTrue();
+    expect(refresher.disabled).toBeFalse();
   });
 });

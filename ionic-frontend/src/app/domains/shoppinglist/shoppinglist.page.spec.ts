@@ -15,6 +15,7 @@ import { GroupService } from 'src/app/service/group.service';
 import { StorageService } from 'src/app/service/storage.service';
 import { WebSocketService } from 'src/app/service/websocket.service';
 import { environment } from 'src/environments/environment';
+import { ionicReady } from 'src/testing/ionic-ready';
 import { aGroup, aLoggedInUser, aShoppingItem, aShoppingList, REFERENCE_DATE } from 'src/testing/test-data';
 import { alertServiceSpy, authServiceStub, provideServiceTesting, storageServiceFake } from 'src/testing/test-providers';
 import { ShoppinglistDto } from './model/shoppinglist-dto';
@@ -1128,19 +1129,6 @@ describe('ShoppinglistPage – Drag & Drop mit echter Geste', () => {
     fixture.detectChanges();
   }
 
-  /**
-   * Ionic lädt seine Web Components im Testbrowser verzögert nach; solange ein Element hydriert, ist sein Inhalt nicht
-   * im Layout. Vor der Geste daher warten, bis alle ion-Elemente der Seite fertig gerendert sind.
-   */
-  async function ionicReady() {
-    const ionElements = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('*'))
-      .filter(element => element.tagName.startsWith('ION-'));
-    await Promise.all([...new Set(ionElements.map(element => element.tagName.toLowerCase()))]
-      .map(tag => customElements.whenDefined(tag)));
-    await Promise.all(ionElements.map(element => (element as HTMLElement & { componentOnReady?: () => Promise<unknown> })
-      .componentOnReady?.()));
-  }
-
   // Die Seite mit vier Listen ist höher als der Karma-Viewport; ohne sichtbare Ziele findet das CDK keinen Container
   // (elementFromPoint) und begrenzt die Vorschau auf den Scroll-Host. Nur für diesen Block: Karma-iframe erhöhen.
   const frame = window.frameElement as HTMLElement | null;
@@ -1174,7 +1162,8 @@ describe('ShoppinglistPage – Drag & Drop mit echter Geste', () => {
     http.expectOne(`${api}/shopping-lists-with-items/1`).flush(loadedLists());
     page.toggleLists = { 1: true, 2: true, 3: true };
     fixture.detectChanges();
-    await ionicReady();
+    // vor der Geste warten, bis alle ion-Elemente der Seite fertig gerendert sind
+    await ionicReady(fixture.nativeElement as HTMLElement);
   });
 
   afterEach(() => http.verify());

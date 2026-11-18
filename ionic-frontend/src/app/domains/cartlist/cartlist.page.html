@@ -40,7 +40,6 @@
       </ion-popover>
     </ion-buttons>
   </ion-toolbar>
-</ion-header>
 
 <ion-list-header color="light">
   <ion-label>
@@ -58,14 +57,19 @@
     </div>
   </ion-label>
 </ion-list-header>
+</ion-header>
 
-<ion-content>
-  <ion-refresher 
+<!-- Ein stabiler Scroll-Container für Liste und Refresher (DIV-79): Er füllt den Bereich unter dem Header unabhängig von
+     dessen Höhe, das CDK virtualisiert die Liste darin (cdkVirtualScrollingElement), und ion-refresher bindet sich über
+     die Klasse ion-content-scroll-host. Nicht unter *ngIf, damit die Bindung beim Wechsel Laden/leer/Liste bleibt. -->
+<ion-content [scrollY]="false">
+  <ion-refresher
       slot="fixed"
       [disabled]="!isAtTop"
       (ionRefresh)="refreshCartList($event)">
     <ion-refresher-content></ion-refresher-content>
   </ion-refresher>
+  <div class="ion-content-scroll-host" cdkVirtualScrollingElement #scrollHost (scroll)="onHostScroll()">
   <ion-grid class="ion-padding">
     <ion-row>
       <ion-col class="ion-text-center" size-md="6" offset-md="3" *ngIf="isLoading">
@@ -77,12 +81,10 @@
     </ion-row>
     <ion-row>
       <ion-col size-md="6" offset-md="3" *ngIf="!isLoading && cartList() && cartList().length > 0">
-        <cdk-virtual-scroll-viewport 
-            itemSize="56" 
-            minBufferPx="900" 
+        <cdk-virtual-scroll-viewport
+            itemSize="56"
+            minBufferPx="900"
             maxBufferPx="1350"
-            (scrolledIndexChange)="onScrollChange()"
-            class="cart-scroll"
             #viewport>
           <ion-list *ngIf="!isLoading && cartList().length > 0">
             <ion-item-sliding *cdkVirtualFor="let cart of cartList(), let i = index" #slidingItem>
@@ -138,4 +140,5 @@
       </ion-col>
     </ion-row>
   </ion-grid>
+  </div>
 </ion-content>

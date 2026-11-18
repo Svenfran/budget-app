@@ -61,10 +61,16 @@ ion-popover {
     align-items: center;
 }
 
-// Nur vertikal scrollen: sonst lässt sich der Inhalt seitlich unter dem Viewport verschieben, wenn er minimal breiter
-// ist (Wrapper des CDK hat nur min-width) und keine Swipe-Geste die horizontale Bewegung übernimmt (fremde Carts)
-.cart-scroll {
-  height: calc(100vh - 150px);
+// Einziger Scroll-Container der Seite (DIV-79, Muster der Einkaufsliste): füllt ion-content und damit den Platz unter
+// dem Header, egal wie hoch dieser ist. Nur vertikal scrollen: sonst lässt sich der Inhalt seitlich unter dem Viewport
+// verschieben, wenn er minimal breiter ist (Wrapper des CDK hat nur min-width) und keine Swipe-Geste die horizontale
+// Bewegung übernimmt (fremde Carts)
+.ion-content-scroll-host {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-x: none;
