@@ -1,16 +1,17 @@
-import { Component, DestroyRef, OnInit } from '@angular/core';
+import { Component, DestroyRef, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { GroupService } from '../service/group.service';
 import { User } from '../auth/user';
 import { AuthService } from '../auth/auth.service';
-import { AlertController, LoadingController, ModalController } from '@ionic/angular';
+import { AlertController, ModalController } from '@ionic/angular';
 import { Group } from '../model/group';
 import { GroupOverview } from './model/group-overview';
 import { GroupmembersPage } from '../groupmembers/groupmembers.page';
-import { INIT_NUMBERS } from '../constants/default-values';
 import { Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
 import { isGroupAdmin } from './group-permissions';
+import { GroupFormSheetMode } from './group-form-sheet/group-form-sheet.component';
+import { groupFormSheetModalOptions } from './group-form-sheet/group-form-sheet-options';
 
 @Component({
   selector: 'app-groupoverview',
@@ -34,7 +35,6 @@ export class GroupoverviewPage implements OnInit {
     private groupService: GroupService,
     private authService: AuthService,
     private alertCtrl: AlertController,
-    private loadingCtrl: LoadingController,
     private modalCtrl: ModalController,
     private router: Router,
     private translate: TranslateService,
@@ -95,82 +95,24 @@ export class GroupoverviewPage implements OnInit {
     this.showGroupMembers(group.id, group.ownerName);
   }
 
+  /** `+` im Header: Bottom Sheet „Gruppe hinzufügen“ (DIV-80, ersetzt den Alert). */
   onCreateGroup() {
-    this.alertCtrl.create({
-      header: this.translate.instant("alerts.group.new.header"),
-      buttons: [{
-        text: this.translate.instant("alerts.group.new.cancel"),
-        role: "cancel"
-      }, {
-        text: this.translate.instant("alerts.group.new.ok"),
-        handler: (data) => {
-          this.loadingCtrl.create({
-            message: this.translate.instant("alerts.group.new.loading")
-          }).then(loadingEl => {
-            if (!data) return;
-            const trimmedGroupName = data.groupName.trim();
-            if (trimmedGroupName === "") return;
-
-            const newGroup: Group = { id: new Date().getTime(), name: trimmedGroupName, dateCreated: new Date() };
-            this.groupService.addGroup(newGroup);
-            loadingEl.dismiss();
-          })
-        }
-      }],
-      inputs: [
-        {
-          name: "groupName",
-          placeholder: this.translate.instant("alerts.group.new.placeholder"),
-          attributes: {
-            maxlength: INIT_NUMBERS.MAX_LENGTH
-          }
-        }
-      ]
-    }).then(alertEl => alertEl.present().then(() => {
-      const inputField = document.querySelector("ion-alert input") as HTMLElement;
-      if (inputField) {
-        inputField.focus();
-      }
-    }));
+    return this.openGroupFormSheet('create');
   }
 
-  onUpdateGroup(group: Group) {
-    this.alertCtrl.create({
-      header: this.translate.instant("alerts.group.edit.header"),
-      buttons: [{
-        text: this.translate.instant("alerts.group.edit.cancel"),
-        role: "cancel"
-      }, {
-        text: this.translate.instant("alerts.group.edit.ok"),
-        handler: (data) => {
-          this.loadingCtrl.create({
-            message: this.translate.instant("alerts.group.edit.loading")
-          }).then(loadingEl => {
-            if (!data) return;
-            const trimmedGroupName = data.groupName.trim();
-            if (trimmedGroupName === "") return;
+  /** Menüpunkt „Gruppe bearbeiten“: Bottom Sheet mit dem aktuellen Namen (DIV-80, ersetzt den Alert). */
+  onUpdateGroup(group: GroupOverview) {
+    return this.openGroupFormSheet('edit', group);
+  }
 
-            const newGroup: Group = { id: group.id, name: trimmedGroupName, dateCreated: new Date() };
-            this.groupService.updateGroup(newGroup);
-            loadingEl.dismiss();
-          })
-        }
-      }],
-      inputs: [
-        {
-          name: "groupName",
-          value: this.groupOverviewList().find(gr => gr.id === group.id)?.name,
-          attributes: {
-            maxlength: INIT_NUMBERS.MAX_LENGTH
-          }
-        }
-      ]
-    }).then(alertEl => alertEl.present().then(() => {
-      const inputField = document.querySelector("ion-alert input") as HTMLElement;
-      if (inputField) {
-        inputField.focus();
-      }
-    }));
+  /**
+   * Öffnet „Gruppe hinzufügen / bearbeiten“. Das Sheet speichert selbst und schließt erst nach Erfolg; `saving` sperrt das
+   * Schließen, solange der Request läuft. Fokus wie bisher im Alert direkt ins Namensfeld.
+   */
+  async openGroupFormSheet(mode: GroupFormSheetMode, group?: GroupOverview) {
+    const modal = await this.modalCtrl.create(groupFormSheetModalOptions({ mode, group, saving: signal(false) }));
+    await modal.present();
+    await (modal.querySelector('ion-input.group-name-input') as HTMLIonInputElement | null)?.setFocus();
   }
 
   /**

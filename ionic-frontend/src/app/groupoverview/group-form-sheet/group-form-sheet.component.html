@@ -1,0 +1,44 @@
+<!-- Aufbau wie die Ausgleichszahlung (DIV-70): Kopf und Footer fest, nur der Mittelteil scrollt.
+     Header, Untertitel und Aktionsbereich: gemeinsamer Basis-Style (src/theme/bottom-sheet.scss). -->
+<div class="group-form-sheet">
+  <div class="sheet-top">
+    <div class="sheet-header">
+      <ion-icon [name]="isEdit ? 'create-outline' : 'add-circle-outline'" color="primary" aria-hidden="true"></ion-icon>
+      <div class="sheet-title">
+        <h2>{{ (isEdit ? 'groups.form_sheet.title_edit' : 'groups.form_sheet.title_create') | translate }}</h2>
+        <p class="sheet-subtitle" *ngIf="isEdit">{{ group?.name }}</p>
+      </div>
+      <ion-button fill="clear" color="medium" class="btn-close" (click)="close()" [disabled]="saving()"
+                  [attr.aria-label]="'groups.form_sheet.btn_cancel' | translate">
+        <ion-icon name="close" slot="icon-only"></ion-icon>
+      </ion-button>
+    </div>
+  </div>
+
+  <!-- Kein <form>-Element: Enter speichert über save(), das während des Speicherns gesperrt ist. -->
+  <div class="sheet-body" [formGroup]="form">
+    <ion-item lines="none" class="group-form-field">
+      <ion-input formControlName="name" class="group-name-input" type="text" enterkeyhint="done"
+                 labelPlacement="stacked" [maxlength]="maxLength"
+                 [label]="'groups.form_sheet.name_label' | translate"
+                 (keyup.enter)="save()"></ion-input>
+    </ion-item>
+    <p class="field-error error-name" *ngIf="showNameError()" role="alert">
+      <ng-container *ngIf="name.errors?.['required']">{{ 'groups.form_sheet.name_required' | translate }}</ng-container>
+      <ng-container *ngIf="name.errors?.['maxlength']">{{ 'groups.form_sheet.name_too_long' | translate }}</ng-container>
+    </p>
+    <!-- Folgestory (Währung): weiteres Feld hier, Control in group-form.ts -->
+  </div>
+
+  <div class="sheet-footer">
+    <div class="sheet-actions">
+      <ion-button fill="outline" class="btn-cancel" (click)="close()" [disabled]="saving()">
+        {{ 'groups.form_sheet.btn_cancel' | translate }}
+      </ion-button>
+      <ion-button class="btn-save" (click)="save()" [disabled]="saving()">
+        <ion-spinner *ngIf="saving()" name="crescent" slot="start"></ion-spinner>
+        {{ (isEdit ? 'groups.form_sheet.btn_save' : 'groups.form_sheet.btn_create') | translate }}
+      </ion-button>
+    </div>
+  </div>
+</div>

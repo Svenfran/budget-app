@@ -167,12 +167,6 @@
                 "loading": "Create Group...",
                 "placeholder": "Group name"
             },
-            "edit": {
-                "header": "Group name:",
-                "cancel": "Cancel",
-                "ok": "OK",
-                "loading": "Update group..."
-            },
             "delete": {
                 "header": "Delete group?",
                 "message": "Do you really want to delete the group \"{{groupName}}\"? All expenses, settlement payments, shopping lists, categories and other group data will be permanently removed.",
@@ -498,6 +492,16 @@
             "edit_hint": "Change name",
             "delete": "Delete group",
             "delete_hint": "Permanently remove the group and all its data"
+        },
+        "form_sheet": {
+            "title_create": "Add group",
+            "title_edit": "Edit group",
+            "name_label": "Group name",
+            "name_required": "Please enter a group name.",
+            "name_too_long": "The group name is too long.",
+            "btn_cancel": "Cancel",
+            "btn_create": "Create",
+            "btn_save": "Save"
         },
         "group_members": {
             "title": "Group members",

@@ -167,12 +167,6 @@
                 "loading": "Creando grupo...",
                 "placeholder": "Nombre del grupo"
             },
-            "edit": {
-                "header": "Nombre del grupo:",
-                "cancel": "Cancelar",
-                "ok": "OK",
-                "loading": "Actualizando grupo..."
-            },
             "delete": {
                 "header": "¿Eliminar grupo?",
                 "message": "¿Deseas eliminar el grupo \"{{groupName}}\"? Se eliminarán de forma definitiva todos los gastos, pagos de compensación, listas de la compra, categorías y demás datos del grupo.",
@@ -498,6 +492,16 @@
             "edit_hint": "Cambiar el nombre",
             "delete": "Eliminar grupo",
             "delete_hint": "Eliminar el grupo y todos sus datos de forma definitiva"
+        },
+        "form_sheet": {
+            "title_create": "Añadir grupo",
+            "title_edit": "Editar grupo",
+            "name_label": "Nombre del grupo",
+            "name_required": "Introduce un nombre para el grupo.",
+            "name_too_long": "El nombre del grupo es demasiado largo.",
+            "btn_cancel": "Cancelar",
+            "btn_create": "Crear",
+            "btn_save": "Guardar"
         },
         "group_members": {
             "title": "Miembros del grupo",

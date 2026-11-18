@@ -2,7 +2,7 @@ import { Location } from '@angular/common';
 import { HttpTestingController } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
-import { AlertController, IonicModule } from '@ionic/angular';
+import { AlertController, IonicModule, ModalController } from '@ionic/angular';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { BehaviorSubject } from 'rxjs';
 import { AuthService } from 'src/app/auth/auth.service';
@@ -13,6 +13,7 @@ import { StorageService } from 'src/app/service/storage.service';
 import { ionicReady } from 'src/testing/ionic-ready';
 import { aGroup, aGroupOverview, aLoggedInUser } from 'src/testing/test-data';
 import { alertServiceSpy, authServiceStub, provideServiceTesting, storageServiceFake } from 'src/testing/test-providers';
+import { GroupFormSheetComponent } from './group-form-sheet/group-form-sheet.component';
 import { GroupoverviewPage } from './groupoverview.page';
 import { GroupOverview } from './model/group-overview';
 
@@ -78,6 +79,22 @@ describe('GroupoverviewPage – Gruppe auswählen', () => {
 
     expect(setActive).not.toHaveBeenCalled();
     expect(groupService.activeGroupId()).toBe(wg.id);
+  });
+
+  it('„+“ im Header öffnet das Sheet „Gruppe hinzufügen“, „Gruppe bearbeiten“ das Sheet mit der Gruppe (DIV-80)', async () => {
+    // Modal nur als Stub: ein echtes Overlay würde spätere Layout-Tests verdecken
+    const modal = { present: jasmine.createSpy('present').and.resolveTo(), querySelector: () => null };
+    const create = spyOn(TestBed.inject(ModalController), 'create').and.resolveTo(modal as unknown as HTMLIonModalElement);
+
+    (fixture.nativeElement.querySelector('ion-header ion-button') as HTMLElement).click();
+    await create.calls.mostRecent().returnValue;
+    await page.onUpdateGroup(wg);
+
+    const [createOptions, editOptions] = create.calls.allArgs().map(args => args[0]);
+    expect(createOptions.component).toBe(GroupFormSheetComponent);
+    expect(createOptions.componentProps).toEqual(jasmine.objectContaining({ mode: 'create', group: undefined }));
+    expect(editOptions.componentProps).toEqual(jasmine.objectContaining({ mode: 'edit', group: wg }));
+    expect(modal.present).toHaveBeenCalledTimes(2);
   });
 
   it('hat keine Sliding-Aktionen mehr, sondern je Gruppe einen ⋮-Button (DIV-80)', () => {
