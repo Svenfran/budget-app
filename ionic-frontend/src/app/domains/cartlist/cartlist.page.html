@@ -3,10 +3,18 @@
     <ion-buttons slot="start">
       <ion-menu-button menu="m1"></ion-menu-button>
     </ion-buttons>
-    <ion-title>{{ 'domains.spendings.title' | translate }}</ion-title>
+    <ion-title>
+      <div class="page-title">
+        <span class="page-title__text">{{ 'domains.spendings.title' | translate }}</span>
+        <button type="button" class="page-title__group group-name" routerLink="/groupoverview"
+            [attr.aria-label]="'global.change_group' | translate: { name: activeGroup.name }">
+          <span class="page-title__group-name">{{ activeGroup.name }}</span>
+          <ion-icon name="chevron-down-outline" aria-hidden="true"></ion-icon>
+        </button>
+      </div>
+    </ion-title>
 
     <ion-buttons slot="primary">
-      <ion-text class="ion-padding group-name" routerLink="/groupoverview"><small>{{ (activeGroup.name.length > 20)? (activeGroup.name | slice:0:20) + '...' : (activeGroup.name) }}</small></ion-text>
       <ion-button [routerLink]="['new-edit']">
         <ion-icon name="add" slot="icon-only"></ion-icon>
       </ion-button>

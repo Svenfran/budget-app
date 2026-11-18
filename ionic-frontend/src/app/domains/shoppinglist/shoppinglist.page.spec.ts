@@ -80,6 +80,21 @@ describe('ShoppinglistPage – Gruppenwechsel und Umbenennung', () => {
     expect(page.isLoading).toBeFalse();
   });
 
+  // DIV-79: Gruppenname unter dem Titel, ungekürzt im DOM (Kürzung nur per CSS), nicht mehr neben den Aktionen
+  it('Header: langer Gruppenname ungekürzt im Gruppen-Button unter dem Titel, rechts nur die Aktion', () => {
+    const longName = 'Wohngemeinschaft Musterstraße 12';
+    groupService.setActiveGroup(aGroup({ id: 1, name: longName }));
+    fixture.detectChanges();
+
+    const root = fixture.nativeElement as HTMLElement;
+    const groupButton = root.querySelector('ion-title button.group-name')!;
+    expect(groupButton.querySelector('.page-title__group-name')!.textContent!.trim()).toBe(longName);
+    expect(root.querySelector('ion-title .page-title__text')!.textContent!.trim()).toBe('domains.shoppinglists.title');
+    const actions = root.querySelector('ion-buttons[slot="primary"]')!;
+    expect(actions.textContent).not.toContain(longName);
+    expect(actions.querySelectorAll('ion-button').length).toBe(1);
+  });
+
   it('Wechsel auf eine andere Gruppe: Listen werden geleert und genau einmal für die neue Gruppe geladen', () => {
     lists.set([aShoppingList()]);
 

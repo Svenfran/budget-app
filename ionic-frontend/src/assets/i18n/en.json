@@ -18,7 +18,8 @@
             "deleted": "User deleted",
             "removed": "User removed"
         },
-        "language": "Language"
+        "language": "Language",
+        "change_group": "Switch group, current: {{name}}"
     },
     "navigation": {
         "welcome": "Hi {{name}}!",

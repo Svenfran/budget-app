@@ -1,7 +1,7 @@
 import { computed, signal, WritableSignal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ScrollingModule } from '@angular/cdk/scrolling';
-import { Router, RouterModule } from '@angular/router';
+import { Router, RouterModule, UrlTree } from '@angular/router';
 import { AlertController, IonicModule, IonItemSliding, ModalController } from '@ionic/angular';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ScientificCurrencyPipe } from 'src/app/pipe/scientific.pipe';
@@ -1158,5 +1158,82 @@ describe('CartlistPage – Scroll-Host (DIV-79)', () => {
     fixture.detectChanges();
     expect(page.isAtTop).toBeTrue();
     expect(refresher.disabled).toBeFalse();
+  });
+});
+
+// DIV-79 Phase 2: zweizeiliger Header – Titel, darunter die aktive Gruppe als Button zur Gruppenübersicht; rechts nur
+// noch „+“ und das Overflow-Menü. Gekürzt wird nur per CSS, im DOM steht der volle Name.
+describe('CartlistPage – Header (DIV-79)', () => {
+  const longName = 'Wohngemeinschaft Musterstraße 12';
+  let fixture: ComponentFixture<CartlistPage>;
+  let groupService: GroupService;
+  const root = () => fixture.nativeElement as HTMLElement;
+  const groupButton = () => root().querySelector('ion-title button.group-name') as HTMLButtonElement;
+
+  beforeEach(() => {
+    const cartList = signal<Cart[]>([]);
+    TestBed.configureTestingModule({
+      declarations: [CartlistPage],
+      imports: [IonicModule.forRoot(), ScrollingModule, TranslateModule, RouterModule, ScientificCurrencyPipe],
+      providers: [
+        ...provideServiceTesting(),
+        {
+          provide: CartService, useValue: {
+            cartList, initCartList: signal<Cart[]>([]), cartUpdated: signal(0),
+            sum: computed(() => 0), count: computed(() => cartList().length),
+            getCartListByGroupId: jasmine.createSpy('load')
+              .and.callFake((_group: unknown, _refresh: boolean, onComplete?: () => void) => onComplete?.()),
+          },
+        },
+        { provide: OverviewService, useValue: { overviewRefresh: signal(0) } },
+        { provide: StorageService, useValue: storageServiceFake() },
+        { provide: AuthService, useValue: authServiceStub(aLoggedInUser({ name: 'Anna' })) },
+        { provide: AlertService, useValue: alertServiceSpy() },
+      ],
+    });
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('de', {
+      global: { change_group: 'Gruppe wechseln, aktuell: {{name}}' },
+      domains: { spendings: { title: 'Ausgaben' } },
+    });
+    translate.use('de');
+    groupService = TestBed.inject(GroupService);
+    groupService.setActiveGroup(aGroup({ id: 3, name: longName }));
+    fixture = TestBed.createComponent(CartlistPage);
+    fixture.detectChanges();
+  });
+
+  it('Titel und darunter der volle Gruppenname (kein slice), Button mit beschreibendem aria-label (AC 1, 2)', () => {
+    expect(root().querySelector('ion-title .page-title__text')!.textContent!.trim()).toBe('Ausgaben');
+    expect(groupButton().querySelector('.page-title__group-name')!.textContent!.trim()).toBe(longName);
+    expect(groupButton().getAttribute('aria-label')).toBe(`Gruppe wechseln, aktuell: ${longName}`);
+    expect(groupButton().querySelector('ion-icon')!.getAttribute('name')).toBe('chevron-down-outline');
+  });
+
+  it('Tipp auf die Gruppe navigiert zur Gruppenübersicht (AC 2)', () => {
+    const router = TestBed.inject(Router);
+    const navigate = spyOn(router, 'navigateByUrl').and.resolveTo(true);
+
+    groupButton().click();
+
+    expect(navigate).toHaveBeenCalledTimes(1);
+    expect(router.serializeUrl(navigate.calls.mostRecent().args[0] as UrlTree)).toBe('/groupoverview');
+  });
+
+  it('Umbenennung der aktiven Gruppe aktualisiert den Header', () => {
+    groupService.setActiveGroup(aGroup({ id: 3, name: 'Neue WG' }));
+    fixture.detectChanges();
+
+    expect(groupButton().querySelector('.page-title__group-name')!.textContent!.trim()).toBe('Neue WG');
+  });
+
+  it('rechts nur noch „+“ und Overflow-Menü, kein Gruppenname (AC 3)', () => {
+    const actions = root().querySelector('ion-buttons[slot="primary"]')!;
+    expect(actions.textContent).not.toContain(longName);
+    const buttons = Array.from(actions.querySelectorAll(':scope > ion-button'));
+    expect(buttons.length).toBe(2);
+    expect(buttons[0].querySelector('ion-icon')!.getAttribute('name')).toBe('add');
+    expect(buttons[1].id).toBe('cartlist-popover-button');
+    expect(actions.querySelector('ion-popover')!.getAttribute('trigger')).toBe('cartlist-popover-button');
   });
 });
