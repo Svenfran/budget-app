@@ -10,7 +10,7 @@ import { User } from 'src/app/auth/user';
 import { AlertService } from 'src/app/service/alert.service';
 import { GroupService } from 'src/app/service/group.service';
 import { StorageService } from 'src/app/service/storage.service';
-import { aGroup, aLoggedInUser } from 'src/testing/test-data';
+import { aGroup, aGroupOverview, aLoggedInUser } from 'src/testing/test-data';
 import { alertServiceSpy, authServiceStub, provideServiceTesting, storageServiceFake } from 'src/testing/test-providers';
 import { GroupoverviewPage } from './groupoverview.page';
 import { GroupOverview } from './model/group-overview';
@@ -22,7 +22,7 @@ describe('GroupoverviewPage – Gruppe auswählen', () => {
   let groupService: GroupService;
 
   const overview = (id: number, name: string): GroupOverview =>
-    ({ id, name, dateCreated: new Date(2025, 0, 1), ownerName: 'Anna', memberCount: 1 });
+    aGroupOverview({ id, name });
   const haushalt = overview(1, 'Haushalt');
   const wg = overview(2, 'WG');
   const urlaub = overview(3, 'Urlaub');
@@ -98,13 +98,49 @@ describe('GroupoverviewPage – Gruppe auswählen', () => {
   });
 });
 
+// DIV-80: Admin-Aktionen per User-ID, nicht per Name – ein gleichnamiges Mitglied ist kein Admin.
+describe('GroupoverviewPage – Admin-Erkennung per ID (DIV-80)', () => {
+  let fixture: ComponentFixture<GroupoverviewPage>;
+  const me = aLoggedInUser({ name: 'Anna' });
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      declarations: [GroupoverviewPage],
+      imports: [IonicModule.forRoot(), TranslateModule],
+      providers: [
+        ...provideServiceTesting(),
+        { provide: StorageService, useValue: storageServiceFake() },
+        { provide: AuthService, useValue: authServiceStub(me) },
+        { provide: AlertService, useValue: alertServiceSpy() },
+      ],
+    });
+    const groupService = TestBed.inject(GroupService);
+    spyOn(groupService, 'getGroupsForOverview');
+    groupService.groupOverviewList.set([
+      // fremde Gruppe, deren Admin zufällig genauso heißt wie der Nutzer
+      aGroupOverview({ id: 1, name: 'Fremd', ownerName: 'Anna', ownerId: me.id + 1000 }),
+      aGroupOverview({ id: 2, name: 'Eigene', ownerName: 'Anna', ownerId: me.id }),
+    ]);
+    fixture = TestBed.createComponent(GroupoverviewPage);
+    fixture.detectChanges();
+  });
+
+  it('zeigt Bearbeiten/Löschen/Hinzufügen nur in der Gruppe, deren ownerId der Nutzer ist', () => {
+    const adminActions = Array.from<HTMLElement>(fixture.nativeElement.querySelectorAll('ion-item-sliding'))
+      .map(item => item.querySelectorAll('ion-item-option').length);
+
+    // je Gruppe: Mitglieder (alle) + 3 Admin-Aktionen
+    expect(adminActions).toEqual([1, 4]);
+  });
+});
+
 // DIV-80: Nach dem Löschen der letzten Gruppe geht es erst nach erfolgreicher Antwort zu no-group.
 describe('GroupoverviewPage – letzte Gruppe löschen (DIV-80)', () => {
   let page: GroupoverviewPage;
   let groupService: GroupService;
   let http: HttpTestingController;
   let navigate: jasmine.Spy;
-  const only: GroupOverview = { id: 1, name: 'Haushalt', dateCreated: new Date(2025, 0, 1), ownerName: 'Anna', memberCount: 0 };
+  const only: GroupOverview = aGroupOverview({ id: 1, name: 'Haushalt', memberCount: 0 });
 
   beforeEach(() => {
     TestBed.configureTestingModule({

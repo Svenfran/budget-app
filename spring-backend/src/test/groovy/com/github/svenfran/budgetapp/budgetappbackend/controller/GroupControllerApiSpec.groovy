@@ -11,11 +11,13 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.mock.web.MockHttpServletResponse
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 
 /**
  * Fehlermeldungs-Vertrag beim Hinzufügen von Mitgliedern (Liste der Meldungen: {@link CartControllerApiSpec}) und
- * Rechte-Mapping (NotOwnerOfGroupException -> 403) für remove/change-owner/delete.
+ * Rechte-Mapping (NotOwnerOfGroupException -> 403) für remove/change-owner/delete und JSON-Felder der Übersicht,
+ * die das Frontend liest (ownerId, DIV-80).
  */
 class GroupControllerApiSpec extends IntegrationSpec implements ApiRequests {
 
@@ -97,6 +99,30 @@ class GroupControllerApiSpec extends IntegrationSpec implements ApiRequests {
 
         where:
         aktion << ['Cleo entfernen', 'Owner an Cleo übergeben', 'Gruppe löschen']
+    }
+
+    def "Übersicht liefert dem Mitglied ownerId und ownerName des Owners (Admin-Erkennung im Frontend, DIV-80)"() {
+        given: "Anna ist Owner, Ben Mitglied und angemeldet"
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def groupId = wg.group.id
+        def annaId = wg.owner.id
+        def annaName = wg.owner.name
+        def benId = ben.id
+        LOG.info('Szenario: Gruppe {}, Owner {} ({}), Mitglied Ben {} (angemeldet)', groupId, annaId, annaName, benId)
+
+        when:
+        def response = send(get('/api/groups/overview'), user: ben)
+        def eintrag = json(response).find { it.id == groupId }
+        LOG.info('Antwort: Gruppe {} -> ownerId {}, ownerName {}, memberCount {}', eintrag?.id, eintrag?.ownerId,
+                eintrag?.ownerName, eintrag?.memberCount)
+
+        then:
+        response.status == 200
+        eintrag.ownerId == annaId
+        eintrag.ownerId != benId
+        eintrag.ownerName == annaName
+        eintrag.memberCount == 1
     }
 
     private MockHttpServletResponse addNewMember(GroupScenario wg, User angemeldet, String newMemberEmail) {

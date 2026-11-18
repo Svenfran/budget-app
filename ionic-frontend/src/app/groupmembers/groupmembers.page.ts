@@ -54,6 +54,12 @@ export class GroupmembersPage implements OnInit {
 
   get selectedOption() {return this.form.get('selectedOption');}
 
+  /** Admin per User-ID der geladenen Liste dieser Gruppe statt per Name (DIV-80). */
+  isAdmin(): boolean {
+    const members = this.groupMembers();
+    return members.id === this.groupId && !!this.user && members.ownerId === this.user.id;
+  }
+
   onDismiss() {
     if (!this.isSelected) {
       this.modalCtrl.dismiss();

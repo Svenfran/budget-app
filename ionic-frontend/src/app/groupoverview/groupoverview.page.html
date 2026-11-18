@@ -44,7 +44,7 @@
                 <div class="group-details">
                   <div class="admin">
                     <ion-text class="ion-text-wrap" color="medium">Admin: </ion-text>
-                    <ion-text class="ion-text-wrap" [attr.color]="group.ownerName === user?.name ? 'primary' : 'medium'">
+                    <ion-text class="ion-text-wrap" [attr.color]="group.ownerId === user?.id ? 'primary' : 'medium'">
                       {{ (group.ownerName.length > 10) ? (group.ownerName | slice:0:10) + '...' : group.ownerName}}
                     </ion-text>
                   </div>
@@ -58,13 +58,13 @@
               <ion-item-option color="secondary">
                 <ion-icon name="people" slot="icon-only" (click)="showGroupMembers(group.id, group.ownerName, slidingItem)"></ion-icon>
               </ion-item-option>
-              <ion-item-option *ngIf="group.ownerName === user?.name" color="secondary" (click)="onAddMember(group, slidingItem)">
+              <ion-item-option *ngIf="group.ownerId === user?.id" color="secondary" (click)="onAddMember(group, slidingItem)">
                 <ion-icon  name="person-add" slot="icon-only"></ion-icon>
               </ion-item-option>
-              <ion-item-option *ngIf="group.ownerName === user?.name" color="secondary" (click)="onUpdateGroup(group, slidingItem)">
+              <ion-item-option *ngIf="group.ownerId === user?.id" color="secondary" (click)="onUpdateGroup(group, slidingItem)">
                 <ion-icon name="create" slot="icon-only"></ion-icon>
               </ion-item-option>
-              <ion-item-option *ngIf="group.ownerName === user?.name" color="secondary" (click)="onDeleteGroup(group, slidingItem)">
+              <ion-item-option *ngIf="group.ownerId === user?.id" color="secondary" (click)="onDeleteGroup(group, slidingItem)">
                 <ion-icon name="trash" slot="icon-only"></ion-icon>
               </ion-item-option>
             </ion-item-options>

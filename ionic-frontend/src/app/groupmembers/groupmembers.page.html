@@ -16,7 +16,7 @@
   </ion-list>
   <ion-list class="ion-text-center ion-padding" *ngIf="groupMembers().members.length > 0">
     <ion-text class="ion-text-wrap">{{ groupMembers().name }}</ion-text>
-    <div *ngIf="groupOwnerName === user?.name" (click)="toggleVisability()" class="select-owner">
+    <div *ngIf="isAdmin()" (click)="toggleVisability()" class="select-owner">
       <ion-text><small>{{ 'groups.group_members.change_admin' | translate }}</small></ion-text>
       <ion-icon *ngIf="isNotVisible" name="chevron-forward-outline" slot="icon-only" size="small"></ion-icon>
       <ion-icon *ngIf="!isNotVisible" name="chevron-back-outline" slot="icon-only" size="small"></ion-icon>
@@ -34,7 +34,7 @@
                 color="success"
                 [value]="member.id"
                 (click)="getSelectedMember($event, member, groupMembers().id, i)"
-                *ngIf="groupOwnerName === user?.name"
+                *ngIf="isAdmin()"
                 [class.isNotVisible]="isNotVisible"
               ></ion-radio>
               <h2 class="ion-text-wrap">
@@ -44,7 +44,7 @@
             </div>
           </ion-label>
           <ion-icon 
-              *ngIf="member.userName === user?.name || groupOwnerName === user?.name"
+              *ngIf="member.id === user?.id || isAdmin()"
               (click)="removeMemberFromGroup(member, groupMembers())"
               slot="end"
               name="close-circle-outline">

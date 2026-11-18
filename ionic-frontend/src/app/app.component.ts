@@ -13,9 +13,11 @@ import { PluginListenerHandle } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { NavigationBar } from '@hugotomazi/capacitor-navigation-bar';
 import { StorageService } from './service/storage.service';
-import { GroupOverview } from './groupoverview/model/group-overview';
 import { ChangeGroupOwnerDto } from './groupmembers/model/change-group-owner-dto';
-import { applyOwnerChange, renameGroup } from './service/group-events';
+import {
+  applyMemberAddedToOverview, applyMemberRemovedFromOverview, applyMembersChange, applyOwnerChange,
+  applyOwnerChangeToOverview, GroupMembersEvent, renameGroup,
+} from './service/group-events';
 import { CategoryDto } from './model/category-dto';
 import { CategoryService } from './service/category.service';
 import { INIT_NUMBERS, INIT_VALUES } from './constants/default-values';
@@ -430,27 +432,19 @@ export class AppComponent {
       { owner: 'app' }
     );
 
-    this.webSocketService.subscribe(
+    this.webSocketService.subscribe<GroupMembersEvent>(
       `/user/notification/remove-group-member`,
-      (parsedData: any) => {
+      parsedData => {
         console.log(parsedData);
-      
+        // Übersicht und offene Mitgliederliste (DIV-80) über pure Funktionen (group-events.ts)
+        this.groupOverviewList.update(groups => applyMemberRemovedFromOverview(groups, parsedData, this.user?.id));
+        this.groupMembers.update(groupMembers => applyMembersChange(groupMembers, parsedData));
+
         if (parsedData.updatedMember.id === this.user?.id) {
           this.sideNavGroups.update(
             groups => groups.filter(group => group.id !== parsedData.id)
           );
-          this.groupOverviewList.update(
-            groups => groups.filter(group => group.id !== parsedData.id)
-          );
           this.groupService.updateActiveGroup(this.sideNavGroups(), this.activeGroup);
-        } else {
-          this.groupOverviewList.update(groups => {
-            return groups.map(group => 
-              group.id === parsedData.id
-                ? { ...group, memberCount: parsedData.members.length }
-                : group
-            );
-          });
         }
 
         if (this.sideNavGroups().length === 0) {
@@ -462,30 +456,18 @@ export class AppComponent {
       { owner: 'app' }
     );
     
-    this.webSocketService.subscribe(
+    this.webSocketService.subscribe<GroupMembersEvent>(
       `/user/notification/add-group-member`,
-      (parsedData: any) => {
+      parsedData => {
         console.log(parsedData);
         const group: Group = { id: parsedData.id, name: parsedData.name, dateCreated: parsedData.dateCreated };
-        const groupOverview: GroupOverview = { 
-          id: parsedData.id, 
-          name: parsedData.name, 
-          dateCreated: parsedData.dateCreated, 
-          ownerName: parsedData.ownerName, 
-          memberCount: parsedData.members.length
-        };
-        
-        if (parsedData.updatedMember.id === this.user?.id) {
+        // Übersicht (inkl. ownerId) und offene Mitgliederliste (DIV-80) über pure Funktionen (group-events.ts)
+        this.groupOverviewList.update(groups => applyMemberAddedToOverview(groups, parsedData, this.user?.id));
+        this.groupMembers.update(groupMembers => applyMembersChange(groupMembers, parsedData));
+
+        // wie in der Übersicht nicht doppelt aufnehmen (z. B. nach einem Resync vor dem Event)
+        if (parsedData.updatedMember.id === this.user?.id && !this.sideNavGroups().some(g => g.id === group.id)) {
           this.sideNavGroups.update(groups => [...groups, group]);
-          this.groupOverviewList.update(groups => [ ...groups, groupOverview]);
-        } else {
-          this.groupOverviewList.update(groups => {
-            return groups.map(group => 
-              group.id === parsedData.id
-                ? { ...group, memberCount: parsedData.members.length }
-                : group
-            );
-          });
         }
 
         if (this.router.url.includes(INIT_VALUES.NO_GROUP)) {
@@ -501,9 +483,7 @@ export class AppComponent {
       `/user/notification/change-group-owner`,
       data => {
         this.groupMembers.update(groupMembers => applyOwnerChange(groupMembers, data));
-        this.groupOverviewList.update(groups => groups.map(group =>
-          group.id === data.groupId ? { ...group, ownerName: data.newOwner.userName } : group
-        ));
+        this.groupOverviewList.update(groups => applyOwnerChangeToOverview(groups, data));
       },
       { owner: 'app' }
     );

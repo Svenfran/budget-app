@@ -17,7 +17,7 @@ import { Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
 import { LoadOptions } from '../model/load-options';
 import { AddMemberResult } from '../groupoverview/model/add-member-result';
-import { applyMembersChange, applyOwnerChange } from './group-events';
+import { applyMembersChange, applyOwnerChange, applyOwnerChangeToOverview } from './group-events';
 
 @Injectable({
   providedIn: 'root'
@@ -251,6 +251,7 @@ export class GroupService {
             name: result.name,
             dateCreated: result.dateCreated,
             ownerName: this.user?.name!,
+            ownerId: this.user?.id!,
             memberCount: 0
           }
           this.groupOverviewList.update(groups => [...groups, newGroupOverview]);
@@ -449,9 +450,7 @@ export class GroupService {
       .subscribe({
         next: () => {
           this.groupMembers.update(members => applyOwnerChange(members, newOwner));
-          this.groupOverviewList.update(groups => groups.map(gr =>
-            gr.id === newOwner.groupId ? { ...gr, ownerName: newOwner.newOwner.userName } : gr
-          ));
+          this.groupOverviewList.update(groups => applyOwnerChangeToOverview(groups, newOwner));
           resolve(true);
         },
         error: (err) => {

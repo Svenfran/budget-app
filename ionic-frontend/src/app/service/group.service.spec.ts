@@ -11,7 +11,7 @@ import { GroupMembers } from 'src/app/groupmembers/model/groupmembers-dto';
 import { GroupOverview } from 'src/app/groupoverview/model/group-overview';
 import { Group } from 'src/app/model/group';
 import { environment } from 'src/environments/environment';
-import { aGroup, aLoggedInUser, aUser, REFERENCE_DATE } from 'src/testing/test-data';
+import { aGroup, aGroupOverview, aLoggedInUser, aUser, REFERENCE_DATE } from 'src/testing/test-data';
 import { alertServiceSpy, authServiceStub, provideServiceTesting, storageServiceFake } from 'src/testing/test-providers';
 import { AlertService } from './alert.service';
 import { GroupService } from './group.service';
@@ -30,7 +30,7 @@ describe('GroupService', () => {
   const ids = (groups: { id: number }[]) => groups.map(g => g.id);
 
   const anOverview = (group: Group, overrides: Partial<GroupOverview> = {}): GroupOverview =>
-    ({ id: group.id, name: group.name, dateCreated: group.dateCreated, ownerName: 'Anna', memberCount: 1, ...overrides });
+    aGroupOverview({ id: group.id, name: group.name, dateCreated: group.dateCreated, ...overrides });
   const someMembers = (overrides: Partial<GroupMembers> = {}): GroupMembers =>
     ({ id: 1, name: 'WG', ownerName: 'Anna', ownerId: 1, members: [aUser()], ...overrides });
 
@@ -397,7 +397,7 @@ describe('GroupService', () => {
       const created = { id: 4, name: 'Verein', dateCreated: newGroup.dateCreated };
       expect(await result).toBeTrue();
       expect(service.groupsSideNav()).toEqual([...sideNav, created]);
-      expect(service.groupOverviewList()).toEqual([...overview, { ...created, ownerName: 'Anna', memberCount: 0 }]);
+      expect(service.groupOverviewList()).toEqual([...overview, { ...created, ownerName: 'Anna', ownerId: me.id, memberCount: 0 }]);
       expect(service.activeGroup()).toEqual(created);
       expect(navigate).not.toHaveBeenCalled();
       expect(alerts.showToast).not.toHaveBeenCalled();
@@ -702,7 +702,7 @@ describe('GroupService', () => {
 
       expect(await result).toBeTrue();
       expect(service.groupMembers()).toEqual({ ...members, ownerId: ben.id, ownerName: 'Ben', members: [{ id: me.id, userName: 'Anna' }] });
-      expect(service.groupOverviewList()).toEqual([{ ...overview[0], ownerName: 'Ben' }, overview[1], overview[2]]);
+      expect(service.groupOverviewList()).toEqual([{ ...overview[0], ownerName: 'Ben', ownerId: ben.id }, overview[1], overview[2]]);
     });
 
     it('ändert bei einem Fehler keinen Zustand, meldet false und zeigt einen Hinweis', async () => {
@@ -790,7 +790,7 @@ describe('GroupService – Anmelde-Sitzung (DIV-36)', () => {
   function givenGroupDataOfUser() {
     const group = aGroup({ id: 5, name: 'WG' });
     const sideNav = [group];
-    const overview: GroupOverview[] = [{ id: 5, name: 'WG', dateCreated: group.dateCreated, ownerName: 'Anna', memberCount: 2 }];
+    const overview: GroupOverview[] = [aGroupOverview({ id: 5, name: 'WG', dateCreated: group.dateCreated, ownerId: 7, memberCount: 2 })];
     const members: GroupMembers = { id: 5, name: 'WG', ownerName: 'Anna', ownerId: 7, members: [aUser({ id: 8 })] };
     const history: Zeitraum[] = [{ startDate: REFERENCE_DATE, endDate: REFERENCE_DATE, groupId: 5, userId: 7 }];
     service.groupsSideNav.set(sideNav);
@@ -1005,7 +1005,7 @@ describe('GroupService – Antwort nach Sitzungswechsel (DIV-58)', () => {
   describe('getGroupsForOverview', () => {
     const overviewUrl = `${environment.apiBaseUrl}/api/groups/overview`;
     const anOverview = (id: number): GroupOverview =>
-      ({ id, name: `Gruppe ${id}`, dateCreated: REFERENCE_DATE, ownerName: 'Anna', memberCount: 1 });
+      aGroupOverview({ id, name: `Gruppe ${id}` });
 
     it('verwirft eine Antwort, die nach dem Logout eintrifft', () => {
       login(7);
