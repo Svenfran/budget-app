@@ -73,6 +73,8 @@ export class MembersSheetComponent implements OnInit, OnDestroy {
   /** Sheet ist geschlossen oder schließt gerade: keine weiteren Aktionen, späte Ergebnisse ohne Wirkung. */
   private closed = false;
   private loadGeneration = 0;
+  /** Gerade offener Bestätigungs-Alert (schließt mit dem Sheet). */
+  private openAlert: HTMLIonAlertElement | undefined;
 
   constructor(
     private modalCtrl: ModalController,
@@ -101,6 +103,7 @@ export class MembersSheetComponent implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     this.closed = true;
+    this.dismissOpenAlert();
   }
 
   /** Lädt die Mitglieder; nur die jeweils letzte Antwort einer noch offenen Instanz zählt (F-003, F-005). */
@@ -224,7 +227,11 @@ export class MembersSheetComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** Bestätigungs-Alert (`<key>.header/message/cancel/ok`); true nur bei der bestätigenden Aktion. */
+  /**
+   * Bestätigungs-Alert (`<key>.header/message/cancel/ok`); true nur bei der bestätigenden Aktion. Der Alert gehört zum
+   * Sheet (Codex-Implementierungsreview F-002): Ist das Sheet beim Fertigstellen schon zu, erscheint er nicht; schließt
+   * das Sheet, während er offen ist (Gruppenverlust, Logout), schließt er mit.
+   */
   private async confirm(key: string, params: Record<string, string>): Promise<boolean> {
     const alert = await this.alertCtrl.create({
       header: this.translate.instant(`${key}.header`),
@@ -234,15 +241,27 @@ export class MembersSheetComponent implements OnInit, OnDestroy {
         { text: this.translate.instant(`${key}.ok`), role: 'confirm' },
       ],
     });
-    await alert.present();
-    const { role } = await alert.onDidDismiss();
-    return role === 'confirm';
+    if (this.closed) return false;
+    this.openAlert = alert;
+    try {
+      await alert.present();
+      const { role } = await alert.onDidDismiss();
+      return role === 'confirm' && !this.closed;
+    } finally {
+      if (this.openAlert === alert) this.openAlert = undefined;
+    }
   }
 
   private closeWith(role: string) {
     if (this.closed) return;
     this.closed = true;
     this.memberMenuOpen = false;
+    this.dismissOpenAlert();
     this.modalCtrl.dismiss(undefined, role, this.modalId);
+  }
+
+  private dismissOpenAlert() {
+    this.openAlert?.dismiss().catch(() => undefined);
+    this.openAlert = undefined;
   }
 }

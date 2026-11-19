@@ -41,8 +41,15 @@
     }
   }
 
-  // Langer Gruppenname im Untertitel bricht um statt die Breite zu sprengen
+  // Höchstens zwei Zeilen (Codex-Implementierungsreview F-001): Der Kopf schrumpft nicht, ein langer Gruppenname (bis
+  // 200 Zeichen) würde sonst bei großer Schrift Feld und Buttons aus dem auf 90vh begrenzten Sheet drängen. Der volle
+  // Name bleibt im DOM (beim Bearbeiten steht er zudem vollständig im Feld).
   .sheet-title .sheet-subtitle {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
     margin: 2px 0 0;
     overflow-wrap: anywhere;
   }

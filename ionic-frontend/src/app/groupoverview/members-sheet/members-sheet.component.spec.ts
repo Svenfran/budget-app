@@ -359,6 +359,43 @@ describe('MembersSheetComponent (DIV-80)', () => {
       });
     }
 
+    // Codex-Implementierungsreview F-002: ein offener Bestätigungs-Alert gehört zum Sheet und schließt mit ihm
+    it('offener Bestätigungs-Alert schließt mit dem Sheet; die Aktion wird nicht ausgeführt', async () => {
+      let dismissed!: (value: { role: string }) => void;
+      const dismiss = jasmine.createSpy('dismiss').and.callFake(async () => { dismissed({ role: 'backdrop' }); return true; });
+      const present = jasmine.createSpy('present').and.resolveTo();
+      alertCreate.and.callFake(async () => ({
+        present, dismiss, onDidDismiss: () => new Promise(resolve => dismissed = resolve),
+      }));
+      const { fixture, component } = await loaded();
+
+      const pending = component.removeMember(cleo);
+      await settle();
+      expect(present).toHaveBeenCalled();
+
+      overview.set([]);
+      fixture.detectChanges();
+      await pending;
+
+      expect(dismiss).toHaveBeenCalled();
+      expect(removeMemberFromGroup).not.toHaveBeenCalled();
+    });
+
+    it('Alert, der erst nach dem Schließen fertig erzeugt ist, wird nicht mehr angezeigt', async () => {
+      let created!: (alert: unknown) => void;
+      const present = jasmine.createSpy('present').and.resolveTo();
+      alertCreate.and.returnValue(new Promise(resolve => created = resolve));
+      const { fixture, component } = await loaded();
+
+      const pending = component.makeAdmin(ben);
+      fixture.destroy();
+      created({ present, dismiss: jasmine.createSpy('dismiss').and.resolveTo(true), onDidDismiss: () => Promise.resolve({ role: 'confirm' }) });
+      await pending;
+
+      expect(present).not.toHaveBeenCalled();
+      expect(changeGroupOwner).not.toHaveBeenCalled();
+    });
+
     it('schließt auch während eines Requests; das spätere Ergebnis ändert die Ansicht nicht mehr', async () => {
       let resolve!: (r: { ok: true }) => void;
       addMemberToGroup.and.returnValue(new Promise(r => resolve = r));
@@ -447,6 +484,47 @@ describe('MembersSheetComponent (DIV-80)', () => {
         }
         expect(el.querySelector('.member-name')!.getBoundingClientRect().width).toBeGreaterThan(0);
       });
+
+      // Codex-Implementierungsreview F-001: Kopf schrumpft nicht; ein Gruppenname mit 200 Zeichen darf Liste, Feld und
+      // Buttons nicht aus dem auf 90vh begrenzten Sheet drängen. Höhe wie ein 640 px hohes Handy über das Karma-iframe.
+      for (const view of ['list', 'add'] as MembersSheetView[]) {
+        it(`Gruppenname mit 200 Zeichen (Ansicht „${view}“): Untertitel höchstens zwei Zeilen, Inhalt und Aktionen sichtbar`, async () => {
+          const frame = window.frameElement as HTMLElement | null;
+          const frameHeight = frame?.style.height ?? '';
+          try {
+            if (frame) frame.style.height = '711px'; // 90vh = 640 px
+            const longName = 'Wohngemeinschaft '.repeat(12).slice(0, 200);
+            const sheet = create(WG, longName);
+            answer(loads.length - 1, wgMembers());
+            await settle();
+            if (view === 'add') sheet.component.openAdd();
+            await at200(sheet.el, sheet.fixture);
+
+            const box = sheet.el.querySelector('.members-sheet')!.getBoundingClientRect();
+            const subtitle = sheet.el.querySelector('.sheet-subtitle') as HTMLElement;
+            const lineHeight = parseFloat(getComputedStyle(subtitle).fontSize) * 1.5;
+            expect(subtitle.getBoundingClientRect().height).toBeLessThanOrEqual(lineHeight * 2 + 1);
+            expect(subtitle.textContent!.trim()).toBe(longName.trim());
+            const body = sheet.el.querySelector('.sheet-body')!.getBoundingClientRect();
+            const visible = view === 'list' ? ['.btn-add-member'] : ['ion-item.member-email-field'];
+            for (const sel of visible) {
+              const r = sheet.el.querySelector(sel)!.getBoundingClientRect();
+              expect(r.height).withContext(sel).toBeGreaterThan(0);
+              expect(r.top).withContext(sel).toBeGreaterThanOrEqual(body.top - 0.5);
+              expect(r.bottom).withContext(sel).toBeLessThanOrEqual(body.bottom + 0.5);
+            }
+            if (view === 'add') {
+              for (const sel of ['.btn-cancel', '.btn-add']) {
+                const r = sheet.el.querySelector(sel)!.getBoundingClientRect();
+                expect(r.bottom).withContext(sel).toBeLessThanOrEqual(box.bottom + 0.5);
+                expect(r.top).withContext(sel).toBeGreaterThanOrEqual(box.top - 0.5);
+              }
+            }
+          } finally {
+            if (frame) frame.style.height = frameHeight;
+          }
+        });
+      }
 
       it('„Mitglied hinzufügen“: Feld und beide Buttons erreichbar, kein Überlauf', async () => {
         const { fixture, component, el } = await loaded();

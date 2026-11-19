@@ -233,6 +233,43 @@ describe('GroupFormSheetComponent (DIV-80)', () => {
         }
         expect(el().querySelector('.group-name-input')!.getBoundingClientRect().right).toBeLessThanOrEqual(WIDTH + 0.5);
       });
+
+      // Codex-Implementierungsreview F-001: Der Kopf schrumpft nicht; ein langer Name im Untertitel darf das Feld nicht
+      // aus dem höhenbegrenzten Sheet (90vh) verdrängen. Höhe wie ein 640 px hohes Handy über das Karma-iframe.
+      it('Gruppenname mit 200 Zeichen: Untertitel höchstens zwei Zeilen, Namensfeld und Buttons vollständig sichtbar', async () => {
+        const frame = window.frameElement as HTMLElement | null;
+        const frameHeight = frame?.style.height ?? '';
+        try {
+          if (frame) frame.style.height = '711px'; // 90vh = 640 px
+          const longest = aGroupOverview({ id: 11, name: 'Wohngemeinschaft '.repeat(12).slice(0, 200) });
+          overview.set([longest]);
+          create('edit', longest);
+          Object.assign(el().style, { position: 'fixed', bottom: '0', left: '0', width: `${WIDTH}px`, display: 'block' });
+          document.documentElement.style.fontSize = '200%';
+          fixture.detectChanges();
+          await ionicReady(el());
+          await new Promise(resolve => requestAnimationFrame(resolve));
+          await new Promise(resolve => requestAnimationFrame(resolve));
+
+          const sheet = el().querySelector('.group-form-sheet')!.getBoundingClientRect();
+          const subtitle = el().querySelector('.sheet-subtitle') as HTMLElement;
+          const lineHeight = parseFloat(getComputedStyle(subtitle).fontSize) * 1.5;
+          expect(subtitle.getBoundingClientRect().height).toBeLessThanOrEqual(lineHeight * 2 + 1);
+          expect(subtitle.textContent!.trim()).toBe(longest.name.trim());
+          const field = el().querySelector('ion-item.group-form-field')!.getBoundingClientRect();
+          const body = el().querySelector('.sheet-body')!.getBoundingClientRect();
+          expect(field.height).toBeGreaterThan(0);
+          expect(field.bottom).toBeLessThanOrEqual(body.bottom + 0.5);
+          expect(field.top).toBeGreaterThanOrEqual(body.top - 0.5);
+          for (const cls of ['btn-cancel', 'btn-save']) {
+            const r = button(cls).getBoundingClientRect();
+            expect(r.bottom).withContext(cls).toBeLessThanOrEqual(sheet.bottom + 0.5);
+            expect(r.top).withContext(cls).toBeGreaterThanOrEqual(sheet.top - 0.5);
+          }
+        } finally {
+          if (frame) frame.style.height = frameHeight;
+        }
+      });
     });
   });
 });
