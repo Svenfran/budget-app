@@ -42,6 +42,8 @@ public class UserProfileService {
 
     private final ShoppingPurchaseRepository shoppingPurchaseRepository;
 
+    private final SettlementRepository settlementRepository;
+
     private final GroupMembershipHistoryService gmhService;
 
     private final PasswordEncoder passwordEncoder;
@@ -66,7 +68,8 @@ public class UserProfileService {
                               GroupService groupService, CartRepository cartRepository, GroupRepository groupRepository,
                               CategoryRepository categoryRepository, ShoppingListRepository shoppingListRepository,
                               ShoppingItemRepository shoppingItemRepository,
-                              ShoppingPurchaseRepository shoppingPurchaseRepository, GroupMembershipHistoryService gmhService,
+                              ShoppingPurchaseRepository shoppingPurchaseRepository, SettlementRepository settlementRepository,
+                              GroupMembershipHistoryService gmhService,
                               PasswordEncoder passwordEncoder, TokenRepository tokenRepository,
                               EmailSenderService senderService, VerificationService verificationService,
                               CartTemplateRepository cartTemplateRepository, NotificationService notificationService,
@@ -81,6 +84,7 @@ public class UserProfileService {
         this.shoppingListRepository = shoppingListRepository;
         this.shoppingItemRepository = shoppingItemRepository;
         this.shoppingPurchaseRepository = shoppingPurchaseRepository;
+        this.settlementRepository = settlementRepository;
         this.gmhService = gmhService;
         this.passwordEncoder = passwordEncoder;
         this.tokenRepository = tokenRepository;
@@ -125,6 +129,8 @@ public class UserProfileService {
 
         group.removeAllMembers();
         cartRepository.deleteAll(group.getCarts());
+        // nach den Carts: cart.settlement_id verweist auf settlement (DIV-74)
+        settlementRepository.deleteByGroupId(group.getId());
         categoryRepository.deleteAll(group.getCategories());
         cartTemplateRepository.deleteAll(cartTemplateRepository.findByGroupId(group.getId()));
 
@@ -163,9 +169,11 @@ public class UserProfileService {
         var userAuth = dataLoaderService.getAuthenticatedUser();
         var userChange = dataLoaderService.loadUser(userDto.getId());
         verificationService.verifyIsAuthenticatedUser(userChange, userAuth);
-        verificationService.verifyUserNameIsAllowed(userDto.getUserName());
-        verificationService.verifyUserNameNotExists(userDto.getUserName());
-        userChange.setName(userDto.getUserName());
+        // Umgebende Leerzeichen (z. B. von der Tastatur-Autovervollständigung) nicht mitspeichern
+        var userName = userDto.getUserName() == null ? null : userDto.getUserName().trim();
+        verificationService.verifyUserNameIsAllowed(userName);
+        verificationService.verifyUserNameNotExists(userName);
+        userChange.setName(userName);
         return new UserDto(userRepository.save(userChange), userChange.getEmail());
     }
 

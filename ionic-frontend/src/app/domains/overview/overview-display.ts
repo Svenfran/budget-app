@@ -17,14 +17,15 @@ export function isDeletedMarker(userName: string): boolean {
 
 /**
  * Anzeigename ohne Längenkürzung (gekürzt bzw. umgebrochen wird per CSS):
- * gelöscht → übersetztes Label, entfernt → erstes Wort, sonst unverändert.
+ * gelöscht → übersetztes Label, entfernt → Name ohne den Marker am Ende (auch mehrwortig), sonst unverändert.
  */
 export function userDisplayName(userName: string, deletedLabel: string): string {
   if (userName.includes(DELETED)) {
     return deletedLabel;
   }
-  if (userName.includes(REMOVED)) {
-    return userName.split(' ')[0];
+  const removedSuffix = ` ${REMOVED}`;
+  if (userName.endsWith(removedSuffix)) {
+    return userName.slice(0, -removedSuffix.length);
   }
   return userName;
 }

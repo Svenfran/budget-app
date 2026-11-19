@@ -57,4 +57,8 @@
 
     <include context="prod" file="db/changelog/release-1.x/20261110120000-1_createLoginAttemptTable.xml" relativeToChangelogFile="false"/>
 
+    <include context="prod" file="db/changelog/release-1.x/20261116120000-1_createSettlementTableAndLinkColumns.xml" relativeToChangelogFile="false"/>
+
+    <include context="prod" file="db/changelog/release-1.x/20261116120000-2_linkExistingSettlementPayments.xml" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

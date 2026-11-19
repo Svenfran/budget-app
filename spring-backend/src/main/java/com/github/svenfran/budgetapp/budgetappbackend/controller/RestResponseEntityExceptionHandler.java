@@ -30,7 +30,8 @@ public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionH
             ShoppingListDoesNotBelongToGroupException.class,
             ShoppingItemDoesNotBelongToShoppingListException.class,
             CategoryBelongsNotToGroupException.class,
-            CategoryIsUsedByCartException.class
+            CategoryIsUsedByCartException.class,
+            SettlementNotFoundException.class
     })
     protected ResponseEntity<Object> handleNotFound(Exception ex, WebRequest request) {
         return buildResponse(ex, HttpStatus.NOT_FOUND);
@@ -48,7 +49,9 @@ public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionH
             DatePurchasedNotWithinMembershipPeriodException.class,
             UserNameNotAllowedException.class,
             ShoppingItemMoveWithinSameListException.class,
-            InvalidStatisticsRequestException.class
+            InvalidStatisticsRequestException.class,
+            InvalidSettlementPaymentException.class,
+            SettlementCategoryNotAllowedException.class
     })
     protected ResponseEntity<Object> handleBadRequest(Exception ex, WebRequest request) {
         return buildResponse(ex, HttpStatus.BAD_REQUEST);
@@ -60,7 +63,9 @@ public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionH
             MemberEqualsOwnerException.class,
             NotMemberOfGroupException.class,
             NotOwnerOrMemberOfGroupException.class,
-            NotOwnerOfCartException.class
+            NotOwnerOfCartException.class,
+            NotPartyOfSettlementException.class,
+            ReceiverChangeNotAllowedException.class
     })
     protected ResponseEntity<Object> handleForbidden(Exception ex, WebRequest request) {
         return buildResponse(ex, HttpStatus.FORBIDDEN);
@@ -75,6 +80,14 @@ public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionH
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getRetryAfterSeconds()))
                 .body(ex.getMessage());
+    }
+
+    /** Gültige Anfrage, die dem Zustand der Ressource widerspricht (DIV-74: Settlement-Cart über normalen Endpoint). */
+    @ExceptionHandler(value = {
+            SettlementCartNotEditableException.class
+    })
+    protected ResponseEntity<Object> handleConflict(Exception ex, WebRequest request) {
+        return buildResponse(ex, HttpStatus.CONFLICT);
     }
 
     /** Name of the unique constraint on user_details.email (Liquibase changeset 20261015120000-1). */

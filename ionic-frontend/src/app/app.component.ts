@@ -1,5 +1,5 @@
 import { Component, effect, NgZone, Renderer2 } from '@angular/core';
-import { firstValueFrom, Subscription } from 'rxjs';
+import {Subscription } from 'rxjs';
 import { AuthService } from './auth/auth.service';
 import { Router } from '@angular/router';
 import { User } from './auth/user';
@@ -13,9 +13,11 @@ import { PluginListenerHandle } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { NavigationBar } from '@hugotomazi/capacitor-navigation-bar';
 import { StorageService } from './service/storage.service';
-import { GroupOverview } from './groupoverview/model/group-overview';
 import { ChangeGroupOwnerDto } from './groupmembers/model/change-group-owner-dto';
-import { applyOwnerChange, renameGroup } from './service/group-events';
+import {
+  applyMemberAddedToOverview, applyMemberRemovedFromOverview, applyMembersChange, applyOwnerChange,
+  applyOwnerChangeToOverview, GroupMembersEvent, renameGroup,
+} from './service/group-events';
 import { CategoryDto } from './model/category-dto';
 import { CategoryService } from './service/category.service';
 import { INIT_NUMBERS, INIT_VALUES } from './constants/default-values';
@@ -24,7 +26,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { LanguageService } from './service/language.service';
 import { ShoppinglistService } from './domains/shoppinglist/service/shoppinglist.service';
 import { isLongBackground, ResyncThrottle } from './service/resync-throttle';
-import { KeyboardOffset } from './service/keyboard-offset';
+import { KeyboardOffset, offsetMinusViewportShift } from './service/keyboard-offset';
 
 @Component({
   selector: 'app-root',
@@ -291,19 +293,31 @@ export class AppComponent {
    * Setzt `--keyboard-offset` (global.scss) auf den von der Tastatur verdeckten Teil der WebView, damit Alerts mit
    * Eingabefeld im freien Bereich zentriert werden – ab dem zweiten Öffnen synchron mit der Tastatur-Animation,
    * beim ersten Öffnen nach dem Einblenden (Geräteverhalten wird dabei gemessen, siehe KeyboardOffset).
+   * Hat die WebView den sichtbaren Bereich zum fokussierten Feld hochgeschoben (`visualViewport.offsetTop`), wird diese
+   * Verschiebung abgezogen, sonst stünden die Bottom Sheets zu hoch (DIV-70, offsetMinusViewportShift).
    */
   private initKeyboardOffset() {
     if (!isPlatform('capacitor')) return;
     const root = document.documentElement;
     const keyboardOffset = new KeyboardOffset(window.innerHeight, window.innerWidth);
+    // zuletzt von KeyboardOffset gelieferter Offset (null: Tastatur zu oder Verhalten noch unbekannt)
+    let baseOffset: number | null = null;
+    const applyOffset = () => {
+      if (baseOffset === null) return;
+      const shifted = offsetMinusViewportShift(baseOffset, window.visualViewport?.offsetTop ?? 0);
+      root.style.setProperty('--keyboard-offset', `${shifted}px`);
+    };
     const setOffset = (px: number | null) => {
-      if (px !== null) root.style.setProperty('--keyboard-offset', `${px}px`);
+      if (px === null) return;
+      baseOffset = px;
+      applyOffset();
     };
     this.keyboardListeners = [
       Keyboard.addListener('keyboardWillShow', info => setOffset(keyboardOffset.willShow(info.keyboardHeight))),
       Keyboard.addListener('keyboardDidShow', info => setOffset(keyboardOffset.didShow(info.keyboardHeight, window.innerHeight))),
       Keyboard.addListener('keyboardWillHide', () => {
         keyboardOffset.willHide();
+        baseOffset = null;
         root.style.removeProperty('--keyboard-offset');
       }),
       Keyboard.addListener('keyboardDidHide', () => keyboardOffset.didHide(window.innerHeight)),
@@ -311,8 +325,14 @@ export class AppComponent {
     // Größenänderung: bei offener Tastatur neu messen (die WebView wird ggf. erst nach keyboardDidShow verkleinert), bei
     // geschlossener Tastatur nach einer Drehung die Höhe ohne Tastatur aktualisieren (KeyboardOffset.viewportResized)
     const onResize = () => setOffset(keyboardOffset.viewportResized(window.innerWidth, window.innerHeight));
+    // Verschiebung des sichtbaren Bereichs (hoch beim Fokussieren, zurück per Wischen): Offset nachführen
+    const onViewportScroll = () => applyOffset();
     window.addEventListener('resize', onResize);
-    this.removeResizeListener = () => window.removeEventListener('resize', onResize);
+    window.visualViewport?.addEventListener('scroll', onViewportScroll);
+    this.removeResizeListener = () => {
+      window.removeEventListener('resize', onResize);
+      window.visualViewport?.removeEventListener('scroll', onViewportScroll);
+    };
   }
 
   initBackButton() {
@@ -412,27 +432,19 @@ export class AppComponent {
       { owner: 'app' }
     );
 
-    this.webSocketService.subscribe(
+    this.webSocketService.subscribe<GroupMembersEvent>(
       `/user/notification/remove-group-member`,
-      (parsedData: any) => {
+      parsedData => {
         console.log(parsedData);
-      
+        // Übersicht und offene Mitgliederliste (DIV-80) über pure Funktionen (group-events.ts)
+        this.groupOverviewList.update(groups => applyMemberRemovedFromOverview(groups, parsedData, this.user?.id));
+        this.groupMembers.update(groupMembers => applyMembersChange(groupMembers, parsedData));
+
         if (parsedData.updatedMember.id === this.user?.id) {
           this.sideNavGroups.update(
             groups => groups.filter(group => group.id !== parsedData.id)
           );
-          this.groupOverviewList.update(
-            groups => groups.filter(group => group.id !== parsedData.id)
-          );
           this.groupService.updateActiveGroup(this.sideNavGroups(), this.activeGroup);
-        } else {
-          this.groupOverviewList.update(groups => {
-            return groups.map(group => 
-              group.id === parsedData.id
-                ? { ...group, memberCount: parsedData.members.length }
-                : group
-            );
-          });
         }
 
         if (this.sideNavGroups().length === 0) {
@@ -444,30 +456,18 @@ export class AppComponent {
       { owner: 'app' }
     );
     
-    this.webSocketService.subscribe(
+    this.webSocketService.subscribe<GroupMembersEvent>(
       `/user/notification/add-group-member`,
-      (parsedData: any) => {
+      parsedData => {
         console.log(parsedData);
         const group: Group = { id: parsedData.id, name: parsedData.name, dateCreated: parsedData.dateCreated };
-        const groupOverview: GroupOverview = { 
-          id: parsedData.id, 
-          name: parsedData.name, 
-          dateCreated: parsedData.dateCreated, 
-          ownerName: parsedData.ownerName, 
-          memberCount: parsedData.members.length
-        };
-        
-        if (parsedData.updatedMember.id === this.user?.id) {
+        // Übersicht (inkl. ownerId) und offene Mitgliederliste (DIV-80) über pure Funktionen (group-events.ts)
+        this.groupOverviewList.update(groups => applyMemberAddedToOverview(groups, parsedData, this.user?.id));
+        this.groupMembers.update(groupMembers => applyMembersChange(groupMembers, parsedData));
+
+        // wie in der Übersicht nicht doppelt aufnehmen (z. B. nach einem Resync vor dem Event)
+        if (parsedData.updatedMember.id === this.user?.id && !this.sideNavGroups().some(g => g.id === group.id)) {
           this.sideNavGroups.update(groups => [...groups, group]);
-          this.groupOverviewList.update(groups => [ ...groups, groupOverview]);
-        } else {
-          this.groupOverviewList.update(groups => {
-            return groups.map(group => 
-              group.id === parsedData.id
-                ? { ...group, memberCount: parsedData.members.length }
-                : group
-            );
-          });
         }
 
         if (this.router.url.includes(INIT_VALUES.NO_GROUP)) {
@@ -483,9 +483,7 @@ export class AppComponent {
       `/user/notification/change-group-owner`,
       data => {
         this.groupMembers.update(groupMembers => applyOwnerChange(groupMembers, data));
-        this.groupOverviewList.update(groups => groups.map(group =>
-          group.id === data.groupId ? { ...group, ownerName: data.newOwner.userName } : group
-        ));
+        this.groupOverviewList.update(groups => applyOwnerChangeToOverview(groups, data));
       },
       { owner: 'app' }
     );

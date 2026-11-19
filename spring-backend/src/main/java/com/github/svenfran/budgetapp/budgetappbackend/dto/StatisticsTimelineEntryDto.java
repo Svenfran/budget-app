@@ -12,7 +12,7 @@ public class StatisticsTimelineEntryDto {
     private Integer week;
     private LocalDate from;
     private LocalDate to;
-    // von dir bezahlt, darf negativ sein
+    // persönliche Zeitreihe: von dir bezahlt; Gruppenperspektive: alle Zahler; darf negativ sein
     private double amount;
 
     public StatisticsTimelineEntryDto(int year, Integer month, Integer week, LocalDate from, LocalDate to, double amount) {

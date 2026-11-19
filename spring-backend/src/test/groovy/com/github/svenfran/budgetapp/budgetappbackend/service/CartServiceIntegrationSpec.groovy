@@ -2,12 +2,15 @@ package com.github.svenfran.budgetapp.budgetappbackend.service
 
 import com.github.svenfran.budgetapp.budgetappbackend.constants.RecurrenceType
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto
+import com.github.svenfran.budgetapp.budgetappbackend.dto.CategoryDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto
 import com.github.svenfran.budgetapp.budgetappbackend.entity.CartTemplate
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.DatePurchasedNotWithinMembershipPeriodException
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOfCartException
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOrMemberOfGroupException
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.SettlementCartNotEditableException
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.SettlementCategoryNotAllowedException
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartTemplateRepository
@@ -33,6 +36,8 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
     @Autowired CartRepository cartRepository
     @Autowired CartTemplateRepository templateRepository
     @Autowired GroupMembershipHistoryRepository membershipRepository
+    @Autowired SettlementService settlementService
+    @Autowired CategoryService categoryService
     @Autowired CategoryRepository categoryRepository
 
     def "Bearbeiten #originalRecurrenceType -> #updatedRecurrenceType mit Titel '#newTitle' (Template-Update: #updateSelected) hinterlässt aktive Templates #expectedActiveTypes"() {
@@ -458,6 +463,43 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         saved.averagePerMember == 20d
         saved.template == null
         templateRepository.findByGroupId(groupId).isEmpty()
+    }
+
+    def "addCart mit der ID eines fremden Einkaufs legt einen neuen Einkauf an, das Original bleibt unverändert (DIV-73)"() {
+        given: "Original gehört Anna in Gruppe A; Ben schickt dessen ID beim Anlegen in seiner eigenen Gruppe B mit"
+        def gruppeA = fixtures.group()
+        def original = fixtures.cart(gruppeA, title: 'Original', amount: 25d)
+        def gruppeB = fixtures.group()
+        def ben = gruppeB.owner
+        def (originalId, gruppeAId, annaId, gruppeBId, benId) = [original.id, gruppeA.group.id, gruppeA.owner.id,
+                                                                 gruppeB.group.id, ben.id]
+        def dto = TestData.cartDto(id: originalId, groupId: gruppeBId, categoryDto: TestData.categoryDto(gruppeB.category),
+                title: 'Manipuliert', amount: 99d)
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe A {} mit Owner Anna {} und Einkauf {} Original 25.00; Gruppe B {} mit Owner Ben {} ' +
+                '(angemeldet); DTO mit id {}', gruppeAId, annaId, originalId, gruppeBId, benId, originalId)
+
+        when:
+        def result = cartService.addCart(dto)
+        flushAndClear()
+        def neu = cartRepository.findById(result.id).get()
+        def unveraendert = cartRepository.findById(originalId).get()
+        LOG.info('cartService.addCart(id {}, Manipuliert 99.00) -> Cart {} (User {}, Gruppe {}); Original {}: {} {} ' +
+                '(User {}, Gruppe {})', originalId, result.id, neu.user.id, neu.group.id, originalId,
+                unveraendert.title, unveraendert.amount, unveraendert.user.id, unveraendert.group.id)
+
+        then: "Neuanlage mit eigener ID für den angemeldeten Nutzer in der erlaubten Gruppe"
+        result.id != originalId
+        neu.user.id == benId
+        neu.group.id == gruppeBId
+        neu.title == 'Manipuliert'
+
+        and: "Original vollständig unverändert"
+        unveraendert.title == 'Original'
+        unveraendert.amount == 25d
+        unveraendert.user.id == annaId
+        unveraendert.group.id == gruppeAId
     }
 
     def "Nicht-Mitglied kann keinen Einkauf anlegen"() {
@@ -1011,196 +1053,103 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         cartRepository.findById(cartId).isPresent()
     }
 
-    // ----- addSettlementPayment (DIV-14) -----
-    // Ohne Request liest der Translator die JVM-Locale (lokal de, in CI ggf. en): die Features setzen Locale.GERMAN
-    // und setzen sie im cleanup:-Block zurück. Kategorie per übersetztem Namen (DIV-51) bewusst nicht getestet.
+    // ----- Schutz der Ausgleichszahlungen (DIV-74) -----
 
-    def "#rolle zahlt aus: ohne Settlement-Kategorie wird sie angelegt und es entstehen zwei gegenläufige Einkäufe"() {
-        given: "Anna ist Owner, Ben Mitglied; es zahlt jeweils die Rolle an den anderen"
+    def "Bearbeiten des Einkaufs einer Ausgleichszahlung durch den #rolle wird abgelehnt, das Paar bleibt unverändert"() {
+        given: "Owner zahlt 30.00 an Ben; der Einkauf des #rolle soll über den normalen Endpunkt auf 99.00 geändert werden"
         LocaleContextHolder.setLocale(Locale.GERMAN)
-        def anna = fixtures.user(name: "Anna${TestData.nextId()}")
-        def ben = fixtures.user(name: "Ben${TestData.nextId()}")
-        def wg = fixtures.group(owner: anna, members: [ben])
-        def (zahler, partner) = rolle == 'Gruppen-Owner' ? [anna, ben] : [ben, anna]
-        def (groupId, zahlerId, partnerId, standardKategorieId) = [wg.group.id, zahler.id, partner.id, wg.category.id]
-        def (zahlerName, partnerName) = [zahler.name, partner.name]
-        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: partnerId), DateUtils.toDate(TestData.REFERENCE_DATE))
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
         flushAndClear()
-        loginAs(zahler)
-        LOG.info('Szenario: Locale de, Gruppe {} ohne Settlement-Kategorie (Standardkategorie {}), Owner {}, Mitglied {}; ' +
-                'User {} {} ({}, angemeldet) zahlt 30.00 an User {} {} am {}', groupId, standardKategorieId, anna.id, ben.id,
-                zahlerId, zahlerName, rolle, partnerId, partnerName, TestData.REFERENCE_DATE)
+        loginAs(wg.owner)
+        def paar = settlementService.addSettlementPayment(
+                new SettlementPaymentDto(30d, wg.group.id, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE)))
+        flushAndClear()
+        def eigener = rolle == 'Zahler' ? paar[0] : paar[1]
+        def bearbeiter = rolle == 'Zahler' ? wg.owner : ben
+        def dto = new CartDto(cartRepository.findById(eigener.id).get())
+        dto.amount = 99d
+        flushAndClear()
+        loginAs(bearbeiter)
+        LOG.info('Szenario: Gruppe {}, Owner {} zahlt an Ben {}; Settlement {} mit Carts {}; User {} ({}) bearbeitet Cart {}',
+                wg.group.id, wg.owner.id, ben.id, eigener.settlementId, paar*.id, bearbeiter.id, rolle, eigener.id)
 
         when:
-        def result = cartService.addSettlementPayment(dto)
-        flushAndClear()
-        def sender = cartRepository.findById(result[0].id).get()
-        def empfaenger = cartRepository.findById(result[1].id).get()
-        def settlementIds = settlementCategoryIds(groupId)
-        LOG.info('cartService.addSettlementPayment(30.00 an User {}) -> Cart {} "{}" {} (User {}, avg {}), Cart {} "{}" {} ' +
-                '(User {}, avg {}); Settlement-Kategorien {}', partnerId, sender.id, sender.title, sender.amount, sender.user.id,
-                sender.averagePerMember, empfaenger.id, empfaenger.title, empfaenger.amount, empfaenger.user.id,
-                empfaenger.averagePerMember, settlementIds)
+        LOG.info('cartService.updateCart(Cart {}: amount 99.00), erwartet SettlementCartNotEditableException', eigener.id)
+        cartService.updateCart(dto)
 
-        then: "Carts werden nicht live synchronisiert"
-        0 * notificationService._
-
-        and: "genau eine neue Settlement-Kategorie neben der Standardkategorie"
-        settlementIds.size() == 1
-        def settlementId = settlementIds.first()
-        settlementId != standardKategorieId
-
-        and: "Sender bucht +30 an den Empfänger"
-        sender.title == "Ausgleichszahlung an ${partnerName}".toString()
-        sender.user.id == zahlerId
-        sender.amount == 30d
-        sender.averagePerMember == 15d
-        sender.category.id == settlementId
-        DateUtils.toLocalDate(sender.datePurchased) == TestData.REFERENCE_DATE
-
-        and: "Empfänger bucht -30 vom Sender"
-        empfaenger.title == "Ausgleichszahlung von ${zahlerName}".toString()
-        empfaenger.user.id == partnerId
-        empfaenger.amount == -30d
-        empfaenger.averagePerMember == -15d
-        empfaenger.category.id == settlementId
-        DateUtils.toLocalDate(empfaenger.datePurchased) == TestData.REFERENCE_DATE
+        then:
+        thrown(SettlementCartNotEditableException)
+        paar.collect { cartRepository.findById(it.id).get().amount } == [30d, -30d]
 
         cleanup:
         LocaleContextHolder.resetLocaleContext()
 
         where:
-        rolle << ['Gruppen-Owner', 'Mitglied']
+        rolle << ['Zahler', 'Empfänger']
     }
 
-    def "Vorhandene Settlement-Kategorie wird wiederverwendet"() {
+    def "Löschen des Einkaufs einer Ausgleichszahlung über den normalen Endpunkt wird abgelehnt, beide Einkäufe bleiben"() {
         given:
         LocaleContextHolder.setLocale(Locale.GERMAN)
         def ben = fixtures.user()
         def wg = fixtures.group(members: [ben])
-        def vorhanden = fixtures.category(wg, name: 'Ausgleichszahlung')
-        def (groupId, vorhandenId) = [wg.group.id, vorhanden.id]
-        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE))
         flushAndClear()
         loginAs(wg.owner)
-        LOG.info('Szenario: Locale de, Gruppe {} mit Settlement-Kategorie {}, Owner {} (angemeldet), Ben {}; ' +
-                'Ausgleichszahlung 30.00 an Ben', groupId, vorhandenId, wg.owner.id, ben.id)
+        def paar = settlementService.addSettlementPayment(
+                new SettlementPaymentDto(30d, wg.group.id, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE)))
+        flushAndClear()
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet) zahlt an Ben {}; Settlement {} mit Carts {}', wg.group.id,
+                wg.owner.id, ben.id, paar[0].settlementId, paar*.id)
 
         when:
-        def result = cartService.addSettlementPayment(dto)
-        flushAndClear()
-        def kategorien = result.collect { cartRepository.findById(it.id).get().category.id }
-        def settlementIds = settlementCategoryIds(groupId)
-        LOG.info('cartService.addSettlementPayment(30.00 an User {}) -> Carts {} mit Kategorien {}; Settlement-Kategorien {}',
-                ben.id, result*.id, kategorien, settlementIds)
+        LOG.info('cartService.deleteCart(Cart {}), erwartet SettlementCartNotEditableException', paar[0].id)
+        cartService.deleteCart(paar[0].id)
 
         then:
-        settlementIds == [vorhandenId]
-        kategorien == [vorhandenId, vorhandenId]
+        thrown(SettlementCartNotEditableException)
+        paar.every { cartRepository.existsById(it.id) }
 
         cleanup:
         LocaleContextHolder.resetLocaleContext()
     }
 
-    def "Lange Namen werden im Titel der Ausgleichszahlung nach 10 Zeichen gekürzt"() {
-        given:
-        LocaleContextHolder.setLocale(Locale.GERMAN)
-        def ben = fixtures.user(name: "Maximilian${TestData.nextId()}")
-        def wg = fixtures.group(members: [ben])
-        def (groupId, benName) = [wg.group.id, ben.name]
-        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE))
+    def "Settlement-Kategorie für einen normalen Einkauf (#vorgang) wird abgelehnt, nichts gespeichert"() {
+        given: "Regression Review 2, F-001: auch nachdem addCategory mit der Id dieser Kategorie aufgerufen wurde"
+        def wg = fixtures.group()
+        def settlementKategorie = fixtures.category(wg, name: 'Ausgleichszahlung', settlement: true)
+        def cart = fixtures.cart(wg, title: 'Pizza', amount: 20d)
+        def (groupId, kategorieId, cartId) = [wg.group.id, settlementKategorie.id, cart.id]
         flushAndClear()
         loginAs(wg.owner)
-        LOG.info('Szenario: Locale de, Gruppe {}, Owner {} (angemeldet), Mitglied {} "{}" ({} Zeichen); Ausgleichszahlung an ihn',
-                groupId, wg.owner.id, ben.id, benName, benName.length())
+        categoryService.addCategory(new CategoryDto(id: kategorieId, name: 'Überschreiben?', groupId: groupId))
+        flushAndClear()
+        def kategorieDto = TestData.categoryDto(categoryRepository.findById(kategorieId).get())
+        def dto = vorgang == 'Neuanlage'
+                ? TestData.cartDto(groupId: groupId, categoryDto: kategorieDto, title: 'Pizza')
+                : new CartDto(cartRepository.findById(cartId).get()).with { it.categoryDto = kategorieDto; it }
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), Settlement-Kategorie {} (nach addCategory mit ihrer Id), Einkauf {}; {}',
+                groupId, wg.owner.id, kategorieId, cartId, vorgang)
 
         when:
-        def result = cartService.addSettlementPayment(dto)
-        flushAndClear()
-        def senderTitle = cartRepository.findById(result[0].id).get().title
-        LOG.info('cartService.addSettlementPayment(an User {}) -> Titel "{}"', ben.id, senderTitle)
+        LOG.info('cartService.{}(Kategorie {}), erwartet SettlementCategoryNotAllowedException',
+                vorgang == 'Neuanlage' ? 'addCart' : 'updateCart', kategorieId)
+        vorgang == 'Neuanlage' ? cartService.addCart(dto) : cartService.updateCart(dto)
 
         then:
-        senderTitle == 'Ausgleichszahlung an Maximilian...'
-
-        cleanup:
-        LocaleContextHolder.resetLocaleContext()
-    }
-
-    def "#fall wird abgelehnt, weder Settlement-Kategorie noch Einkäufe werden angelegt"() {
-        given: "Fremder ist weder Owner noch Mitglied der Gruppe"
-        LocaleContextHolder.setLocale(Locale.GERMAN)
-        def ben = fixtures.user()
-        def wg = fixtures.group(members: [ben])
-        def fremder = fixtures.user()
-        def (zahler, empfaenger) = fall == 'Ausgleichszahlung an ein Nicht-Mitglied' ? [wg.owner, fremder] : [fremder, ben]
-        def groupId = wg.group.id
-        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: empfaenger.id),
-                DateUtils.toDate(TestData.REFERENCE_DATE))
-        flushAndClear()
-        loginAs(zahler)
-        LOG.info('Szenario: Gruppe {}, Owner {}, Ben {}, Fremder {}; angemeldet User {} zahlt an User {}', groupId,
-                wg.owner.id, ben.id, fremder.id, zahler.id, empfaenger.id)
-
-        when:
-        LOG.info('cartService.addSettlementPayment(an User {}) als User {}, erwartet NotOwnerOrMemberOfGroupException',
-                empfaenger.id, zahler.id)
-        cartService.addSettlementPayment(dto)
-
-        then:
-        thrown(NotOwnerOrMemberOfGroupException)
-        settlementCategoryIds(groupId).isEmpty()
-        cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(groupId).isEmpty()
-
-        cleanup:
-        LocaleContextHolder.resetLocaleContext()
+        thrown(SettlementCategoryNotAllowedException)
+        categoryRepository.findById(kategorieId).get().settlement
+        cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(groupId)*.id == [cartId]
+        cartRepository.findById(cartId).get().category.id == wg.category.id
 
         where:
-        fall << ['Ausgleichszahlung an ein Nicht-Mitglied', 'Ausgleichszahlung durch ein Nicht-Mitglied']
-    }
-
-    def "Kaufdatum außerhalb der Mitgliedschaft des #wer wird abgelehnt, nichts angelegt"() {
-        given: "Owner zahlt am REFERENCE_DATE an Ben; einer der beiden ist erst ab dem Folgetag Mitglied"
-        LocaleContextHolder.setLocale(Locale.GERMAN)
-        def ben = fixtures.user()
-        def wg = fixtures.group(members: [ben])
-        def groupId = wg.group.id
-        def spaeter = wer == 'Senders' ? wg.owner : ben
-        def membership = membershipRepository.findByGroupIdAndUserId(groupId, spaeter.id).first()
-        membership.membershipStart = DateUtils.toDate(TestData.REFERENCE_DATE.plusDays(1))
-        membershipRepository.save(membership)
-        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE))
-        flushAndClear()
-        loginAs(wg.owner)
-        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet, Sender), Ben {} (Empfänger); User {} Mitglied erst ab {}; ' +
-                'Kaufdatum {}', groupId, wg.owner.id, ben.id, spaeter.id, TestData.REFERENCE_DATE.plusDays(1),
-                TestData.REFERENCE_DATE)
-
-        when:
-        LOG.info('cartService.addSettlementPayment(an User {} am {}), erwartet DatePurchasedNotWithinMembershipPeriodException',
-                ben.id, TestData.REFERENCE_DATE)
-        cartService.addSettlementPayment(dto)
-
-        then:
-        thrown(DatePurchasedNotWithinMembershipPeriodException)
-        settlementCategoryIds(groupId).isEmpty()
-        cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(groupId).isEmpty()
-
-        cleanup:
-        LocaleContextHolder.resetLocaleContext()
-
-        where:
-        wer << ['Senders', 'Empfängers']
+        vorgang << ['Neuanlage', 'Bearbeitung']
     }
 
     private CartTemplate activeTemplate(GroupScenario wg) {
         def active = templateRepository.findByGroupId(wg.group.id).findAll { it.active }
         assert active.size() == 1
         active.first()
-    }
-
-    private List<Long> settlementCategoryIds(Long groupId) {
-        categoryRepository.findAllByGroup_IdOrderByName(groupId).findAll { it.name == 'Ausgleichszahlung' }*.id
     }
 
     private List<RecurrenceType> activeTemplateTypes(GroupScenario wg) {

@@ -1,4 +1,4 @@
-import { Component, effect, OnInit, signal, untracked, ViewChild } from '@angular/core';
+import { Component, DestroyRef, effect, ElementRef, inject, OnInit, signal, untracked, ViewChild } from '@angular/core';
 import { CartService } from './service/cart.service';
 import { GroupService } from 'src/app/service/group.service';
 import { User } from 'src/app/auth/user';
@@ -8,13 +8,18 @@ import { Cart } from './model/cart';
 import { Router } from '@angular/router';
 import { OverviewService } from '../overview/service/overview.service';
 import { CategoryService } from 'src/app/service/category.service';
-import { SettlementPaymentPage } from 'src/app/settlement-payment/settlement-payment.page';
 import { INIT_VALUES } from 'src/app/constants/default-values';
-import { FilterModalPage } from 'src/app/filter-modal/filter-modal.page';
-import { CartFilter } from 'src/app/filter-modal/model/CartFilter';
+import { CartFilter } from './model/cart-filter';
 import { TranslateService } from '@ngx-translate/core';
 import { CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
 import { exportDialogModalOptions } from './export-dialog/export-dialog-options';
+import { filterSheetModalOptions } from './filter-sheet/filter-sheet-options';
+import { FILTER_SHEET_APPLY_ROLE } from './filter-sheet/filter-sheet.component';
+import { applyCartFilter } from './filter-sheet/cart-filter-form';
+import { settlementSheetModalOptions } from './settlement-sheet/settlement-sheet-options';
+import { SettlementEditData, settlementEditData } from './settlement-sheet/settlement-form';
+import { AlertService } from 'src/app/service/alert.service';
+import { categoryLabel } from 'src/app/service/category-label';
 
 @Component({
   selector: 'app-cartlist',
@@ -23,8 +28,11 @@ import { exportDialogModalOptions } from './export-dialog/export-dialog-options'
   standalone: false
 })
 export class CartlistPage implements OnInit {
-  @ViewChild('viewport', { static: false }) viewport!: CdkVirtualScrollViewport;
-  
+  @ViewChild('viewport', { static: false }) viewport?: CdkVirtualScrollViewport;
+  /** Stabiler Scroll-Container der Liste (DIV-79), immer vorhanden – der Viewport darf darin neu entstehen. */
+  @ViewChild('scrollHost', { static: true }) scrollHost?: ElementRef<HTMLElement>;
+  private readonly destroyRef = inject(DestroyRef);
+
   public cartList = this.cartService.cartList;
   public initCartList = this.cartService.initCartList;
   public activeGroup = this.groupService.activeGroup();
@@ -39,7 +47,6 @@ export class CartlistPage implements OnInit {
   public cartFilter: CartFilter = {};
   public cartVisible: boolean = false;
   public isAtTop: boolean = true;
-  public viewportInitialized: boolean = false;
 
   constructor(
     private cartService: CartService,
@@ -51,7 +58,8 @@ export class CartlistPage implements OnInit {
     private overviewService: OverviewService,
     private categoryService: CategoryService,
     private modalCtrl: ModalController,
-    private translate: TranslateService
+    private translate: TranslateService,
+    private alertService: AlertService
   ) { 
     // Anzeige: hält den Gruppennamen aktuell (auch bei Umbenennung), ohne neu zu laden
     effect(() => {
@@ -78,32 +86,45 @@ export class CartlistPage implements OnInit {
       }
       this.cartVisible = false;
     });
-  
+    // Aktiven Filter nach jeder erfolgreichen Änderung neu anwenden (DIV-74, Review F-001): Die Services ersetzen bzw.
+    // ergänzen Einträge in der gefilterten Liste, ohne die Filterkriterien zu prüfen – ein bearbeiteter Einkauf blieb sonst
+    // sichtbar, obwohl er nicht mehr passt. Grundlage ist die vollständige Liste; Chip und Filter bleiben erhalten.
+    effect(() => {
+      this.cartService.cartUpdated();
+      untracked(() => {
+        if (this.filterMode()) {
+          this.cartList.set(applyCartFilter(this.initCartList(), this.cartFilter));
+        }
+      });
+    });
   }
 
   ngOnInit() {
     this.authService.user.subscribe(user => {
       if (user) this.user = user;
     })
+    this.observeScrollHostSize();
   }
 
-  ngAfterViewChecked() {
-  if (this.viewport && !this.viewportInitialized) {
-    this.viewportInitialized = true;
-
-    this.viewport.elementScrolled().subscribe(() => {
-      const scrollOffset = this.viewport.measureScrollOffset();
-      this.isAtTop = scrollOffset <= 100;
-    });
+  /**
+   * Das CDK misst die Größe des Scroll-Containers nur bei window-resize/orientationchange neu. Ändert sich die Höhe ohne
+   * Fenster-Resize (Header wächst, Filter-Chip, Sprachwechsel), würde es mit veralteter Höhe rendern (DIV-79). Der
+   * Container ist stabil; gemessen wird jeweils der aktuelle Viewport (fehlt im Lade-/Leerzustand).
+   */
+  private observeScrollHostSize() {
+    const host = this.scrollHost?.nativeElement;
+    if (!host) return; // nur ohne Template (Komponententests der Seitenlogik)
+    const observer = new ResizeObserver(() => this.viewport?.checkViewportSize());
+    observer.observe(host);
+    this.destroyRef.onDestroy(() => observer.disconnect());
   }
-}
-  
-  onScrollChange() {
-    setTimeout(() => {
-      if (!this.viewport) return;
-      const offset = this.viewport.measureScrollOffset();
-      this.isAtTop = offset <= 100;
-    }, 50);
+
+  /**
+   * Scroll-Handler im Template (innerhalb der Angular-Zone, damit `[disabled]` des Refreshers aktualisiert wird): Pull-to-
+   * Refresh nur nahe am Listenanfang, nicht beim Hochscrollen mitten in der Liste.
+   */
+  onHostScroll() {
+    this.isAtTop = (this.scrollHost?.nativeElement.scrollTop ?? 0) <= 100;
   }
 
   getTranslationKey() {
@@ -124,10 +145,6 @@ export class CartlistPage implements OnInit {
       )
       this.cartVisible = false;
     }
-  }
-
-  isSettlementpayment(category: string): boolean {
-    return this.categoryService.isSettlementpayment(category);
   }
 
   resetFilterParams() {
@@ -159,6 +176,10 @@ export class CartlistPage implements OnInit {
 
   onDeleteCart(cart: Cart, slidingItem: IonItemSliding) {
     slidingItem.close();
+    if (cart.settlementId) {
+      this.onDeleteSettlement(cart);
+      return;
+    }
     this.alertCtrl.create({
       header: this.translate.instant('alerts.cart.delete.header'),
       message: this.translate.instant('alerts.cart.delete.message', { cartTitle: cart.title }),
@@ -180,9 +201,60 @@ export class CartlistPage implements OnInit {
     }).then(alertEl => alertEl.present());
   }
 
+  /**
+   * Ausgleichszahlung löschen (DIV-74): immer beide Einkäufe über den Settlement-Endpoint. Gruppe und Anmelde-Sitzung
+   * werden beim Bestätigen festgehalten; eine Antwort nach einem Wechsel verwirft der Service.
+   */
+  private onDeleteSettlement(cart: Cart) {
+    this.alertCtrl.create({
+      header: this.translate.instant('alerts.cart.delete_settlement.header'),
+      message: this.translate.instant('alerts.cart.delete_settlement.message', { cartTitle: cart.title }),
+      buttons: [{
+        text: this.translate.instant('alerts.cart.delete.cancel'),
+        role: 'cancel'
+      }, {
+        text: this.translate.instant('alerts.cart.delete.ok'),
+        handler: () => {
+          const group = this.groupService.activeGroup();
+          const sameSession = this.groupService.sessionGuard();
+          const isCurrent = () => this.groupService.activeGroupId() === group.id && sameSession();
+          this.cartService.deleteSettlementPayment(cart.settlementId!, group, isCurrent);
+        }
+      }]
+    }).then(alertEl => alertEl.present());
+  }
+
+  /**
+   * Wischaktion „Bearbeiten“: normale Einkäufe im Formular, Einkäufe einer Ausgleichszahlung im Settlement-Sheet
+   * (DIV-74), vorbelegt aus dem Cart-Paar der vollständigen Liste. Fehlt der Partner-Cart (veraltete Liste), wird still
+   * neu geladen und ein Hinweis gezeigt.
+   */
   editCart(cart: Cart, slidingItem: IonItemSliding) {
     slidingItem.close();
-    this.router.navigate(['domains', 'tabs', 'cartlist', 'new-edit', cart.id?.toString()]);
+    if (!cart.settlementId) {
+      this.router.navigate(['domains', 'tabs', 'cartlist', 'new-edit', cart.id?.toString()]);
+      return;
+    }
+    const settlement = settlementEditData(cart, this.initCartList());
+    if (!settlement) {
+      const group = this.groupService.activeGroup();
+      const sameSession = this.groupService.sessionGuard();
+      this.alertService.showErrorAlert(
+        this.translate.instant('alerts.cart.settlement_not_found.header'),
+        this.translate.instant('alerts.cart.settlement_not_found.message')
+      );
+      this.cartService.getCartListByGroupId(group, true, undefined, {
+        silent: true, isCurrent: () => this.groupService.activeGroupId() === group.id && sameSession(),
+      });
+      return;
+    }
+    this.openSettlementSheet(settlement);
+  }
+
+  /** Sliding-Aktion „Duplizieren“ (DIV-73): Neuanlage mit den Werten dieser Ausgabe, angelegt wird erst beim Speichern. */
+  duplicateCart(cart: Cart, slidingItem: IonItemSliding) {
+    slidingItem.close();
+    this.router.navigate(['domains', 'tabs', 'cartlist', 'new-edit'], { queryParams: { duplicateOf: cart.id } });
   }
 
   /** Menüpunkt „Download“: Export-Dialog als Bottom Sheet (DIV-68). */
@@ -192,15 +264,24 @@ export class CartlistPage implements OnInit {
     await modal.present();
   }
 
-  onFilter(action: string, filterTerm: string) {
+  /** Schnellfilter per Tipp auf die Kategorie eines Einkaufs: Chip mit dem Anzeigenamen der Kategorie (DIV-74). */
+  onFilterCategory(cart: Cart) {
+    this.onFilter('category', cart.categoryDto.name, categoryLabel(cart.categoryDto, key => this.translate.instant(key)));
+  }
+
+  /**
+   * Schnellfilter per Tipp auf Ersteller oder Kategorie. Gefiltert wird über den gespeicherten Wert; `label` ist nur die
+   * Anzeige im Chip (DIV-74: die Settlement-Kategorie in der App-Sprache).
+   */
+  onFilter(action: string, filterTerm: string, label: string = filterTerm) {
     this.cartFilter = {};
     if (!this.filterMode()) {
       this.filterMode.set(true);
-      this.cartList.update(carts => carts.filter(cart => 
+      this.cartList.update(carts => carts.filter(cart =>
         action === "user" ? cart.userDto.userName === filterTerm : cart.categoryDto.name === filterTerm)
       );
       action === "user" ? this.cartFilter.userName = [filterTerm] : this.cartFilter.category = [filterTerm];
-      this.filterTerm.set(filterTerm);
+      this.filterTerm.set(label);
     } else {
       // this.cartService.getCartListByGroupId(this.activeGroup);
       this.resetFilterParams();
@@ -214,38 +295,72 @@ export class CartlistPage implements OnInit {
     this.cartList.set(this.initCartList());
   }
 
-  async settlementPayment() {
-    const modal = this.modalCtrl.create({
-      component: SettlementPaymentPage,
-      backdropDismiss: true
-    });
-
-    (await modal).onDidDismiss().then((response) => {
-      if (response.data) {
-        this.cartService.addSettlementPayment(response.data);
-      }
-    });
-    return (await modal).present();
+  /**
+   * Menüpunkt „Ausgleichszahlung“: Bottom Sheet (DIV-70). Das Sheet speichert selbst über CartService und schließt
+   * erst nach Erfolg; `saving` sperrt das Schließen, solange der Request läuft. Bei geänderten Eingaben (`dirty`) fragt
+   * das Schließen über X, Backdrop oder Hardware-Back vorher nach (confirmDiscard).
+   */
+  async openSettlementSheet(settlement?: SettlementEditData) {
+    const saving = signal(false);
+    const dirty = signal(false);
+    const modal = await this.modalCtrl.create(settlementSheetModalOptions({
+      saving,
+      dirty,
+      confirmDiscard: () => this.confirmDiscard(),
+      dismiss: modalId => this.modalCtrl.dismiss(undefined, 'cancel', modalId),
+      settlement,
+    }));
+    await modal.present();
   }
 
-  async filterModal() {
-    const modal = this.modalCtrl.create({
-      component: FilterModalPage,
-      componentProps: { 
-        activeGroupId: this.activeGroup.id,
-        cartFilter: this.cartFilter
-      },
-      backdropDismiss: true
+  /** Laufende Rückfrage „Eingaben verwerfen?“; gleichzeitige Auslöser (z. B. Doppel-Tipp) teilen sich einen Alert. */
+  private discardConfirmation: Promise<boolean> | null = null;
+
+  /** Rückfrage vor dem Verwerfen der Ausgleichszahlung: true nur bei „Verwerfen“. */
+  confirmDiscard(): Promise<boolean> {
+    if (!this.discardConfirmation) {
+      this.discardConfirmation = this.askDiscard().finally(() => this.discardConfirmation = null);
+    }
+    return this.discardConfirmation;
+  }
+
+  private async askDiscard(): Promise<boolean> {
+    const alert = await this.alertCtrl.create({
+      header: this.translate.instant('domains.spendings.overlay.settlementpayment.discard.header'),
+      message: this.translate.instant('domains.spendings.overlay.settlementpayment.discard.message'),
+      buttons: [
+        { text: this.translate.instant('domains.spendings.overlay.settlementpayment.discard.btn_continue'), role: 'cancel' },
+        { text: this.translate.instant('domains.spendings.overlay.settlementpayment.discard.btn_discard'), role: 'destructive' },
+      ],
+    });
+    await alert.present();
+    const { role } = await alert.onDidDismiss();
+    return role === 'destructive';
+  }
+
+  /**
+   * Menüpunkt „Filter“ und Filter-Chip: Filter als Bottom Sheet (DIV-71). Das Sheet bearbeitet eine Kopie des
+   * angewendeten Filters; übernommen wird nur bei „Filter anwenden“ und nur, wenn aktive Gruppe und Anmelde-Sitzung
+   * noch dieselben sind (sonst wurde die Liste inzwischen neu geladen und der Filter zurückgesetzt).
+   */
+  async openFilterSheet() {
+    const groupId = this.groupService.activeGroupId();
+    const sameSession = this.groupService.sessionGuard();
+    const draft: CartFilter = {
+      ...this.cartFilter,
+      category: this.cartFilter.category?.slice(),
+      userName: this.cartFilter.userName?.slice(),
+    };
+    const modal = await this.modalCtrl.create(filterSheetModalOptions(draft));
+
+    modal.onDidDismiss<CartFilter>().then(({ data, role }) => {
+      if (role !== FILTER_SHEET_APPLY_ROLE || !data) return;
+      if (this.groupService.activeGroupId() !== groupId || !sameSession()) return;
+      this.filterCarts(data);
+      this.cartFilter = data;
     });
 
-    (await modal).onDidDismiss().then((response) => {
-      if (response.data) {
-        this.filterCarts(response.data);
-        this.cartFilter = response.data;
-      }
-    });
-
-    return (await modal).present();
+    await modal.present();
   }
 
   filterCarts(cartFilter: CartFilter) {
@@ -255,17 +370,12 @@ export class CartlistPage implements OnInit {
       return;
     }
 
+    // Zeitraum nach Kalendertag, wie die Liste ihn anzeigt (purchaseDayOf), beide Grenzen einschließlich – siehe
+    // applyCartFilter. Ein Vergleich mit Uhrzeit schloss Carts am Enddatum aus („bis“ war lokale Mitternacht).
     this.filterTerm.set('');
-    this.cartList.set(this.initCartList());
-    this.cartList.update(carts => 
-      carts.filter(cart =>
-        (cartFilter.title ? cart.title?.toLowerCase().includes(cartFilter.title.toLowerCase()) : true) &&
-        (cartFilter.description ? cart.description?.toLowerCase().includes(cartFilter.description.toLowerCase()) : true) &&
-        (cartFilter.category && cartFilter.category.length > 0 ? cartFilter.category.includes(cart.categoryDto.name) : true) &&
-        (cartFilter.userName && cartFilter.userName.length > 0 ? cartFilter.userName.includes(cart.userDto.userName) : true) &&
-        (cartFilter.startDate ? new Date(cart.datePurchased) >= cartFilter.startDate : true) &&
-        (cartFilter.endDate ? new Date(cart.datePurchased) <= cartFilter.endDate : true)
-    ))
+    // Merken, damit der Filter nach jeder erfolgreichen Änderung neu angewendet werden kann (DIV-74)
+    this.cartFilter = cartFilter;
+    this.cartList.set(applyCartFilter(this.initCartList(), cartFilter));
 
     this.filterMode.set(true);
   }

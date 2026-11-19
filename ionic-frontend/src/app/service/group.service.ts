@@ -16,6 +16,8 @@ import { ChangeGroupOwnerDto } from '../groupmembers/model/change-group-owner-dt
 import { Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
 import { LoadOptions } from '../model/load-options';
+import { AddMemberResult } from '../groupoverview/model/add-member-result';
+import { applyMembersChange, applyOwnerChange, applyOwnerChangeToOverview } from './group-events';
 
 @Injectable({
   providedIn: 'root'
@@ -69,6 +71,13 @@ export class GroupService {
         // Logout: aktive Gruppe zurücksetzen (den Storage-Eintrag löscht AuthService.logout()), damit während der
         // Abmeldung keine Tab-Page für die alte Gruppe lädt (DIV-36).
         this.activeGroup.set(Init.DEFAULT_GROUP);
+        // Gruppenlisten und Mitglieder ebenfalls leeren, damit ein danach angemeldeter Nutzer bis zum Eintreffen
+        // seiner eigenen Antworten nicht die Daten des abgemeldeten Nutzers sieht (DIV-59).
+        this.groupsSideNav.set([]);
+        this.groupOverviewList.set([]);
+        this.groupMembers.set(Init.DEFAULT_GROUP_MEMBERS);
+        this.groupMembershipHistory.set([]);
+        this.hasNoGroups.set(false);
       }
       const userId = user?.id ?? null;
       if (userId !== this.sessionUserId) {
@@ -84,7 +93,8 @@ export class GroupService {
 
   /**
    * Prüfung „noch dieselbe Anmelde-Sitzung wie jetzt?“ – für `LoadOptions.isCurrent` beim stillen Resync (DIV-36) und
-   * Standard von `getGroupsForSideNav`/`getGroupsForOverview` (DIV-58). Setzt voraus, dass `session` vor dem Start des
+   * Standard von `getGroupsForSideNav`/`getGroupsForOverview` (DIV-58) sowie `getGroupMembers`/
+   * `getGroupMembershipHistoryForGroupAndUser` (DIV-60). Setzt voraus, dass `session` vor dem Start des
    * Requests hochgezählt wurde: Der Konstruktor abonniert `authService.user` vor `AppComponent.initUser()`, das bei
    * einer Emission lädt.
    */
@@ -217,8 +227,12 @@ export class GroupService {
       })
   }
 
-  addGroup(group: Group, callingPage?: string): void {
-    this.http
+  /**
+   * Legt die Gruppe an; State erst nach Erfolg. Das Promise meldet den Erfolg und weist nie zurück (DIV-80, für die
+   * Bottom Sheets: schließen nach Erfolg, offen bleiben bei Fehler).
+   */
+  addGroup(group: Group, callingPage?: string): Promise<boolean> {
+    return new Promise(resolve => this.http
       .post<Group>(this.addGroupUrl, group)
       .subscribe({
         next: (result) => {
@@ -237,6 +251,7 @@ export class GroupService {
             name: result.name,
             dateCreated: result.dateCreated,
             ownerName: this.user?.name!,
+            ownerId: this.user?.id!,
             memberCount: 0
           }
           this.groupOverviewList.update(groups => [...groups, newGroupOverview]);
@@ -246,15 +261,19 @@ export class GroupService {
             this.hasNoGroups.set(false);
             this.router.navigateByUrl('/domains/tabs/overview', { replaceUrl: true });
           };
+          resolve(true);
         },
         error: (err) => {
           console.error("Error adding group:", err);
+          this.showErrorToast("alerts.group.error.add_group");
+          resolve(false);
         }
-      })
+      }));
   }
 
-  updateGroup(group: Group): void {
-    this.http
+  /** Benennt die Gruppe um; State erst nach Erfolg, Promise wie `addGroup` (DIV-80). */
+  updateGroup(group: Group): Promise<boolean> {
+    return new Promise(resolve => this.http
       .put<Group>(this.updateGroupUrl, group)
       .subscribe({
         next: (result) => {
@@ -267,15 +286,19 @@ export class GroupService {
           
           // aktive Gruppe muss nochmal gesetzt werden, damit Überschriften der einzelnen Views aktualisiert wird.
           if (this.activeGroup().id === result.id)  this.setActiveGroup(result);
+          resolve(true);
         },
         error: (err) => {
           console.error("Error updating group:", err);
+          this.showErrorToast("alerts.group.error.update_group");
+          resolve(false);
         }
-      })
+      }));
   }
 
-  deleteGroup(group: Group): void {
-    this.http
+  /** Löscht die Gruppe; State erst nach Erfolg, Promise wie `addGroup` (DIV-80). */
+  deleteGroup(group: Group): Promise<boolean> {
+    return new Promise(resolve => this.http
       .delete<void>(`${this.deleteGroupUrl}/${group.id}`)
       .subscribe({
         next: () => {
@@ -292,110 +315,167 @@ export class GroupService {
           if (this.activeGroup().id === group.id) {
             this.setActiveGroup(hasGroups ? groups[0] : Init.DEFAULT_GROUP);
           };
-
+          resolve(true);
         },
         error: (err) => {
           console.error("Error deleting group:", err);
+          this.showErrorToast("alerts.group.error.delete_group");
+          resolve(false);
         }
-      })
+      }));
   }
 
-  getGroupMembershipHistoryForGroupAndUser(group: Group): void {
+  /**
+   * Lädt die Mitgliedschaftszeiträume des Nutzers in der Gruppe. Wertet von `options` nur `isCurrent` aus (Standard:
+   * Sitzungsprüfung, DIV-60); `silent` wird ignoriert, weil kein Aufrufer es braucht – ein Fehler leert die Liste.
+   */
+  getGroupMembershipHistoryForGroupAndUser(group: Group, options: LoadOptions = {}): void {
+    // Antworten aus einer inzwischen beendeten Anmelde-Sitzung verwerfen (DIV-60)
+    const isCurrent = options.isCurrent ?? this.sessionGuard();
     this.http
       .get<Zeitraum[]>(`${this.gmhUrl}/${group.id}`)
       .subscribe({
         next: (result) => {
+          if (!isCurrent()) return;
           this.groupMembershipHistory.set(result || []);
         },
         error: (err) => {
+          if (!isCurrent()) return;
           console.error("Error fetching group membership history:", err);
           this.groupMembershipHistory.set([]);
         }
       })
   }
 
-  addMemberToGroup(newMemberDto: NewMemberDto): void {
-    this.http
-      .post<any>(this.addNewMemberUrl, newMemberDto)
-      .subscribe({
-        next: (result) => {
-          this.groupOverviewList.update(groups => groups.map(gr => 
-            gr.id === result.id ? {...gr, memberCount: result.members.length} : gr
-          ));
-
-          const message = this.translate.instant("alerts.group.add_member.error_message_service.message_success");
-          this.alertService.showToast(message);
-          this.triggerUpdate();
-        },
-        error: (err) => {
-          console.error("Error adding member to group:", err);
-          let message = "";
-
-          if (err.error.includes(newMemberDto.newMemberEmail)) {
-            message = this.translate.instant("alerts.group.add_member.error_message_service.message_no_exists");
-          } else if (err.error.includes("New member equals group owner")) {
-            message = this.translate.instant("alerts.group.add_member.error_message_service.message_admin_is_member");
-          } else if (err.error.includes("Member already exists")) {
-            message = this.translate.instant("alerts.group.add_member.error_message_service.message_already_member");
-          } else {
-            message = this.translate.instant("alerts.group.add_member.error_message_service.message_default");
-          }
-          this.alertService.showToast(message);
-        }
-      })
-  }
-
-  getGroupMembers(groupId: number, options: LoadOptions = {}): void {
-    this.http
-      .get<GroupMembers>(`${this.groupMembersUrl}/${groupId}`)
-      .subscribe({
-        next: (result) => {
-          // still: nur übernehmen, wenn inzwischen keine andere Mitgliederliste geöffnet wurde
-          if (options.silent && this.groupMembers().id !== groupId) return;
-          if (options.isCurrent?.() === false) return;
-          this.groupMembers.set(result);
-        },
-        error: (err) => {
-          if (options.silent) {
-            console.warn("Silent resync of group members failed:", err);
-            return;
-          }
-          console.error("Error fetching group members:", err);
-          this.groupMembers.set(Init.DEFAULT_GROUP_MEMBERS);
-        }
-      })
-  }
-
-  removeMemberFromGroup(removeMemberDto: RemoveMemberDto): void {
-    this.http
-      .post<any>(this.removeMemberUrl, removeMemberDto)
+  /**
+   * Fügt ein Mitglied hinzu; State erst nach Erfolg (Mitgliederzahl, geladene Mitgliederliste). Erfolg meldet ein Toast,
+   * ein Fehler kommt als i18n-Key zurück (DIV-80: das Sheet zeigt ihn unter dem E-Mail-Feld). Weist nie zurück.
+   */
+  addMemberToGroup(newMemberDto: NewMemberDto): Promise<AddMemberResult> {
+    return new Promise(resolve => this.http
+      .post<GroupMembers>(this.addNewMemberUrl, newMemberDto)
       .subscribe({
         next: (result) => {
           this.groupOverviewList.update(groups => groups.map(gr =>
             gr.id === result.id ? {...gr, memberCount: result.members.length} : gr
           ));
+          this.groupMembers.update(members => applyMembersChange(members, result));
+
+          const message = this.translate.instant("alerts.group.add_member.error_message_service.message_success");
+          this.alertService.showToast(message);
+          this.triggerUpdate();
+          resolve({ ok: true });
+        },
+        error: (err) => {
+          console.error("Error adding member to group:", err);
+          resolve({ ok: false, errorKey: addMemberErrorKey(err?.error, newMemberDto.newMemberEmail) });
+        }
+      }));
+  }
+
+  /**
+   * Lädt die Mitglieder der Gruppe. Das Promise meldet, ob die Antwort übernommen wurde (DIV-80, Ladezustand des
+   * Mitglieder-Sheets): `false` bei Fehler und bei verworfener Antwort; weist nie zurück. Bisherige Aufrufer ignorieren es.
+   */
+  getGroupMembers(groupId: number, options: LoadOptions = {}): Promise<boolean> {
+    // Antworten aus einer inzwischen beendeten Anmelde-Sitzung verwerfen (DIV-60)
+    const isCurrent = options.isCurrent ?? this.sessionGuard();
+    return new Promise(resolve => this.http
+      .get<GroupMembers>(`${this.groupMembersUrl}/${groupId}`)
+      .subscribe({
+        next: (result) => {
+          // still: nur übernehmen, wenn inzwischen keine andere Mitgliederliste geöffnet wurde
+          if ((options.silent && this.groupMembers().id !== groupId) || !isCurrent()) {
+            resolve(false);
+            return;
+          }
+          this.groupMembers.set(result);
+          resolve(true);
+        },
+        error: (err) => {
+          resolve(false);
+          if (options.silent) {
+            console.warn("Silent resync of group members failed:", err);
+            return;
+          }
+          if (!isCurrent()) return;
+          console.error("Error fetching group members:", err);
+          this.groupMembers.set(Init.DEFAULT_GROUP_MEMBERS);
+        }
+      }));
+  }
+
+  /**
+   * Entfernt ein Mitglied; State erst nach Erfolg (DIV-80, vorher änderte GroupmembersPage ihn vor der Antwort).
+   * Entfernt sich der Nutzer selbst, verschwindet die Gruppe aus Seitenleiste und Übersicht und die aktive Gruppe wird
+   * neu bestimmt. Promise wie `addGroup`.
+   */
+  removeMemberFromGroup(removeMemberDto: RemoveMemberDto): Promise<boolean> {
+    return new Promise(resolve => this.http
+      .post<GroupMembers>(this.removeMemberUrl, removeMemberDto)
+      .subscribe({
+        next: (result) => {
+          this.groupOverviewList.update(groups => groups.map(gr =>
+            gr.id === result.id ? {...gr, memberCount: result.members.length} : gr
+          ));
+          this.groupMembers.update(members => applyMembersChange(members, result));
+
+          if (this.user && removeMemberDto.member.id === this.user.id) {
+            this.groupOverviewList.update(groups => groups.filter(gr => gr.id !== removeMemberDto.id));
+            this.groupsSideNav.update(groups => groups.filter(gr => gr.id !== removeMemberDto.id));
+            this.updateActiveGroup(this.groupsSideNav(), this.activeGroup());
+          }
           this.triggerUpdate();
 
           if (this.groupOverviewList().length === 0) {
+            this.hasNoGroups.set(true);
             this.router.navigateByUrl('/no-group', { replaceUrl: true });
           }
+          resolve(true);
         },
         error: (err) => {
           console.error("Error removing member from group:", err);
+          this.showErrorToast("alerts.group.error.remove_member");
+          resolve(false);
         }
-      })
+      }));
   }
 
-  changeGroupOwner(newOwner: ChangeGroupOwnerDto): void {
-    this.http
+  /**
+   * Wechselt den Gruppenadmin; geladene Mitgliederliste und Übersicht erst nach Erfolg (DIV-80). Promise wie `addGroup`.
+   */
+  changeGroupOwner(newOwner: ChangeGroupOwnerDto): Promise<boolean> {
+    return new Promise(resolve => this.http
       .post<void>(this.changeGroupOwnerUrl, newOwner)
       .subscribe({
         next: () => {
-          console.log("Group owner successfully changed");
+          this.groupMembers.update(members => applyOwnerChange(members, newOwner));
+          this.groupOverviewList.update(groups => applyOwnerChangeToOverview(groups, newOwner));
+          resolve(true);
         },
         error: (err) => {
           console.error("Error changing group owner:", err);
+          this.showErrorToast("alerts.group.error.change_owner");
+          resolve(false);
         }
-      })
+      }));
   }
+
+  private showErrorToast(key: string): void {
+    this.alertService.showToast(this.translate.instant(key));
+  }
+}
+
+/**
+ * Fehlermeldung beim Hinzufügen eines Mitglieds als i18n-Key. Die Texte vergleicht das Frontend mit der Backend-Meldung
+ * (Fehlertext-Vertrag M2–M4, Groovydoc `CartControllerApiSpec`); jeder Body ohne Text (z. B. `ProgressEvent` bei
+ * Netzwerkfehler) ergibt die Standardmeldung, damit die Zuordnung nie wirft (DIV-80).
+ */
+export function addMemberErrorKey(body: unknown, email: string): string {
+  const prefix = "alerts.group.add_member.error_message_service.";
+  if (typeof body !== "string") return prefix + "message_default";
+  if (body.includes(email)) return prefix + "message_no_exists";
+  if (body.includes("New member equals group owner")) return prefix + "message_admin_is_member";
+  if (body.includes("Member already exists")) return prefix + "message_already_member";
+  return prefix + "message_default";
 }

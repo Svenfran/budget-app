@@ -44,6 +44,42 @@ describe('CategoryService', () => {
 
       expect(service.categories()).toEqual([]);
     });
+
+    // DIV-73: Das Formular „Einkauf hinzufügen“ arbeitet mit dem Ergebnis seiner eigenen Anfrage.
+    it('übergibt dem Callback das Ergebnis genau dieser Anfrage und setzt das Signal', () => {
+      const loaded = [aCategory({ name: 'Drogerie' })];
+      const onComplete = jasmine.createSpy('onComplete');
+
+      service.getCategoriesByGroup(aGroup({ id: 7 }), onComplete);
+      http.expectOne(`${api}/categories/7`).flush(loaded);
+
+      expect(onComplete).toHaveBeenCalledOnceWith(loaded);
+      expect(service.categories()).toEqual(loaded);
+    });
+
+    it('übergibt dem Callback bei einem Ladefehler null', () => {
+      const onComplete = jasmine.createSpy('onComplete');
+
+      service.getCategoriesByGroup(aGroup({ id: 7 }), onComplete);
+      http.expectOne(`${api}/categories/7`).flush('Server error', { status: 500, statusText: 'Server Error' });
+
+      expect(onComplete).toHaveBeenCalledOnceWith(null);
+      expect(service.categories()).toEqual([]);
+    });
+
+    it('jeder Callback erhält nur das Ergebnis seiner eigenen Anfrage, auch wenn eine ältere später antwortet', () => {
+      const own = [aCategory({ name: 'Eigene' })];
+      const older = [aCategory({ name: 'Fremde' })];
+      const onComplete = jasmine.createSpy('onComplete');
+
+      service.getCategoriesByGroup(aGroup({ id: 3 }));
+      service.getCategoriesByGroup(aGroup({ id: 7 }), onComplete);
+      http.expectOne(`${api}/categories/7`).flush(own);
+      http.expectOne(`${api}/categories/3`).flush(older);
+
+      expect(onComplete).toHaveBeenCalledOnceWith(own);
+      expect(service.categories()).toEqual(older);
+    });
   });
 
   describe('addCategory', () => {
@@ -163,22 +199,4 @@ describe('CategoryService', () => {
     });
   });
 
-  describe('isSettlementpayment', () => {
-    // Regression DIV-63: Die Liste enthielt 'Settlement payment'/'Pago de ajuste', das Backend legt die Kategorie
-    // aber als 'Repayment'/'Repago' an (categories.default.settlement) – in en/es wurde sie nicht erkannt.
-    const useLanguage = (lang: string, settlement: string) => {
-      const translate = TestBed.inject(TranslateService);
-      translate.setTranslation(lang, { domains: { spendings: { settlement } } });
-      translate.use(lang);
-    };
-
-    [['de', 'Ausgleichszahlung'], ['en', 'Repayment'], ['es', 'Repago']].forEach(([lang, settlement]) => {
-      it(`erkennt die Ausgleichszahlungs-Kategorie des Backends in ${lang} ('${settlement}')`, () => {
-        useLanguage(lang, settlement);
-
-        expect(service.isSettlementpayment(settlement)).toBeTrue();
-        expect(service.isSettlementpayment('Lebensmittel')).toBeFalse();
-      });
-    });
-  });
 });

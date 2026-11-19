@@ -5,7 +5,6 @@ import { HttpClient } from '@angular/common/http';
 import { Group } from '../model/group';
 import { AlertService } from './alert.service';
 import { TranslateService } from '@ngx-translate/core';
-import { SETTLEMENTPAYMENT_CATEGORIES } from '../constants/default-values';
 
 @Injectable({
   providedIn: 'root'
@@ -30,16 +29,23 @@ export class CategoryService {
     this.categoryUpdate.set(this.categoryUpdate() + 1);
   }
 
-  getCategoriesByGroup(group: Group): void {
+  /**
+   * Lädt die Kategorien der Gruppe in das gemeinsame `categories`-Signal. `onComplete` erhält das Ergebnis genau dieser
+   * Anfrage (`null` bei Fehler) – für Aufrufer, die nicht vom gemeinsamen Signal abhängen dürfen, das spätere Antworten
+   * anderer Anfragen überschreiben können (DIV-73, Formular „Einkauf hinzufügen“).
+   */
+  getCategoriesByGroup(group: Group, onComplete?: (result: CategoryDto[] | null) => void): void {
     this.http
       .get<CategoryDto[]>(`${this.getCategoriesUrl}/${group.id}`)
       .subscribe({
         next: (result) => {
           this.categories.set(result || []);
+          onComplete?.(result || []);
         },
         error: (err) => {
           console.error("Error fetching categories:", err);
           this.categories.set([]);
+          onComplete?.(null);
         }
       })
   };
@@ -93,9 +99,4 @@ export class CategoryService {
       })
   };
 
-isSettlementpayment(category: string): boolean {
-  let pattern = new RegExp(SETTLEMENTPAYMENT_CATEGORIES.join('|')); 
-  let currentSettlementCategory = this.translate.instant('domains.spendings.settlement');
-  return (pattern.test(currentSettlementCategory) && SETTLEMENTPAYMENT_CATEGORIES.includes(category));
-}
 }

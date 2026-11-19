@@ -14,12 +14,10 @@ import static com.github.svenfran.budgetapp.budgetappbackend.constants.Statistic
 /**
  * Statistikseite (DIV-63): Gesamtausgaben, Von dir bezahlt, Zeitreihe (ISO-Kalenderwochen, Monate, Jahre) und
  * Kategorien in Cent. Kategorien werden gruppenübergreifend nach Name zusammengefasst (K2), Ausgleichszahlungen
- * eingerechnet und in einer Zeile gekennzeichnet (K1). Zeitreihe und Kategorien ergeben zusammen jeweils "Von dir bezahlt".
+ * (erkannt an der Verknüpfung mit einem Settlement, DIV-74) eingerechnet und in einer Zeile gekennzeichnet (K1). Zeitreihe und Kategorien ergeben zusammen jeweils "Von dir bezahlt".
+ * Gruppenperspektive (DIV-72): dieselbe Auswertung über alle Carts; Summe jeweils = Gesamtausgaben.
  */
 class StatisticsCalculatorSpec extends Specification {
-
-    static final Set<String> SETTLEMENT = ['Ausgleichszahlung', 'Repayment', 'Repago']
-            .collect { StatisticsCalculator.normalize(it) } as Set
 
     def anna = TestData.user(id: 1L)
     def ben = TestData.user(id: 2L)
@@ -35,7 +33,7 @@ class StatisticsCalculatorSpec extends Specification {
                      einkauf(ben, 99.0, LocalDate.of(2026, 1, 1))]
 
         when:
-        def result = StatisticsCalculator.calculate(carts, anna.id, YEAR, 2025, null, [2026, 2025, 2024], SETTLEMENT)
+        def result = StatisticsCalculator.calculate(carts, anna.id, YEAR, 2025, null, [2026, 2025, 2024])
 
         then:
         result.totalCents() == 100000L
@@ -52,7 +50,7 @@ class StatisticsCalculatorSpec extends Specification {
                      einkauf(ben, 100.0, LocalDate.of(2025, 2, 1))]
 
         when:
-        def result = StatisticsCalculator.calculate(carts, anna.id, YEAR, 2025, null, [2025], SETTLEMENT)
+        def result = StatisticsCalculator.calculate(carts, anna.id, YEAR, 2025, null, [2025])
 
         then:
         result.timeline()*.month == (1..12).toList()
@@ -65,7 +63,7 @@ class StatisticsCalculatorSpec extends Specification {
 
     def "Monatsansicht #jahr-#monat: genau die ISO-Kalenderwochen, die den Monat berühren, auf den Monat beschnitten"() {
         when:
-        def result = StatisticsCalculator.calculate([], anna.id, MONTH, jahr, monat, [], SETTLEMENT)
+        def result = StatisticsCalculator.calculate([], anna.id, MONTH, jahr, monat, [])
 
         then:
         result.timeline().collect { [it.year(), it.week(), it.from().toString(), it.to().toString()] } == wochen
@@ -94,7 +92,7 @@ class StatisticsCalculatorSpec extends Specification {
                      einkauf(ben, 10.0, LocalDate.of(2027, 1, 20))]
 
         when:
-        def result = StatisticsCalculator.calculate(carts, anna.id, MONTH, 2027, 1, [2027, 2026], SETTLEMENT)
+        def result = StatisticsCalculator.calculate(carts, anna.id, MONTH, 2027, 1, [2027, 2026])
 
         then:
         result.timeline()*.amountCents() == [500L, 400L, 0L, 0L, 500L]
@@ -110,7 +108,7 @@ class StatisticsCalculatorSpec extends Specification {
                      einkauf(ben, 30.0, LocalDate.of(2024, 1, 1))]
 
         when:
-        def result = StatisticsCalculator.calculate(carts, anna.id, ALL, null, null, [2025, 2024, 2023], SETTLEMENT)
+        def result = StatisticsCalculator.calculate(carts, anna.id, ALL, null, null, [2025, 2024, 2023])
 
         then:
         result.timeline()*.year == [2023, 2024, 2025]
@@ -121,7 +119,7 @@ class StatisticsCalculatorSpec extends Specification {
 
     def "Ohne Carts sind alle Summen 0, die Kategorien leer und die Zeitreihe bei ALL leer"() {
         when:
-        def result = StatisticsCalculator.calculate([], anna.id, ALL, null, null, [], SETTLEMENT)
+        def result = StatisticsCalculator.calculate([], anna.id, ALL, null, null, [])
 
         then:
         result.totalCents() == 0L
@@ -136,7 +134,7 @@ class StatisticsCalculatorSpec extends Specification {
         def carts = [einkauf(ben, 80.0, LocalDate.of(2025, 4, 1))]
 
         when:
-        def result = StatisticsCalculator.calculate(carts, anna.id, YEAR, 2025, null, [2025], SETTLEMENT)
+        def result = StatisticsCalculator.calculate(carts, anna.id, YEAR, 2025, null, [2025])
 
         then:
         result.totalCents() == 8000L
@@ -157,7 +155,7 @@ class StatisticsCalculatorSpec extends Specification {
                      einkauf(ben, 50.0, LocalDate.of(2025, 1, 1), TestData.category(name: 'Technik', group: haushalt))]
 
         when:
-        def result = StatisticsCalculator.calculate(carts, anna.id, YEAR, 2025, null, [2025], SETTLEMENT)
+        def result = StatisticsCalculator.calculate(carts, anna.id, YEAR, 2025, null, [2025])
 
         then:
         result.categories() == [new CategoryEntry('Lebensmittel', 1500L, false),
@@ -166,25 +164,29 @@ class StatisticsCalculatorSpec extends Specification {
         result.categories()*.amountCents().sum() == result.paidCents()
     }
 
-    def "K1: Ausgleichszahlungen zählen in Von dir bezahlt und Zeitreihe; alle Sprachen in einer Zeile, negative Kategorien bleiben"() {
-        given:
+    def "K1: Ausgleichszahlungen zählen in Von dir bezahlt und Zeitreihe; alle in einer Zeile, erkannt an der Verknüpfung (DIV-74)"() {
+        given: "Settlement-Carts in 'Ausgleichszahlung' und in einer umbenannten Kategorie; ein unverknüpfter Cart in einer Kategorie namens 'Ausgleichszahlung'"
         def ausgleich = TestData.category(name: 'Ausgleichszahlung', group: haushalt)
-        def repayment = TestData.category(name: 'repayment ', group: urlaub)
+        def umbenannt = TestData.category(name: 'Rückzahlungen', group: urlaub)
+        def namensgleich = TestData.category(name: 'Ausgleichszahlung ', group: urlaub)
         def carts = [einkauf(anna, 100.0, LocalDate.of(2025, 1, 10)),
-                     einkauf(anna, 50.0, LocalDate.of(2025, 2, 1), ausgleich),
-                     einkauf(ben, -50.0, LocalDate.of(2025, 2, 1), ausgleich),
-                     einkauf(anna, -20.0, LocalDate.of(2025, 3, 1), repayment, urlaub),
-                     einkauf(anna, -10.0, LocalDate.of(2025, 4, 1), TestData.category(name: 'Erstattung', group: haushalt))]
+                     ausgleichszahlung(anna, 50.0, LocalDate.of(2025, 2, 1), ausgleich),
+                     ausgleichszahlung(ben, -50.0, LocalDate.of(2025, 2, 1), ausgleich),
+                     ausgleichszahlung(anna, -20.0, LocalDate.of(2025, 3, 1), umbenannt, urlaub),
+                     einkauf(anna, -10.0, LocalDate.of(2025, 4, 1), TestData.category(name: 'Erstattung', group: haushalt)),
+                     einkauf(anna, 7.0, LocalDate.of(2025, 5, 1), namensgleich, urlaub)]
 
         when:
-        def result = StatisticsCalculator.calculate(carts, anna.id, YEAR, 2025, null, [2025], SETTLEMENT)
+        def result = StatisticsCalculator.calculate(carts, anna.id, YEAR, 2025, null, [2025])
 
         then:
-        result.paidCents() == 12000L
-        result.totalCents() == 7000L
-        result.timeline()*.amountCents().take(4) == [10000L, 5000L, -2000L, -1000L]
+        result.paidCents() == 12700L
+        result.totalCents() == 7700L
+        result.paidCartCount() == 3L
+        result.timeline()*.amountCents().take(5) == [10000L, 5000L, -2000L, -1000L, 700L]
         result.categories() == [new CategoryEntry('Lebensmittel', 10000L, false),
                                 new CategoryEntry('Ausgleichszahlung', 3000L, true),
+                                new CategoryEntry('Ausgleichszahlung', 700L, false),
                                 new CategoryEntry('Erstattung', -1000L, false)]
         result.categories()*.amountCents().sum() == result.paidCents()
         result.timeline()*.amountCents().sum() == result.paidCents()
@@ -199,13 +201,13 @@ class StatisticsCalculatorSpec extends Specification {
                      einkauf(anna, -5.0, LocalDate.of(2025, 3, 31), TestData.category(name: 'Erstattung', group: haushalt)),
                      einkauf(anna, 20.0, LocalDate.of(2025, 7, 1)),
                      einkauf(anna, 30.0, LocalDate.of(2024, 12, 31)),
-                     einkauf(anna, 50.0, LocalDate.of(2025, 3, 15), ausgleich),
-                     einkauf(ben, -50.0, LocalDate.of(2025, 3, 15), ausgleich),
-                     einkauf(anna, -20.0, LocalDate.of(2025, 8, 1), repayment, urlaub),
+                     ausgleichszahlung(anna, 50.0, LocalDate.of(2025, 3, 15), ausgleich),
+                     ausgleichszahlung(ben, -50.0, LocalDate.of(2025, 3, 15), ausgleich),
+                     ausgleichszahlung(anna, -20.0, LocalDate.of(2025, 8, 1), repayment, urlaub),
                      einkauf(ben, 99.0, LocalDate.of(2025, 3, 10))]
 
         when:
-        def result = StatisticsCalculator.calculate(carts, anna.id, period, year, month, [2025, 2024], SETTLEMENT)
+        def result = StatisticsCalculator.calculate(carts, anna.id, period, year, month, [2025, 2024])
 
         then:
         result.paidCartCount() == anzahl
@@ -223,7 +225,7 @@ class StatisticsCalculatorSpec extends Specification {
         def carts = betraege.collect { einkauf(anna, it as Double, LocalDate.of(2025, 1, 1)) }
 
         when:
-        def result = StatisticsCalculator.calculate(carts, anna.id, YEAR, 2025, null, [2025], SETTLEMENT)
+        def result = StatisticsCalculator.calculate(carts, anna.id, YEAR, 2025, null, [2025])
 
         then:
         result.paidCents() == cent
@@ -238,9 +240,160 @@ class StatisticsCalculatorSpec extends Specification {
         [-1.005d, 2.0d]     || 99L
     }
 
+    // --- Gruppenperspektive (DIV-72) ---
+
+    def "DIV-72 AC3: Gruppe – 175,00 €, 3 Ausgaben, Durchschnitt 58,33 €, Zeitreihe und Kategorien über alle Zahler"() {
+        given:
+        def carts = [einkauf(anna, 100.0, LocalDate.of(2025, 3, 1)),
+                     einkauf(ben, 50.0, LocalDate.of(2025, 3, 2)),
+                     einkauf(anna, 25.0, LocalDate.of(2025, 5, 1))]
+
+        when:
+        def result = StatisticsCalculator.calculate(carts, anna.id, YEAR, 2025, null, [2025])
+
+        then:
+        result.totalCents() == 17500L
+        result.group().cartCount() == 3L
+        result.group().averageCents() == 5833L
+        result.group().timeline()*.amountCents() == [0L, 0L, 15000L, 0L, 2500L, 0L, 0L, 0L, 0L, 0L, 0L, 0L]
+        result.group().categories() == [new CategoryEntry('Lebensmittel', 17500L, false)]
+    }
+
+    def "DIV-72 AC4: Persönlich bleibt bei denselben Carts 125,00 € von 175,00 €; Zeitreihe und Kategorien nur 125,00 €"() {
+        given:
+        def carts = [einkauf(anna, 100.0, LocalDate.of(2025, 3, 1)),
+                     einkauf(ben, 50.0, LocalDate.of(2025, 3, 2)),
+                     einkauf(anna, 25.0, LocalDate.of(2025, 5, 1))]
+
+        when:
+        def result = StatisticsCalculator.calculate(carts, anna.id, YEAR, 2025, null, [2025])
+
+        then:
+        result.paidCents() == 12500L
+        result.totalCents() == 17500L
+        result.paidCartCount() == 2L
+        result.timeline()*.amountCents() == [0L, 0L, 10000L, 0L, 2500L, 0L, 0L, 0L, 0L, 0L, 0L, 0L]
+        result.categories() == [new CategoryEntry('Lebensmittel', 12500L, false)]
+    }
+
+    def "DIV-72 AC5: Gruppen-Zeitreihe #period hat dieselben Buckets wie die persönliche, ihre Summe ist die Gesamtausgabe"() {
+        given:
+        def carts = [einkauf(anna, 1.0, LocalDate.of(2026, 12, 31)),
+                     einkauf(anna, 10.0, LocalDate.of(2027, 1, 4)),
+                     einkauf(ben, 20.0, LocalDate.of(2027, 1, 20)),
+                     einkauf(ben, 5.0, LocalDate.of(2027, 3, 1))]
+
+        when:
+        def result = StatisticsCalculator.calculate(carts, anna.id, period, year, month, [2027, 2026])
+
+        then:
+        result.group().timeline().collect { [it.year(), it.month(), it.week(), it.from(), it.to()] } ==
+                result.timeline().collect { [it.year(), it.month(), it.week(), it.from(), it.to()] }
+        result.group().timeline()*.amountCents() == balken
+        result.group().timeline()*.amountCents().sum() == result.totalCents()
+        result.totalCents() == gesamt
+
+        where:
+        period | year | month || balken                                                       | gesamt
+        MONTH  | 2027 | 1     || [0L, 1000L, 0L, 2000L, 0L]                                   | 3000L
+        YEAR   | 2027 | null  || [3000L, 0L, 500L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L]         | 3500L
+        ALL    | null | null  || [100L, 3500L]                                                | 3600L
+    }
+
+    def "DIV-72 AC6: Gruppenkategorien fassen alle Zahler und Gruppen zusammen, Summe ist die Gesamtausgabe, 0-Zeilen entfallen"() {
+        given:
+        def carts = [einkauf(anna, 30.0, LocalDate.of(2025, 1, 1)),
+                     einkauf(ben, 20.0, LocalDate.of(2025, 1, 2), TestData.category(name: ' lebensmittel ', group: urlaub), urlaub),
+                     einkauf(ben, 70.0, LocalDate.of(2025, 1, 3), TestData.category(name: 'Technik', group: haushalt)),
+                     einkauf(anna, 10.0, LocalDate.of(2025, 1, 4), TestData.category(name: 'Haushalt', group: haushalt)),
+                     einkauf(ben, -10.0, LocalDate.of(2025, 1, 5), TestData.category(name: 'haushalt', group: urlaub), urlaub)]
+
+        when:
+        def result = StatisticsCalculator.calculate(carts, anna.id, YEAR, 2025, null, [2025])
+
+        then:
+        result.group().categories() == [new CategoryEntry('Technik', 7000L, false),
+                                        new CategoryEntry('Lebensmittel', 5000L, false)]
+        result.group().categories()*.amountCents().sum() == result.totalCents()
+        result.group().cartCount() == 5L
+        result.categories() == [new CategoryEntry('Lebensmittel', 3000L, false),
+                                new CategoryEntry('Haushalt', 1000L, false)]
+    }
+
+    def "DIV-72: Ausgleichszahlung +X/−X zählt nicht als Ausgabe und hebt sich in der Gruppe auf (keine Ausgleichszeile)"() {
+        given:
+        def ausgleich = TestData.category(name: 'Ausgleichszahlung', group: haushalt)
+        def carts = [einkauf(anna, 100.0, LocalDate.of(2025, 1, 10)),
+                     ausgleichszahlung(anna, 50.0, LocalDate.of(2025, 2, 1), ausgleich),
+                     ausgleichszahlung(ben, -50.0, LocalDate.of(2025, 2, 1), ausgleich)]
+
+        when:
+        def result = StatisticsCalculator.calculate(carts, anna.id, YEAR, 2025, null, [2025])
+
+        then:
+        result.totalCents() == 10000L
+        result.group().cartCount() == 1L
+        result.group().averageCents() == 10000L
+        result.group().categories() == [new CategoryEntry('Lebensmittel', 10000L, false)]
+        result.group().timeline()*.amountCents().take(2) == [10000L, 0L]
+    }
+
+    def "DIV-72 R1: Nur ein Rest einer Ausgleichszahlung: Anzahl 0, Durchschnitt 0, Zeitreihe und Kategorien ergeben die Gesamtausgabe"() {
+        given:
+        def ausgleich = TestData.category(name: 'Ausgleichszahlung', group: haushalt)
+        def carts = [ausgleichszahlung(anna, 30.0, LocalDate.of(2025, 2, 1), ausgleich)]
+
+        when:
+        def result = StatisticsCalculator.calculate(carts, anna.id, YEAR, 2025, null, [2025])
+
+        then:
+        result.totalCents() == 3000L
+        result.group().cartCount() == 0L
+        result.group().averageCents() == 0L
+        result.group().categories() == [new CategoryEntry('Ausgleichszahlung', 3000L, true)]
+        result.group().categories()*.amountCents().sum() == result.totalCents()
+        result.group().timeline()*.amountCents().sum() == result.totalCents()
+    }
+
+    def "DIV-72 AC10: Ohne Carts im Monat: Anzahl 0, Durchschnitt 0, Gruppen-Zeitreihe nur 0, keine Gruppenkategorien"() {
+        when:
+        def result = StatisticsCalculator.calculate([], anna.id, MONTH, 2027, 3, [])
+
+        then:
+        result.group().cartCount() == 0L
+        result.group().averageCents() == 0L
+        result.group().timeline()*.amountCents() == [0L, 0L, 0L, 0L, 0L]
+        result.group().categories() == []
+    }
+
+    def "DIV-72: Durchschnitt rundet HALF_UP auf Cent: #betraege ergeben #durchschnitt Cent"() {
+        given:
+        def carts = betraege.collect { einkauf(ben, it as Double, LocalDate.of(2025, 1, 1)) }
+
+        when:
+        def result = StatisticsCalculator.calculate(carts, anna.id, YEAR, 2025, null, [2025])
+
+        then:
+        result.group().cartCount() == betraege.size()
+        result.group().averageCents() == durchschnitt
+
+        where:
+        betraege             || durchschnitt
+        [5.0d, 3.0d, 2.0d]   || 333L
+        [0.03d, 0.02d]       || 3L
+        [-0.03d, -0.02d]     || -3L
+    }
+
     /** Cart mit fester ID; Kategorie und Gruppe standardmäßig Lebensmittel/Haushalt. */
     private Cart einkauf(User zahler, Double betrag, LocalDate datum, Category kategorie = lebensmittel, def gruppe = haushalt) {
         TestData.cart(id: TestData.nextId(), user: zahler, amount: betrag, datePurchased: DateUtils.toDate(datum),
                 category: kategorie, group: gruppe)
+    }
+
+    /** Cart einer Ausgleichszahlung (DIV-74): mit Settlement verknüpft, Kategorie beliebig. */
+    private Cart ausgleichszahlung(User zahler, Double betrag, LocalDate datum, Category kategorie, def gruppe = haushalt) {
+        def cart = einkauf(zahler, betrag, datum, kategorie, gruppe)
+        cart.settlement = TestData.settlement(id: TestData.nextId())
+        cart
     }
 }

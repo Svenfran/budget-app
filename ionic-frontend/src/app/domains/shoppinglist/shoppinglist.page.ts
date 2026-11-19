@@ -1,11 +1,11 @@
 import {
-  Component, computed, effect, ElementRef, OnDestroy, OnInit, QueryList, Renderer2, untracked, ViewChild, ViewChildren
+  Component, computed, effect, ElementRef, OnDestroy, OnInit, QueryList, Renderer2, signal, untracked, ViewChild, ViewChildren
 } from '@angular/core';
 import { CdkDrag, CdkDragDrop, CdkDragMove, CdkDropList } from '@angular/cdk/drag-drop';
 import { ShoppinglistService } from './service/shoppinglist.service';
 import { AddEditShoppinglistDto } from './model/add-edit-shoppinglist-dto';
 import { AlertService } from 'src/app/service/alert.service';
-import { AlertController, IonInput, IonItemSliding, LoadingController } from '@ionic/angular';
+import { AlertController, IonInput, IonItemSliding, LoadingController, ModalController } from '@ionic/angular';
 import { ShoppinglistDto } from './model/shoppinglist-dto';
 import { AddEditShoppingItemDto } from './model/add-edit-shopping-item-dto';
 import { ShoppingitemDto } from './model/shoppingitem-dto';
@@ -18,6 +18,7 @@ import { ShoppinglistOrderDto } from './model/shoppinglist-order-dto';
 import { ShoppingitemOrderDto } from './model/shoppingitem-order-dto';
 import { ShoppingitemMovedDto } from './model/shoppingitem-moved-dto';
 import { ShoppingSuggestionsDto } from './model/shopping-suggestions-dto';
+import { suggestionsSheetModalOptions } from './suggestions-sheet/suggestions-sheet-options';
 
 @Component({
   selector: 'app-shoppinglist',
@@ -46,6 +47,10 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
   public listMenuOpen = false;
   public listMenuListId: number | null = null;
   public listMenuEvent: Event | undefined;
+  /** Listen, deren Einkaufsvorschläge gerade geladen werden: Spinner im Chip statt Overlay, Chip gesperrt (DIV-69). */
+  public loadingSuggestions = signal<ReadonlySet<number>>(new Set());
+  /** Zählt Gruppen-/Sitzungswechsel: Antworten älterer Vorschlagsanfragen ändern den Ladezustand nicht mehr. */
+  private suggestionsGeneration = 0;
 
 
   constructor(
@@ -53,6 +58,7 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
     private alertService: AlertService,
     private alertCtrl: AlertController,
     private loadingCtrl: LoadingController,
+    private modalCtrl: ModalController,
     private webSocketService: WebSocketService,
     private groupService: GroupService,
     private translate: TranslateService,
@@ -70,6 +76,9 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
       const activeGroup = untracked(() => this.groupService.activeGroup());
       // ein unterbrochener Drag gibt den Puffer frei; Updates der alten Gruppe bzw. Sitzung verwirft der Service
       this.shoppinglistService.releaseUpdates();
+      // Vorschlagsanfragen der alten Gruppe bzw. Sitzung sperren die Chips nicht weiter
+      this.suggestionsGeneration++;
+      this.loadingSuggestions.set(new Set());
       this.isLoading = true;
       if (!activeGroup.flag?.includes(INIT_VALUES.DEFAULT)) {
         this.shoppingLists.set([]);
@@ -299,49 +308,51 @@ export class ShoppinglistPage implements OnInit, OnDestroy {
   }
 
   /**
-   * Einkaufsvorschläge (DIV-23): laden, zur Auswahl anbieten, nur die ausgewählten hinzufügen. Der Kontext (Gruppe,
-   * Sitzung, Liste) wird beim Öffnen festgehalten: nach einem Wechsel erscheint kein Dialog mehr, und ein noch offener
-   * Dialog sendet beim Bestätigen nichts.
+   * Einkaufsvorschläge (DIV-23): laden und im Bottom Sheet (DIV-69) zur Auswahl anbieten; das Sheet fügt nur die
+   * ausgewählten hinzu. Der Kontext (Gruppe, Sitzung, Liste) wird beim Öffnen festgehalten: nach einem Wechsel erscheint
+   * kein Sheet mehr, und ein noch offenes Sheet sendet beim Bestätigen nichts.
    */
-  onShowSuggestions(list: ShoppinglistDto): Promise<void> {
+  onShowSuggestions(list: ShoppinglistDto): void {
+    if (this.loadingSuggestions().has(list.id)) return;
     const inContext = this.shoppinglistService.captureSuggestionContext(list.id);
     const groupId = this.activeGroup.id;
-    return this.loadingCtrl.create({
-      message: this.translate.instant('alerts.shoppinglist.suggestions.loading')
-    }).then(loadingEl => {
-      loadingEl.present();
-      this.shoppinglistService.getSuggestions(groupId, list.id).subscribe({
-        next: (suggestions) => {
-          loadingEl.dismiss();
-          if (inContext()) this.presentSuggestions(groupId, list.id, suggestions, inContext);
-        },
-        error: (err) => {
-          loadingEl.dismiss();
-          console.error("Error loading shopping suggestions:", err);
-          if (inContext()) this.alertService.showToast(this.translate.instant('alerts.shoppinglist.suggestions.error'));
-        }
-      });
+    const generation = this.suggestionsGeneration;
+    // nach einem Gruppen-/Sitzungswechsel gehört der Ladezustand bereits einer neuen Anfrage (oder keiner)
+    const done = () => {
+      if (generation === this.suggestionsGeneration) this.setSuggestionsLoading(list.id, false);
+    };
+    this.setSuggestionsLoading(list.id, true);
+    this.shoppinglistService.getSuggestions(groupId, list.id).subscribe({
+      next: (suggestions) => {
+        done();
+        if (inContext()) this.presentSuggestions(groupId, list, suggestions, inContext);
+      },
+      error: (err) => {
+        done();
+        console.error("Error loading shopping suggestions:", err);
+        if (inContext()) this.alertService.showToast(this.translate.instant('alerts.shoppinglist.suggestions.error'));
+      }
     });
   }
 
-  private presentSuggestions(groupId: number, listId: number, suggestions: ShoppingSuggestionsDto, inContext: () => boolean) {
-    const empty = suggestions.names.length === 0;
-    const message = empty
-      ? this.translate.instant('alerts.shoppinglist.suggestions.empty')
-      : suggestions.defaultSuggestions ? this.translate.instant('alerts.shoppinglist.suggestions.defaults_hint') : undefined;
-    const cancel = { text: this.translate.instant('alerts.shoppinglist.suggestions.cancel'), role: 'cancel' };
-    this.alertCtrl.create({
-      header: this.translate.instant('alerts.shoppinglist.suggestions.header'),
-      message,
-      inputs: suggestions.names.map(name => ({ type: 'checkbox' as const, label: name, value: name })),
-      buttons: empty ? [cancel] : [cancel, {
-        text: this.translate.instant('alerts.shoppinglist.suggestions.ok'),
-        handler: (selected: string[]) => {
-          if (!inContext() || !selected?.length) return;
-          this.shoppinglistService.addItemsToShoppingList({ groupId, shoppingListId: listId, names: selected });
-        }
-      }]
-    }).then(alertEl => alertEl.present());
+  private setSuggestionsLoading(listId: number, loading: boolean) {
+    this.loadingSuggestions.update(ids => {
+      const next = new Set(ids);
+      if (loading) next.add(listId); else next.delete(listId);
+      return next;
+    });
+  }
+
+  private presentSuggestions(groupId: number, list: ShoppinglistDto, suggestions: ShoppingSuggestionsDto, inContext: () => boolean) {
+    const props = { listName: list.name, suggestions, groupId, listId: list.id, inContext };
+    return this.modalCtrl.create(suggestionsSheetModalOptions(props, signal(false))).then(modalEl => {
+      // create() ist asynchron: ist der Kontext inzwischen weg, das Sheet gar nicht erst zeigen
+      if (!inContext()) {
+        modalEl.remove();
+        return;
+      }
+      return modalEl.present();
+    });
   }
 
   deleteListOfItems(list: ShoppinglistDto) {

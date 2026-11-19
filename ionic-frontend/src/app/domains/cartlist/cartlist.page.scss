@@ -5,6 +5,7 @@
     font-size: small;
     .cart-name-date {
         display: flex;
+        flex-shrink: 0; // Datum nie verdrängen (DIV-79)
     }
 }
 
@@ -12,6 +13,27 @@
     display: flex;
     align-items: center;
     gap: 0.25rem;
+    // Füllt den Platz bis zum Datum. contain: inline-size, damit der (nowrap-)Name nicht in die Inhaltsbreite eingeht:
+    // der CDK-Wrapper ist absolut positioniert und richtet sich nach ihr – ein langer Name machte sonst die ganze Liste
+    // breiter als den Bildschirm (versteckt durch overflow-x, Datum außerhalb).
+    flex: 1 1 0;
+    min-width: 0;
+    contain: inline-size;
+    margin-right: 0.5rem; // Abstand zum Datum, auch bei gekürztem Namen
+
+    ion-icon {
+        flex-shrink: 0;
+    }
+}
+
+// Mitgliedsname einzeilig, lange Namen per Ellipsis (DIV-79, statt slice im Template); Zeilenhöhe bleibt gleich.
+// Gilt auch für gelöschte/entfernte Nutzer (kursiv mit Zusatz), damit deren Zeile nicht umbricht.
+.cart-user {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .category-circle {
@@ -27,21 +49,176 @@
     }
 }
 
-.total {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-weight: bold;
-    padding-left: 22px;
-    padding-right: 36px;
+// Zusammenfassung und Filterzeile unter dem Seitentitel (DIV-79). Keine festen Breiten: bei großer Systemschrift
+// brechen die Bereiche um, statt zu überlappen oder Icons zu verkleinern.
+// Hintergrund wie der Seiteninhalt (Light: Grau, Dark: Schwarz); die Titel-Toolbar darüber behält ihre Farbe.
+.spendings-toolbar {
+    --background: var(--ion-background-color);
+    --min-height: 0;
+    --padding-top: 0;
+    --padding-bottom: 0;
+    --padding-start: 0;
+    --padding-end: 0;
 }
 
+// Seitlich wie das Listen-Grid (ion-padding), damit die Spalten exakt übereinander liegen
+.spendings-toolbar__grid {
+    padding: 0 var(--ion-padding, 16px) 0.5rem;
+}
+
+// Betrag in drei Stufen: 1. neben der Bezeichnung; 2. passt beides nicht, rutscht die Summe als Ganzes rechtsbündig in
+// eine eigene Zeile (flex-wrap bricht vor dem Schrumpfen um); 3. ist sie allein breiter als die Zeile, bricht sie
+// innerhalb um – nie abgeschnitten, nie horizontaler Überlauf, Schrift nicht verkleinert. Deshalb kein nowrap.
+.spendings-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 1rem;
+    row-gap: 0.25rem;
+    margin-top: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    // wie die Listeneinträge, hebt sich vom Seitenhintergrund ab (Light: Weiß auf Grau, Dark: Dunkelgrau auf Schwarz)
+    background-color: var(--ion-item-background);
+}
+
+.spendings-summary__info {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 8rem;
+    min-width: 0;
+}
+
+.spendings-summary__label {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    font-weight: 600;
+}
+
+.spendings-summary__count {
+    color: var(--ion-color-medium);
+    font-size: 0.875rem;
+}
+
+.spendings-summary__sum {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    margin-left: auto;
+    text-align: end;
+    overflow-wrap: anywhere;
+    font-size: 0.875rem;
+    font-weight: 700;
+}
+
+// row-gap ≥ 12px, damit sich die erweiterten Touch-Flächen umgebrochener Zeilen nicht überlappen
+.spendings-filter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 0.5rem;
+    row-gap: 0.75rem;
+    padding-top: 0.75rem;
+}
+
+// Optisch kompakt (32px wie ion-chip), Touch-Fläche trotzdem mindestens 44 × 44px: unsichtbare, zentrierte Erweiterung,
+// unabhängig von Rahmen und Elementgröße. Icons und Entfernen-Button schrumpfen nie (flex-shrink: 0).
+%touch-target-44 {
+    position: relative;
+
+    &::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: max(100%, 44px);
+        height: max(100%, 44px);
+        transform: translate(-50%, -50%);
+    }
+}
+
+.spendings-filter__button {
+    @extend %touch-target-44;
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0.375rem;
+    min-height: 32px;
+    padding: 0 0.875rem;
+    border: 1px solid var(--ion-color-primary);
+    border-radius: 999px;
+    background: none;
+    color: var(--ion-color-primary);
+    font: inherit;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+
+    ion-icon {
+        flex-shrink: 0;
+        font-size: 1.125rem;
+    }
+}
+
+// Aktiver Filter: gefüllt statt umrandet
+.spendings-filter__button--active {
+    background-color: var(--ion-color-primary);
+    color: var(--ion-color-primary-contrast);
+}
+
+.spendings-filter__chip {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 32px;
+    padding-left: 0.75rem;
+    border-radius: 999px;
+    background-color: rgba(var(--ion-color-primary-rgb), 0.15);
+    color: var(--ion-color-primary);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.spendings-filter__chip-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.spendings-filter__chip-remove {
+    @extend %touch-target-44;
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+
+    ion-icon {
+        flex-shrink: 0;
+        font-size: 1.125rem;
+    }
+}
+
+// Breiter als der Text bei Standardschrift braucht, damit Labels bei vergrößerter Systemschrift nicht mitten im Wort umbrechen
 ion-popover {
-    --width: 14rem;
+    --width: min(16rem, calc(100vw - 2rem));
 }
 
 .pop-icon {
-    margin-right: 1rem;
+    margin-right: 0.75rem;
 }
 
 .titlestyle {
@@ -60,10 +237,16 @@ ion-popover {
     align-items: center;
 }
 
-// Nur vertikal scrollen: sonst lässt sich der Inhalt seitlich unter dem Viewport verschieben, wenn er minimal breiter
-// ist (Wrapper des CDK hat nur min-width) und keine Swipe-Geste die horizontale Bewegung übernimmt (fremde Carts)
-.cart-scroll {
-  height: calc(100vh - 150px);
+// Einziger Scroll-Container der Seite (DIV-79, Muster der Einkaufsliste): füllt ion-content und damit den Platz unter
+// dem Header, egal wie hoch dieser ist. Nur vertikal scrollen: sonst lässt sich der Inhalt seitlich unter dem Viewport
+// verschieben, wenn er minimal breiter ist (Wrapper des CDK hat nur min-width) und keine Swipe-Geste die horizontale
+// Bewegung übernimmt (fremde Carts)
+.ion-content-scroll-host {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-x: none;

@@ -7,7 +7,8 @@ import { User } from 'src/app/auth/user';
 import { AlertService } from 'src/app/service/alert.service';
 import { StorageService } from 'src/app/service/storage.service';
 import { environment } from 'src/environments/environment';
-import { aLoggedInUser, REFERENCE_DATE } from 'src/testing/test-data';
+import { GroupService } from 'src/app/service/group.service';
+import { aGroup, aLoggedInUser, REFERENCE_DATE } from 'src/testing/test-data';
 import { alertServiceSpy, authServiceStub, provideServiceTesting, storageServiceFake } from 'src/testing/test-providers';
 import { StatisticsDto } from '../model/statistics-dto';
 import { StatisticsFilter } from '../model/statistics-filter';
@@ -25,7 +26,8 @@ describe('StatisticsService', () => {
 
   const statisticsDto = (overrides: Partial<StatisticsDto> = {}): StatisticsDto => ({
     groupId: null, period: 'YEAR', year: 2025, month: null, totalSpent: 100, paidByUser: 60, paidCartCount: 3, currentBalance: 10,
-    availableYears: [2025], timeline: [], categories: [], ...overrides,
+    availableYears: [2025], timeline: [], categories: [],
+    groupView: { cartCount: 0, averagePerCart: 0, memberCount: 0, timeline: [], categories: [] }, ...overrides,
   });
   const isStatisticsRequest = (request: HttpRequest<unknown>) => request.url === api;
   const params = (request: TestRequest) => request.request.params.keys()
@@ -246,6 +248,25 @@ describe('StatisticsService', () => {
       expect(service.statistics()).toBeNull();
       after.flush(statisticsDto({ totalSpent: 100 }));
       expect(service.statistics()?.totalSpent).toBe(100);
+    });
+
+    it('lädt nicht, wenn der Logout die Seitenleiste leert, und verwirft die alten Daten (DIV-59)', () => {
+      const groupService = TestBed.inject(GroupService);
+      const sideNavIds = () => groupService.groupsSideNav().map(group => group.id);
+      groupService.groupsSideNav.set([aGroup({ id: 1 }), aGroup({ id: 2 })]);
+      service.groupsChanged(sideNavIds());
+      service.load();
+      http.expectOne(isStatisticsRequest).flush(statisticsDto());
+
+      user$.next(null);
+      // so ruft der StatisticsPage-Effect groupsChanged nach dem Logout auf
+      service.groupsChanged(sideNavIds());
+
+      expect(sideNavIds()).withContext('Seitenleiste nach Logout').toEqual([]);
+      http.expectNone(isStatisticsRequest);
+      expect(service.statistics()).toBeNull();
+      expect(service.isLoading()).toBeFalse();
+      expect(service.hasError()).toBeFalse();
     });
   });
 });

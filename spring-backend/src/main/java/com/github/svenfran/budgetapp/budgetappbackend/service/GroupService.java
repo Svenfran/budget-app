@@ -35,6 +35,8 @@ public class GroupService {
 
     private final ShoppingPurchaseRepository shoppingPurchaseRepository;
 
+    private final SettlementRepository settlementRepository;
+
     private final GroupMembershipHistoryService groupMembershipHistoryService;
 
     private final GroupMembershipHistoryRepository gmhRepository;
@@ -55,6 +57,7 @@ public class GroupService {
                         CategoryRepository categoryRepository, ShoppingListRepository shoppingListRepository,
                         ShoppingItemRepository shoppingItemRepository,
                         ShoppingPurchaseRepository shoppingPurchaseRepository,
+                        SettlementRepository settlementRepository,
                         GroupMembershipHistoryService groupMembershipHistoryService,
                         GroupMembershipHistoryRepository gmhRepository, DataLoaderService dataLoaderService,
                         VerificationService verificationService, NotificationService notificationService,
@@ -66,6 +69,7 @@ public class GroupService {
         this.shoppingListRepository = shoppingListRepository;
         this.shoppingItemRepository = shoppingItemRepository;
         this.shoppingPurchaseRepository = shoppingPurchaseRepository;
+        this.settlementRepository = settlementRepository;
         this.groupMembershipHistoryService = groupMembershipHistoryService;
         this.gmhRepository = gmhRepository;
         this.dataLoaderService = dataLoaderService;
@@ -183,6 +187,8 @@ public class GroupService {
         if (!group.getMembers().isEmpty()) group.removeAllMembers();
         if (!groupMembershipToRemove.isEmpty()) gmhRepository.deleteAll(groupMembershipToRemove);
         if (!group.getCarts().isEmpty()) cartRepository.deleteAll(group.getCarts());
+        // nach den Carts: cart.settlement_id verweist auf settlement (DIV-74)
+        settlementRepository.deleteByGroupId(group.getId());
         if (!group.getCategories().isEmpty()) categoryRepository.deleteAll(group.getCategories());
         if (!group.getShoppingLists().isEmpty()) {
             group.getShoppingLists().forEach(list -> shoppingItemRepository.deleteAll(list.getShoppingItems()));
@@ -225,6 +231,8 @@ public class GroupService {
             var category = new Category();
             category.setName(translator.translate(categoryName));
             category.setGroup(group);
+            // Settlement-Kategorie per Kennzeichen statt Name (DIV-74)
+            category.setSettlement(SettlementService.SETTLEMENT_CATEGORY_KEY.equals(categoryName));
             categoryRepository.save(category);
         }
     }
@@ -239,6 +247,10 @@ public class GroupService {
     }
 
     public void setIsDeletedForCart(Group group, User member, boolean delete) {
+        // DIV-74 (A11): Dieser Weg und calculateAveragePerMember schreiben Carts komplett zurück. Erst alle Settlements der
+        // Gruppe sperren, dann Carts laden – sonst könnte ein gleichzeitig geändertes Settlement-Paar mit Altwerten
+        // überschrieben werden. Alle Aufrufer rufen diese Methode vor calculateAveragePerMember auf.
+        settlementRepository.lockAllByGroupId(group.getId());
         var cartsOfMember = cartRepository.findCartsByGroupAndUser(group, member);
         if (!cartsOfMember.isEmpty()) {
             cartsOfMember.forEach(cart -> cart.setDeleted(delete));

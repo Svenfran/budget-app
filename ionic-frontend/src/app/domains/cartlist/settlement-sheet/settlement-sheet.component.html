@@ -1,0 +1,118 @@
+<!-- Aufbau wie der Ausgabenfilter (DIV-71): Kopf und Footer fest, nur der Mittelteil scrollt.
+     Header, Untertitel und Aktionsbereich: gemeinsamer Basis-Style (src/theme/bottom-sheet.scss). -->
+<div class="settlement-sheet">
+  <div class="sheet-top">
+    <div class="sheet-header">
+      <ion-icon name="swap-horizontal-outline" color="primary" aria-hidden="true"></ion-icon>
+      <div class="sheet-title">
+        <h2>{{ (settlement ? 'domains.spendings.overlay.settlementpayment.title_edit' : 'domains.spendings.overlay.settlementpayment.title') | translate }}</h2>
+        <p class="sheet-subtitle">{{ (settlement ? 'domains.spendings.overlay.settlementpayment.subtitle_edit' : 'domains.spendings.overlay.settlementpayment.subtitle') | translate }}</p>
+      </div>
+      <ion-button fill="clear" color="medium" class="btn-close" (click)="close()" [disabled]="saving()"
+                  [attr.aria-label]="'domains.spendings.overlay.settlementpayment.btn_cancel' | translate">
+        <ion-icon name="close" slot="icon-only"></ion-icon>
+      </ion-button>
+    </div>
+  </div>
+
+  <div class="sheet-body">
+    <!-- Kein <form>-Element: Enter darf nicht absenden, nur die Tastatur schließen (wie DIV-71). -->
+    <div *ngIf="showForm(); else noRecipients" [formGroup]="form" class="settlement-form">
+      <!-- Richtung (DIV-74): beim Anlegen wählbar, im Edit-Modus aus der Rolle und gesperrt (Zahler nicht änderbar) -->
+      <ion-segment class="direction-segment" [value]="direction()" [disabled]="!!settlement || saving()"
+                   (ionChange)="changeDirection($event.detail.value)">
+        <ion-segment-button value="paid" class="direction-paid">
+          <ion-label class="ion-text-wrap">{{ 'domains.spendings.overlay.settlementpayment.direction_paid' | translate }}</ion-label>
+        </ion-segment-button>
+        <ion-segment-button value="received" class="direction-received">
+          <ion-label class="ion-text-wrap">{{ 'domains.spendings.overlay.settlementpayment.direction_received' | translate }}</ion-label>
+        </ion-segment-button>
+      </ion-segment>
+
+      <ion-item lines="none" class="settlement-field">
+        <ion-icon name="cash-outline" slot="start" aria-hidden="true"></ion-icon>
+        <ion-input formControlName="amount" class="input-amount" type="number" inputmode="decimal"
+                   enterkeyhint="done" labelPlacement="floating"
+                   [label]="'domains.spendings.overlay.settlementpayment.amount' | translate"
+                   (keyup.enter)="blurInput($event)"></ion-input>
+      </ion-item>
+      <p class="field-error error-amount" *ngIf="showError(amount)" role="alert">
+        <ng-container *ngIf="amount.errors?.['required']">{{ 'global.errors.required' | translate }}</ng-container>
+        <ng-container *ngIf="amount.errors?.['pattern']">{{ 'global.errors.invalid_amount' | translate }}</ng-container>
+        <ng-container *ngIf="amount.errors?.['min'] && !amount.errors?.['pattern']">{{ 'domains.spendings.overlay.settlementpayment.amount_positive' | translate }}</ng-container>
+      </p>
+
+    <!-- Platzhalter statt schwebendem Label: ion-select schneidet das schwebende Label bei großer Schrift ab (DIV-71). -->
+      <!-- Empfänger: im Edit-Modus des Empfängers fest (DIV-74), sonst wählbar -->
+      <ion-item *ngIf="!canSelectReceiver()" lines="none" class="settlement-field payer-field">
+        <ion-icon name="person-outline" slot="start" aria-hidden="true"></ion-icon>
+        <ion-label class="ion-text-wrap">
+          <span class="date-caption">{{ 'domains.spendings.overlay.settlementpayment.paid_by' | translate }}</span>
+          <span class="date-value payer-name">{{ settlement?.payer?.userName }}</span>
+        </ion-label>
+      </ion-item>
+      <ion-item *ngIf="canSelectReceiver()" lines="none" class="settlement-field">
+        <ion-icon name="person-outline" slot="start" aria-hidden="true"></ion-icon>
+        <ion-select formControlName="memberId" class="select-member"
+                    [placeholder]="memberPlaceholderKey() | translate"
+                    [attr.aria-label]="memberPlaceholderKey() | translate"
+                    [okText]="'global.selections.btn_ok' | translate"
+                    [cancelText]="'global.selections.btn_cancel' | translate"
+                    [interfaceOptions]="{ header: (memberPlaceholderKey() | translate) }"
+                    (ionDismiss)="memberSelectClosed.set(true)">
+          <ion-select-option *ngFor="let member of selectableRecipients()" [value]="member.id">{{ member.userName }}</ion-select-option>
+        </ion-select>
+      </ion-item>
+      <p class="field-error error-member" *ngIf="showMemberError()" role="alert">
+        {{ 'global.errors.required' | translate }}
+      </p>
+
+      <ion-item lines="none" class="settlement-field date-field" [button]="true" [detail]="false"
+                [disabled]="saving()" (click)="openDatePicker()">
+        <ion-icon name="calendar-outline" slot="start" aria-hidden="true"></ion-icon>
+        <ion-label class="ion-text-wrap">
+          <span class="date-caption">{{ 'domains.spendings.overlay.settlementpayment.date' | translate }}</span>
+          <span class="date-value">{{ displayDate() }}</span>
+        </ion-label>
+      </ion-item>
+
+      <!-- Inline-Picker; sein Inhalt wird bei jedem Öffnen neu erzeugt und zeigt so immer den Formularwert. -->
+      <ion-modal class="settlement-date-picker date-picker-modal" [isOpen]="openPicker()" (didDismiss)="onPickerDismissed()">
+        <ng-template>
+          <ion-content>
+            <ion-datetime #datetime
+                          [locale]="currentLang()"
+                          size="cover"
+                          presentation="date"
+                          [firstDayOfWeek]="1"
+                          [preferWheel]="false"
+                          [value]="pickerValue()"
+                          [min]="minDate"
+                          [max]="maxDate"
+                          [isDateEnabled]="isDateEnabled">
+              <ion-buttons slot="buttons">
+                <ion-button color="primary" class="btn-picker-cancel" (click)="closeDatePicker()">{{ 'global.date_picker.btn_cancel' | translate }}</ion-button>
+                <ion-button color="primary" class="btn-picker-ok" (click)="pickDate(datetime)">{{ 'global.date_picker.btn_ok' | translate }}</ion-button>
+              </ion-buttons>
+            </ion-datetime>
+          </ion-content>
+        </ng-template>
+      </ion-modal>
+    </div>
+
+    <ng-template #noRecipients>
+      <p class="no-members">{{ 'domains.spendings.overlay.settlementpayment.no_members' | translate }}</p>
+    </ng-template>
+  </div>
+
+  <!-- Nur „Speichern“ in voller Breite; geschlossen wird über das X oben (kein doppeltes „Abbrechen“, Nutzerwunsch). -->
+  <div class="sheet-footer" *ngIf="showForm()">
+    <div class="sheet-actions">
+      <ion-button expand="block" class="btn-save" (click)="save()" [disabled]="form.invalid || saving()">
+        <ion-spinner *ngIf="saving()" name="crescent" slot="start"></ion-spinner>
+        <ion-icon *ngIf="!saving()" name="checkmark" slot="start"></ion-icon>
+        {{ 'domains.spendings.overlay.settlementpayment.btn_save' | translate }}
+      </ion-button>
+    </div>
+  </div>
+</div>

@@ -18,7 +18,8 @@
             "deleted": "User deleted",
             "removed": "User removed"
         },
-        "language": "Language"
+        "language": "Language",
+        "change_group": "Switch group, current: {{name}}"
     },
     "navigation": {
         "welcome": "Hi {{name}}!",
@@ -72,8 +73,16 @@
             "total": "Total",
             "export_menu": "Export",
             "settlement": "Repayment",
+            "settlement_menu": "Settle up",
             "filter": "Filter",
+            "filter_active": "Filter active",
+            "remove_filter": "Remove filter",
+            "count_one": "{{count}} expense",
+            "count_other": "{{count}} expenses",
             "no_spendings": "No expenses available!",
+            "duplicate": "Duplicate",
+            "edit": "Edit",
+            "delete": "Delete",
             "toast": {
                 "message": "Download successfull."
             },
@@ -99,11 +108,26 @@
             "overlay": {
                 "settlementpayment": {
                     "title": "Repayment",
+                    "subtitle": "Record a payment to a member of the group.",
+                    "btn_save": "Save",
+                    "placeholder_member": "To member",
+                    "placeholder_member_from": "From member",
+                    "direction_paid": "I paid to",
+                    "direction_received": "I received from",
                     "amount": "Amount in €*",
-                    "to_member": "To member*",
+                    "amount_positive": "Amount must be greater than 0",
+                    "title_edit": "Edit repayment",
+                    "subtitle_edit": "Changes apply to both parties.",
+                    "paid_by": "Paid by",
                     "date": "Date*",
                     "btn_cancel": "Cancel",
-                    "no_members": "No members available"
+                    "no_members": "No members available",
+                    "discard": {
+                        "header": "Discard entries?",
+                        "message": "Your repayment entries will be lost.",
+                        "btn_discard": "Discard",
+                        "btn_continue": "Keep editing"
+                    }
                 },
                 "filter": {
                     "header": "Filter",
@@ -114,7 +138,13 @@
                     "date_from": "Date from",
                     "date_to": "Date to",
                     "btn_reset": "Reset",
-                    "btn_cancel": "Cancel"
+                    "btn_cancel": "Cancel",
+                    "subtitle": "Filter expenses by various criteria",
+                    "section_content": "Content",
+                    "section_assignment": "Category & creator",
+                    "section_period": "Period",
+                    "btn_apply": "Apply filter",
+                    "error_date_range": "\"Date from\" must not be after \"Date to\"."
                 }
             }
         },
@@ -137,29 +167,13 @@
                 "loading": "Create Group...",
                 "placeholder": "Group name"
             },
-            "edit": {
-                "header": "Group name:",
-                "cancel": "Cancel",
-                "ok": "OK",
-                "loading": "Update group..."
-            },
             "delete": {
-                "header": "Delete group:",
-                "message": "Do you really want to delete the group \"{{groupName}}\" including all expenses and categories?",
-                "cancel": "No",
-                "ok": "Yes",
-                "loading": "Delete group..."
+                "header": "Delete group?",
+                "message": "Do you really want to delete the group \"{{groupName}}\"? All expenses, settlement payments, shopping lists, categories and other group data will be permanently removed.",
+                "cancel": "Cancel",
+                "ok": "Delete"
             },
             "add_member": {
-                "header": "Add member:",
-                "cancel": "Cancel",
-                "ok": "OK",
-                "loading": "Add member...",
-                "placeholder": "E-mail address",
-                "error_message_page": {
-                    "header": "Incorrect e-mail address!",
-                    "message": "Please enter a valid e-mail address."
-                },
                 "error_message_service": {
                     "message_success": "User has been added to the group.",
                     "message_no_exists": "User does not exist.",
@@ -173,6 +187,19 @@
                 "message": "Do you really want to remove the member \"{{memberName}}\" from the group \"{{group}}\" including all saved expenses?",
                 "cancel": "No",
                 "ok": "Yes"
+            },
+            "change_owner": {
+                "header": "Make admin?",
+                "message": "Should \"{{memberName}}\" become admin of the group \"{{group}}\"? You will lose your admin rights.",
+                "cancel": "Cancel",
+                "ok": "Make admin"
+            },
+            "error": {
+                "add_group": "The group could not be created.",
+                "update_group": "The group could not be saved.",
+                "delete_group": "The group could not be deleted.",
+                "remove_member": "The member could not be removed.",
+                "change_owner": "The group admin could not be changed."
             }
         },
         "category": {
@@ -213,6 +240,27 @@
                 "header": "Date not in the period of membership",
                 "message_new_edit": "You were not a member of the group at the time selected. Please choose another date.",
                 "message_settlementpayment": "The user \"{{userName}}\" was not a member of the group at the time selected. Please choose another date."
+            },
+            "delete_settlement": {
+                "header": "Delete repayment:",
+                "message": "Do you really want to delete the repayment \"{{cartTitle}}\"? It will be removed for both parties."
+            },
+            "settlement_delete_failed": {
+                "header": "Repayment not deleted",
+                "message": "The repayment could not be deleted. Please try again."
+            },
+            "settlement_already_deleted": "The repayment has already been deleted.",
+            "settlement_update_failed": {
+                "header": "Repayment not saved",
+                "message": "The change could not be saved. Your input is kept, please try again."
+            },
+            "settlement_not_found": {
+                "header": "Repayment no longer exists",
+                "message": "The repayment has been deleted in the meantime. The list is being reloaded."
+            },
+            "settlement_failed": {
+                "header": "Repayment not saved",
+                "message": "The repayment could not be saved. Your entries have been kept, please try again."
             }
         },
         "forgot_password": {
@@ -287,13 +335,19 @@
                 "error": "The change could not be saved."
             },
             "suggestions": {
-                "header": "Shopping suggestions:",
-                "defaults_hint": "No purchases in this list yet – general suggestions:",
+                "header": "Shopping suggestions",
                 "empty": "No suggestions – all previous purchases are already on the list.",
-                "cancel": "Cancel",
-                "ok": "Add",
                 "loading": "Loading suggestions...",
-                "error": "The suggestions could not be loaded."
+                "error": "The suggestions could not be loaded.",
+                "subtitle_history": "Frequently bought items",
+                "subtitle_defaults": "General suggestions",
+                "selected_count": "{{count}} of {{total}} selected",
+                "select_all": "Select all",
+                "deselect_all": "Deselect all",
+                "add_none": "Add items",
+                "add_one": "Add {{count}} item",
+                "add_other": "Add {{count}} items",
+                "close": "Close"
             }
         },
         "user_profile": {
@@ -430,15 +484,49 @@
         "group": {
             "members": "Members:"
         },
-        "group_members": {
-            "title": "Group members",
-            "change_admin": "Change group admin",
-            "no_members": "No members available!"
+        "menu": {
+            "more_actions": "More actions",
+            "members": "Manage members",
+            "members_hint": "Show members, set the admin and add members",
+            "edit": "Edit group",
+            "edit_hint": "Change name",
+            "delete": "Delete group",
+            "delete_hint": "Permanently remove the group and all its data"
+        },
+        "form_sheet": {
+            "title_create": "Add group",
+            "title_edit": "Edit group",
+            "name_label": "Group name",
+            "name_required": "Please enter a group name.",
+            "name_too_long": "The group name is too long.",
+            "btn_cancel": "Cancel",
+            "btn_create": "Create",
+            "btn_save": "Save"
+        },
+        "members_sheet": {
+            "title": "Manage members",
+            "add_title": "Add member",
+            "btn_add_member": "Add member",
+            "section_members": "MEMBERS",
+            "admin_badge": "Admin",
+            "no_members": "No other members yet.",
+            "make_admin": "Make admin",
+            "remove": "Remove member",
+            "member_actions": "Actions for {{memberName}}",
+            "email_label": "Email address",
+            "btn_cancel": "Cancel",
+            "btn_add": "Add",
+            "btn_close": "Close",
+            "email_invalid": "Please enter a valid email address.",
+            "admin_hint": "The group admin can remove members, change the admin and add new members.",
+            "load_error": "The members could not be loaded.",
+            "btn_retry": "Try again"
         }
     },
     "carts": {
         "title_add": "Add purchase",
         "title_edit": "Edit purchase",
+        "duplicate_hint": "Data copied from an existing expense",
         "form": {
             "title": "Title*",
             "amount": "Amount in €*",
@@ -474,15 +562,23 @@
             "month": "Month",
             "year": "Year"
         },
+        "perspective": {
+            "personal": "Personal",
+            "group": "Group expenses"
+        },
         "kpi": {
             "total_spent": "Total spending",
             "paid_by_user": "Paid by you",
             "current_balance": "Current balance",
             "current_balance_hint": "Independent of the period",
-            "paid_cart_count": "Paid purchases"
+            "paid_cart_count": "Paid purchases",
+            "cart_count": "Number of expenses",
+            "average_per_cart": "Average per expense",
+            "member_count": "Number of members"
         },
         "timeline": {
             "title": "Paid by you",
+            "title_group": "Group expenses",
             "week": "CW {{week}}"
         },
         "categories": {
@@ -492,6 +588,7 @@
             "no_chart": "No category with a positive amount for the chart."
         },
         "empty": "No spending of your own in the selected period.",
+        "empty_group": "No spending in the selected period.",
         "error": "The statistics could not be loaded.",
         "retry": "Reload"
     },

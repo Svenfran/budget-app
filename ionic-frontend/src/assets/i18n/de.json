@@ -18,7 +18,8 @@
             "deleted": "Nutzer gelöscht",
             "removed": "Nutzer entfernt"
         },
-        "language": "Sprache"
+        "language": "Sprache",
+        "change_group": "Gruppe wechseln, aktuell: {{name}}"
     },
     "navigation": {
         "welcome": "Hallo {{name}}!",
@@ -72,8 +73,16 @@
             "total": "Gesamt",
             "export_menu": "Exportieren",
             "settlement": "Ausgleichszahlung",
+            "settlement_menu": "Ausgleichen",
             "filter": "Filter",
+            "filter_active": "Filter aktiv",
+            "remove_filter": "Filter entfernen",
+            "count_one": "{{count}} Ausgabe",
+            "count_other": "{{count}} Ausgaben",
             "no_spendings": "Keine Ausgaben vorhanden!",
+            "duplicate": "Duplizieren",
+            "edit": "Bearbeiten",
+            "delete": "Löschen",
             "toast": {
                 "message": "Datei erfolgreich heruntergeladen."
             },
@@ -99,11 +108,26 @@
             "overlay": {
                 "settlementpayment": {
                     "title": "Ausgleichszahlung",
+                    "subtitle": "Erfasse eine Zahlung an ein Mitglied der Gruppe.",
+                    "btn_save": "Speichern",
+                    "placeholder_member": "An Mitglied",
+                    "placeholder_member_from": "Von Mitglied",
+                    "direction_paid": "Ich habe gezahlt an",
+                    "direction_received": "Ich habe erhalten von",
                     "amount": "Betrag in €*",
-                    "to_member": "An Mitglied*",
+                    "amount_positive": "Betrag muss größer als 0 sein",
+                    "title_edit": "Ausgleichszahlung bearbeiten",
+                    "subtitle_edit": "Änderungen gelten für beide Beteiligten.",
+                    "paid_by": "Gezahlt von",
                     "date": "Datum*",
                     "btn_cancel": "Abbrechen",
-                    "no_members": "Keine Mitglieder vorhanden"
+                    "no_members": "Keine Mitglieder vorhanden",
+                    "discard": {
+                        "header": "Eingaben verwerfen?",
+                        "message": "Deine Eingaben zur Ausgleichszahlung gehen verloren.",
+                        "btn_discard": "Verwerfen",
+                        "btn_continue": "Weiter bearbeiten"
+                    }
                 },
                 "filter": {
                     "header": "Filter",
@@ -114,7 +138,13 @@
                     "date_from": "Datum von",
                     "date_to": "Datum bis",
                     "btn_reset": "Reset",
-                    "btn_cancel": "Abbrechen"
+                    "btn_cancel": "Abbrechen",
+                    "subtitle": "Ausgaben nach verschiedenen Kriterien filtern",
+                    "section_content": "Inhalt",
+                    "section_assignment": "Kategorie & Ersteller",
+                    "section_period": "Zeitraum",
+                    "btn_apply": "Filter anwenden",
+                    "error_date_range": "„Datum von“ darf nicht nach „Datum bis“ liegen."
                 }
             }
         },
@@ -137,29 +167,13 @@
                 "loading": "Erstelle Gruppe...",
                 "placeholder": "Gruppenname"
             },
-            "edit": {
-                "header": "Gruppenname:",
-                "cancel": "Abbrechen",
-                "ok": "OK",
-                "loading": "Aktualisiere Gruppe..."
-            },
             "delete": {
-                "header": "Gruppe löschen:",
-                "message": "Möchtest du die Gruppe \"{{groupName}}\" wirklich löschen inkl. aller Ausgaben und Kategorien?",
-                "cancel": "Nein",
-                "ok": "Ja",
-                "loading": "Lösche Gruppe..."
+                "header": "Gruppe löschen?",
+                "message": "Möchtest du die Gruppe „{{groupName}}“ wirklich löschen? Dabei werden alle Ausgaben, Ausgleichszahlungen, Einkaufslisten, Kategorien und weiteren Gruppendaten endgültig entfernt.",
+                "cancel": "Abbrechen",
+                "ok": "Löschen"
             },
             "add_member": {
-                "header": "Mitglied hinzufügen:",
-                "cancel": "Abbrechen",
-                "ok": "OK",
-                "loading": "Füge Mitglied hinzu...",
-                "placeholder": "E-Mail-Adresse",
-                "error_message_page": {
-                    "header": "Fehlerhafte E-Mail-Adresse!",
-                    "message": "Bitte gib eine gültige E-Mail-Adresse an."
-                },
                 "error_message_service": {
                     "message_success": "Benutzer wurde zur Gruppe hinzugefügt.",
                     "message_no_exists": "Benutzer existiert nicht.",
@@ -173,6 +187,19 @@
                 "message": "Möchtest du das Mitglied \"{{memberName}}\" wirklich aus der Gruppe \"{{group}}\" entfernen inkl. aller gespeicherten Ausgaben?",
                 "cancel": "Nein",
                 "ok": "Ja"
+            },
+            "change_owner": {
+                "header": "Zum Admin machen?",
+                "message": "Soll „{{memberName}}“ Admin der Gruppe „{{group}}“ werden? Du verlierst dadurch deine Admin-Rechte.",
+                "cancel": "Abbrechen",
+                "ok": "Zum Admin machen"
+            },
+            "error": {
+                "add_group": "Die Gruppe konnte nicht erstellt werden.",
+                "update_group": "Die Gruppe konnte nicht gespeichert werden.",
+                "delete_group": "Die Gruppe konnte nicht gelöscht werden.",
+                "remove_member": "Das Mitglied konnte nicht entfernt werden.",
+                "change_owner": "Der Gruppenadmin konnte nicht geändert werden."
             }
         },
         "category": {
@@ -213,6 +240,27 @@
                 "header": "Datum nicht im Zeitraum der Mitgliedschaft",
                 "message_new_edit": "Du warst zu dem gewählten Zeitpunkt kein Mitglied der Gruppe. Bitte wähle ein anderes Datum.",
                 "message_settlementpayment": "Der Nutzer \"{{userName}}\" war zu dem gewählten Zeitpunkt kein Mitglied der Gruppe. Bitte wähle ein anderes Datum."
+            },
+            "delete_settlement": {
+                "header": "Ausgleichszahlung löschen:",
+                "message": "Möchtest du die Ausgleichszahlung \"{{cartTitle}}\" wirklich löschen? Sie wird für beide Beteiligten entfernt."
+            },
+            "settlement_delete_failed": {
+                "header": "Ausgleichszahlung nicht gelöscht",
+                "message": "Die Ausgleichszahlung konnte nicht gelöscht werden. Bitte versuche es erneut."
+            },
+            "settlement_already_deleted": "Die Ausgleichszahlung wurde bereits gelöscht.",
+            "settlement_update_failed": {
+                "header": "Ausgleichszahlung nicht gespeichert",
+                "message": "Die Änderung konnte nicht gespeichert werden. Deine Eingaben bleiben erhalten, bitte versuche es erneut."
+            },
+            "settlement_not_found": {
+                "header": "Ausgleichszahlung nicht mehr vorhanden",
+                "message": "Die Ausgleichszahlung wurde inzwischen gelöscht. Die Liste wird neu geladen."
+            },
+            "settlement_failed": {
+                "header": "Ausgleichszahlung nicht gespeichert",
+                "message": "Die Ausgleichszahlung konnte nicht gespeichert werden. Deine Eingaben bleiben erhalten, bitte versuche es erneut."
             }
         },
         "forgot_password": {
@@ -287,13 +335,19 @@
                 "error": "Die Änderung konnte nicht gespeichert werden."
             },
             "suggestions": {
-                "header": "Einkaufsvorschläge:",
-                "defaults_hint": "Noch keine Einkäufe in dieser Liste – allgemeine Vorschläge:",
+                "header": "Einkaufsvorschläge",
                 "empty": "Keine Vorschläge – alle bisherigen Einkäufe stehen schon auf der Liste.",
-                "cancel": "Abbrechen",
-                "ok": "Hinzufügen",
                 "loading": "Lade Vorschläge...",
-                "error": "Die Vorschläge konnten nicht geladen werden."
+                "error": "Die Vorschläge konnten nicht geladen werden.",
+                "subtitle_history": "Häufig gekaufte Artikel",
+                "subtitle_defaults": "Allgemeine Vorschläge",
+                "selected_count": "{{count}} von {{total}} ausgewählt",
+                "select_all": "Alle auswählen",
+                "deselect_all": "Auswahl aufheben",
+                "add_none": "Artikel hinzufügen",
+                "add_one": "{{count}} Artikel hinzufügen",
+                "add_other": "{{count}} Artikel hinzufügen",
+                "close": "Schließen"
             }
         },
         "user_profile": {
@@ -430,15 +484,49 @@
         "group": {
             "members": "Mitglieder:"
         },
-        "group_members": {
-            "title": "Gruppenmitglieder",
-            "change_admin": "Gruppenadmin ändern",
-            "no_members": "Keine Mitglieder vorhanden."
+        "menu": {
+            "more_actions": "Weitere Aktionen",
+            "members": "Mitglieder verwalten",
+            "members_hint": "Mitglieder anzeigen, Admin festlegen und Mitglieder hinzufügen",
+            "edit": "Gruppe bearbeiten",
+            "edit_hint": "Namen ändern",
+            "delete": "Gruppe löschen",
+            "delete_hint": "Gruppe und alle Daten endgültig entfernen"
+        },
+        "form_sheet": {
+            "title_create": "Gruppe hinzufügen",
+            "title_edit": "Gruppe bearbeiten",
+            "name_label": "Gruppenname",
+            "name_required": "Bitte gib einen Gruppennamen ein.",
+            "name_too_long": "Der Gruppenname ist zu lang.",
+            "btn_cancel": "Abbrechen",
+            "btn_create": "Erstellen",
+            "btn_save": "Speichern"
+        },
+        "members_sheet": {
+            "title": "Mitglieder verwalten",
+            "add_title": "Mitglied hinzufügen",
+            "btn_add_member": "Mitglied hinzufügen",
+            "section_members": "MITGLIEDER",
+            "admin_badge": "Admin",
+            "no_members": "Noch keine weiteren Mitglieder.",
+            "make_admin": "Zum Admin machen",
+            "remove": "Mitglied entfernen",
+            "member_actions": "Aktionen für {{memberName}}",
+            "email_label": "E-Mail-Adresse",
+            "btn_cancel": "Abbrechen",
+            "btn_add": "Hinzufügen",
+            "btn_close": "Schließen",
+            "email_invalid": "Bitte gib eine gültige E-Mail-Adresse an.",
+            "admin_hint": "Der Gruppenadmin kann Mitglieder entfernen, den Admin wechseln und neue Mitglieder hinzufügen.",
+            "load_error": "Die Mitglieder konnten nicht geladen werden.",
+            "btn_retry": "Erneut versuchen"
         }
     },
     "carts": {
         "title_add": "Einkauf hinzufügen",
         "title_edit": "Einkauf bearbeiten",
+        "duplicate_hint": "Daten aus bestehender Ausgabe übernommen",
         "form": {
             "title": "Titel*",
             "amount": "Betrag in €*",
@@ -474,15 +562,23 @@
             "month": "Monat",
             "year": "Jahr"
         },
+        "perspective": {
+            "personal": "Persönlich",
+            "group": "Gruppenausgaben"
+        },
         "kpi": {
             "total_spent": "Gesamtausgaben",
             "paid_by_user": "Von dir bezahlt",
             "current_balance": "Aktueller Saldo",
             "current_balance_hint": "Unabhängig vom Zeitraum",
-            "paid_cart_count": "Bezahlte Einkäufe"
+            "paid_cart_count": "Bezahlte Einkäufe",
+            "cart_count": "Anzahl Ausgaben",
+            "average_per_cart": "Durchschnitt pro Ausgabe",
+            "member_count": "Anzahl Mitglieder"
         },
         "timeline": {
             "title": "Von dir bezahlt",
+            "title_group": "Gruppenausgaben",
             "week": "KW {{week}}"
         },
         "categories": {
@@ -492,6 +588,7 @@
             "no_chart": "Keine Kategorie mit positivem Betrag für das Diagramm."
         },
         "empty": "Keine eigenen Ausgaben im gewählten Zeitraum.",
+        "empty_group": "Keine Ausgaben im gewählten Zeitraum.",
         "error": "Die Statistik konnte nicht geladen werden.",
         "retry": "Erneut laden"
     },

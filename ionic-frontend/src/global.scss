@@ -83,23 +83,80 @@ ion-modal {
   }
 }
 
-// Export-Dialog der Ausgaben-Seite (DIV-68): Ausnahme von der transparenten Overlay-Regel oben. Unten angedockt,
-// deckend und so hoch wie der Inhalt (der Inhalt begrenzt sich selbst auf 90vh und scrollt darüber).
-ion-modal.export-sheet {
-  --background: var(--ion-background-color, #fff);
-  --height: auto;
-  --border-radius: 16px 16px 0 0;
-  align-items: flex-end;
+// Bottom Sheets (Export DIV-68, Einkaufsvorschläge DIV-69): Ausnahme von der transparenten Overlay-Regel oben
+@import "./theme/bottom-sheet.scss";
 
-  .ion-page {
-    position: relative;
-    display: block;
-    contain: content;
+// Datums-Picker (ion-modal mit ion-datetime, Klasse `date-picker-modal`; DIV-71): Der transparente, vollflächige
+// Modal-Inhalt (Regel oben) liegt über dem Backdrop, ein Tipp neben den Kalender schloss deshalb nicht. Der Inhalt
+// lässt Tipps jetzt durch, nur der Kalender nimmt sie an: ein Tipp daneben trifft den Backdrop und schließt den Picker
+// ohne Übernahme (wie „Abbrechen“).
+ion-modal.date-picker-modal::part(content) {
+  pointer-events: none;
+}
+
+ion-modal.date-picker-modal ion-datetime {
+  pointer-events: auto;
+
+  // Eigene Buttons (Reset, Abbrechen, Speichern): ion-datetime richtet sie rechtsbündig ohne Umbruch aus, bei großer
+  // Schrift ragte der erste Button links aus dem Bild. Hier dürfen sie umbrechen und bleiben rechtsbündig.
+  ion-buttons {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: 100%;
   }
 }
 
 .group-name {
   font-weight: 600;
+}
+
+// Zweizeiliger Seitentitel der Tabs (DIV-79): Titel und darunter die aktive Gruppe bilden zusammen einen Button zur
+// Gruppenübersicht. So ist die Touch-Fläche (≥ 44px) ohne Leerraum und ohne negativen Margin erreicht – den würde der
+// Wrapper von ion-title (Shadow DOM, nowrap/overflow: hidden, von außen nicht erreichbar) abschneiden (Codex-Review
+// F-002). Kürzung nur per CSS, keine festen Breiten (große Systemschrift).
+.page-title {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  line-height: 1.2;
+  text-align: start;
+  white-space: normal;
+  cursor: pointer;
+}
+
+.page-title__text {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.page-title__group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: 100%;
+  color: var(--ion-color-medium);
+  font-size: 0.875rem;
+  font-weight: 600;
+
+  ion-icon {
+    flex-shrink: 0;
+  }
+}
+
+.page-title__group-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .alert-wrapper.sc-ion-alert-md {

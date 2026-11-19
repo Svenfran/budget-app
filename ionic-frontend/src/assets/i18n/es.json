@@ -18,7 +18,8 @@
             "deleted": "Usuario eliminado",
             "removed": "Usuario eliminado"
         },
-        "language": "Idioma"
+        "language": "Idioma",
+        "change_group": "Cambiar grupo, actual: {{name}}"
     },
     "navigation": {
         "welcome": "¡Hola {{name}}!",
@@ -72,8 +73,16 @@
             "total": "Total",
             "export_menu": "Exportar",
             "settlement": "Repago",
+            "settlement_menu": "Saldar",
             "filter": "Filtro",
+            "filter_active": "Filtro activo",
+            "remove_filter": "Quitar filtro",
+            "count_one": "{{count}} gasto",
+            "count_other": "{{count}} gastos",
             "no_spendings": "No hay gastos registrados",
+            "duplicate": "Duplicar",
+            "edit": "Editar",
+            "delete": "Eliminar",
             "toast": {
                 "message": "Archivo descargado con éxito."
             },
@@ -99,11 +108,26 @@
             "overlay": {
                 "settlementpayment": {
                     "title": "Repago",
+                    "subtitle": "Registra un pago a un miembro del grupo.",
+                    "btn_save": "Guardar",
+                    "placeholder_member": "Al miembro",
+                    "placeholder_member_from": "De miembro",
+                    "direction_paid": "He pagado a",
+                    "direction_received": "He recibido de",
                     "amount": "Importe en €*",
-                    "to_member": "Al miembro*",
+                    "amount_positive": "El importe debe ser mayor que 0",
+                    "title_edit": "Editar repago",
+                    "subtitle_edit": "Los cambios se aplican a ambas partes.",
+                    "paid_by": "Pagado por",
                     "date": "Fecha*",
                     "btn_cancel": "Cancelar",
-                    "no_members": "No hay miembros disponibles"
+                    "no_members": "No hay miembros disponibles",
+                    "discard": {
+                        "header": "¿Descartar los datos?",
+                        "message": "Se perderán los datos del repago.",
+                        "btn_discard": "Descartar",
+                        "btn_continue": "Seguir editando"
+                    }
                 },
                 "filter": {
                     "header": "Filtro",
@@ -114,7 +138,13 @@
                     "date_from": "Fecha desde",
                     "date_to": "Fecha hasta",
                     "btn_reset": "Restablecer",
-                    "btn_cancel": "Cancelar"
+                    "btn_cancel": "Cancelar",
+                    "subtitle": "Filtrar gastos según varios criterios",
+                    "section_content": "Contenido",
+                    "section_assignment": "Categoría y usuario",
+                    "section_period": "Periodo",
+                    "btn_apply": "Aplicar filtro",
+                    "error_date_range": "La «Fecha desde» no puede ser posterior a la «Fecha hasta»."
                 }
             }
         },
@@ -137,29 +167,13 @@
                 "loading": "Creando grupo...",
                 "placeholder": "Nombre del grupo"
             },
-            "edit": {
-                "header": "Nombre del grupo:",
-                "cancel": "Cancelar",
-                "ok": "OK",
-                "loading": "Actualizando grupo..."
-            },
             "delete": {
-                "header": "Eliminar grupo:",
-                "message": "¿Deseas eliminar el grupo \"{{groupName}}\" incluyendo todos los gastos y categorías?",
-                "cancel": "No",
-                "ok": "Sí",
-                "loading": "Eliminando grupo..."
+                "header": "¿Eliminar grupo?",
+                "message": "¿Deseas eliminar el grupo \"{{groupName}}\"? Se eliminarán de forma definitiva todos los gastos, pagos de compensación, listas de la compra, categorías y demás datos del grupo.",
+                "cancel": "Cancelar",
+                "ok": "Eliminar"
             },
             "add_member": {
-                "header": "Agregar miembro:",
-                "cancel": "Cancelar",
-                "ok": "OK",
-                "loading": "Agregando miembro...",
-                "placeholder": "dirección de email",
-                "error_message_page": {
-                    "header": "Dirección de email inválida",
-                    "message": "Por favor ingresa una dirección de email válida."
-                },
                 "error_message_service": {
                     "message_success": "Usuario agregado al grupo.",
                     "message_no_exists": "El usuario no existe.",
@@ -173,6 +187,19 @@
                 "message": "¿Deseas eliminar al miembro \"{{memberName}}\" del grupo \"{{group}}\" incluyendo todos los gastos guardados?",
                 "cancel": "No",
                 "ok": "Sí"
+            },
+            "change_owner": {
+                "header": "¿Hacer administrador?",
+                "message": "¿Debe \"{{memberName}}\" ser administrador del grupo \"{{group}}\"? Perderás tus derechos de administrador.",
+                "cancel": "Cancelar",
+                "ok": "Hacer administrador"
+            },
+            "error": {
+                "add_group": "No se pudo crear el grupo.",
+                "update_group": "No se pudo guardar el grupo.",
+                "delete_group": "No se pudo eliminar el grupo.",
+                "remove_member": "No se pudo eliminar al miembro.",
+                "change_owner": "No se pudo cambiar el administrador del grupo."
             }
         },
         "category": {
@@ -213,6 +240,27 @@
                 "header": "Fecha fuera del periodo de membresía",
                 "message_new_edit": "No eras miembro del grupo en la fecha seleccionada. Por favor elige otra fecha.",
                 "message_settlementpayment": "El usuario \"{{userName}}\" no era miembro del grupo en la fecha seleccionada. Por favor elige otra fecha."
+            },
+            "delete_settlement": {
+                "header": "Eliminar repago:",
+                "message": "¿Seguro que quieres eliminar el repago \"{{cartTitle}}\"? Se eliminará para ambas partes."
+            },
+            "settlement_delete_failed": {
+                "header": "Repago no eliminado",
+                "message": "No se pudo eliminar el repago. Por favor, inténtalo de nuevo."
+            },
+            "settlement_already_deleted": "El repago ya ha sido eliminado.",
+            "settlement_update_failed": {
+                "header": "Repago no guardado",
+                "message": "No se pudo guardar el cambio. Tus datos se conservan, por favor, inténtalo de nuevo."
+            },
+            "settlement_not_found": {
+                "header": "El repago ya no existe",
+                "message": "El repago se ha eliminado mientras tanto. La lista se está recargando."
+            },
+            "settlement_failed": {
+                "header": "Repago no guardado",
+                "message": "No se pudo guardar el repago. Tus datos se han conservado, por favor inténtalo de nuevo."
             }
         },
         "forgot_password": {
@@ -287,13 +335,19 @@
                 "error": "No se pudo guardar el cambio."
             },
             "suggestions": {
-                "header": "Sugerencias de compra:",
-                "defaults_hint": "Todavía no hay compras en esta lista – sugerencias generales:",
+                "header": "Sugerencias de compra",
                 "empty": "No hay sugerencias – todas las compras anteriores ya están en la lista.",
-                "cancel": "Cancelar",
-                "ok": "Añadir",
                 "loading": "Cargando sugerencias...",
-                "error": "No se pudieron cargar las sugerencias."
+                "error": "No se pudieron cargar las sugerencias.",
+                "subtitle_history": "Artículos comprados con frecuencia",
+                "subtitle_defaults": "Sugerencias generales",
+                "selected_count": "{{count}} de {{total}} seleccionados",
+                "select_all": "Seleccionar todo",
+                "deselect_all": "Deseleccionar todo",
+                "add_none": "Añadir artículos",
+                "add_one": "Añadir {{count}} artículo",
+                "add_other": "Añadir {{count}} artículos",
+                "close": "Cerrar"
             }
         },
         "user_profile": {
@@ -430,15 +484,49 @@
         "group": {
             "members": "Miembros:"
         },
-        "group_members": {
-            "title": "Miembros del grupo",
-            "change_admin": "Cambiar admin del grupo",
-            "no_members": "No hay miembros."
+        "menu": {
+            "more_actions": "Más acciones",
+            "members": "Gestionar miembros",
+            "members_hint": "Ver miembros, definir el administrador y añadir miembros",
+            "edit": "Editar grupo",
+            "edit_hint": "Cambiar el nombre",
+            "delete": "Eliminar grupo",
+            "delete_hint": "Eliminar el grupo y todos sus datos de forma definitiva"
+        },
+        "form_sheet": {
+            "title_create": "Añadir grupo",
+            "title_edit": "Editar grupo",
+            "name_label": "Nombre del grupo",
+            "name_required": "Introduce un nombre para el grupo.",
+            "name_too_long": "El nombre del grupo es demasiado largo.",
+            "btn_cancel": "Cancelar",
+            "btn_create": "Crear",
+            "btn_save": "Guardar"
+        },
+        "members_sheet": {
+            "title": "Gestionar miembros",
+            "add_title": "Añadir miembro",
+            "btn_add_member": "Añadir miembro",
+            "section_members": "MIEMBROS",
+            "admin_badge": "Admin",
+            "no_members": "Todavía no hay más miembros.",
+            "make_admin": "Hacer administrador",
+            "remove": "Eliminar miembro",
+            "member_actions": "Acciones para {{memberName}}",
+            "email_label": "Correo electrónico",
+            "btn_cancel": "Cancelar",
+            "btn_add": "Añadir",
+            "btn_close": "Cerrar",
+            "email_invalid": "Introduce un correo electrónico válido.",
+            "admin_hint": "El administrador del grupo puede eliminar miembros, cambiar el administrador y añadir nuevos miembros.",
+            "load_error": "No se pudieron cargar los miembros.",
+            "btn_retry": "Reintentar"
         }
     },
     "carts": {
         "title_add": "Agregar compra",
         "title_edit": "Editar compra",
+        "duplicate_hint": "Datos copiados de un gasto existente",
         "form": {
             "title": "Título*",
             "amount": "Importe en €*",
@@ -474,15 +562,23 @@
             "month": "Mes",
             "year": "Año"
         },
+        "perspective": {
+            "personal": "Personal",
+            "group": "Gastos del grupo"
+        },
         "kpi": {
             "total_spent": "Gastos totales",
             "paid_by_user": "Pagado por ti",
             "current_balance": "Saldo actual",
             "current_balance_hint": "Independiente del periodo",
-            "paid_cart_count": "Compras pagadas"
+            "paid_cart_count": "Compras pagadas",
+            "cart_count": "Número de gastos",
+            "average_per_cart": "Promedio por gasto",
+            "member_count": "Número de miembros"
         },
         "timeline": {
             "title": "Pagado por ti",
+            "title_group": "Gastos del grupo",
             "week": "Sem. {{week}}"
         },
         "categories": {
@@ -492,6 +588,7 @@
             "no_chart": "Ninguna categoría con importe positivo para el gráfico."
         },
         "empty": "No hay gastos propios en el periodo seleccionado.",
+        "empty_group": "No hay gastos en el periodo seleccionado.",
         "error": "No se pudieron cargar las estadísticas.",
         "retry": "Volver a cargar"
     },

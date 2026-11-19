@@ -1,5 +1,9 @@
 package com.github.svenfran.budgetapp.budgetappbackend.entity
 
+import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto
+import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto
+import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto
+import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CategoryRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository
@@ -7,11 +11,14 @@ import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingItemRep
 import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingListRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.TokenRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository
+import com.github.svenfran.budgetapp.budgetappbackend.service.SettlementService
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
+import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
 import org.hibernate.Hibernate
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.context.i18n.LocaleContextHolder
 
 /**
  * toString geladener Entities darf keine Datenbankzugriffe auslösen: keine Lazy-Beziehung initialisieren und
@@ -33,6 +40,7 @@ class EntityToStringIntegrationSpec extends IntegrationSpec {
     @Autowired ShoppingListRepository shoppingListRepository
     @Autowired ShoppingItemRepository shoppingItemRepository
     @Autowired TokenRepository tokenRepository
+    @Autowired SettlementService settlementService
 
     def "toString geladener Entities lädt keine Lazy-Beziehungen nach"() {
         given: "Ben ist Mitglied der WG und hat einen wiederkehrenden Einkauf (mit Template)"
@@ -95,10 +103,46 @@ class EntityToStringIntegrationSpec extends IntegrationSpec {
 
         then:
         noExceptionThrown()
-        cartText.endsWith(", templateId=$templateId}")
+        cartText.endsWith(", templateId=$templateId, settlementId=null}")
         groupText.startsWith("Group{id=$groupId, ")
         groupText.endsWith(", ownerId=$ownerId}")
         userText == "User{id=$benId, name='Ben'}"
+    }
+
+    def "toString und CartDto eines Einkaufs mit Ausgleichszahlung lesen nur die Settlement-Id und laden das Settlement nicht nach"() {
+        given: "DIV-74: Cart.settlement ist lazy"
+        LocaleContextHolder.setLocale(Locale.GERMAN)
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        flushAndClear()
+        loginAs(wg.owner)
+        def carts = settlementService.addSettlementPayment(
+                new SettlementPaymentDto(30d, wg.group.id, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE)))
+        def (cartId, settlementId) = [carts[0].id, carts[0].settlementId]
+        flushAndClear()
+        def loadedCart = cartRepository.findById(cartId).get()
+        def vorher = Hibernate.isInitialized(loadedCart.settlement)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Mitglied {}; Einkauf {} gehört zu Settlement {}; geladen: Cart', wg.group.id,
+                wg.owner.id, ben.id, cartId, settlementId)
+
+        when:
+        def text = loadedCart.toString()
+        def dtoSettlementId = new CartDto(loadedCart).settlementId
+        def nachher = Hibernate.isInitialized(loadedCart.settlement)
+        entityManager.clear()
+        def detachtText = loadedCart.toString()
+        LOG.info('toString/CartDto von Cart {} -> settlementId {}, Settlement initialisiert vorher {}, nachher {}; detacht ohne Exception',
+                cartId, dtoSettlementId, vorher, nachher)
+
+        then:
+        !vorher
+        !nachher
+        dtoSettlementId == settlementId
+        text.endsWith(", settlementId=$settlementId}")
+        detachtText.endsWith(", settlementId=$settlementId}")
+
+        cleanup:
+        LocaleContextHolder.resetLocaleContext()
     }
 
     def "toString von Kategorie, Einkaufsliste, Eintrag und Token lädt nichts nach und wirft detacht keinen Fehler"() {

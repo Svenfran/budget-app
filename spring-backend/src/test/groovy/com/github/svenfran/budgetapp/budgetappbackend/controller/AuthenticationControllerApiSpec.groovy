@@ -74,6 +74,21 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
         userRepository.findByEmail('max@example.de').isPresent()
     }
 
+    def "Registrierung speichert den Nutzernamen ohne umgebende Leerzeichen"() {
+        given:
+        LOG.info('Szenario: neuer Nutzer \' max \' mit max@example.de')
+
+        when:
+        def response = register(' max ', 'max@example.de')
+        flushAndClear()
+        LOG.info('Antwort: name \'{}\'', json(response).name)
+
+        then:
+        response.status == 200
+        json(response).name == 'max'
+        userRepository.findByEmail('max@example.de').get().name == 'max'
+    }
+
     def "Login mit abweichender Schreibweise ('#login') funktioniert"() {
         given:
         register('max', 'Max@Example.de')

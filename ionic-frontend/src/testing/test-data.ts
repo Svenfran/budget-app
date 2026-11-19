@@ -4,6 +4,7 @@ import { Cart } from 'src/app/domains/cartlist/model/cart';
 import { ShoppingitemDto } from 'src/app/domains/shoppinglist/model/shoppingitem-dto';
 import { ShoppinglistDto } from 'src/app/domains/shoppinglist/model/shoppinglist-dto';
 import { CategoryDto } from 'src/app/model/category-dto';
+import { GroupOverview } from 'src/app/groupoverview/model/group-overview';
 import { Group } from 'src/app/model/group';
 import { UserDto } from 'src/app/model/user-dto';
 
@@ -21,6 +22,12 @@ export function aUser(overrides: Partial<UserDto> = {}): UserDto {
 export function aGroup(overrides: Partial<Group> = {}): Group {
   const id = nextId();
   return { id, name: `Gruppe ${id}`, dateCreated: REFERENCE_DATE, ...overrides };
+}
+
+/** Eintrag der Gruppenübersicht (DIV-80: mit `ownerId`); Owner und Mitgliederzahl bei Bedarf im Test setzen. */
+export function aGroupOverview(overrides: Partial<GroupOverview> = {}): GroupOverview {
+  const id = nextId();
+  return { id, name: `Gruppe ${id}`, dateCreated: REFERENCE_DATE, ownerName: 'Anna', ownerId: nextId(), memberCount: 1, ...overrides };
 }
 
 export function aCategory(overrides: Partial<CategoryDto> = {}): CategoryDto {

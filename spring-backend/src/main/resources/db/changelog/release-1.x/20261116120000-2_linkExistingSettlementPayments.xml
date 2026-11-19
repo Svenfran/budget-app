@@ -1,0 +1,24 @@
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!-- DIV-74: Altdaten verknüpfen. Kennzeichnet Kategorien mit Settlement-Namen (de/en/es), bildet je Paar ein
+         settlement (richtungsbezogen, nach Id deterministisch) und setzt cart.settlement_id. Beträge, Daten, User und
+         Titel der Carts bleiben unverändert.
+
+         Abbruch statt Precondition: Die SQL-Datei prüft vor dem ersten Insert und bricht per RAISE EXCEPTION ab, wenn ein
+         Cart einer Settlement-Kategorie ohne eindeutigen Partner bliebe oder ein Schlüssel mehr als zwei User hat. Die
+         Wirkung entspricht einer sqlCheck-Precondition mit onFail="HALT" (Changeset wird zurückgerollt, der Start
+         schlägt fehl), die Abbruchlogik ist aber mit derselben Datei in SettlementLinkMigrationIntegrationSpec testbar.
+         Eine Precondition müsste dort nachgebaut werden und könnte abweichen.
+
+         Rückweg (manuell): UPDATE cart SET settlement_id = NULL; DELETE FROM settlement;
+         UPDATE category SET is_settlement = false. -->
+    <changeSet author="sven" id="20261116120000-2">
+        <sqlFile path="db/changelog/release-1.x/sql/20261116120000-2_linkExistingSettlementPayments.sql"
+                 relativeToChangelogFile="false" splitStatements="false"/>
+    </changeSet>
+
+</databaseChangeLog>

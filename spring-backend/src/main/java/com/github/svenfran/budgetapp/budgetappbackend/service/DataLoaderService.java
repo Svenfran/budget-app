@@ -28,11 +28,15 @@ public class DataLoaderService {
 
     private final GroupMembershipHistoryRepository groupMembershipHistoryRepository;
 
+    private final SettlementRepository settlementRepository;
+
     public DataLoaderService(GroupRepository groupRepository, CartRepository cartRepository,
                              CategoryRepository categoryRepository, UserRepository userRepository,
                              ShoppingListRepository shoppingListRepository,
                              ShoppingItemRepository shoppingItemRepository,
-                             GroupMembershipHistoryRepository groupMembershipHistoryRepository) {
+                             GroupMembershipHistoryRepository groupMembershipHistoryRepository,
+                             SettlementRepository settlementRepository) {
+        this.settlementRepository = settlementRepository;
         this.groupRepository = groupRepository;
         this.cartRepository = cartRepository;
         this.categoryRepository = categoryRepository;
@@ -65,8 +69,10 @@ public class DataLoaderService {
         return categoryRepository.findAllByGroup_IdOrderByName(groupId);
     }
 
-    public Category loadCategoryByGroupAndName(Group group, String categoryName) {
-        return categoryRepository.findCategoryByGroupAndName(group, categoryName);
+    /** Settlement mit Zeilensperre laden (DIV-74); als erster Zugriff auf das Settlement in der Transaktion aufrufen. */
+    public Settlement loadSettlementForUpdate(Long settlementId) throws SettlementNotFoundException {
+        return settlementRepository.findByIdForUpdate(settlementId)
+                        .orElseThrow(() -> new SettlementNotFoundException(String.format("Settlement with Id %s not found", settlementId)));
     }
 
     public User loadUser(Long userId) throws UserNotFoundException {

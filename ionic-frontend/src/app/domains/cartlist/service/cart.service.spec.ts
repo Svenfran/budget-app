@@ -1,10 +1,10 @@
-import { HttpTestingController } from '@angular/common/http/testing';
-import { TestBed } from '@angular/core/testing';
+import { HttpTestingController, TestRequest } from '@angular/common/http/testing';
+import { fakeAsync, flush, TestBed } from '@angular/core/testing';
 import { TranslateService } from '@ngx-translate/core';
 import { Init } from 'src/app/constants/default-values';
 import { RECURRENCE_TYPE } from 'src/app/constants/recurrence-type';
 import { AlertService } from 'src/app/service/alert.service';
-import { SettlementPaymentDto } from 'src/app/settlement-payment/model/settlement-payment-dto';
+import { SettlementPaymentDto } from '../model/settlement-payment-dto';
 import { environment } from 'src/environments/environment';
 import { aCart, aGroup, aUser } from 'src/testing/test-data';
 import { alertServiceSpy, provideServiceTesting } from 'src/testing/test-providers';
@@ -75,6 +75,35 @@ describe('CartService', () => {
       expect(service.cartList()).toEqual([]);
       expect(service.initCartList()).toEqual([]);
       expect(onComplete).toHaveBeenCalledTimes(1);
+    });
+
+    it('behält mit silent bei einem Ladefehler den bisherigen Stand (DIV-74)', () => {
+      const cartList = [aCart({ id: 1 })];
+      const initCartList = [aCart({ id: 1 }), aCart({ id: 2 })];
+      service.cartList.set(cartList);
+      service.initCartList.set(initCartList);
+      const onComplete = jasmine.createSpy('onComplete');
+
+      service.getCartListByGroupId(aGroup({ id: 7 }), false, onComplete, { silent: true });
+      http.expectOne(`${api}/carts-by-groupid/7`).flush('Server error', { status: 500, statusText: 'Server Error' });
+
+      expect(service.cartList()).toEqual(cartList);
+      expect(service.initCartList()).toEqual(initCartList);
+      expect(onComplete).toHaveBeenCalledTimes(1);
+    });
+
+    it('verwirft eine Antwort, die nach einem Gruppen- oder Sitzungswechsel eintrifft (isCurrent, DIV-74)', () => {
+      const aktuell = [aCart({ id: 9 })];
+      service.cartList.set(aktuell);
+      service.initCartList.set(aktuell);
+      const updatesBefore = service.cartUpdated();
+
+      service.getCartListByGroupId(aGroup({ id: 7 }), true, undefined, { isCurrent: () => false });
+      http.expectOne(`${api}/carts-by-groupid/7`).flush([aCart({ id: 1 })]);
+
+      expect(ids(service.cartList())).toEqual([9]);
+      expect(ids(service.initCartList())).toEqual([9]);
+      expect(service.cartUpdated()).toBe(updatesBefore);
     });
 
     it('leert für die Platzhalter-Gruppe beide Listen ohne Request', () => {
@@ -270,12 +299,216 @@ describe('CartService', () => {
     });
   });
 
+  describe('updateSettlementPayment (DIV-74)', () => {
+    const group = aGroup({ id: 7 });
+    const payment = (): SettlementPaymentDto => ({
+      id: 70, amount: 45, groupId: 7, member: aUser({ userName: 'Ben' }), datePurchased: new Date('2025-06-10'),
+    });
+    const paar = () => [
+      aCart({ id: 1, amount: 30, settlementId: 70, datePurchased: new Date('2025-06-15') }),
+      aCart({ id: 2, amount: -30, settlementId: 70, datePurchased: new Date('2025-06-15') }),
+    ];
+
+    it('sendet PUT, ersetzt beide Einkäufe per Id in beiden Listen, sortiert neu, meldet die Änderung und liefert true', async () => {
+      const neuer = aCart({ id: 3, datePurchased: new Date('2025-06-12') });
+      service.cartList.set([...paar(), neuer]);
+      service.initCartList.set([...paar(), neuer, aCart({ id: 4, datePurchased: new Date('2025-01-01') })]);
+      const updatesBefore = service.cartUpdated();
+      const dto = payment();
+
+      const result = service.updateSettlementPayment(dto, group, () => true);
+      const req = http.expectOne(`${api}/settlement-payment/update`);
+      expect(req.request.method).toBe('PUT');
+      expect(req.request.body).toEqual(dto);
+      req.flush([
+        aCart({ id: 1, amount: 45, settlementId: 70, datePurchased: new Date('2025-06-10') }),
+        aCart({ id: 2, amount: -45, settlementId: 70, datePurchased: new Date('2025-06-10') }),
+      ]);
+
+      expect(await result).toBeTrue();
+      expect(ids(service.cartList())).toEqual([3, 1, 2]);
+      expect(service.cartList().filter(c => c.settlementId === 70).map(c => c.amount)).toEqual([45, -45]);
+      expect(ids(service.initCartList())).toEqual([3, 1, 2, 4]);
+      expect(service.cartUpdated()).toBe(updatesBefore + 1);
+    });
+
+    it('Mitgliedschaftsfehler: State unverändert, Hinweis mit dem Empfänger (exakte Backend-Meldung, M1), liefert false', async () => {
+      const translate = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
+      const cartList = paar();
+      service.cartList.set(cartList);
+      service.initCartList.set(cartList);
+
+      const result = service.updateSettlementPayment(payment(), group, () => true);
+      http.expectOne(`${api}/settlement-payment/update`).flush(notWithinMembership, { status: 400, statusText: 'Bad Request' });
+
+      expect(await result).toBeFalse();
+      expect(service.cartList()).toEqual(cartList);
+      expect(service.initCartList()).toEqual(cartList);
+      expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(
+        'alerts.cart.invalid_membership.header', 'alerts.cart.invalid_membership.message_settlementpayment');
+      expect(translate).toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Ben' });
+    });
+
+    it('anderer Fehler: State unverändert, allgemeiner Alert, liefert false', async () => {
+      const cartList = paar();
+      service.cartList.set(cartList);
+      service.initCartList.set(cartList);
+
+      const result = service.updateSettlementPayment(payment(), group, () => true);
+      http.expectOne(`${api}/settlement-payment/update`).flush('Only the payer may change the receiver', { status: 403, statusText: 'Forbidden' });
+
+      expect(await result).toBeFalse();
+      expect(service.cartList()).toEqual(cartList);
+      expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(
+        'alerts.cart.settlement_update_failed.header', 'alerts.cart.settlement_update_failed.message');
+    });
+
+    it('404: Hinweis „existiert nicht mehr“, stilles Neuladen der Liste, liefert true (Sheet schließt)', async () => {
+      service.cartList.set(paar());
+      service.initCartList.set(paar());
+
+      const result = service.updateSettlementPayment(payment(), group, () => true);
+      http.expectOne(`${api}/settlement-payment/update`).flush('Settlement with Id 70 not found', { status: 404, statusText: 'Not Found' });
+
+      expect(await result).toBeTrue();
+      expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(
+        'alerts.cart.settlement_not_found.header', 'alerts.cart.settlement_not_found.message');
+      http.expectOne(`${api}/carts-by-groupid/7`).flush([aCart({ id: 5 })]);
+      expect(ids(service.cartList())).toEqual([5]);
+    });
+
+    it('404 und scheiterndes Neuladen: bisheriger Stand bleibt', async () => {
+      service.cartList.set(paar());
+      service.initCartList.set(paar());
+
+      const result = service.updateSettlementPayment(payment(), group, () => true);
+      http.expectOne(`${api}/settlement-payment/update`).flush('not found', { status: 404, statusText: 'Not Found' });
+      http.expectOne(`${api}/carts-by-groupid/7`).flush('Server error', { status: 500, statusText: 'Server Error' });
+
+      expect(await result).toBeTrue();
+      expect(ids(service.cartList())).toEqual([1, 2]);
+    });
+
+    it('verwirft die Antwort nach Gruppen- oder Sitzungswechsel: kein State-Update, kein Alert, kein Neuladen', async () => {
+      const cartList = paar();
+      service.cartList.set(cartList);
+      service.initCartList.set(cartList);
+      const updatesBefore = service.cartUpdated();
+
+      const erfolg = service.updateSettlementPayment(payment(), group, () => false);
+      http.expectOne(`${api}/settlement-payment/update`).flush([aCart({ id: 1, amount: 45, settlementId: 70 })]);
+      const fehler = service.updateSettlementPayment(payment(), group, () => false);
+      http.expectOne(`${api}/settlement-payment/update`).flush('not found', { status: 404, statusText: 'Not Found' });
+
+      expect(await erfolg).toBeTrue();
+      expect(await fehler).toBeTrue();
+      http.expectNone(`${api}/carts-by-groupid/7`);
+      expect(service.cartList()).toEqual(cartList);
+      expect(service.cartUpdated()).toBe(updatesBefore);
+      expect(alerts.showErrorAlert).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('deleteSettlementPayment (DIV-74)', () => {
+    const group = aGroup({ id: 7 });
+    const paar = () => [aCart({ id: 1, settlementId: 70 }), aCart({ id: 2, settlementId: 70 })];
+
+    it('entfernt nach dem Löschen beide Einkäufe des Settlements aus beiden Listen und meldet die Änderung', () => {
+      service.cartList.set([...paar(), aCart({ id: 3 })]);
+      service.initCartList.set([...paar(), aCart({ id: 3 }), aCart({ id: 4, settlementId: 71 })]);
+      const updatesBefore = service.cartUpdated();
+
+      service.deleteSettlementPayment(70, group, () => true);
+      const req = http.expectOne(`${api}/settlement-payment/delete/70`);
+      expect(req.request.method).toBe('DELETE');
+      req.flush(null);
+
+      expect(ids(service.cartList())).toEqual([3]);
+      expect(ids(service.initCartList())).toEqual([3, 4]);
+      expect(service.cartUpdated()).toBe(updatesBefore + 1);
+      expect(alerts.showErrorAlert).not.toHaveBeenCalled();
+    });
+
+    it('lässt beide Listen bei einem Fehler unverändert und zeigt den Lösch-Alert', () => {
+      const cartList = [...paar(), aCart({ id: 3 })];
+      service.cartList.set(cartList);
+      service.initCartList.set(cartList);
+      const updatesBefore = service.cartUpdated();
+
+      service.deleteSettlementPayment(70, group, () => true);
+      http.expectOne(`${api}/settlement-payment/delete/70`).flush('Server error', { status: 500, statusText: 'Server Error' });
+
+      expect(service.cartList()).toEqual(cartList);
+      expect(service.initCartList()).toEqual(cartList);
+      expect(service.cartUpdated()).toBe(updatesBefore);
+      expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(
+        'alerts.cart.settlement_delete_failed.header', 'alerts.cart.settlement_delete_failed.message');
+      expect(alerts.showToast).not.toHaveBeenCalled();
+    });
+
+    it('404: kein Fehler-Alert, Hinweis „bereits gelöscht“ und stilles Neuladen der Liste', () => {
+      service.cartList.set(paar());
+      service.initCartList.set(paar());
+
+      service.deleteSettlementPayment(70, group, () => true);
+      http.expectOne(`${api}/settlement-payment/delete/70`)
+        .flush('Settlement with Id 70 not found', { status: 404, statusText: 'Not Found' });
+
+      expect(alerts.showErrorAlert).not.toHaveBeenCalled();
+      expect(alerts.showToast).toHaveBeenCalledOnceWith('alerts.cart.settlement_already_deleted');
+      http.expectOne(`${api}/carts-by-groupid/7`).flush([aCart({ id: 5 })]);
+      expect(ids(service.cartList())).toEqual([5]);
+      expect(ids(service.initCartList())).toEqual([5]);
+    });
+
+    it('404: scheitert auch das stille Neuladen, bleibt der bisherige Stand erhalten', () => {
+      service.cartList.set(paar());
+      service.initCartList.set(paar());
+
+      service.deleteSettlementPayment(70, group, () => true);
+      http.expectOne(`${api}/settlement-payment/delete/70`).flush('not found', { status: 404, statusText: 'Not Found' });
+      http.expectOne(`${api}/carts-by-groupid/7`).flush('Server error', { status: 500, statusText: 'Server Error' });
+
+      expect(ids(service.cartList())).toEqual([1, 2]);
+      expect(ids(service.initCartList())).toEqual([1, 2]);
+      expect(alerts.showErrorAlert).not.toHaveBeenCalled();
+    });
+
+    [
+      { fall: 'Erfolg', antwort: () => null, status: undefined },
+      { fall: 'Fehler 500', antwort: () => 'Server error', status: 500 },
+      { fall: '404', antwort: () => 'not found', status: 404 },
+    ].forEach(({ fall, antwort, status }) => {
+      it(`verwirft die Antwort (${fall}) nach Gruppen- oder Sitzungswechsel: kein State-Update, kein Alert, kein Neuladen`, () => {
+        const cartList = paar();
+        service.cartList.set(cartList);
+        service.initCartList.set(cartList);
+        const updatesBefore = service.cartUpdated();
+
+        service.deleteSettlementPayment(70, group, () => false);
+        const req = http.expectOne(`${api}/settlement-payment/delete/70`);
+        if (status) {
+          req.flush(antwort(), { status, statusText: 'Error' });
+        } else {
+          req.flush(antwort());
+        }
+
+        http.expectNone(`${api}/carts-by-groupid/7`);
+        expect(service.cartList()).toEqual(cartList);
+        expect(service.initCartList()).toEqual(cartList);
+        expect(service.cartUpdated()).toBe(updatesBefore);
+        expect(alerts.showErrorAlert).not.toHaveBeenCalled();
+        expect(alerts.showToast).not.toHaveBeenCalled();
+      });
+    });
+  });
+
   describe('addSettlementPayment', () => {
     const payment = (): SettlementPaymentDto => ({
       amount: 25, groupId: 1, member: aUser({ userName: 'Anna' }), datePurchased: new Date('2025-02-01'),
     });
 
-    it('fügt die erzeugten Ausgleichsbuchungen sortiert in beide Listen ein und meldet die Änderung', () => {
+    it('fügt die erzeugten Ausgleichsbuchungen sortiert in beide Listen ein, meldet die Änderung und liefert true', async () => {
       const older = aCart({ id: 1, datePurchased: new Date('2025-01-01') });
       const newest = aCart({ id: 4, datePurchased: new Date('2025-03-01') });
       service.cartList.set([older]);
@@ -283,7 +516,7 @@ describe('CartService', () => {
       const updatesBefore = service.cartUpdated();
       const dto = payment();
 
-      service.addSettlementPayment(dto);
+      const result = service.addSettlementPayment(dto);
       const req = http.expectOne(`${api}/settlement-payment/add`);
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual(dto);
@@ -295,9 +528,10 @@ describe('CartService', () => {
       expect(ids(service.cartList())).toEqual([3, 2, 1]);
       expect(ids(service.initCartList())).toEqual([4, 3, 2, 1]);
       expect(service.cartUpdated()).toBe(updatesBefore + 1);
+      expect(await result).toBeTrue();
     });
 
-    it('lässt beide Listen bei einem Fehler unverändert und zeigt den Mitgliedschafts-Hinweis mit dem Mitglied', () => {
+    it('lässt beide Listen bei einem Fehler unverändert, zeigt den Mitgliedschafts-Hinweis mit dem Mitglied und liefert false', async () => {
       const cartList = [aCart({ id: 1 })];
       const initCartList = [aCart({ id: 1 }), aCart({ id: 3 })];
       service.cartList.set(cartList);
@@ -305,7 +539,7 @@ describe('CartService', () => {
       const updatesBefore = service.cartUpdated();
       const instant = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
 
-      service.addSettlementPayment(payment());
+      const result = service.addSettlementPayment(payment());
       http.expectOne(`${api}/settlement-payment/add`).flush(notWithinMembership,
         { status: 400, statusText: 'Bad Request' });
 
@@ -317,19 +551,65 @@ describe('CartService', () => {
       // TranslateService ohne Loader setzt keine Parameter ein – deshalb am Aufruf von instant() prüfen.
       expect(instant).toHaveBeenCalledWith(
         'alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Anna' });
+      expect(alerts.showErrorAlert).toHaveBeenCalledTimes(1);
+      expect(await result).toBeFalse();
+    });
+
+    it('erhaltene Zahlung (DIV-74): sendet payer und nennt im Mitgliedschafts-Hinweis die Gegenpartei (Zahler)', async () => {
+      const instant = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
+      const dto: SettlementPaymentDto = {
+        ...payment(), payer: aUser({ userName: 'Ben' }), member: aUser({ userName: 'Ich' }),
+      };
+
+      const result = service.addSettlementPayment(dto);
+      const req = http.expectOne(`${api}/settlement-payment/add`);
+      expect(req.request.body.payer.userName).toBe('Ben');
+      req.flush(notWithinMembership, { status: 400, statusText: 'Bad Request' });
+
+      expect(await result).toBeFalse();
+      expect(instant).toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Ben' });
+    });
+
+    // DIV-70: Jeder andere Fehler zeigt einen allgemeinen Hinweis und liefert false. Der Fehlerbody ist nicht immer Text
+    // (Netzwerkfehler, JSON, null) – die Prüfung auf den Mitgliedschafts-Text darf daran nicht scheitern.
+    [
+      {
+        name: 'Text-Body (403)',
+        fail: (req: TestRequest) => req.flush('User with ID 5 is either a member nor the owner of the group',
+          { status: 403, statusText: 'Forbidden' }),
+      },
+      { name: 'null-Body (500)', fail: (req: TestRequest) => req.flush(null, { status: 500, statusText: 'Server Error' }) },
+      {
+        name: 'Objekt-Body (400)',
+        fail: (req: TestRequest) => req.flush({ message: 'Bad Request' }, { status: 400, statusText: 'Bad Request' }),
+      },
+      { name: 'Netzwerkfehler (Status 0)', fail: (req: TestRequest) => req.error(new ProgressEvent('error')) },
+    ].forEach(c => {
+      it(`zeigt bei einem anderen Fehler (${c.name}) den allgemeinen Hinweis, lässt den State unverändert und liefert false`, async () => {
+        const cartList = [aCart({ id: 1 })];
+        const initCartList = [aCart({ id: 1 }), aCart({ id: 3 })];
+        service.cartList.set(cartList);
+        service.initCartList.set(initCartList);
+        const updatesBefore = service.cartUpdated();
+
+        const result = service.addSettlementPayment(payment());
+        c.fail(http.expectOne(`${api}/settlement-payment/add`));
+
+        expect(await result).toBeFalse();
+        expect(service.cartList()).toEqual(cartList);
+        expect(service.initCartList()).toEqual(initCartList);
+        expect(service.cartUpdated()).toBe(updatesBefore);
+        expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(
+          'alerts.cart.settlement_failed.header', 'alerts.cart.settlement_failed.message');
+      });
     });
   });
 
-  // Nur der Mitgliedschafts-Fehler hat einen eigenen Hinweis; andere Fehler laufen ohne Alert durch.
+  // addCart/updateCart: Nur der Mitgliedschafts-Fehler hat einen eigenen Hinweis; andere Fehler laufen ohne Alert durch.
+  // (addSettlementPayment zeigt seit DIV-70 einen allgemeinen Hinweis, siehe oben.)
   [
     { name: 'addCart', call: (s: CartService) => s.addCart(aCart({ id: null })), url: `${api}/add` },
     { name: 'updateCart', call: (s: CartService) => s.updateCart(aCart({ id: 1 })), url: `${api}/update` },
-    {
-      name: 'addSettlementPayment',
-      call: (s: CartService) => s.addSettlementPayment(
-        { amount: 25, groupId: 1, member: aUser(), datePurchased: new Date('2025-02-01') }),
-      url: `${api}/settlement-payment/add`,
-    },
   ].forEach(c => {
     it(`${c.name} zeigt bei einem anderen Fehler keinen Hinweis`, () => {
       c.call(service);
@@ -337,6 +617,33 @@ describe('CartService', () => {
         { status: 403, statusText: 'Forbidden' });
 
       expect(alerts.showErrorAlert).not.toHaveBeenCalled();
+    });
+
+    // DIV-70 Phase 4 (A): Der Fehlerbody ist nicht immer Text. `err.error.includes` warf bisher im error-Callback;
+    // RxJS meldet das asynchron als unbehandelten Fehler – flush() holt ihn in diesen Test.
+    [
+      { name: 'null-Body (500)', fail: (req: TestRequest) => req.flush(null, { status: 500, statusText: 'Server Error' }) },
+      {
+        name: 'Objekt-Body (400)',
+        fail: (req: TestRequest) => req.flush({ message: 'Bad Request' }, { status: 400, statusText: 'Bad Request' }),
+      },
+      { name: 'Netzwerkfehler (Status 0)', fail: (req: TestRequest) => req.error(new ProgressEvent('error')) },
+    ].forEach(f => {
+      it(`${c.name}: ${f.name} läuft ohne Absturz und ohne Hinweis durch, State unverändert`, fakeAsync(() => {
+        const cartList = [aCart({ id: 1 })];
+        service.cartList.set(cartList);
+        service.initCartList.set(cartList);
+        const updatesBefore = service.cartUpdated();
+
+        c.call(service);
+        f.fail(http.expectOne(c.url));
+        flush();
+
+        expect(alerts.showErrorAlert).not.toHaveBeenCalled();
+        expect(service.cartList()).toEqual(cartList);
+        expect(service.initCartList()).toEqual(cartList);
+        expect(service.cartUpdated()).toBe(updatesBefore);
+      }));
     });
   });
 

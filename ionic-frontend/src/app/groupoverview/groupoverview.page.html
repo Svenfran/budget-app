@@ -31,43 +31,67 @@
           <ion-list-header>
             <ion-label color="medium">{{ 'groups.header' | translate }}</ion-label>
           </ion-list-header>
-          <ion-item-sliding *ngFor="let group of groupOverviewList(), let i = index" #slidingItem>
-            <ion-item button detail="false"
-                      (click)="onSelectGroup(group, slidingItem)"
-                      [lines]="i === groupOverviewList().length - 1 ? 'none' : 'inset'">
-              <ion-icon *ngIf="group.memberCount > 0" slot="start" name="people-outline"></ion-icon>
-              <ion-icon *ngIf="group.memberCount === 0" slot="start" name="person-outline"></ion-icon>
-              <ion-label>
-                <h2 class="ion-text-wrap">{{ group.name }}</h2>
-                <div class="group-details">
-                  <div class="admin">
-                    <ion-text class="ion-text-wrap" color="medium">Admin: </ion-text>
-                    <ion-text class="ion-text-wrap" [attr.color]="group.ownerName === user?.name ? 'primary' : 'medium'">
-                      {{ (group.ownerName.length > 10) ? (group.ownerName | slice:0:10) + '...' : group.ownerName}}
-                    </ion-text>
-                  </div>
-                  <div class="group-members">
-                    <ion-text color="medium">{{ 'groups.group.members' | translate }} {{ group.memberCount }}</ion-text>
-                  </div>
+          <!-- Gruppenaktionen über das ⋮-Menü statt Sliding (DIV-80); Tipp auf den Eintrag wählt die Gruppe (DIV-72) -->
+          <ion-item *ngFor="let group of groupOverviewList(), let i = index"
+                    button detail="false" class="group-item"
+                    (click)="onSelectGroup(group)"
+                    [class.active-group]="group.id === activeGroupId()"
+                    [attr.aria-current]="group.id === activeGroupId() ? 'true' : null"
+                    [lines]="i === groupOverviewList().length - 1 ? 'none' : 'inset'">
+            <ion-icon *ngIf="group.memberCount > 0" slot="start" name="people-outline"></ion-icon>
+            <ion-icon *ngIf="group.memberCount === 0" slot="start" name="person-outline"></ion-icon>
+            <ion-label>
+              <h2 class="ion-text-wrap">{{ group.name }}</h2>
+              <!-- Admin-Name nur per CSS gekürzt, der volle Text bleibt im DOM (DIV-79-Konvention) -->
+              <div class="group-details">
+                <div class="admin">
+                  <ion-text class="admin-label" color="medium">Admin:&nbsp;</ion-text>
+                  <ion-text class="admin-name" [attr.color]="isAdmin(group) ? 'primary' : 'medium'">{{ group.ownerName }}</ion-text>
                 </div>
-              </ion-label>
-            </ion-item>
-            <ion-item-options>
-              <ion-item-option color="secondary">
-                <ion-icon name="people" slot="icon-only" (click)="showGroupMembers(group.id, group.ownerName, slidingItem)"></ion-icon>
-              </ion-item-option>
-              <ion-item-option *ngIf="group.ownerName === user?.name" color="secondary" (click)="onAddMember(group, slidingItem)">
-                <ion-icon  name="person-add" slot="icon-only"></ion-icon>
-              </ion-item-option>
-              <ion-item-option *ngIf="group.ownerName === user?.name" color="secondary" (click)="onUpdateGroup(group, slidingItem)">
-                <ion-icon name="create" slot="icon-only"></ion-icon>
-              </ion-item-option>
-              <ion-item-option *ngIf="group.ownerName === user?.name" color="secondary" (click)="onDeleteGroup(group, slidingItem)">
-                <ion-icon name="trash" slot="icon-only"></ion-icon>
-              </ion-item-option>
-            </ion-item-options>
-          </ion-item-sliding>
+                <div class="group-members">
+                  <ion-text color="medium">{{ 'groups.group.members' | translate }} {{ group.memberCount }}</ion-text>
+                </div>
+              </div>
+            </ion-label>
+            <ion-button slot="end" fill="clear" color="medium" class="group-menu-button"
+                        (click)="openGroupMenu($event, group)"
+                        [attr.aria-label]="'groups.menu.more_actions' | translate">
+              <ion-icon name="ellipsis-vertical" slot="icon-only"></ion-icon>
+            </ion-button>
+          </ion-item>
         </ion-list>
+
+        <!-- Ein Popover für alle Gruppen (Muster Einkaufsliste), die Gruppe kommt aus menuGroupId -->
+        <ion-popover class="group-menu" [isOpen]="menuOpen" [event]="menuEvent" (didDismiss)="closeGroupMenu()"
+                     [dismissOnSelect]="true" side="bottom" alignment="end">
+          <ng-template>
+            <ion-content>
+              <ion-list lines="none" *ngIf="menuGroup() as group">
+                <ion-item class="menu-members" [button]="true" [detail]="false" (click)="onManageMembers(group)">
+                  <ion-icon name="people-outline" slot="start" aria-hidden="true"></ion-icon>
+                  <ion-label class="ion-text-wrap">
+                    <h3>{{ 'groups.menu.members' | translate }}</h3>
+                    <p>{{ 'groups.menu.members_hint' | translate }}</p>
+                  </ion-label>
+                </ion-item>
+                <ion-item *ngIf="isAdmin(group)" class="menu-edit" [button]="true" [detail]="false" (click)="onUpdateGroup(group)">
+                  <ion-icon name="create-outline" slot="start" aria-hidden="true"></ion-icon>
+                  <ion-label class="ion-text-wrap">
+                    <h3>{{ 'groups.menu.edit' | translate }}</h3>
+                    <p>{{ 'groups.menu.edit_hint' | translate }}</p>
+                  </ion-label>
+                </ion-item>
+                <ion-item *ngIf="isAdmin(group)" class="menu-delete" [button]="true" [detail]="false" (click)="onDeleteGroup(group)">
+                  <ion-icon name="trash-outline" color="danger" slot="start" aria-hidden="true"></ion-icon>
+                  <ion-label class="ion-text-wrap" color="danger">
+                    <h3>{{ 'groups.menu.delete' | translate }}</h3>
+                    <p>{{ 'groups.menu.delete_hint' | translate }}</p>
+                  </ion-label>
+                </ion-item>
+              </ion-list>
+            </ion-content>
+          </ng-template>
+        </ion-popover>
       </ion-col>
     </ion-row>
   </ion-grid>

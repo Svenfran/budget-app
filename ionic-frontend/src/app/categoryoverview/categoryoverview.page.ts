@@ -1,9 +1,9 @@
-import { Component, effect } from '@angular/core';
+import { Component, computed, effect } from '@angular/core';
 import { CategoryService } from '../service/category.service';
 import { CategoryDto } from '../model/category-dto';
 import { GroupService } from '../service/group.service';
 import { AlertController, LoadingController } from '@ionic/angular';
-import { INIT_NUMBERS, INIT_VALUES, SETTLEMENTPAYMENT_CATEGORIES } from '../constants/default-values';
+import { INIT_NUMBERS, INIT_VALUES } from '../constants/default-values';
 import { CartService } from '../domains/cartlist/service/cart.service';
 import { TranslateService } from '@ngx-translate/core';
 
@@ -15,7 +15,12 @@ import { TranslateService } from '@ngx-translate/core';
 })
 export class CategoryoverviewPage {
 
-  public categories = this.categoryService.categories;
+  /**
+   * Verwaltbare Kategorien der Gruppe: ohne die Settlement-Kategorie (DIV-74). Sie wird automatisch angelegt, ist für
+   * Einkäufe nicht wählbar und am Kennzeichen erkannt; Umbenennen oder Löschen hätte hier keinen Nutzen. Sichtbar
+   * bleibt sie in Cart-Liste, Filter und Statistik.
+   */
+  public categories = computed(() => this.categoryService.categories().filter(cat => !cat.settlement));
   public isLoading: boolean = false;
   public activeGroup = this.groupService.activeGroup;
 
@@ -42,10 +47,6 @@ export class CategoryoverviewPage {
       this.categoryService.getCategoriesByGroup(this.activeGroup());
       (event.target as HTMLIonRefresherElement).complete();
     }, 2000);
-  }
-
-  isSettlementpayment(category: string): boolean {
-    return this.categoryService.isSettlementpayment(category);
   }
 
   onCreateCategory() {

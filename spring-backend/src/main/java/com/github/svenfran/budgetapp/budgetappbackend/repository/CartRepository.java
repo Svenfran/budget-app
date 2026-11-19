@@ -17,6 +17,9 @@ public interface CartRepository extends CrudRepository<Cart, Long> {
 
     List<Cart> findCartsByGroupIdOrderByDatePurchasedDesc(Long groupId);
 
+    /** Beide Carts einer Ausgleichszahlung (DIV-74). */
+    List<Cart> findBySettlementIdOrderByIdAsc(Long settlementId);
+
     Optional<Cart> findById(Long id);
 
     @Override

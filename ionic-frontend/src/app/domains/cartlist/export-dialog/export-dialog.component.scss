@@ -1,5 +1,5 @@
 // Nur Ionic-Theme-Variablen: Dark/Light folgt dem color-theme automatisch.
-// Höhe und Hintergrund des Modals selbst: ion-modal.export-sheet in global.scss.
+// Modal, Header, Untertitel, Trennlinie und Aktionen: gemeinsamer Basis-Style in src/theme/bottom-sheet.scss (DIV-69).
 
 .export-dialog {
   max-height: 90vh;
@@ -7,27 +7,31 @@
   padding: 8px 20px 0;
 }
 
-.export-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 8px;
+// Kopf wie im Vorschlags-Sheet: Titelblock mit Untertitel, X oben rechts. Unter .export-dialog geschachtelt, weil die
+// globalen Basisregeln (`ion-modal.bottom-sheet .sheet-…`) sonst spezifischer sind.
+.export-dialog {
+  .sheet-header {
+    align-items: flex-start;
 
-  ion-icon {
-    font-size: 1.8em;
-    flex-shrink: 0;
+    .sheet-title {
+      flex: 1;
+      min-width: 0;
+    }
+
+    > ion-icon {
+      margin-top: 2px;
+    }
+
+    .btn-close {
+      flex-shrink: 0;
+      margin: -6px -12px 0 0;
+    }
   }
 
-  h2 {
-    margin: 0;
-    font-size: 1.3em;
-    font-weight: 600;
+  .sheet-title .sheet-subtitle {
+    margin: 2px 0 0;
+    overflow-wrap: anywhere;
   }
-}
-
-.export-subtitle {
-  margin: 8px 0 4px;
-  color: var(--ion-color-medium);
 }
 
 .export-section {
@@ -86,22 +90,5 @@
   &.zip {
     background: var(--ion-color-tertiary);
     color: var(--ion-color-tertiary-contrast);
-  }
-}
-
-.export-divider {
-  height: 1px;
-  margin: 8px 0;
-  background: var(--ion-color-step-150, var(--ion-color-light-shade));
-}
-
-.export-actions {
-  margin-top: 24px;
-  padding-bottom: calc(8px + var(--ion-safe-area-bottom, 0px));
-
-  ion-spinner {
-    width: 1.2em;
-    height: 1.2em;
-    margin-inline-end: 8px;
   }
 }

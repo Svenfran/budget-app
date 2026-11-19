@@ -1,0 +1,69 @@
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!-- DIV-74: Ausgleichszahlung als eigene Entität. settlement ist die einzige Wahrheit (Zahler, Empfänger, Betrag,
+         Datum); die beiden Carts (Zahler +amount, Empfänger -amount) sind daraus abgeleitete Buchungen und tragen
+         settlement_id. category.is_settlement kennzeichnet die Settlement-Kategorie einer Gruppe unabhängig von Name und
+         Sprache. Rein additiv: bestehende Zeilen bleiben unverändert (Verknüpfung der Altdaten: Changeset -2).
+         created_by ist nullable, weil der Ersteller migrierter Altpaare unbekannt ist. -->
+    <changeSet author="sven" id="20261116120000-1">
+        <createTable tableName="settlement">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="group_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_settlement_group"
+                             referencedTableName="group_details" referencedColumnNames="id"/>
+            </column>
+            <column name="payer_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_settlement_payer"
+                             referencedTableName="user_details" referencedColumnNames="id"/>
+            </column>
+            <column name="receiver_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_settlement_receiver"
+                             referencedTableName="user_details" referencedColumnNames="id"/>
+            </column>
+            <column name="created_by" type="BIGINT">
+                <constraints nullable="true" foreignKeyName="fk_settlement_created_by"
+                             referencedTableName="user_details" referencedColumnNames="id"/>
+            </column>
+            <column name="amount" type="DOUBLE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="date_purchased" type="DATE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="date_created" type="DATETIME"/>
+            <column name="last_update" type="DATETIME"/>
+        </createTable>
+        <sql>
+            ALTER TABLE settlement ADD CONSTRAINT ck_settlement_amount_positive CHECK (amount &gt; 0);
+            ALTER TABLE settlement ADD CONSTRAINT ck_settlement_payer_receiver CHECK (payer_id &lt;&gt; receiver_id);
+        </sql>
+        <createIndex tableName="settlement" indexName="idx_settlement_group">
+            <column name="group_id"/>
+        </createIndex>
+
+        <addColumn tableName="cart">
+            <column name="settlement_id" type="BIGINT">
+                <constraints nullable="true" foreignKeyName="fk_cart_settlement"
+                             referencedTableName="settlement" referencedColumnNames="id"/>
+            </column>
+        </addColumn>
+        <createIndex tableName="cart" indexName="idx_cart_settlement">
+            <column name="settlement_id"/>
+        </createIndex>
+        <!-- Je Settlement höchstens ein Cart pro User (Zahler ≠ Empfänger); NULL bleibt mehrfach erlaubt. -->
+        <addUniqueConstraint tableName="cart" columnNames="settlement_id, user_id" constraintName="uq_cart_settlement_user"/>
+
+        <addColumn tableName="category">
+            <column name="is_settlement" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

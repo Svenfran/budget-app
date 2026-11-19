@@ -1351,13 +1351,14 @@ describe('ShoppinglistService', () => {
       const dto = { groupId: 1, shoppingListId: 20, names: ['Milch', 'Brot', 'Eier'] };
       const angelegt = (id: number, name: string) => itemDto({ id, name, shoppingListId: 20, groupId: 1 });
 
-      it('POST mit den ausgewählten Namen; nur die gelieferten Einträge werden in Antwortreihenfolge angehängt', () => {
-        service.addItemsToShoppingList(dto);
+      it('POST mit den ausgewählten Namen; nur die gelieferten Einträge werden in Antwortreihenfolge angehängt', async () => {
+        const ergebnis = service.addItemsToShoppingList(dto);
         const req = http.expectOne(addItemsUrl);
         expect(req.request.method).toBe('POST');
         expect(req.request.body).toEqual(dto);
         req.flush([angelegt(23, 'Brot'), angelegt(22, 'Eier')], created);
 
+        expect(await ergebnis).toBeTrue();
         expect(itemsOf(20)).toEqual([21, 23, 22]);
         expect(service.getShoppingLists()()[1].shoppingItems.slice(1)).toEqual([
           { id: 23, name: 'Brot', completed: false }, { id: 22, name: 'Eier', completed: false },
@@ -1366,21 +1367,35 @@ describe('ShoppinglistService', () => {
         expect(alerts.showToast).not.toHaveBeenCalled();
       });
 
-      it('Fehler: Listen unverändert, auch mit inzwischen eingetroffenen Änderungen, und Toast', () => {
-        service.addItemsToShoppingList(dto);
+      // DIV-69: alle ausgewählten Namen stehen inzwischen als offene Einträge auf der Liste – das Backend überspringt
+      // sie und liefert eine leere Liste; das ist ein Erfolg, das Sheet darf schließen
+      it('leere Antwort: Ergebnis true, Listen unverändert, kein Toast', async () => {
+        const vorher = service.getShoppingLists()();
+        const ergebnis = service.addItemsToShoppingList(dto);
+
+        http.expectOne(addItemsUrl).flush([], created);
+
+        expect(await ergebnis).toBeTrue();
+        expect(service.getShoppingLists()()).toBe(vorher);
+        expect(alerts.showToast).not.toHaveBeenCalled();
+      });
+
+      it('Fehler: Ergebnis false, Listen unverändert, auch mit inzwischen eingetroffenen Änderungen, und Toast', async () => {
+        const ergebnis = service.addItemsToShoppingList(dto);
         const req = http.expectOne(addItemsUrl);
         service.onItemAdded(itemDto({ id: 30, name: 'Kaffee', shoppingListId: 20, groupId: 1 }));
         const zwischenstand = service.getShoppingLists()();
 
         req.flush(forbiddenBody, forbidden);
 
+        expect(await ergebnis).toBeFalse();
         expect(service.getShoppingLists()()).toBe(zwischenstand);
         expect(itemsOf(20)).toEqual([21, 30]);
         expect(alerts.showToast).toHaveBeenCalledOnceWith('alerts.shoppinglist.save.error');
       });
 
-      it('Antwort nach einem Gruppenwechsel wird verworfen', () => {
-        service.addItemsToShoppingList(dto);
+      it('Antwort nach einem Gruppenwechsel wird verworfen, Ergebnis trotzdem true', async () => {
+        const ergebnis = service.addItemsToShoppingList(dto);
         const req = http.expectOne(addItemsUrl);
 
         switchTo(andereGruppe);
@@ -1388,15 +1403,17 @@ describe('ShoppinglistService', () => {
         service.getShoppingLists().set(listenDerNeuenGruppe);
         req.flush([angelegt(23, 'Brot')], created);
 
+        expect(await ergebnis).toBeTrue();
         expect(service.getShoppingLists()()).toBe(listenDerNeuenGruppe);
       });
 
-      it('Antwort während eines Drags wird zurückgestellt und beim Release angewandt', () => {
-        service.addItemsToShoppingList(dto);
+      it('Antwort während eines Drags wird zurückgestellt und beim Release angewandt, Ergebnis sofort true', async () => {
+        const ergebnis = service.addItemsToShoppingList(dto);
         const req = http.expectOne(addItemsUrl);
 
         service.holdUpdates();
         req.flush([angelegt(23, 'Brot')], created);
+        expect(await ergebnis).toBeTrue();
         expect(itemsOf(20)).toEqual([21]);
 
         service.releaseUpdates();

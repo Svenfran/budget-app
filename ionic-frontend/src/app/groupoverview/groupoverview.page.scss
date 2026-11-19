@@ -1,12 +1,65 @@
+// Aktive Gruppe (DIV-72): Akzentbalken links in der Primärfarbe, leicht abgesetzter Hintergrund. Die Tönung leitet sich
+// aus der Textfarbe ab (Hell: dunkler, Dunkel: heller) und liegt über dem normalen Item-Hintergrund; der Hintergrund
+// bleibt deckend (stammt aus der Sliding-Zeit, DIV-80 hat die Sliding-Aktionen durch das ⋮-Menü ersetzt).
+ion-item.active-group {
+    --background: linear-gradient(rgba(var(--ion-text-color-rgb, 0, 0, 0), 0.06), rgba(var(--ion-text-color-rgb, 0, 0, 0), 0.06)),
+        var(--ion-item-background, var(--ion-background-color, #fff));
+
+    // Balken als Inset-Schatten am inneren Element: liegt über dessen deckendem Hintergrund
+    &::part(native) {
+        box-shadow: inset 3px 0 0 var(--ion-color-primary);
+    }
+}
+
+// Lange Namen dürfen die Zeile nicht verbreitern (FA9): das Label schrumpft, der ⋮-Button nicht
+.group-item ion-label {
+    min-width: 0;
+}
+
+// Immer zwei Blöcke, in jedem Eintrag gleich (Nutzerwunsch): oben „Admin: Name“, darunter „Mitglieder: N“. So
+// überlagern sich die Texte auch bei großer Android-Schrift nicht (FA9).
 .group-details {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: small;
+    flex-direction: column;
+    align-items: flex-start;
+    row-gap: 2px;
+    // 0.8125rem = bisheriges `small` (13 px), folgt aber wie alle übrigen Texte der Root-Schrift
+    font-size: 0.8125rem;
     .group-members {
-        display: flex;
+        max-width: 100%;
+        white-space: nowrap;
     }
+    // Der Admin-Name bricht wie der Gruppenname darüber als normaler Text um und ist so immer vollständig lesbar, auch
+    // bei 200 % Schrift auf schmalen Geräten (Nutzerentscheidung statt Ellipsis); `anywhere` auch für Namen ohne
+    // Leerzeichen. Der volle Text steht im DOM (DIV-79-Konvention, kein `slice`).
     .admin {
-        margin-right: 0.5rem;
+        max-width: 100%;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+}
+
+// ⋮ am Gruppeneintrag (DIV-80): feste, ausreichend große Touch-Fläche, das Icon schrumpft nicht
+.group-menu-button {
+    flex-shrink: 0;
+    min-width: 44px;
+    min-height: 44px;
+    margin-inline-start: 4px;
+    --padding-start: 8px;
+    --padding-end: 8px;
+}
+
+// ⋮-Menü wie in der Einkaufsliste; breiter für die Hinweiszeilen, auf schmalen Displays höchstens Bildschirmbreite
+ion-popover.group-menu {
+    --width: min(18rem, calc(100vw - 2rem));
+    --box-shadow: none;
+
+    ion-icon[slot='start'] {
+        flex-shrink: 0;
+        margin-inline-end: 0.75rem;
+    }
+
+    ion-label p {
+        color: var(--ion-color-medium);
     }
 }

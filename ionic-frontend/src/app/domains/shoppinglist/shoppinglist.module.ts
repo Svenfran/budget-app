@@ -9,6 +9,7 @@ import { ShoppinglistPageRoutingModule } from './shoppinglist-routing.module';
 
 import { ShoppinglistPage } from './shoppinglist.page';
 import { TranslateModule } from '@ngx-translate/core';
+import { SuggestionsSheetComponent } from './suggestions-sheet/suggestions-sheet.component';
 
 @NgModule({
   imports: [
@@ -19,6 +20,6 @@ import { TranslateModule } from '@ngx-translate/core';
     DragDropModule,
     ShoppinglistPageRoutingModule
   ],
-  declarations: [ShoppinglistPage]
+  declarations: [ShoppinglistPage, SuggestionsSheetComponent]
 })
 export class ShoppinglistPageModule {}

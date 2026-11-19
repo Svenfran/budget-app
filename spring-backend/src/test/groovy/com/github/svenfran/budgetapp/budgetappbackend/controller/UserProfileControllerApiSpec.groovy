@@ -123,6 +123,37 @@ class UserProfileControllerApiSpec extends IntegrationSpec implements ApiRequest
         response.contentAsString.contains(ben.name)
     }
 
+    def "Nutzername ändern speichert den Namen ohne umgebende Leerzeichen"() {
+        given:
+        def anna = fixtures.user()
+        LOG.info('Szenario: User {} ändert den Namen auf \' Annika \'', anna.id)
+
+        when:
+        def response = changeUserName(anna, ' Annika ')
+        flushAndClear()
+        LOG.info('Antwort: userName \'{}\'', json(response).userName)
+
+        then:
+        response.status == 201
+        json(response).userName == 'Annika'
+        userRepository.findById(anna.id).get().name == 'Annika'
+    }
+
+    def "Nutzername ändern auf einen vergebenen Namen mit Leerzeichen am Ende wird abgelehnt"() {
+        given:
+        def anna = fixtures.user()
+        def ben = fixtures.user()
+        LOG.info('Szenario: User {} ändert den Namen auf \'{} \' (vergeben an User {})', anna.id, ben.name, ben.id)
+
+        when:
+        def response = changeUserName(anna, ben.name + ' ')
+        LOG.info('Antwort: {}', response.contentAsString)
+
+        then:
+        response.status == 400
+        response.contentAsString == "User with name ${ben.name} already exists".toString()
+    }
+
     def "Reservierter Nutzername: 400 'User name is not allowed'"() {
         given:
         def anna = fixtures.user()

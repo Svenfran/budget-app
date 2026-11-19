@@ -2,6 +2,7 @@ package com.github.svenfran.budgetapp.budgetappbackend.service;
 
 import com.github.svenfran.budgetapp.budgetappbackend.constants.ExportFormat;
 import com.github.svenfran.budgetapp.budgetappbackend.constants.UserEnum;
+import com.github.svenfran.budgetapp.budgetappbackend.entity.Category;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.GroupMembershipHistory;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.GroupNotFoundException;
@@ -106,7 +107,7 @@ public class ExportService {
                         cart.getDescription(),
                         DateUtils.toLocalDate(cart.getDatePurchased()),
                         cart.getAmount(),
-                        cart.getCategory().getName(),
+                        categoryName(cart.getCategory()),
                         cart.getGroup().getName()))
                 .toList();
 
@@ -119,6 +120,14 @@ public class ExportService {
                     history.getType().toString()));
         }
         return new GroupExport(group.getId(), group.getName(), carts, memberships);
+    }
+
+    /**
+     * Kategoriename im Export: die Settlement-Kategorie in der Export-Sprache (DIV-74, erkannt am Kennzeichen), alle
+     * anderen mit ihrem gespeicherten Namen.
+     */
+    private String categoryName(Category category) {
+        return category.isSettlement() ? translator.translate(SettlementService.SETTLEMENT_CATEGORY_KEY) : category.getName();
     }
 
     /** Ein Nutzer wird pro Export nur einmal geladen, auch wenn er in mehreren Gruppen bzw. Mitgliedschaften vorkommt. */

@@ -16,7 +16,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * API-Spec der Statistikseite (DIV-63): GET /api/statistics?period=…[&groupId][&year][&month].
  *
  * - JSON-Form des StatisticsDto (Frontend-Modell statistics/model/statistics-dto.ts): Felder, Typen, settlement als
- *   Boolean, from/to als ISO-Datum (yyyy-MM-dd).
+ *   Boolean, from/to als ISO-Datum (yyyy-MM-dd); groupView (DIV-72) mit cartCount, averagePerCart, memberCount,
+ *   timeline und categories in derselben Form.
  * - Ohne Anmeldung 403 (Ist-Verhalten von Spring Security), fremde Gruppe 403, unbekannte Gruppe 404.
  * - Ungültige Parameterkombinationen 400 statt 500, auch technisch nicht darstellbare Jahre; keine fachliche
  *   Jahresgrenze.
@@ -37,21 +38,22 @@ class StatisticsControllerApiSpec extends IntegrationSpec implements ApiRequests
         fixtures.cart(wg, user: ben, amount: 7.5d, datePurchased: DateUtils.toDate(of(2025, 3, 20)))
         def groupId = wg.group.id
         def owner = wg.owner
+        def standardKategorie = wg.category.name
         flushAndClear()
-        LOG.info('Szenario: Gruppe {}, Owner {} zahlt 12.50 (Lebensmittel, 2025-03-01), Ben {} 7.50 (2025-03-20)',
-                groupId, owner.id, ben.id)
+        LOG.info('Szenario: Gruppe {}, Owner {} zahlt 12.50 (Lebensmittel, 2025-03-01), Ben {} 7.50 ({}, 2025-03-20)',
+                groupId, owner.id, ben.id, standardKategorie)
 
         when:
         def response = send(statistics(groupId: groupId, period: 'MONTH', year: 2025, month: 3), user: owner)
         def body = json(response)
-        LOG.info('Antwort: Felder {}, totalSpent {}, paidByUser {}, paidCartCount {}, currentBalance {}, Wochen {}, Kategorien {}',
-                body.keySet(), body.totalSpent, body.paidByUser, body.paidCartCount, body.currentBalance, body.timeline*.week,
-                body.categories)
+        LOG.info('Antwort: Felder {}, totalSpent {}, paidByUser {}, paidCartCount {}, currentBalance {}, Wochen {}, Kategorien {}; ' +
+                'groupView {}', body.keySet(), body.totalSpent, body.paidByUser, body.paidCartCount, body.currentBalance,
+                body.timeline*.week, body.categories, body.groupView)
 
         then:
         response.status == 200
         body.keySet() == ['groupId', 'period', 'year', 'month', 'totalSpent', 'paidByUser', 'paidCartCount',
-                          'currentBalance', 'availableYears', 'timeline', 'categories'] as Set
+                          'currentBalance', 'availableYears', 'timeline', 'categories', 'groupView'] as Set
         body.groupId == groupId
         body.period == 'MONTH'
         body.year == 2025
@@ -67,6 +69,17 @@ class StatisticsControllerApiSpec extends IntegrationSpec implements ApiRequests
         body.timeline[0] == [year: 2025, month: null, week: 9, from: '2025-03-01', to: '2025-03-02', amount: 12.5]
         body.timeline[-1] == [year: 2025, month: null, week: 14, from: '2025-03-31', to: '2025-03-31', amount: 0.0]
         body.categories == [[name: 'Lebensmittel', amount: 12.5, settlement: false]]
+
+        and: "DIV-72: Gruppenblock mit allen Zahlern, gleiche Wochen wie die persönliche Zeitreihe"
+        body.groupView.keySet() == ['cartCount', 'averagePerCart', 'memberCount', 'timeline', 'categories'] as Set
+        body.groupView.cartCount == 2
+        body.groupView.averagePerCart == 10.0
+        body.groupView.memberCount == 2
+        body.groupView.timeline*.week == body.timeline*.week
+        body.groupView.timeline[0] == [year: 2025, month: null, week: 9, from: '2025-03-01', to: '2025-03-02', amount: 12.5]
+        body.groupView.timeline[3] == [year: 2025, month: null, week: 12, from: '2025-03-17', to: '2025-03-23', amount: 7.5]
+        body.groupView.categories == [[name: 'Lebensmittel', amount: 12.5, settlement: false],
+                                      [name: standardKategorie, amount: 7.5, settlement: false]]
     }
 
     def "YEAR ohne groupId: alle Gruppen, groupId null, 12 Monatseinträge ohne Wochenfelder"() {

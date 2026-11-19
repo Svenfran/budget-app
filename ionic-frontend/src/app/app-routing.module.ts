@@ -43,12 +43,6 @@ export const routes: Routes = [
     canActivate: [AuthGuard]
   },
   {
-    path: 'groupmembers',
-    loadChildren: () => import('./groupmembers/groupmembers.module').then( m => m.GroupmembersPageModule),
-    canLoad: [AuthGuard],
-    canActivate: [AuthGuard]
-  },
-  {
     path: 'categoryoverview',
     loadChildren: () => import('./categoryoverview/categoryoverview.module').then( m => m.CategoryoverviewPageModule),
     canLoad: [AuthGuard],
@@ -57,18 +51,6 @@ export const routes: Routes = [
   {
     path: 'statistics',
     loadChildren: () => import('./statistics/statistics.module').then( m => m.StatisticsPageModule),
-    canLoad: [AuthGuard],
-    canActivate: [AuthGuard]
-  },
-  {
-    path: 'settlement-payment',
-    loadChildren: () => import('./settlement-payment/settlement-payment.module').then( m => m.SettlementPaymentPageModule),
-    canLoad: [AuthGuard],
-    canActivate: [AuthGuard]
-  },
-  {
-    path: 'filter-modal',
-    loadChildren: () => import('./filter-modal/filter-modal.module').then( m => m.FilterModalPageModule),
     canLoad: [AuthGuard],
     canActivate: [AuthGuard]
   },
