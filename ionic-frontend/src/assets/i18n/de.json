@@ -167,29 +167,13 @@
                 "loading": "Erstelle Gruppe...",
                 "placeholder": "Gruppenname"
             },
-            "edit": {
-                "header": "Gruppenname:",
-                "cancel": "Abbrechen",
-                "ok": "OK",
-                "loading": "Aktualisiere Gruppe..."
-            },
             "delete": {
-                "header": "Gruppe löschen:",
-                "message": "Möchtest du die Gruppe \"{{groupName}}\" wirklich löschen inkl. aller Ausgaben und Kategorien?",
-                "cancel": "Nein",
-                "ok": "Ja",
-                "loading": "Lösche Gruppe..."
+                "header": "Gruppe löschen?",
+                "message": "Möchtest du die Gruppe „{{groupName}}“ wirklich löschen? Dabei werden alle Ausgaben, Ausgleichszahlungen, Einkaufslisten, Kategorien und weiteren Gruppendaten endgültig entfernt.",
+                "cancel": "Abbrechen",
+                "ok": "Löschen"
             },
             "add_member": {
-                "header": "Mitglied hinzufügen:",
-                "cancel": "Abbrechen",
-                "ok": "OK",
-                "loading": "Füge Mitglied hinzu...",
-                "placeholder": "E-Mail-Adresse",
-                "error_message_page": {
-                    "header": "Fehlerhafte E-Mail-Adresse!",
-                    "message": "Bitte gib eine gültige E-Mail-Adresse an."
-                },
                 "error_message_service": {
                     "message_success": "Benutzer wurde zur Gruppe hinzugefügt.",
                     "message_no_exists": "Benutzer existiert nicht.",
@@ -203,6 +187,19 @@
                 "message": "Möchtest du das Mitglied \"{{memberName}}\" wirklich aus der Gruppe \"{{group}}\" entfernen inkl. aller gespeicherten Ausgaben?",
                 "cancel": "Nein",
                 "ok": "Ja"
+            },
+            "change_owner": {
+                "header": "Zum Admin machen?",
+                "message": "Soll „{{memberName}}“ Admin der Gruppe „{{group}}“ werden? Du verlierst dadurch deine Admin-Rechte.",
+                "cancel": "Abbrechen",
+                "ok": "Zum Admin machen"
+            },
+            "error": {
+                "add_group": "Die Gruppe konnte nicht erstellt werden.",
+                "update_group": "Die Gruppe konnte nicht gespeichert werden.",
+                "delete_group": "Die Gruppe konnte nicht gelöscht werden.",
+                "remove_member": "Das Mitglied konnte nicht entfernt werden.",
+                "change_owner": "Der Gruppenadmin konnte nicht geändert werden."
             }
         },
         "category": {
@@ -484,10 +481,43 @@
         "group": {
             "members": "Mitglieder:"
         },
-        "group_members": {
-            "title": "Gruppenmitglieder",
-            "change_admin": "Gruppenadmin ändern",
-            "no_members": "Keine Mitglieder vorhanden."
+        "menu": {
+            "more_actions": "Weitere Aktionen",
+            "members": "Mitglieder verwalten",
+            "members_hint": "Mitglieder anzeigen, Admin festlegen und Mitglieder hinzufügen",
+            "edit": "Gruppe bearbeiten",
+            "edit_hint": "Namen ändern",
+            "delete": "Gruppe löschen",
+            "delete_hint": "Gruppe und alle Daten endgültig entfernen"
+        },
+        "form_sheet": {
+            "title_create": "Gruppe hinzufügen",
+            "title_edit": "Gruppe bearbeiten",
+            "name_label": "Gruppenname",
+            "name_required": "Bitte gib einen Gruppennamen ein.",
+            "name_too_long": "Der Gruppenname ist zu lang.",
+            "btn_cancel": "Abbrechen",
+            "btn_create": "Erstellen",
+            "btn_save": "Speichern"
+        },
+        "members_sheet": {
+            "title": "Mitglieder verwalten",
+            "add_title": "Mitglied hinzufügen",
+            "btn_add_member": "Mitglied hinzufügen",
+            "section_members": "MITGLIEDER",
+            "admin_badge": "Admin",
+            "no_members": "Noch keine weiteren Mitglieder.",
+            "make_admin": "Zum Admin machen",
+            "remove": "Mitglied entfernen",
+            "member_actions": "Aktionen für {{memberName}}",
+            "email_label": "E-Mail-Adresse",
+            "btn_cancel": "Abbrechen",
+            "btn_add": "Hinzufügen",
+            "btn_close": "Schließen",
+            "email_invalid": "Bitte gib eine gültige E-Mail-Adresse an.",
+            "admin_hint": "Der Gruppenadmin kann Mitglieder entfernen, den Admin wechseln und neue Mitglieder hinzufügen.",
+            "load_error": "Die Mitglieder konnten nicht geladen werden.",
+            "btn_retry": "Erneut versuchen"
         }
     },
     "carts": {

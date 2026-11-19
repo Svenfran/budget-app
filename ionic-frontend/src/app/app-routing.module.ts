@@ -43,12 +43,6 @@ export const routes: Routes = [
     canActivate: [AuthGuard]
   },
   {
-    path: 'groupmembers',
-    loadChildren: () => import('./groupmembers/groupmembers.module').then( m => m.GroupmembersPageModule),
-    canLoad: [AuthGuard],
-    canActivate: [AuthGuard]
-  },
-  {
     path: 'categoryoverview',
     loadChildren: () => import('./categoryoverview/categoryoverview.module').then( m => m.CategoryoverviewPageModule),
     canLoad: [AuthGuard],

@@ -1,6 +1,9 @@
-import { aGroup, aUser } from 'src/testing/test-data';
+import { aGroup, aGroupOverview, aUser, REFERENCE_DATE } from 'src/testing/test-data';
 import { GroupMembers } from '../groupmembers/model/groupmembers-dto';
-import { applyOwnerChange, renameGroup } from './group-events';
+import {
+  applyMemberAddedToOverview, applyMemberRemovedFromOverview, applyMembersChange, applyOwnerChange,
+  applyOwnerChangeToOverview, GroupMembersEvent, renameGroup,
+} from './group-events';
 
 describe('group-events', () => {
   describe('renameGroup', () => {
@@ -18,6 +21,107 @@ describe('group-events', () => {
 
       expect(renameGroup([wg], { id: 999, name: 'Unbekannt' })).toEqual([wg]);
       expect(renameGroup([], { id: 999, name: 'Unbekannt' })).toEqual([]);
+    });
+  });
+
+  // DIV-80: Antwort/Event von Hinzufügen und Entfernen in der geladenen Mitgliederliste
+  describe('applyMembersChange', () => {
+    const loaded = (): GroupMembers =>
+      ({ id: 10, name: 'WG', ownerId: 20, ownerName: 'Anna', members: [aUser({ id: 30 })] });
+
+    it('übernimmt Owner und Mitglieder aus dem neuen Stand der geladenen Gruppe', () => {
+      const current = loaded();
+      const newMembers = [aUser({ id: 30 }), aUser({ id: 40 })];
+
+      const result = applyMembersChange(current, { ...current, name: 'Ignoriert', members: newMembers });
+
+      expect(result).toEqual({ ...current, members: newMembers });
+    });
+
+    it('ändert eine geladene Liste einer anderen Gruppe nicht (gleiche Referenz)', () => {
+      const current = loaded();
+
+      expect(applyMembersChange(current, { ...current, id: 11, members: [] })).toBe(current);
+    });
+
+    it('ist bei doppeltem Event idempotent', () => {
+      const update = { ...loaded(), members: [aUser({ id: 40 })] };
+
+      const once = applyMembersChange(loaded(), update);
+
+      expect(applyMembersChange(once, update)).toEqual(once);
+    });
+  });
+
+  // DIV-80: Übersicht bei Add/Remove-Member- und Owner-Events (vorher inline in AppComponent)
+  describe('Übersicht bei Mitglieder-Events', () => {
+    const ME = 50;
+    const event = (overrides: Partial<GroupMembersEvent> = {}): GroupMembersEvent => ({
+      id: 10, name: 'WG', dateCreated: REFERENCE_DATE, ownerName: 'Anna', ownerId: 20,
+      members: [aUser(), aUser()], updatedMember: aUser({ id: 60 }), ...overrides,
+    });
+    const wg = () => aGroupOverview({ id: 10, name: 'WG', ownerId: 20, memberCount: 1 });
+    const urlaub = () => aGroupOverview({ id: 11, name: 'Urlaub', memberCount: 4 });
+
+    describe('applyMemberAddedToOverview', () => {
+      it('nimmt die Gruppe mit ownerId auf, wenn der Nutzer selbst hinzugefügt wurde', () => {
+        const other = urlaub();
+
+        const result = applyMemberAddedToOverview([other], event({ updatedMember: aUser({ id: ME }) }), ME);
+
+        expect(result).toEqual([other, {
+          id: 10, name: 'WG', dateCreated: REFERENCE_DATE, ownerName: 'Anna', ownerId: 20, memberCount: 2,
+        }]);
+      });
+
+      it('nimmt die eigene Gruppe nicht doppelt auf (z. B. Resync vor dem Event)', () => {
+        const result = applyMemberAddedToOverview([wg()], event({ updatedMember: aUser({ id: ME }) }), ME);
+
+        expect(result.map(g => g.id)).toEqual([10]);
+        expect(result[0].memberCount).toBe(2);
+      });
+
+      it('aktualisiert bei fremdem Mitglied nur die Mitgliederzahl der betroffenen Gruppe', () => {
+        const other = urlaub();
+
+        const before = wg();
+
+        const result = applyMemberAddedToOverview([before, other], event(), ME);
+
+        expect(result).toEqual([{ ...before, memberCount: 2 }, other]);
+        expect(result[1]).toBe(other);
+      });
+    });
+
+    describe('applyMemberRemovedFromOverview', () => {
+      it('entfernt die Gruppe, wenn der Nutzer selbst entfernt wurde', () => {
+        const other = urlaub();
+
+        expect(applyMemberRemovedFromOverview([wg(), other], event({ updatedMember: aUser({ id: ME }) }), ME)).toEqual([other]);
+      });
+
+      it('aktualisiert bei fremdem Mitglied nur die Mitgliederzahl', () => {
+        const result = applyMemberRemovedFromOverview([wg(), urlaub()], event({ members: [] }), ME);
+
+        expect(result.map(g => [g.id, g.memberCount])).toEqual([[10, 0], [11, 4]]);
+      });
+
+      it('ändert bei unbekannter Gruppe nichts und wirft nicht', () => {
+        expect(applyMemberRemovedFromOverview([urlaub()], event(), ME).map(g => g.memberCount)).toEqual([4]);
+        expect(applyMemberRemovedFromOverview([], event(), ME)).toEqual([]);
+      });
+    });
+
+    describe('applyOwnerChangeToOverview', () => {
+      it('übernimmt Name und ID des neuen Admins nur für die betroffene Gruppe', () => {
+        const other = urlaub();
+        const ben = aUser({ id: 30, userName: 'Ben' });
+
+        const result = applyOwnerChangeToOverview([wg(), other], { groupId: 10, newOwner: ben });
+
+        expect([result[0].ownerId, result[0].ownerName]).toEqual([30, 'Ben']);
+        expect(result[1]).toBe(other);
+      });
     });
   });
 

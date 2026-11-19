@@ -7,6 +7,33 @@
   padding: 8px 20px 0;
 }
 
+// Kopf wie im Vorschlags-Sheet: Titelblock mit Untertitel, X oben rechts. Unter .export-dialog geschachtelt, weil die
+// globalen Basisregeln (`ion-modal.bottom-sheet .sheet-…`) sonst spezifischer sind.
+.export-dialog {
+  .sheet-header {
+    align-items: flex-start;
+
+    .sheet-title {
+      flex: 1;
+      min-width: 0;
+    }
+
+    > ion-icon {
+      margin-top: 2px;
+    }
+
+    .btn-close {
+      flex-shrink: 0;
+      margin: -6px -12px 0 0;
+    }
+  }
+
+  .sheet-title .sheet-subtitle {
+    margin: 2px 0 0;
+    overflow-wrap: anywhere;
+  }
+}
+
 .export-section {
   background: transparent;
   padding: 0;

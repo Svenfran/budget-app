@@ -25,6 +25,7 @@ describe('ExportDialogComponent (DIV-68)', () => {
   };
   const exportButton = () => el().querySelector('ion-button.btn-export') as HTMLIonButtonElement;
   const cancelButton = () => el().querySelector('ion-button.btn-cancel') as HTMLIonButtonElement;
+  const closeButton = () => el().querySelector('.sheet-header ion-button.btn-close') as HTMLIonButtonElement;
 
   beforeEach(() => {
     exportCarts = jasmine.createSpy('exportCarts');
@@ -132,6 +133,7 @@ describe('ExportDialogComponent (DIV-68)', () => {
     expect(exporting()).toBeTrue();
     expect(exportButton().disabled).toBeTrue();
     expect(cancelButton().disabled).toBeTrue();
+    expect(closeButton().disabled).toBeTrue();
     el().querySelectorAll('ion-radio').forEach(radio => expect((radio as HTMLIonRadioElement).disabled).toBeTrue());
     expect(el().querySelector('ion-button.btn-export ion-spinner')).not.toBeNull();
   });
@@ -168,6 +170,13 @@ describe('ExportDialogComponent (DIV-68)', () => {
 
   it('Abbrechen schließt den Dialog ohne Export', () => {
     cancelButton().click();
+
+    expect(modalCtrl.dismiss).toHaveBeenCalledTimes(1);
+    expect(exportCarts).not.toHaveBeenCalled();
+  });
+
+  it('X oben rechts schließt den Dialog ohne Export', () => {
+    closeButton().click();
 
     expect(modalCtrl.dismiss).toHaveBeenCalledTimes(1);
     expect(exportCarts).not.toHaveBeenCalled();

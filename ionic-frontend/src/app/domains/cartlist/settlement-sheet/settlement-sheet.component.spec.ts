@@ -8,6 +8,7 @@ import { GroupMembers } from 'src/app/groupmembers/model/groupmembers-dto';
 import { GroupService } from 'src/app/service/group.service';
 import { aGroup, aLoggedInUser, aUser, REFERENCE_DATE } from 'src/testing/test-data';
 import { authServiceStub, provideServiceTesting } from 'src/testing/test-providers';
+import { removeOverlays } from 'src/testing/overlay-cleanup';
 import { toIsoDay } from '../iso-day';
 import { Zeitraum } from '../new-edit-cart/model/gmh-zeitraum';
 import { CartService } from '../service/cart.service';
@@ -303,6 +304,9 @@ describe('SettlementSheetComponent (DIV-70)', () => {
   });
 
   describe('Datumsauswahl', () => {
+    // Geöffnete Picker hängen außerhalb der Fixture und verdeckten sonst Layout-Tests anderer Specs (DIV-80)
+    afterEach(() => removeOverlays('ion-modal.settlement-date-picker'));
+
     const pickerModal = () => el().querySelector('ion-modal.settlement-date-picker') as HTMLIonModalElement;
     const dateItem = () => el().querySelector('ion-item.date-field') as HTMLElement;
 
