@@ -292,6 +292,97 @@ describe('GroupoverviewPage – Layout langer Namen (DIV-80)', () => {
   });
 });
 
+// DIV-80 (Gerätetest Nutzer): Bei großer Schrift überlagerten sich „Admin: …“ und „Mitglieder: N“, der Admin-Name war
+// nicht mehr zu sehen. Jetzt steht die Mitgliederzahl immer in einer eigenen Zeile (einheitlich für alle Einträge).
+describe('GroupoverviewPage – Detailzeile bei großer Schrift (DIV-80)', () => {
+  let fixture: ComponentFixture<GroupoverviewPage>;
+  let style: HTMLStyleElement | undefined;
+  let width = 320;
+  // ion-col (size-md="6") richtet sich nach der Fensterbreite: iframe auf Handybreite (unter md) wie in cartlist.page.spec
+  const frame = window.frameElement as HTMLElement | null;
+  const frameWidth = frame?.style.width ?? '';
+
+  const rect = (sel: string) => (fixture.nativeElement as HTMLElement).querySelector(sel)!.getBoundingClientRect();
+  const overlap = (a: DOMRect, b: DOMRect) =>
+    a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
+
+  async function render(textScale: number, ownerName = 'Sven Beispiel', fixtureWidth = 320) {
+    width = fixtureWidth;
+    // `font-size: small` ist absolut und folgt der Root-Schrift nicht: Android-Schriftgröße hier direkt nachgestellt
+    style = document.createElement('style');
+    style.textContent = `.group-details { font-size: calc(13px * ${textScale}) !important; }`;
+    document.head.appendChild(style);
+    TestBed.configureTestingModule({
+      declarations: [GroupoverviewPage],
+      imports: [IonicModule.forRoot(), TranslateModule],
+      providers: [
+        ...provideServiceTesting(),
+        { provide: StorageService, useValue: storageServiceFake() },
+        { provide: AuthService, useValue: authServiceStub(aLoggedInUser()) },
+        { provide: AlertService, useValue: alertServiceSpy() },
+      ],
+    });
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('de', { groups: { group: { members: 'Mitglieder:' } } }, true);
+    translate.use('de');
+    const groupService = TestBed.inject(GroupService);
+    spyOn(groupService, 'getGroupsForOverview');
+    groupService.groupOverviewList.set([aGroupOverview({ name: 'Haushalt', ownerName, memberCount: 12 })]);
+    fixture = TestBed.createComponent(GroupoverviewPage);
+    const root = fixture.nativeElement as HTMLElement;
+    root.classList.add('ion-page');
+    Object.assign(root.style, { position: 'fixed', top: '0', left: '0', width: `${width}px`, height: '640px' });
+    if (frame) frame.style.width = `${width + 100}px`;
+    window.dispatchEvent(new Event('resize'));
+    fixture.detectChanges();
+    await ionicReady(root);
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    await new Promise(resolve => requestAnimationFrame(resolve));
+  }
+
+  afterEach(() => {
+    style?.remove();
+    if (frame) frame.style.width = frameWidth;
+    window.dispatchEvent(new Event('resize'));
+  });
+
+  it('normale Schrift, kurzer Name: trotzdem zwei Zeilen wie jeder Eintrag, Name vollständig', async () => {
+    await render(1, 'Anna', 412);
+
+    const admin = rect('.admin');
+    const members = rect('.group-members');
+    const name = (fixture.nativeElement as HTMLElement).querySelector('.admin-name') as HTMLElement;
+    expect(members.top).toBeGreaterThanOrEqual(admin.bottom - 1);
+    expect(Math.abs(admin.left - members.left)).toBeLessThan(1);
+    expect(name.scrollWidth).toBeLessThanOrEqual(name.clientWidth + 1);
+  });
+
+  it('normale Schrift, langer Name: zwei Zeilen, Name per Ellipsis gekürzt, kein Überlauf', async () => {
+    await render(1, 'Maximiliane-Alexandra von Hohenzollern-Sigmaringen', 320);
+
+    const name = (fixture.nativeElement as HTMLElement).querySelector('.admin-name') as HTMLElement;
+    expect(rect('.group-members').top).toBeGreaterThanOrEqual(rect('.admin').bottom - 1);
+    expect(name.scrollWidth).toBeGreaterThan(name.clientWidth);
+    expect(rect('.admin').right).toBeLessThanOrEqual(rect('.group-details').right + 0.5);
+  });
+
+  it('200 % Schrift: Mitgliederzahl in eigener Zeile, „Admin:“, Name und Zahl überlagern sich nicht, Name sichtbar', async () => {
+    await render(2);
+
+    const label = rect('.admin-label');
+    const name = rect('.admin-name');
+    const members = rect('.group-members');
+    expect(overlap(label, members)).toBeFalse();
+    expect(overlap(name, members)).toBeFalse();
+    expect(overlap(label, name)).toBeFalse();
+    expect(members.top).toBeGreaterThanOrEqual(name.bottom - 1);
+    expect(name.width).toBeGreaterThan(40);
+    expect(members.right).toBeLessThanOrEqual(width + 0.5);
+    expect((fixture.nativeElement as HTMLElement).querySelector('ion-item.group-item')!.getBoundingClientRect().right)
+      .toBeLessThanOrEqual(width + 0.5);
+  });
+});
+
 // DIV-80: Nach dem Löschen der letzten Gruppe geht es erst nach erfolgreicher Antwort zu no-group.
 describe('GroupoverviewPage – letzte Gruppe löschen (DIV-80)', () => {
   let page: GroupoverviewPage;

@@ -16,21 +16,28 @@ ion-item.active-group {
     min-width: 0;
 }
 
+// Immer zwei Zeilen, in jedem Eintrag gleich (Nutzerwunsch): oben „Admin: Name“, darunter „Mitglieder: N“. So
+// überlagern sich die Texte auch bei großer Android-Schrift nicht, und der Name hat die volle Breite; per Ellipsis
+// gekürzt wird nur ein Name, der allein länger als die Zeile ist (FA9).
 .group-details {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
+    flex-direction: column;
+    align-items: flex-start;
+    row-gap: 2px;
     font-size: small;
     .group-members {
-        display: flex;
-        flex-shrink: 0;
+        max-width: 100%;
+        white-space: nowrap;
     }
     // Admin-Name nur per CSS gekürzt, der volle Text bleibt im DOM (DIV-79-Konvention, vorher `slice` im Template)
     .admin {
         display: flex;
+        max-width: 100%;
         min-width: 0;
         white-space: nowrap;
+    }
+    .admin-label {
+        flex: none;
     }
     .admin-name {
         min-width: 0;

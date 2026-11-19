@@ -45,7 +45,7 @@
               <!-- Admin-Name nur per CSS gekürzt, der volle Text bleibt im DOM (DIV-79-Konvention) -->
               <div class="group-details">
                 <div class="admin">
-                  <ion-text color="medium">Admin:&nbsp;</ion-text>
+                  <ion-text class="admin-label" color="medium">Admin:&nbsp;</ion-text>
                   <ion-text class="admin-name" [attr.color]="isAdmin(group) ? 'primary' : 'medium'">{{ group.ownerName }}</ion-text>
                 </div>
                 <div class="group-members">
