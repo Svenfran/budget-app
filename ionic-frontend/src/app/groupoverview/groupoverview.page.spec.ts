@@ -276,19 +276,19 @@ describe('GroupoverviewPage – Layout langer Namen (DIV-80)', () => {
     await new Promise(resolve => requestAnimationFrame(resolve));
   });
 
-  it('kein horizontaler Überlauf; Admin-Name per Ellipsis gekürzt, voller Text im DOM; ⋮ mindestens 44 px', () => {
+  it('kein horizontaler Überlauf; Admin-Name vollständig und umgebrochen; ⋮ mindestens 44 px', () => {
     const root = fixture.nativeElement as HTMLElement;
     const item = root.querySelector('ion-item.group-item') as HTMLElement;
-    const adminName = root.querySelector('.admin-name') as HTMLElement;
+    const admin = root.querySelector('.admin') as HTMLElement;
     const button = root.querySelector('.group-menu-button') as HTMLElement;
 
     expect(item.getBoundingClientRect().right).toBeLessThanOrEqual(WIDTH + 0.5);
     expect(button.getBoundingClientRect().right).toBeLessThanOrEqual(WIDTH + 0.5);
     expect(button.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
     expect(button.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
-    expect(adminName.textContent!.trim()).toBe('Maximiliane-Alexandra von Hohenzollern-Sigmaringen');
-    expect(getComputedStyle(adminName).textOverflow).toBe('ellipsis');
-    expect(adminName.scrollWidth).toBeGreaterThan(adminName.clientWidth);
+    expect(root.querySelector('.admin-name')!.textContent!.trim()).toBe('Maximiliane-Alexandra von Hohenzollern-Sigmaringen');
+    expect(admin.scrollWidth).toBeLessThanOrEqual(admin.clientWidth + 1);
+    expect(admin.getBoundingClientRect().height).toBeGreaterThan(root.querySelector('.group-members')!.getBoundingClientRect().height * 1.5);
   });
 });
 
@@ -296,7 +296,6 @@ describe('GroupoverviewPage – Layout langer Namen (DIV-80)', () => {
 // nicht mehr zu sehen. Jetzt steht die Mitgliederzahl immer in einer eigenen Zeile (einheitlich für alle Einträge).
 describe('GroupoverviewPage – Detailzeile bei großer Schrift (DIV-80)', () => {
   let fixture: ComponentFixture<GroupoverviewPage>;
-  let style: HTMLStyleElement | undefined;
   let width = 320;
   // ion-col (size-md="6") richtet sich nach der Fensterbreite: iframe auf Handybreite (unter md) wie in cartlist.page.spec
   const frame = window.frameElement as HTMLElement | null;
@@ -308,10 +307,8 @@ describe('GroupoverviewPage – Detailzeile bei großer Schrift (DIV-80)', () =>
 
   async function render(textScale: number, ownerName = 'Sven Beispiel', fixtureWidth = 320) {
     width = fixtureWidth;
-    // `font-size: small` ist absolut und folgt der Root-Schrift nicht: Android-Schriftgröße hier direkt nachgestellt
-    style = document.createElement('style');
-    style.textContent = `.group-details { font-size: calc(13px * ${textScale}) !important; }`;
-    document.head.appendChild(style);
+    // Android-Schriftgröße als Root-Schrift nachgestellt (Codex F-004: am Dokument, nicht am Fixture-Root)
+    document.documentElement.style.fontSize = `${textScale * 100}%`;
     TestBed.configureTestingModule({
       declarations: [GroupoverviewPage],
       imports: [IonicModule.forRoot(), TranslateModule],
@@ -341,7 +338,7 @@ describe('GroupoverviewPage – Detailzeile bei großer Schrift (DIV-80)', () =>
   }
 
   afterEach(() => {
-    style?.remove();
+    document.documentElement.style.fontSize = '';
     if (frame) frame.style.width = frameWidth;
     window.dispatchEvent(new Event('resize'));
   });
@@ -351,32 +348,36 @@ describe('GroupoverviewPage – Detailzeile bei großer Schrift (DIV-80)', () =>
 
     const admin = rect('.admin');
     const members = rect('.group-members');
-    const name = (fixture.nativeElement as HTMLElement).querySelector('.admin-name') as HTMLElement;
     expect(members.top).toBeGreaterThanOrEqual(admin.bottom - 1);
     expect(Math.abs(admin.left - members.left)).toBeLessThan(1);
-    expect(name.scrollWidth).toBeLessThanOrEqual(name.clientWidth + 1);
+    // einzeilig: so hoch wie die Mitgliederzeile
+    expect(admin.height).toBeLessThan(members.height * 1.5);
   });
 
-  it('normale Schrift, langer Name: zwei Zeilen, Name per Ellipsis gekürzt, kein Überlauf', async () => {
+  it('normale Schrift, langer Name: bricht wie der Gruppenname um, vollständig lesbar, kein Überlauf', async () => {
     await render(1, 'Maximiliane-Alexandra von Hohenzollern-Sigmaringen', 320);
 
-    const name = (fixture.nativeElement as HTMLElement).querySelector('.admin-name') as HTMLElement;
+    const admin = (fixture.nativeElement as HTMLElement).querySelector('.admin') as HTMLElement;
     expect(rect('.group-members').top).toBeGreaterThanOrEqual(rect('.admin').bottom - 1);
-    expect(name.scrollWidth).toBeGreaterThan(name.clientWidth);
+    expect(rect('.admin').height).toBeGreaterThan(rect('.group-members').height * 1.5);
+    expect(admin.scrollWidth).toBeLessThanOrEqual(admin.clientWidth + 1);
     expect(rect('.admin').right).toBeLessThanOrEqual(rect('.group-details').right + 0.5);
   });
 
-  it('200 % Schrift: Mitgliederzahl in eigener Zeile, „Admin:“, Name und Zahl überlagern sich nicht, Name sichtbar', async () => {
+  it('200 % Schrift: Mitgliederzahl in eigener Zeile, nichts überlagert, Name vollständig lesbar', async () => {
     await render(2);
+    // Nachweis, dass die Vergrößerung wirkt (13 px bei 100 %)
+    expect(parseFloat(getComputedStyle((fixture.nativeElement as HTMLElement).querySelector('.group-details')!).fontSize))
+      .toBeGreaterThanOrEqual(25);
 
-    const label = rect('.admin-label');
-    const name = rect('.admin-name');
+    const admin = rect('.admin');
     const members = rect('.group-members');
-    expect(overlap(label, members)).toBeFalse();
-    expect(overlap(name, members)).toBeFalse();
-    expect(overlap(label, name)).toBeFalse();
-    expect(members.top).toBeGreaterThanOrEqual(name.bottom - 1);
-    expect(name.width).toBeGreaterThan(40);
+    const adminEl = (fixture.nativeElement as HTMLElement).querySelector('.admin') as HTMLElement;
+    expect(overlap(admin, members)).toBeFalse();
+    expect(members.top).toBeGreaterThanOrEqual(admin.bottom - 1);
+    // Name vollständig lesbar (umgebrochen statt abgeschnitten)
+    expect(adminEl.scrollWidth).toBeLessThanOrEqual(adminEl.clientWidth + 1);
+    expect(adminEl.textContent).toContain('Sven Beispiel');
     expect(members.right).toBeLessThanOrEqual(width + 0.5);
     expect((fixture.nativeElement as HTMLElement).querySelector('ion-item.group-item')!.getBoundingClientRect().right)
       .toBeLessThanOrEqual(width + 0.5);

@@ -211,5 +211,28 @@ describe('GroupFormSheetComponent (DIV-80)', () => {
       expect(save.bottom).toBeLessThanOrEqual(cancel.top + 0.5);
       expect(button('btn-cancel').getAttribute('fill')).toBe('clear');
     });
+
+    // Codex F-004: Android-Schriftgröße als Root-Schrift (am Dokument), Wirkung per getComputedStyle nachgewiesen
+    describe('200 % Schrift', () => {
+      afterEach(() => document.documentElement.style.fontSize = '');
+
+      it('Kopf, Feld und beide Buttons bleiben ohne horizontalen Überlauf erreichbar', async () => {
+        const title = el().querySelector('h2') as HTMLElement;
+        const before = parseFloat(getComputedStyle(title).fontSize);
+        document.documentElement.style.fontSize = '200%';
+        fixture.detectChanges();
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        await new Promise(resolve => requestAnimationFrame(resolve));
+
+        expect(parseFloat(getComputedStyle(title).fontSize)).toBeGreaterThanOrEqual(before * 1.9);
+        expect(el().scrollWidth).toBeLessThanOrEqual(WIDTH);
+        for (const cls of ['btn-cancel', 'btn-save', 'btn-close']) {
+          const r = button(cls).getBoundingClientRect();
+          expect(r.width).withContext(cls).toBeGreaterThan(0);
+          expect(r.right).withContext(cls).toBeLessThanOrEqual(WIDTH + 0.5);
+        }
+        expect(el().querySelector('.group-name-input')!.getBoundingClientRect().right).toBeLessThanOrEqual(WIDTH + 0.5);
+      });
+    });
   });
 });

@@ -406,5 +406,60 @@ describe('MembersSheetComponent (DIV-80)', () => {
       expect(add.right).toBeLessThanOrEqual(WIDTH + 0.5);
       expect(add.bottom).toBeLessThanOrEqual(el.querySelector('.member-list')!.getBoundingClientRect().top + 0.5);
     });
+
+    // Codex F-004: Android-Schriftgröße als Root-Schrift (am Dokument), Wirkung per getComputedStyle nachgewiesen
+    describe('200 % Schrift', () => {
+      afterEach(() => document.documentElement.style.fontSize = '');
+
+      // Ohne Loader zeigt die Pipe lange, unumbrechbare Schlüssel; für die Breite zählen die echten Texte
+      beforeEach(() => {
+        const translate = TestBed.inject(TranslateService);
+        translate.setTranslation('de', { groups: { members_sheet: {
+          title: 'Mitglieder verwalten', add_title: 'Mitglied hinzufügen', btn_add_member: 'Mitglied hinzufügen',
+          section_members: 'MITGLIEDER', admin_badge: 'Admin', admin_hint: 'Der Gruppenadmin kann Mitglieder entfernen.',
+          email_label: 'E-Mail-Adresse', btn_cancel: 'Abbrechen', btn_add: 'Hinzufügen',
+        } } }, true);
+        translate.use('de');
+      });
+
+      async function at200(el: HTMLElement, fixture: ComponentFixture<MembersSheetComponent>) {
+        fixture.detectChanges();
+        const title = el.querySelector('h2') as HTMLElement;
+        const before = parseFloat(getComputedStyle(title).fontSize);
+        Object.assign(el.style, { position: 'fixed', bottom: '0', left: '0', width: `${WIDTH}px`, display: 'block' });
+        document.documentElement.style.fontSize = '200%';
+        fixture.detectChanges();
+        await ionicReady(el);
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        expect(parseFloat(getComputedStyle(title).fontSize)).toBeGreaterThanOrEqual(before * 1.9);
+      }
+
+      it('Liste: kein Überlauf, Badge, ⋮ und „Mitglied hinzufügen“ innerhalb der Breite, Name gekürzt statt verdrängt', async () => {
+        const { fixture, el } = await loaded(wgMembers({ ownerName: 'Maximiliane Beispielhausen' }));
+        await at200(el, fixture);
+
+        expect(el.scrollWidth).toBeLessThanOrEqual(WIDTH);
+        for (const sel of ['.admin-badge', '.member-menu-button', '.btn-add-member', '.btn-close']) {
+          const r = el.querySelector(sel)!.getBoundingClientRect();
+          expect(r.width).withContext(sel).toBeGreaterThan(0);
+          expect(r.right).withContext(sel).toBeLessThanOrEqual(WIDTH + 0.5);
+        }
+        expect(el.querySelector('.member-name')!.getBoundingClientRect().width).toBeGreaterThan(0);
+      });
+
+      it('„Mitglied hinzufügen“: Feld und beide Buttons erreichbar, kein Überlauf', async () => {
+        const { fixture, component, el } = await loaded();
+        component.openAdd();
+        await at200(el, fixture);
+
+        expect(el.scrollWidth).toBeLessThanOrEqual(WIDTH);
+        for (const sel of ['.member-email-input', '.btn-cancel', '.btn-add']) {
+          const r = el.querySelector(sel)!.getBoundingClientRect();
+          expect(r.width).withContext(sel).toBeGreaterThan(0);
+          expect(r.right).withContext(sel).toBeLessThanOrEqual(WIDTH + 0.5);
+        }
+      });
+    });
   });
 });
