@@ -7,6 +7,7 @@ import { CategoryService } from 'src/app/service/category.service';
 import { GroupService } from 'src/app/service/group.service';
 import { aCategory, aGroup } from 'src/testing/test-data';
 import { provideServiceTesting } from 'src/testing/test-providers';
+import { removeOverlays } from 'src/testing/overlay-cleanup';
 import { CartFilter } from '../model/cart-filter';
 import { DatePickerRef, FilterSheetComponent } from './filter-sheet.component';
 
@@ -201,6 +202,8 @@ describe('FilterSheetComponent (DIV-71)', () => {
 
   describe('Datumsauswahl', () => {
     beforeEach(() => render());
+    // Geöffnete Picker hängen außerhalb der Fixture und verdeckten sonst Layout-Tests anderer Specs (DIV-80)
+    afterEach(() => removeOverlays('ion-modal.filter-date-picker'));
 
     it('Tipp auf ein Datumsfeld öffnet genau dessen Picker', () => {
       click(dateItem('endDate'));
