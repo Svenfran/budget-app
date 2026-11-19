@@ -1,0 +1,32 @@
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!-- DIV-64: Login-Rate-Limit. Ein Zähler je (scope, key_hash) mit festem Zeitfenster ab window_start (UTC).
+         key_hash ist ein HMAC-SHA256 (hex) der normalisierten E-Mail bzw. Client-IP, nie der Klartext.
+         Kein Fremdschlüssel auf user_details: Zähler gibt es auch für nicht existierende Accounts.
+         Der Index auf window_start dient dem Aufräum-Job (abgelaufene Fenster löschen). -->
+    <changeSet author="sven" id="20261110120000-1">
+        <createTable tableName="login_attempt">
+            <column name="scope" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="key_hash" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="window_start" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="attempts" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addPrimaryKey tableName="login_attempt" columnNames="scope, key_hash" constraintName="pk_login_attempt"/>
+        <createIndex tableName="login_attempt" indexName="idx_login_attempt_window_start">
+            <column name="window_start"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
