@@ -241,7 +241,11 @@ export class MembersSheetComponent implements OnInit, OnDestroy {
         { text: this.translate.instant(`${key}.ok`), role: 'confirm' },
       ],
     });
-    if (this.closed) return false;
+    if (this.closed) {
+      // Ionic hängt den Alert schon beim Erzeugen an; nie präsentiert hilft nur remove() (Codex-Review 2 F-003)
+      alert.remove();
+      return false;
+    }
     this.openAlert = alert;
     try {
       await alert.present();

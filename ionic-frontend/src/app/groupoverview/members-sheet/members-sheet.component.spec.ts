@@ -381,18 +381,21 @@ describe('MembersSheetComponent (DIV-80)', () => {
       expect(removeMemberFromGroup).not.toHaveBeenCalled();
     });
 
-    it('Alert, der erst nach dem Schließen fertig erzeugt ist, wird nicht mehr angezeigt', async () => {
+    it('Alert, der erst nach dem Schließen fertig erzeugt ist, wird nicht angezeigt und wieder entfernt (Codex-Review 2 F-003)', async () => {
       let created!: (alert: unknown) => void;
       const present = jasmine.createSpy('present').and.resolveTo();
+      // Ionic hängt den Alert schon beim Erzeugen an; ohne present() hilft nur remove()
+      const remove = jasmine.createSpy('remove');
       alertCreate.and.returnValue(new Promise(resolve => created = resolve));
       const { fixture, component } = await loaded();
 
       const pending = component.makeAdmin(ben);
       fixture.destroy();
-      created({ present, dismiss: jasmine.createSpy('dismiss').and.resolveTo(true), onDidDismiss: () => Promise.resolve({ role: 'confirm' }) });
+      created({ present, remove, dismiss: jasmine.createSpy('dismiss').and.resolveTo(true), onDidDismiss: () => Promise.resolve({ role: 'confirm' }) });
       await pending;
 
       expect(present).not.toHaveBeenCalled();
+      expect(remove).toHaveBeenCalledTimes(1);
       expect(changeGroupOwner).not.toHaveBeenCalled();
     });
 
