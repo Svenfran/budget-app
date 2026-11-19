@@ -1,4 +1,4 @@
-import { Component, effect, Input, OnInit, WritableSignal } from '@angular/core';
+import { Component, effect, Input, OnInit, signal, WritableSignal } from '@angular/core';
 import { ModalController } from '@ionic/angular';
 import { GroupService } from 'src/app/service/group.service';
 import { GROUP_GONE_ROLE, GROUP_SHEET_SAVED_ROLE } from '../group-sheet-roles';
@@ -33,6 +33,8 @@ export class GroupFormSheetComponent implements OnInit {
 
   readonly maxLength = GROUP_NAME_MAX_LENGTH;
   form: GroupFormGroup = groupForm();
+  /** Speichern mit ungültigem Formular versucht: ab dann zeigt das Feld seinen Fehler auch ohne Eingabe. */
+  readonly submitted = signal(false);
   /** Sheet ist geschlossen oder schließt gerade (Gruppe verschwunden): keine weiteren Aktionen. */
   private closed = false;
 
@@ -59,15 +61,19 @@ export class GroupFormSheetComponent implements OnInit {
 
   get isEdit(): boolean { return this.mode === 'edit'; }
 
-  /** Feldfehler erst nach Bedienung zeigen, nicht beim Öffnen. */
+  /**
+   * Feldfehler erst nach einer Eingabe oder einem Speicherversuch zeigen – nicht schon, wenn das leere Feld den Fokus
+   * verliert: Der Tipp aufs X löst zuerst den Blur aus, die eingeblendete Zeile ließe das unten verankerte Sheet nach
+   * oben wachsen und das X unter dem Finger wegrutschen (der Klick ginge daneben).
+   */
   showNameError(): boolean {
-    return this.name.invalid && (this.name.dirty || this.name.touched);
+    return this.name.invalid && (this.name.dirty || this.submitted());
   }
 
   async save() {
     if (this.closed || this.saving()) return;
     if (this.form.invalid) {
-      this.name.markAsTouched();
+      this.submitted.set(true);
       return;
     }
     const group = toGroup(this.form.getRawValue(), this.isEdit ? this.group : undefined);

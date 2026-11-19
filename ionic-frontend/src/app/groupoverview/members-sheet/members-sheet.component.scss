@@ -2,12 +2,19 @@
 // dem color-theme automatisch. Basis-Style: src/theme/bottom-sheet.scss.
 
 // Inhaltshohes Sheet: höchstens 90 % der Höhe; Kopf (und in der Eingabe der Footer) fest, der Mittelteil scrollt bei
-// langen Listen oder großer Schrift. `--keyboard-offset` hebt Feld und Footer über die Tastatur.
+// langen Listen oder großer Schrift.
 .members-sheet {
   display: flex;
   flex-direction: column;
-  max-height: calc(90vh - var(--keyboard-offset, 0px));
-  margin-bottom: var(--keyboard-offset, 0px);
+  max-height: 90vh;
+
+  // Nur die Eingabe hebt Feld und Footer per `--keyboard-offset` über die Tastatur. Die Liste hat kein Feld: Bei
+  // „Abbrechen“ erscheint sie sofort, 'keyboardWillHide' entfernt den Offset erst danach – mit Offset wäre sie kurz bis
+  // zu 90vh hoch (Flackern über die ganze Seite).
+  &.view-add {
+    max-height: calc(90vh - var(--keyboard-offset, 0px));
+    margin-bottom: var(--keyboard-offset, 0px);
+  }
 }
 
 .sheet-body {

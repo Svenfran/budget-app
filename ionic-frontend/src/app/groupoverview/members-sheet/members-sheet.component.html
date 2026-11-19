@@ -1,6 +1,6 @@
 <!-- Ein Sheet, zwei Ansichten (DIV-80, FA4): Mitgliederliste und „Mitglied hinzufügen“. Aufbau wie die übrigen Sheets:
      Kopf und Footer fest, nur der Mittelteil scrollt. Basis-Style: src/theme/bottom-sheet.scss. -->
-<div class="members-sheet">
+<div class="members-sheet" [class.view-add]="view() === 'add'">
   <div class="sheet-top">
     <div class="sheet-header">
       <ion-icon [name]="view() === 'add' ? 'person-add-outline' : 'people-outline'" color="primary" aria-hidden="true"></ion-icon>
@@ -92,7 +92,7 @@
     <!-- Kein <form>-Element: Enter fügt über submitAdd() hinzu, das während des Requests gesperrt ist. -->
     <div class="sheet-body">
       <ion-item lines="none" class="member-email-field">
-        <ion-input [formControl]="email" class="member-email-input" type="email" inputmode="email" autocomplete="email"
+        <ion-input #emailInput [formControl]="email" class="member-email-input" type="email" inputmode="email" autocomplete="email"
                    enterkeyhint="send" labelPlacement="stacked" [maxlength]="maxLength"
                    [label]="'groups.members_sheet.email_label' | translate"
                    (ionInput)="onEmailInput()" (keyup.enter)="submitAdd()"></ion-input>

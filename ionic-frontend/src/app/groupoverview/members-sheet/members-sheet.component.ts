@@ -1,4 +1,4 @@
-import { Component, computed, DestroyRef, effect, Input, OnDestroy, OnInit, signal, WritableSignal } from '@angular/core';
+import { Component, computed, DestroyRef, effect, ElementRef, Input, OnDestroy, OnInit, signal, ViewChild, WritableSignal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, Validators } from '@angular/forms';
 import { AlertController, ModalController } from '@ionic/angular';
@@ -64,6 +64,16 @@ export class MembersSheetComponent implements OnInit, OnDestroy {
     const members = this.members();
     return !!members && members.ownerId === this.userId();
   });
+
+  /**
+   * Fokus ins E-Mail-Feld, sobald die Ansicht „Mitglied hinzufügen“ erscheint (wie „Gruppe hinzufügen“): Das Feld ist
+   * der einzige Zweck der Ansicht. Der Setter läuft bei jedem Wechsel in die Ansicht, da *ngIf das Feld neu erzeugt.
+   * Erst nach dem ersten Rendern und einem Frame fokussieren: Direkt beim Anlegen hat ion-input noch kein natives
+   * Eingabefeld, setFocus() bewirkt dann nichts.
+   */
+  @ViewChild('emailInput', { read: ElementRef }) set emailInput(ref: ElementRef<HTMLIonInputElement> | undefined) {
+    if (ref) this.focusWhenReady(ref.nativeElement);
+  }
 
   /** ⋮-Menü eines Mitglieds: ein Popover für alle Zeilen. */
   memberMenuOpen = false;
@@ -253,6 +263,16 @@ export class MembersSheetComponent implements OnInit, OnDestroy {
       return role === 'confirm' && !this.closed;
     } finally {
       if (this.openAlert === alert) this.openAlert = undefined;
+    }
+  }
+
+  private async focusWhenReady(input: HTMLIonInputElement) {
+    try {
+      await input.componentOnReady();
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      if (!this.closed && input.isConnected) await input.setFocus();
+    } catch {
+      // Fokus ist eine Komfortfunktion; ohne ihn bleibt die Eingabe bedienbar
     }
   }
 

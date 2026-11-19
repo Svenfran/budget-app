@@ -1,7 +1,7 @@
 import { computed, signal, WritableSignal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ReactiveFormsModule } from '@angular/forms';
-import { AlertController, IonicModule, ModalController } from '@ionic/angular';
+import { AlertController, IonicModule, IonInput, ModalController } from '@ionic/angular';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { BehaviorSubject } from 'rxjs';
 import { AuthService } from 'src/app/auth/auth.service';
@@ -285,6 +285,29 @@ describe('MembersSheetComponent (DIV-80)', () => {
       expect(modalCtrl.dismiss).not.toHaveBeenCalled();
     });
 
+    it('fokussiert beim Wechsel in die Eingabe wirklich das E-Mail-Feld – auch beim zweiten Mal', async () => {
+      const { fixture, component, el } = await loaded();
+      const nativeInput = async () => {
+        fixture.detectChanges();
+        const input = el.querySelector('ion-input.member-email-input') as HTMLIonInputElement;
+        await ionicReady(el);
+        // das Sheet fokussiert einen Frame nach dem Rendern; zwei Frames warten
+        for (let i = 0; i < 2; i++) await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve)));
+        return input.getInputElement();
+      };
+
+      component.openAdd();
+      const input = await nativeInput();
+      expect(document.activeElement).toBe(input);
+
+      component.cancelAdd();
+      fixture.detectChanges();
+      (document.activeElement as HTMLElement | null)?.blur();
+      component.openAdd();
+      const second = await nativeInput();
+      expect(document.activeElement).toBe(second);
+    });
+
     it('ungültige E-Mail: Feldfehler, kein Request (A4)', async () => {
       const { fixture, component, el } = await loaded();
       component.openAdd();
@@ -445,6 +468,29 @@ describe('MembersSheetComponent (DIV-80)', () => {
       const add = (el.querySelector('.btn-add-member') as HTMLElement).getBoundingClientRect();
       expect(add.right).toBeLessThanOrEqual(WIDTH + 0.5);
       expect(add.bottom).toBeLessThanOrEqual(el.querySelector('.member-list')!.getBoundingClientRect().top + 0.5);
+    });
+
+    // Abbrechen bei offener Tastatur: Die Liste erscheint sofort, 'keyboardWillHide' entfernt den Offset erst danach.
+    // Mit Offset wäre die Liste kurz bis zu 90vh hoch (Flackern über die ganze Seite) – nur die Eingabe nutzt ihn.
+    describe('Tastatur-Offset', () => {
+      afterEach(() => document.documentElement.style.removeProperty('--keyboard-offset'));
+
+      it('gilt nur in der Eingabe, nicht in der Liste', async () => {
+        document.documentElement.style.setProperty('--keyboard-offset', '300px');
+        const { fixture, component, el } = await loaded();
+        const sheet = () => el.querySelector('.members-sheet') as HTMLElement;
+        const vh90 = window.innerHeight * 0.9;
+
+        component.openAdd();
+        fixture.detectChanges();
+        expect(getComputedStyle(sheet()).marginBottom).toBe('300px');
+        expect(parseFloat(getComputedStyle(sheet()).maxHeight)).toBeCloseTo(vh90 - 300, 0);
+
+        component.cancelAdd();
+        fixture.detectChanges();
+        expect(getComputedStyle(sheet()).marginBottom).toBe('0px');
+        expect(parseFloat(getComputedStyle(sheet()).maxHeight)).toBeCloseTo(vh90, 0);
+      });
     });
 
     // Codex F-004: Android-Schriftgröße als Root-Schrift (am Dokument), Wirkung per getComputedStyle nachgewiesen

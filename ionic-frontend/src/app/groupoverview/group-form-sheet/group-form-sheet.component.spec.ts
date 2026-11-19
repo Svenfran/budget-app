@@ -81,6 +81,22 @@ describe('GroupFormSheetComponent (DIV-80)', () => {
       expect(saving()).toBeFalse();
     });
 
+    it('leeres Feld verlassen (z. B. Tipp aufs X): kein Feldfehler, damit sich der Kopf nicht verschiebt', () => {
+      el().querySelector('ion-input.group-name-input')!.dispatchEvent(new CustomEvent('ionBlur'));
+      fixture.detectChanges();
+
+      expect(component.name.touched).toBeTrue();
+      expect(el().querySelector('.error-name')).toBeNull();
+    });
+
+    it('Name eingegeben und wieder gelöscht: Feldfehler sofort sichtbar', () => {
+      component.name.setValue('');
+      component.name.markAsDirty();
+      fixture.detectChanges();
+
+      expect(el().querySelector('.error-name')!.textContent!.trim()).toBe('groups.form_sheet.name_required');
+    });
+
     it('leerer Name: kein Request, Feldfehler sichtbar', async () => {
       component.form.setValue({ name: '   ' });
 
