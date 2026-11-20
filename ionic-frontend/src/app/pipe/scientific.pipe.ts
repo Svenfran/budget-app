@@ -1,5 +1,15 @@
 import { Pipe, PipeTransform } from '@angular/core';
 
+/**
+ * Währungssymbol eines ISO-Codes in derselben Darstellung wie die Betragsanzeige (`Intl.NumberFormat`, DIV-77),
+ * z. B. `EUR → €`, `USD → $`, `CHF → CHF`. Für Labels und Auswahllisten. Das Zahlenformat bleibt vorerst fest `de`.
+ */
+export function currencySymbol(currencyCode: string, locale = 'de'): string {
+  return new Intl.NumberFormat(locale, { style: 'currency', currency: currencyCode })
+    .formatToParts(0)
+    .find(part => part.type === 'currency')?.value ?? currencyCode;
+}
+
 @Pipe({
   name: 'scientificCurrency'
 })
@@ -18,12 +28,16 @@ export class ScientificCurrencyPipe implements PipeTransform {
       '7': '⁷',
       '8': '⁸',
       '9': '⁹',
-      '-': '⁻' 
+      '-': '⁻'
     };
     return exponent.toString().split('').map(char => superscriptMap[char] || char).join('');
   }
 
-  transform(value: number, currencyCode: string = 'EUR', display: 'symbol' | 'code' | 'symbol-narrow' = 'symbol', digitsInfo: string = '1.2-2', locale: string = 'de'): string {
+  /**
+   * Betrag in der Währung der Gruppe (DIV-77). `currencyCode` ist Pflicht und hat bewusst keinen Standardwert: eine
+   * vergessene Anzeige fällt beim Build (strictTemplates) auf, statt still „€“ zu zeigen.
+   */
+  transform(value: number, currencyCode: string, locale: string = 'de'): string {
     const threshold = 1000000;
 
     // Wenn der Wert kleiner ist als der Schwellwert, normale Währungsformatierung anwenden
@@ -40,10 +54,9 @@ export class ScientificCurrencyPipe implements PipeTransform {
     const exponent = Math.floor(Math.log10(Math.abs(value)));
     const mantissa = value / Math.pow(10, exponent);
 
-    // Die Zahl im Format "mantissa * 10^exponent" mit Währungszeichen zurückgeben
-    const currencySymbol = currencyCode === 'EUR' ? '€' : currencyCode;
+    // Die Zahl im Format "mantissa * 10^exponent" mit Währungszeichen zurückgeben (Symbol wie im Normalfall)
     const superscriptExponent = this.toSuperscript(exponent);  // Exponent in hochgestellter Form umwandeln
 
-    return `${mantissa.toFixed(2)} * 10${superscriptExponent} ${currencySymbol}`;
+    return `${mantissa.toFixed(2)} * 10${superscriptExponent} ${currencySymbol(currencyCode, locale)}`;
   }
 }

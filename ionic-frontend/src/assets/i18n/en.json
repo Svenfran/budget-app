@@ -114,7 +114,7 @@
                     "placeholder_member_from": "From member",
                     "direction_paid": "I paid to",
                     "direction_received": "I received from",
-                    "amount": "Amount in €*",
+                    "amount": "Amount in {{currency}}*",
                     "amount_positive": "Amount must be greater than 0",
                     "title_edit": "Edit repayment",
                     "subtitle_edit": "Changes apply to both parties.",
@@ -526,7 +526,7 @@
         "duplicate_hint": "Data copied from an existing expense",
         "form": {
             "title": "Title*",
-            "amount": "Amount in €*",
+            "amount": "Amount in {{currency}}*",
             "description": "Description",
             "date_purchased": "Date*",
             "category": "Category*",
@@ -553,6 +553,7 @@
         "filter": {
             "group": "Group",
             "all_groups": "All groups",
+            "currency": "Currency",
             "period_month": "Month",
             "period_year": "Year",
             "period_all": "All",

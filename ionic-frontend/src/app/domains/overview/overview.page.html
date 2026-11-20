@@ -72,7 +72,7 @@
                 <ion-text color="medium" class="subtitle">{{ 'domains.overview.total_all_members' | translate }}</ion-text>
               </div>
             </div>
-            <div class="total-amount">{{ spendingsTotal.sumTotalYear | scientificCurrency }}</div>
+            <div class="total-amount">{{ spendingsTotal.sumTotalYear | scientificCurrency: currency() }}</div>
           </div>
           <button type="button" class="total-badge" (click)="openStatistics()"
                   [attr.aria-label]="'navigation.statistics.open' | translate">
@@ -94,7 +94,7 @@
           </ng-container>
           <div class="total-row" *ngIf="spendingsUsers.length > 1">
             <ion-text color="medium">{{ 'domains.overview.total' | translate }}</ion-text>
-            <span class="money">{{ spendingsTotal.sumTotalYear | scientificCurrency }}</span>
+            <span class="money">{{ spendingsTotal.sumTotalYear | scientificCurrency: currency() }}</span>
           </div>
         </ion-card>
       </ion-col>
@@ -145,7 +145,7 @@
       <ion-icon name="calendar-outline" class="period-icon" aria-hidden="true"></ion-icon>
       <span class="period-label">{{ label }}</span>
       <span class="period-total" *ngIf="spendingsUsers.length > 1">
-        {{ 'domains.overview.total' | translate }} <strong class="money">{{ total | scientificCurrency }}</strong>
+        {{ 'domains.overview.total' | translate }} <strong class="money">{{ total | scientificCurrency: currency() }}</strong>
       </span>
     </div>
     <ng-container *ngTemplateOutlet="columnHeader; context: { showPerson: true }"></ng-container>
@@ -180,12 +180,12 @@
       {{ getUserDisplayName(userSpendings.userName) }}
     </span>
     <div class="amounts">
-      <span class="amount money">{{ userSpendings.sum | scientificCurrency }}</span>
+      <span class="amount money">{{ userSpendings.sum | scientificCurrency: currency() }}</span>
       <span *ngIf="spendingsUsers.length > 1"
             class="saldo money"
             [class.positive]="!isDeletedUser(userSpendings.userName) && userSpendings.diff >= 0"
             [class.negative]="!isDeletedUser(userSpendings.userName) && userSpendings.diff < 0">
-        {{ userSpendings.diff | scientificCurrency }}
+        {{ userSpendings.diff | scientificCurrency: currency() }}
       </span>
     </div>
   </div>

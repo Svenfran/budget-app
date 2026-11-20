@@ -36,6 +36,8 @@ export class CartlistPage implements OnInit {
   public cartList = this.cartService.cartList;
   public initCartList = this.cartService.initCartList;
   public activeGroup = this.groupService.activeGroup();
+  /** Währung aller Beträge der Liste (DIV-77) */
+  public currency = this.groupService.activeCurrency;
   public filterTerm = signal<string>('');
   public filterMode = signal<boolean>(false);
   public sum = this.cartService.sum;

@@ -7,6 +7,8 @@ import { AuthService } from 'src/app/auth/auth.service';
 import { GroupService } from 'src/app/service/group.service';
 import { LanguageService } from 'src/app/service/language.service';
 import { roundedAmountInput } from 'src/app/service/amount';
+import { currencySymbol } from 'src/app/pipe/scientific.pipe';
+import { DEFAULT_CURRENCY } from 'src/app/constants/currency';
 import { formatDisplayDate, isoDayOf, toIsoDay } from '../iso-day';
 import { CartService } from '../service/cart.service';
 import {
@@ -51,6 +53,8 @@ export class SettlementSheetComponent implements OnInit {
   @Input() settlement?: SettlementEditData;
 
   readonly group = this.groupService.activeGroup();
+  /** Währungssymbol im Betrags-Label (DIV-77): Gruppe beim Öffnen festgehalten wie Request und Datumsgrenzen */
+  readonly currencySymbol = currencySymbol(this.group.currencyCode ?? DEFAULT_CURRENCY);
   readonly currentLang = this.langService.currentLang;
   readonly userId = signal<number | undefined>(undefined);
   readonly userName = signal('');

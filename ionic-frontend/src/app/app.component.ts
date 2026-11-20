@@ -16,7 +16,7 @@ import { StorageService } from './service/storage.service';
 import { ChangeGroupOwnerDto } from './groupmembers/model/change-group-owner-dto';
 import {
   applyMemberAddedToOverview, applyMemberRemovedFromOverview, applyMembersChange, applyOwnerChange,
-  applyOwnerChangeToOverview, GroupMembersEvent, renameGroup,
+  applyOwnerChangeToOverview, GroupMembersEvent, applyGroupUpdate, GroupUpdateEvent,
 } from './service/group-events';
 import { CategoryDto } from './model/category-dto';
 import { CategoryService } from './service/category.service';
@@ -396,14 +396,15 @@ export class AppComponent {
   }
 
   subscribeToTopics() {
-    this.webSocketService.subscribe<Group>(
+    this.webSocketService.subscribe<GroupUpdateEvent>(
       `/user/notification/update-group`,
       data => {
-        this.sideNavGroups.update(groups => renameGroup(groups, data));
-        this.groupOverviewList.update(groups => renameGroup(groups, data));
+        // Name und Währung (DIV-77) in Seitenleiste, Übersicht und aktiver Gruppe
+        this.sideNavGroups.update(groups => applyGroupUpdate(groups, data));
+        this.groupOverviewList.update(groups => applyGroupUpdate(groups, data));
 
         if (this.activeGroup.id === data.id) {
-          this.groupService.setActiveGroup({ ...this.activeGroup, name: data.name });
+          this.groupService.setActiveGroup(applyGroupUpdate([this.activeGroup], data)[0]);
         }
       },
       { owner: 'app' }
@@ -460,7 +461,9 @@ export class AppComponent {
       `/user/notification/add-group-member`,
       parsedData => {
         console.log(parsedData);
-        const group: Group = { id: parsedData.id, name: parsedData.name, dateCreated: parsedData.dateCreated };
+        const group: Group = {
+          id: parsedData.id, name: parsedData.name, dateCreated: parsedData.dateCreated, currencyCode: parsedData.currencyCode,
+        };
         // Übersicht (inkl. ownerId) und offene Mitgliederliste (DIV-80) über pure Funktionen (group-events.ts)
         this.groupOverviewList.update(groups => applyMemberAddedToOverview(groups, parsedData, this.user?.id));
         this.groupMembers.update(groupMembers => applyMembersChange(groupMembers, parsedData));
@@ -474,6 +477,8 @@ export class AppComponent {
           this.groupService.setActiveGroup(group);
           this.router.navigateByUrl("/domains/tabs/overview", { replaceUrl: true });
         }
+        // Eigene Aufnahme: still neu laden, falls die Währung inzwischen gewechselt wurde (DIV-77, D8)
+        this.groupService.refreshAfterMembershipEvent(parsedData, this.user);
       
       },
       { owner: 'app' }

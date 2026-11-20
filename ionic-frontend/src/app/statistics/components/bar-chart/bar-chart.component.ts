@@ -1,9 +1,7 @@
 import { AfterViewInit, Component, effect, ElementRef, input, OnDestroy, untracked, viewChild } from '@angular/core';
 import { ChartTheme } from '../../chart-theme';
 import { ChartThemeService } from '../../service/chart-theme.service';
-import { Chart, formatAmount } from '../chart-setup';
-
-const AXIS_FORMAT = new Intl.NumberFormat('de', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+import { Chart, formatAmount, formatAxisAmount } from '../chart-setup';
 
 /** Balkendiagramm „Von dir bezahlt“; negative Balken (empfangene Ausgleichszahlungen) in der Farbe von danger. */
 @Component({
@@ -16,6 +14,8 @@ export class BarChartComponent implements AfterViewInit, OnDestroy {
 
   labels = input.required<string[]>();
   values = input.required<number[]>();
+  /** Währung der Beträge (DIV-77): Tooltip und Achse */
+  currency = input.required<string>();
 
   private canvas = viewChild.required<ElementRef<HTMLCanvasElement>>('canvas');
   private chart?: Chart<'bar'>;
@@ -24,6 +24,7 @@ export class BarChartComponent implements AfterViewInit, OnDestroy {
     effect(() => {
       const labels = this.labels();
       const values = this.values();
+      this.currency(); // Währungswechsel zeichnet Tooltip und Achse neu
       const theme = this.chartThemeService.theme();
       untracked(() => this.chart && this.update(labels, values, theme));
     });
@@ -39,11 +40,11 @@ export class BarChartComponent implements AfterViewInit, OnDestroy {
         maintainAspectRatio: false,
         animation: false,
         plugins: {
-          tooltip: { callbacks: { label: context => formatAmount(context.parsed.y ?? 0) } },
+          tooltip: { callbacks: { label: context => formatAmount(context.parsed.y ?? 0, this.currency()) } },
         },
         scales: {
           x: { grid: { display: false }, ticks: { maxRotation: 0 } },
-          y: { ticks: { callback: value => AXIS_FORMAT.format(Number(value)) } },
+          y: { ticks: { callback: value => formatAxisAmount(Number(value), this.currency()) } },
         },
       },
     });

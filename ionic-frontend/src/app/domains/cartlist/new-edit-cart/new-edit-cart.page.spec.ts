@@ -69,6 +69,7 @@ describe('NewEditCartPage', () => {
         } },
         { provide: GroupService, useValue: {
           activeGroup: signal(aGroup({ id: GROUP_ID, dateCreated: new Date('2024-01-01T00:00:00Z') })),
+          activeCurrency: signal('EUR'),
           groupMembershipHistory: signal([]),
           getGroupMembershipHistoryForGroupAndUser: jasmine.createSpy('getGroupMembershipHistoryForGroupAndUser'),
         } },

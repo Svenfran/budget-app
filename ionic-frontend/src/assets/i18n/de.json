@@ -114,7 +114,7 @@
                     "placeholder_member_from": "Von Mitglied",
                     "direction_paid": "Ich habe gezahlt an",
                     "direction_received": "Ich habe erhalten von",
-                    "amount": "Betrag in €*",
+                    "amount": "Betrag in {{currency}}*",
                     "amount_positive": "Betrag muss größer als 0 sein",
                     "title_edit": "Ausgleichszahlung bearbeiten",
                     "subtitle_edit": "Änderungen gelten für beide Beteiligten.",
@@ -526,7 +526,7 @@
         "duplicate_hint": "Daten aus bestehender Ausgabe übernommen",
         "form": {
             "title": "Titel*",
-            "amount": "Betrag in €*",
+            "amount": "Betrag in {{currency}}*",
             "description": "Beschreibung",
             "date_purchased": "Datum*",
             "category": "Kategorie*",
@@ -553,6 +553,7 @@
         "filter": {
             "group": "Gruppe",
             "all_groups": "Alle Gruppen",
+            "currency": "Währung",
             "period_month": "Monat",
             "period_year": "Jahr",
             "period_all": "Alle",

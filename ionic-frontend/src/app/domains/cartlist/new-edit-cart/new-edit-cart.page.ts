@@ -17,6 +17,7 @@ import { LanguageService } from 'src/app/service/language.service';
 import { calculateNextExecutionDate } from './next-execution-date';
 import { duplicateFormValues, duplicateSource } from './duplicate-cart';
 import { roundedAmountInput } from 'src/app/service/amount';
+import { currencySymbol } from 'src/app/pipe/scientific.pipe';
 
 
 @Component({
@@ -56,6 +57,8 @@ export class NewEditCartPage implements OnInit {
   public activeGroup = this.groupService.activeGroup();
   public cartList = this.cartService.cartList;
   public zeitraeume = this.groupService.groupMembershipHistory;
+  /** Währungssymbol im Betrags-Label (DIV-77) */
+  public currencySymbol = computed(() => currencySymbol(this.groupService.activeCurrency()));
   public recurrenceTypes = [
     { value: RECURRENCE_TYPE.DAILY, label: this.translate.instant("carts.recurrence_types.daily") },
     { value: RECURRENCE_TYPE.WEEKLY, label: this.translate.instant("carts.recurrence_types.weekly") },

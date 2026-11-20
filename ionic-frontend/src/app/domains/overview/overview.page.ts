@@ -29,6 +29,8 @@ export interface PeriodRange {
 export class OverviewPage implements OnInit {
 
   public activeGroup = this.groupService.activeGroup();
+  /** Währung aller Beträge der Übersicht (DIV-77) */
+  public currency = this.groupService.activeCurrency;
   // Monthly
   public spendingsOverviewMonthly = this.overviewService.spendingsOverview;
   public spendingsPerMonth = this.overviewService.spendingsPerMonth;
