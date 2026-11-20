@@ -1,3 +1,4 @@
+import { CurrencyCode } from 'src/app/constants/currency';
 import { StatisticsPeriod } from './statistics-dto';
 
 export interface StatisticsFilter {
@@ -8,11 +9,17 @@ export interface StatisticsFilter {
   year: number;
   /** 1–12, nur bei MONTH verwendet */
   month: number;
+  /**
+   * Währung bei „Alle Gruppen“ (DIV-77): Beträge verschiedener Währungen werden nie addiert. `null` = Währung der aktiven
+   * Gruppe (Standard und Rückfall, wenn die gewählte Währung unter den Gruppen nicht mehr vorkommt). Mit `groupId` ohne
+   * Wirkung – dann gilt die Gruppenwährung.
+   */
+  currency: CurrencyCode | null;
 }
 
 /** Standard beim ersten Öffnen und nach einem Sitzungswechsel (AC2): alle Gruppen, aktuelles Jahr. */
 export function defaultStatisticsFilter(now: Date): StatisticsFilter {
-  return { groupId: null, period: 'YEAR', year: now.getFullYear(), month: now.getMonth() + 1 };
+  return { groupId: null, period: 'YEAR', year: now.getFullYear(), month: now.getMonth() + 1, currency: null };
 }
 
 /**
