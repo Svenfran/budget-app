@@ -1,7 +1,6 @@
 import { Component, computed, effect, signal, untracked } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
 import { GroupService } from 'src/app/service/group.service';
-import { CurrencyCode } from 'src/app/constants/currency';
 import { currencySymbol } from 'src/app/pipe/scientific.pipe';
 import { LanguageService } from 'src/app/service/language.service';
 import { StatisticsPeriod, StatisticsPerspective } from './model/statistics-dto';
@@ -103,7 +102,7 @@ export class StatisticsPage {
     this.statisticsService.setFilter({ ...this.filter(), groupId: value === ALL_GROUPS ? null : Number(value) });
   }
 
-  onCurrencyChange(value: CurrencyCode) {
+  onCurrencyChange(value: string) {
     if (value === this.selectedCurrency()) return;
     this.statisticsService.setFilter({ ...this.filter(), currency: value });
   }

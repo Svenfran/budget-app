@@ -33,7 +33,7 @@ class ExcelWriterSpec extends Specification {
         zeile(ausgaben, 0) == ['Benutzername', 'Titel', 'Beschreibung', 'Datum', 'Betrag', 'Währung', 'Kategorie', 'Gruppe']
         zeile(historie, 0) == ['Benutzername', 'Startdatum', 'Enddatum', 'Status']
 
-        and: "Ausgabe: Datum als Datumszelle, Betrag numerisch ungerundet"
+        and: "Ausgabe: Datum als Datumszelle, Betrag numerisch ungerundet, angezeigt mit zwei Nachkommastellen (DIV-77)"
         ausgaben.lastRowNum == 1
         def cart = ausgaben.getRow(1)
         [0, 1, 2, 5, 6, 7].collect { cart.getCell(it).stringCellValue } == ['Anna', 'Pizza', 'Freitag', 'CHF', 'Essen', 'Haushalt']
@@ -41,6 +41,7 @@ class ExcelWriterSpec extends Specification {
         cart.getCell(3).cellStyle.dataFormatString == 'dd.MM.yyyy'
         cart.getCell(4).cellType == CellType.NUMERIC
         cart.getCell(4).numericCellValue == 12.345d
+        cart.getCell(4).cellStyle.dataFormatString == '0.00'
 
         and: "Historie: offene Mitgliedschaft mit leerem Enddatum"
         historie.lastRowNum == 2

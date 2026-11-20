@@ -34,14 +34,15 @@ public class ExcelWriter {
     public void write(OutputStream outputStream) throws IOException {
         try (var workbook = new XSSFWorkbook()) {
             var dateStyle = createDateCellStyle(workbook);
+            var amountStyle = createAmountCellStyle(workbook);
             String cartSheetName = translator.translate("download.cart.sheetname");
             String membershipSheetName = translator.translate("download.membership.sheetname");
 
             if (groups.isEmpty()) {
-                writeCartSheet(workbook.createSheet(cartSheetName), List.of(), dateStyle);
+                writeCartSheet(workbook.createSheet(cartSheetName), List.of(), dateStyle, amountStyle);
                 writeMembershipSheet(workbook.createSheet(membershipSheetName), List.of(), dateStyle);
             } else if (!allGroups) {
-                writeCartSheet(workbook.createSheet(cartSheetName), groups.get(0).carts(), dateStyle);
+                writeCartSheet(workbook.createSheet(cartSheetName), groups.get(0).carts(), dateStyle, amountStyle);
                 writeMembershipSheet(workbook.createSheet(membershipSheetName), groups.get(0).memberships(), dateStyle);
             } else {
                 var names = ExportNames.assign(groups, cartSheetName,
@@ -49,7 +50,7 @@ public class ExcelWriter {
                         translator.translate("download.group.fallback"));
                 for (GroupExport group : groups) {
                     var groupNames = names.get(group.groupId());
-                    writeCartSheet(workbook.createSheet(groupNames.cartSheet()), group.carts(), dateStyle);
+                    writeCartSheet(workbook.createSheet(groupNames.cartSheet()), group.carts(), dateStyle, amountStyle);
                     writeMembershipSheet(workbook.createSheet(groupNames.membershipSheet()), group.memberships(), dateStyle);
                 }
             }
@@ -58,7 +59,7 @@ public class ExcelWriter {
         outputStream.flush();
     }
 
-    private void writeCartSheet(Sheet sheet, List<CartExportRow> carts, CellStyle dateStyle) {
+    private void writeCartSheet(Sheet sheet, List<CartExportRow> carts, CellStyle dateStyle, CellStyle amountStyle) {
         var header = header("download.cart.header");
         writeHeader(sheet, header);
         int rowNum = 1;
@@ -72,7 +73,9 @@ public class ExcelWriter {
             dateCell.setCellValue(cart.datePurchased());
             dateCell.setCellStyle(dateStyle);
 
-            row.createCell(4).setCellValue(cart.amount());
+            var amountCell = row.createCell(4);
+            amountCell.setCellValue(cart.amount());
+            amountCell.setCellStyle(amountStyle);
             row.createCell(5).setCellValue(cart.currencyCode());
             row.createCell(6).setCellValue(cart.category());
             row.createCell(7).setCellValue(cart.groupName());
@@ -119,6 +122,16 @@ public class ExcelWriter {
     private static CellStyle createDateCellStyle(Workbook workbook) {
         CellStyle cellStyle = workbook.createCellStyle();
         cellStyle.setDataFormat(workbook.getCreationHelper().createDataFormat().getFormat("dd.MM.yyyy"));
+        return cellStyle;
+    }
+
+    /**
+     * Betrag mit zwei Nachkommastellen anzeigen (DIV-77; Excel stellt das Dezimalzeichen nach Gebietsschema dar). Nur
+     * Anzeige: Der Zellwert bleibt der gespeicherte, ungerundete Betrag – wie in der CSV.
+     */
+    private static CellStyle createAmountCellStyle(Workbook workbook) {
+        CellStyle cellStyle = workbook.createCellStyle();
+        cellStyle.setDataFormat(workbook.getCreationHelper().createDataFormat().getFormat("0.00"));
         return cellStyle;
     }
 

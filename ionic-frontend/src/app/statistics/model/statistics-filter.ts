@@ -1,4 +1,3 @@
-import { CurrencyCode } from 'src/app/constants/currency';
 import { StatisticsPeriod } from './statistics-dto';
 
 export interface StatisticsFilter {
@@ -12,9 +11,10 @@ export interface StatisticsFilter {
   /**
    * Währung bei „Alle Gruppen“ (DIV-77): Beträge verschiedener Währungen werden nie addiert. `null` = Währung der aktiven
    * Gruppe (Standard und Rückfall, wenn die gewählte Währung unter den Gruppen nicht mehr vorkommt). Mit `groupId` ohne
-   * Wirkung – dann gilt die Gruppenwährung.
+   * Wirkung – dann gilt die Gruppenwährung. `string` statt `CurrencyCode`: Das Backend kann Währungen liefern, die
+   * diese App-Version noch nicht kennt (neuere Version hat sie eingeführt); sie werden wie bekannte behandelt.
    */
-  currency: CurrencyCode | null;
+  currency: string | null;
 }
 
 /** Standard beim ersten Öffnen und nach einem Sitzungswechsel (AC2): alle Gruppen, aktuelles Jahr. */

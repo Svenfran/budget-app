@@ -275,6 +275,14 @@ describe('StatisticsService', () => {
       expect(params(http.expectOne(isStatisticsRequest))).toEqual({ period: 'YEAR', currency: 'USD', year: '2025' });
     });
 
+    it('sendet auch eine dieser App-Version unbekannte Währung (später eingeführt) unverändert', () => {
+      service.groupsChanged([{ id: 1, currencyCode: 'EUR' }, { id: 2, currencyCode: 'JPY' }]);
+      service.setFilter({ ...defaultFilter, currency: 'JPY' });
+
+      expect(params(http.expectOne(isStatisticsRequest))).toEqual({ period: 'YEAR', currency: 'JPY', year: '2025' });
+      expect(service.filter().currency).toBe('JPY');
+    });
+
     it('Sitzungswechsel setzt die gewählte Währung zurück', () => {
       service.setFilter({ ...defaultFilter, currency: 'USD' });
       http.expectOne(isStatisticsRequest).flush(statisticsDto());
