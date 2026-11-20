@@ -73,8 +73,9 @@ public class ExcelWriter {
             dateCell.setCellStyle(dateStyle);
 
             row.createCell(4).setCellValue(cart.amount());
-            row.createCell(5).setCellValue(cart.category());
-            row.createCell(6).setCellValue(cart.groupName());
+            row.createCell(5).setCellValue(cart.currencyCode());
+            row.createCell(6).setCellValue(cart.category());
+            row.createCell(7).setCellValue(cart.groupName());
         }
         autoSizeColumns(sheet, header.length);
     }

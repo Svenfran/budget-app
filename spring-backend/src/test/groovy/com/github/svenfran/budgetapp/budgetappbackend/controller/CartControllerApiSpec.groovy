@@ -601,14 +601,15 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
         def xlsx = TestData.workbook(exportieren(anna, [format: 'XLSX', groupId: gid]).contentAsByteArray)
         def csvZeile = TestData.unzip(exportieren(anna, [format: 'CSV', groupId: gid]).contentAsByteArray)['ausgaben.csv'].readLines()[1]
         def zeile = xlsx.getSheet('Ausgaben').getRow(1)
-        def (titel, betrag) = [zeile.getCell(1).stringCellValue, zeile.getCell(4).numericCellValue]
-        LOG.info('Antwort: XLSX Titel {} Betrag {}, CSV-Zeile {}', titel, betrag, csvZeile)
+        def (titel, betrag, waehrung) = [zeile.getCell(1).stringCellValue, zeile.getCell(4).numericCellValue, zeile.getCell(5).stringCellValue]
+        LOG.info('Antwort: XLSX Titel {} Betrag {} Währung {}, CSV-Zeile {}', titel, betrag, waehrung, csvZeile)
 
         then:
         titel == 'Pizza'
         betrag == 12.5d
+        waehrung == 'EUR'
         csvZeile.startsWith('Anna;Pizza;')
-        csvZeile.contains(';12.50;')
+        csvZeile.contains(';12.50;EUR;')
     }
 
     def "Export mit manipulierter groupId einer fremden Gruppe (#format): 403"() {

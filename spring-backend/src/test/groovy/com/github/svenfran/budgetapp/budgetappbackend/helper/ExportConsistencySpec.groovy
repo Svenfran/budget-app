@@ -25,7 +25,7 @@ class ExportConsistencySpec extends Specification {
     def "XLSX und CSV enthalten für alle Gruppen dieselben Werte (Sonderzeichen, große Beträge, Historie, leere Gruppe)"() {
         given:
         def haushalt = TestData.groupExport(groupName: 'Haushalt', carts: [
-                TestData.cartExportRow(userName: 'Zoë 🥳', title: 'Brot; "Bio"', description: null, amount: 1234567.89d,
+                TestData.cartExportRow(userName: 'Zoë 🥳', title: 'Brot; "Bio"', description: null, amount: 1234567.89d, currencyCode: 'BRL',
                         datePurchased: of(2025, 5, 1), category: '=SUMME(1)'),
                 TestData.cartExportRow(title: '-Rabatt', description: 'Zeile1\nZeile2', amount: -20d, datePurchased: of(2025, 4, 1)),
                 TestData.cartExportRow(title: 'Krumm', amount: 12.345d, datePurchased: of(2025, 3, 1), category: '@home')],
@@ -51,7 +51,7 @@ class ExportConsistencySpec extends Specification {
         and: "Stichprobe: Werte stehen tatsächlich drin"
         def ausgaben = csvZeilen(zip['Haushalt/ausgaben.csv'])
         ausgaben.size() == 4
-        ausgaben[1] == ['Zoë 🥳', 'Brot; "Bio"', '', '2025-05-01', '1234567.89', '=SUMME(1)', 'Haushalt']
+        ausgaben[1] == ['Zoë 🥳', 'Brot; "Bio"', '', '2025-05-01', '1234567.89', 'BRL', '=SUMME(1)', 'Haushalt']
         ausgaben[2][1] == '-Rabatt'
         ausgaben[2][2] == 'Zeile1\nZeile2'
         ausgaben[2][4] == '-20'

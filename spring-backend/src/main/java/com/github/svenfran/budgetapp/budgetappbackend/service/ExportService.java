@@ -107,6 +107,7 @@ public class ExportService {
                         cart.getDescription(),
                         DateUtils.toLocalDate(cart.getDatePurchased()),
                         cart.getAmount(),
+                        group.getCurrencyCode().name(),
                         categoryName(cart.getCategory()),
                         cart.getGroup().getName()))
                 .toList();
