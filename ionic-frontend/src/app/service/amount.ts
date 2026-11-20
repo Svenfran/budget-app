@@ -22,19 +22,46 @@ export function roundToCents(amount: number): number {
   return toCents(amount) / 100 || 0;
 }
 
-/** Gültige Zahleneingabe (optional mit Vorzeichen, Punkt als Dezimaltrenner) mit mehr als zwei Nachkommastellen. */
-const AMOUNT_WITH_MORE_THAN_TWO_DECIMALS = /^[+-]?[0-9]*\.[0-9]{3,}$/;
+/**
+ * Gültige Betragseingabe als Text: optional Vorzeichen, Punkt oder Komma als Dezimaltrenner (das Textfeld der
+ * Ausgleichszahlung liefert die Eingabe roh, die App formatiert deutsch), Trennzeichen am Ende erlaubt („45.“, „45,“).
+ */
+const AMOUNT_TEXT = /^[+-]?(?:[0-9]+(?:[.,][0-9]*)?|[.,][0-9]+)$/;
+
+/** Betrag aus einer Texteingabe (Komma wie Punkt); `null`, wenn kein gültiger Betrag. */
+export function parseAmountText(value: string): number | null {
+  const text = value.trim();
+  return AMOUNT_TEXT.test(text) ? Number(text.replace(',', '.')) : null;
+}
 
 /**
- * Eingabe im Betragsfeld (DIV-77, D9): Ein gültiger Betrag mit mehr als zwei Nachkommastellen wird auf Cent gerundet
- * zurückgegeben; alles andere (leer, höchstens zwei Stellen, ungültiges Format) liefert `null` – das Feld bleibt dann
+ * Betrag als Text im Eingabefeld: zwei Nachkommastellen mit Komma wie alle Betragsanzeigen der App (Zahlenformat fest
+ * `de`, DIV-77 A2), z. B. `42.45 → "42,45"`, `12 → "12,00"`, `-12 → "-12,00"`. Für das Vorbelegen (Bearbeiten,
+ * Duplizieren) und nach dem Runden.
+ */
+export function amountInputText(amount: number): string {
+  return roundToCents(amount).toFixed(2).replace('.', ',');
+}
+
+/**
+ * Betrag aus dem Eingabefeld für den Request: Zahl (Punkt), egal ob als Zahl, mit Punkt oder mit Komma eingegeben;
+ * `null`, wenn kein gültiger Betrag. Das Backend erwartet eine Zahl – „42,45“ als Text wäre dort ungültig.
+ */
+export function amountFromInput(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  return typeof value === 'string' ? parseAmountText(value) : null;
+}
+
+/**
+ * Betragsfelder (Cart-Formular, Ausgleichszahlung) beim Verlassen und vor dem Absenden (DIV-77, D9): jeder gültige
+ * Betrag auf Cent gerundet, als Text mit Komma und genau zwei Nachkommastellen (`amountInputText`), z. B.
+ * `0.0000 → "0,00"`, `45.40349 → "45,40"`, `42.45 → "42,45"`. Zahlen werden direkt gerundet (ihre Textform kann
+ * Exponentenschreibweise sein: `0.0000001` → `"1e-7"`, Codex F-002). Leer oder ungültig: `null`, das Feld bleibt
  * unverändert und die Validatoren melden wie bisher.
  */
-export function roundedAmountInput(value: unknown): number | null {
-  if (typeof value !== 'number' && typeof value !== 'string') return null;
-  const text = String(value).trim();
-  if (!AMOUNT_WITH_MORE_THAN_TWO_DECIMALS.test(text)) return null;
-  return roundToCents(Number(text));
+export function formattedAmountInput(value: unknown): string | null {
+  const amount = amountFromInput(value);
+  return amount === null ? null : amountInputText(amount);
 }
 
 /** Ziffern vor und nach dem Komma, auch für Exponentenschreibweise (`1e-7`, `1.5e+21`). */

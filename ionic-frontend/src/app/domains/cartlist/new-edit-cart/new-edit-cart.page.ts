@@ -16,7 +16,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { LanguageService } from 'src/app/service/language.service';
 import { calculateNextExecutionDate } from './next-execution-date';
 import { duplicateFormValues, duplicateSource } from './duplicate-cart';
-import { roundedAmountInput } from 'src/app/service/amount';
+import { amountFromInput, amountInputText, formattedAmountInput } from 'src/app/service/amount';
 import { currencySymbol } from 'src/app/pipe/scientific.pipe';
 
 
@@ -130,7 +130,8 @@ export class NewEditCartPage implements OnInit {
     this.form = this.fb.group({
       id:[''],
       title: ['',[ Validators.required ]],
-      amount: ['',[ Validators.required, Validators.pattern('[+-]?([0-9]*[.])?[0-9]+') ]],
+      // Punkt oder Komma, Trennzeichen am Ende erlaubt (Textfeld, DIV-77); Vorzeichen für bestehende negative Einkäufe
+      amount: ['',[ Validators.required, Validators.pattern('[+-]?(?:[0-9]+(?:[.,][0-9]*)?|[.,][0-9]+)') ]],
       description: [''],
       datePurchased: ['',[ Validators.required, Validators.pattern('(0[1-9]|1[0-9]|2[0-9]|3[01]).(0[1-9]|1[012]).[0-9]{4}')]],
       categoryId: ['',[ Validators.required ]],
@@ -149,12 +150,13 @@ export class NewEditCartPage implements OnInit {
 
 
   /**
-   * Mehr als zwei Nachkommastellen auf Cent runden und sichtbar ins Feld schreiben (DIV-77, D9): beim Verlassen des
-   * Feldes und vor dem Absenden. Ungültige Eingaben bleiben unverändert (der Formatvalidator meldet sie).
+   * Betrag auf Cent runden und mit zwei Nachkommastellen sichtbar ins Feld schreiben (DIV-77, D9): beim Verlassen des
+   * Feldes und vor dem Absenden, einheitlich wie beim Vorbelegen im Bearbeiten-Modus und in der Ausgleichszahlung
+   * („45.“/„45,“ → „45.00“, „45,5“ → „45.50“). Ungültige Eingaben bleiben unverändert (der Formatvalidator meldet sie).
    */
   roundAmount() {
-    const rounded = roundedAmountInput(this.amount?.value);
-    if (rounded !== null) this.amount?.setValue(rounded);
+    const formatted = formattedAmountInput(this.amount?.value);
+    if (formatted !== null && formatted !== this.amount?.value) this.amount?.setValue(formatted);
   }
 
   /**
@@ -201,7 +203,8 @@ export class NewEditCartPage implements OnInit {
         id: null,
         title: this.form.value.title.trim(),
         description: this.form.value.description.trim(),
-        amount: this.form.value.amount,
+        // Feld zeigt „42,45“ (Komma), der Request braucht die Zahl
+        amount: amountFromInput(this.form.value.amount)!,
         datePurchased: this.getDateFromString(this.form.value.datePurchased),
         groupId: this.activeGroup.id,
         userDto: null!,
@@ -223,7 +226,7 @@ export class NewEditCartPage implements OnInit {
         id: this.form.value.id,
         title: this.form.value.title.trim(),
         description: this.form.value.description.trim(),
-        amount: this.form.value.amount,
+        amount: amountFromInput(this.form.value.amount)!,
         datePurchased: this.getDateFromString(this.form.value.datePurchased),
         groupId: this.activeGroup.id,
         userDto: null!,
@@ -256,7 +259,7 @@ export class NewEditCartPage implements OnInit {
       this.form.patchValue({
         id: cart.id,
         title: cart.title,
-        amount: cart.amount.toFixed(2),
+        amount: amountInputText(cart.amount),
         description: cart.description,
         datePurchased: this.formattedString,
         categoryId: cart.categoryDto.id,

@@ -1,4 +1,4 @@
-import { roundedAmountInput, roundToCents, toCents } from './amount';
+import { amountFromInput, amountInputText, formattedAmountInput, parseAmountText, roundToCents, toCents } from './amount';
 
 // Erwartungen wie im Backend: CostShareCalculator.toCents = BigDecimal.valueOf(amount).setScale(2, HALF_UP) (DIV-77)
 describe('amount (DIV-77)', () => {
@@ -57,24 +57,71 @@ describe('amount (DIV-77)', () => {
     });
   });
 
-  describe('roundedAmountInput (Eingabe im Betragsfeld, D9)', () => {
+  // Phase 9: Eingabefelder mit Komma wie alle Betragsanzeigen (Zahlenformat fest de), Request als Zahl
+  describe('amountInputText / amountFromInput', () => {
+    it('Feldtext mit Komma und zwei Nachkommastellen', () => {
+      expect(amountInputText(42.45)).toBe('42,45');
+      expect(amountInputText(12)).toBe('12,00');
+      expect(amountInputText(-12)).toBe('-12,00');
+      expect(amountInputText(-0.004)).toBe('0,00');
+    });
+
+    it('Request-Betrag als Zahl aus Komma-, Punkt- oder Zahleingabe; sonst null', () => {
+      expect(amountFromInput('42,45')).toBe(42.45);
+      expect(amountFromInput('42.45')).toBe(42.45);
+      expect(amountFromInput(42.45)).toBe(42.45);
+      expect(amountFromInput('-12,00')).toBe(-12);
+      ['', 'abc', null, undefined, NaN].forEach(value => expect(amountFromInput(value)).toBeNull());
+    });
+  });
+
+  describe('parseAmountText', () => {
+    it('liest Punkt und Komma als Dezimaltrenner, auch am Ende; sonst null', () => {
+      expect(parseAmountText('45,5')).toBe(45.5);
+      expect(parseAmountText('45.')).toBe(45);
+      expect(parseAmountText('-0,5')).toBe(-0.5);
+      expect(parseAmountText('1.234,5')).toBeNull();
+      expect(parseAmountText('')).toBeNull();
+    });
+  });
+
+  // Betragsfelder (Cart-Formular, Ausgleichszahlung): einheitlich zwei Nachkommastellen (D9, Nutzer-Feedback Phase 9)
+  describe('formattedAmountInput (Betragsfelder)', () => {
     ([
-      [65.349875, 65.35],
-      ['65.349875', 65.35],
-      ['-1.005', -1.01],
-      ['+2.675', 2.68],
-      ['.125', 0.13],
-      ['0.004', 0],
-    ] as [unknown, number][]).forEach(([value, rounded]) => {
-      it(`rundet ${JSON.stringify(value)} auf ${rounded}`, () => {
-        expect(roundedAmountInput(value)).toBe(rounded);
+      [0, '0,00'],
+      ['0.0000', '0,00'],
+      [45.40349, '45,40'],
+      ['45.40349', '45,40'],
+      [12, '12,00'],
+      ['12.3', '12,30'],
+      ['12.34', '12,34'],
+      [-1.005, '-1,01'],
+      ['-0.004', '0,00'],
+      ['+2.675', '2,68'],
+      ['.5', '0,50'],
+      [65.349875, '65,35'],
+      ['.125', '0,13'],
+      // Zahl in Exponentenschreibweise (String(0.0000001) === '1e-7'), Codex F-002
+      [0.0000001, '0,00'],
+      [-0.0000001, '0,00'],
+      [1.23456e-5, '0,00'],
+      // Textfeld der Ausgleichszahlung: Komma wie Punkt, Trennzeichen am Ende (Phase 9)
+      ['45.', '45,00'],
+      ['45,', '45,00'],
+      ['45,5', '45,50'],
+      ['1,005', '1,01'],
+      [' 7,125 ', '7,13'],
+    ] as [unknown, string][]).forEach(([value, text]) => {
+      it(`${JSON.stringify(value)} → "${text}"`, () => {
+        expect(formattedAmountInput(value)).toBe(text);
       });
     });
 
-    [12.34, '12.34', '12.3', 12, '-3.99', '', null, undefined, 'abc', '1,005', '1.2.345', '1.', 1e-7].forEach(value => {
+    ['', '  ', null, undefined, 'abc', '.', ',', '1.2.345', '1,2,3', '1.234,5', '1e-7', NaN, Infinity].forEach(value => {
       it(`lässt ${JSON.stringify(value) ?? 'undefined'} unverändert (null)`, () => {
-        expect(roundedAmountInput(value)).toBeNull();
+        expect(formattedAmountInput(value)).toBeNull();
       });
     });
   });
+
 });

@@ -6,7 +6,7 @@ import { take } from 'rxjs';
 import { AuthService } from 'src/app/auth/auth.service';
 import { GroupService } from 'src/app/service/group.service';
 import { LanguageService } from 'src/app/service/language.service';
-import { roundedAmountInput } from 'src/app/service/amount';
+import { amountInputText, formattedAmountInput } from 'src/app/service/amount';
 import { currencySymbol } from 'src/app/pipe/scientific.pipe';
 import { DEFAULT_CURRENCY } from 'src/app/constants/currency';
 import { formatDisplayDate, isoDayOf, toIsoDay } from '../iso-day';
@@ -53,8 +53,15 @@ export class SettlementSheetComponent implements OnInit {
   @Input() settlement?: SettlementEditData;
 
   readonly group = this.groupService.activeGroup();
-  /** Währungssymbol im Betrags-Label (DIV-77): Gruppe beim Öffnen festgehalten wie Request und Datumsgrenzen */
-  readonly currencySymbol = currencySymbol(this.group.currencyCode ?? DEFAULT_CURRENCY);
+  /**
+   * Währungssymbol im Betrags-Label (DIV-77): die Gruppe bleibt die beim Öffnen festgehaltene, ihre Währung aber die
+   * aktuelle aus der Gruppenliste (der Live-Handler aktualisiert sie für alle Gruppen) – ändert der Admin sie bei
+   * offenem Sheet, gilt die Zahlung in der neuen Währung (Codex F-001).
+   */
+  readonly currencySymbol = computed(() => {
+    const current = this.groupService.groupsSideNav().find(group => group.id === this.group.id);
+    return currencySymbol(current?.currencyCode ?? this.group.currencyCode ?? DEFAULT_CURRENCY);
+  });
   readonly currentLang = this.langService.currentLang;
   readonly userId = signal<number | undefined>(undefined);
   readonly userName = signal('');
@@ -80,7 +87,7 @@ export class SettlementSheetComponent implements OnInit {
   readonly maxDate = toIsoDay(new Date());
 
   form = new FormGroup({
-    amount: new FormControl<number | null>(null, AMOUNT_VALIDATORS),
+    amount: new FormControl<number | string | null>(null, AMOUNT_VALIDATORS),
     memberId: new FormControl<number | null>(null, Validators.required),
     datePurchased: new FormControl<string | null>(this.maxDate, Validators.required),
   });
@@ -105,7 +112,7 @@ export class SettlementSheetComponent implements OnInit {
     if (this.settlement) {
       // Vorbelegung vor dem Abonnieren der Formular-Events: macht das Formular nicht dirty
       this.form.setValue({
-        amount: this.settlement.amount,
+        amount: amountInputText(this.settlement.amount),
         memberId: this.settlement.receiver.id,
         datePurchased: this.settlement.datePurchased,
       });
@@ -166,13 +173,14 @@ export class SettlementSheetComponent implements OnInit {
   }
 
   /**
-   * Mehr als zwei Nachkommastellen auf Cent runden und sichtbar ins Feld schreiben (DIV-77, D9): beim Verlassen des
-   * Feldes und vor dem Speichern. Ungültige Eingaben bleiben unverändert (Validatoren melden sie).
+   * Betrag auf Cent runden und mit zwei Nachkommastellen sichtbar ins Feld schreiben (DIV-77, D9; einheitlich mit dem
+   * Cart-Formular): beim Verlassen des Feldes und vor dem Speichern. Ungültige Eingaben bleiben unverändert
+   * (Validatoren melden sie). Programmatisch gesetzt, macht das Sheet also nicht „geändert“.
    */
   roundAmount() {
     if (this.saving()) return;
-    const rounded = roundedAmountInput(this.amount.value);
-    if (rounded !== null) this.amount.setValue(rounded);
+    const formatted = formattedAmountInput(this.amount.value);
+    if (formatted !== null && formatted !== this.amount.value) this.amount.setValue(formatted);
   }
 
   async save() {

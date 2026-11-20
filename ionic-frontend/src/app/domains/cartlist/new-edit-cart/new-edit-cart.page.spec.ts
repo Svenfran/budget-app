@@ -119,7 +119,7 @@ describe('NewEditCartPage', () => {
       expect(page.isAddMode).toBeTrue();
       expect(page.isDuplicate).toBeTrue();
       expect(page.form.value).toEqual(jasmine.objectContaining({
-        id: '', title: 'Pizza', amount: '12.50', description: 'Freitag', categoryId: 42,
+        id: '', title: 'Pizza', amount: '12,50', description: 'Freitag', categoryId: 42,
         datePurchased: '15.06.2025', recurrenceType: RECURRENCE_TYPE.NONE, templateUpdateSelected: false,
       }));
       expect(fixture.nativeElement.querySelector('ion-title').textContent).toContain('carts.title_add');
@@ -155,7 +155,7 @@ describe('NewEditCartPage', () => {
       await resolveLoadings();
 
       expect(cartService.addCart).toHaveBeenCalledOnceWith(jasmine.objectContaining({
-        id: null, title: 'Pizza groß', amount: '15.00', description: 'Freitag', groupId: GROUP_ID,
+        id: null, title: 'Pizza groß', amount: 15, description: 'Freitag', groupId: GROUP_ID,
         categoryDto: { id: 43, name: 'Drogerie', groupId: GROUP_ID }, recurrenceType: RECURRENCE_TYPE.NONE,
       }));
       const sent: Cart = cartService.addCart.calls.mostRecent().args[0];
@@ -300,7 +300,7 @@ describe('NewEditCartPage', () => {
 
       amountInput().dispatchEvent(new CustomEvent('ionBlur'));
       fixture.detectChanges();
-      expect(page.form.value.amount).toBe(65.35);
+      expect(page.form.value.amount).toBe('65,35');
       expect(page.amount?.valid).toBeTrue();
 
       page.onSubmit();
@@ -317,6 +317,68 @@ describe('NewEditCartPage', () => {
       expect(cartService.addCart).toHaveBeenCalledOnceWith(jasmine.objectContaining({ amount: -1.01 }));
     });
 
+    it('rundet auch eine Zahl, deren Textform Exponentenschreibweise ist (0.0000001 → 0, Codex F-002)', () => {
+      fillAddForm(0.0000001);
+
+      amountInput().dispatchEvent(new CustomEvent('ionBlur'));
+      fixture.detectChanges();
+
+      expect(page.form.value.amount).toBe('0,00');
+      expect(errorTexts()).not.toContain('global.errors.invalid_amount');
+    });
+
+    // Nutzer-Feedback Phase 9: einheitlich zwei Nachkommastellen wie beim Vorbelegen im Bearbeiten-Modus
+    ([
+      [0, '0,00'],
+      [45.40349, '45,40'],
+      [12, '12,00'],
+    ] as [number, string][]).forEach(([eingabe, anzeige]) => {
+      it(`zeigt nach dem Verlassen des Feldes ${eingabe} als „${anzeige}“`, () => {
+        fillAddForm(eingabe);
+
+        amountInput().dispatchEvent(new CustomEvent('ionBlur'));
+        fixture.detectChanges();
+
+        expect(page.form.value.amount).toBe(anzeige);
+        expect(page.amount?.valid).toBeTrue();
+      });
+    });
+
+    // Phase 9 (Variante 1): Textfeld wie die Ausgleichszahlung – „45.“ meldete im Zahlenfeld „Pflichtfeld“
+    it('ist ein Textfeld mit Dezimaltastatur', () => {
+      createPage();
+      expect(amountInput().getAttribute('type')).toBe('text');
+      expect(amountInput().getAttribute('inputmode')).toBe('decimal');
+    });
+
+    ([
+      ['45.', '45,00'],
+      ['45,', '45,00'],
+      ['45,5', '45,50'],
+      ['45.69', '45,69'],
+      ['-12,5', '-12,50'],
+    ] as [string, string][]).forEach(([eingabe, anzeige]) => {
+      it(`„${eingabe}“ ist gültig und wird beim Verlassen zu „${anzeige}“`, () => {
+        fillAddForm(eingabe);
+        expect(page.amount?.valid).toBeTrue();
+
+        amountInput().dispatchEvent(new CustomEvent('ionBlur'));
+        fixture.detectChanges();
+
+        expect(page.form.value.amount).toBe(anzeige);
+        expect(errorTexts()).toEqual([]);
+      });
+    });
+
+    it('mit Komma gespeichert: Request mit dem gerundeten Betrag', async () => {
+      fillAddForm('12,345');
+
+      page.onSubmit();
+      await resolveLoadings();
+
+      expect(cartService.addCart).toHaveBeenCalledOnceWith(jasmine.objectContaining({ amount: 12.35 }));
+    });
+
     it('lässt einen Betrag mit höchstens zwei Nachkommastellen unverändert', async () => {
       fillAddForm('12.34');
 
@@ -324,7 +386,7 @@ describe('NewEditCartPage', () => {
       page.onSubmit();
       await resolveLoadings();
 
-      expect(cartService.addCart).toHaveBeenCalledOnceWith(jasmine.objectContaining({ amount: '12.34' }));
+      expect(cartService.addCart).toHaveBeenCalledOnceWith(jasmine.objectContaining({ amount: 12.34 }));
     });
 
     it('ungültiges Format bleibt stehen und wird wie bisher abgelehnt, ohne Request', async () => {
@@ -360,7 +422,7 @@ describe('NewEditCartPage', () => {
       expect(page.isAddMode).toBeFalse();
       expect(page.isDuplicate).toBeFalse();
       expect(page.form.value).toEqual(jasmine.objectContaining({
-        id: 1, title: 'Pizza', amount: '12.50', categoryId: 42, datePurchased: '01.05.2025',
+        id: 1, title: 'Pizza', amount: '12,50', categoryId: 42, datePurchased: '01.05.2025',
         recurrenceType: RECURRENCE_TYPE.MONTHLY,
       }));
 

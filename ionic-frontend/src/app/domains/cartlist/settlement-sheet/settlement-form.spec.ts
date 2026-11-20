@@ -131,10 +131,22 @@ describe('settlement-form (DIV-70)', () => {
       });
     });
 
-    ['abc', '1,5', '1.', '1.2.3'].forEach(value => {
+    ['abc', '1.2.3', '1,2,3', ',', '.'].forEach(value => {
       it(`lehnt ${JSON.stringify(value)} ab`, () => {
         expect(errorsOf(value)?.['pattern']).toBeDefined();
       });
+    });
+
+    // Phase 9: Textfeld – Komma als Dezimaltrenner und Trennzeichen am Ende sind gültig (formatiert beim Verlassen)
+    ['1,5', '1.', '45,', '0,01'].forEach(value => {
+      it(`akzeptiert ${JSON.stringify(value)}`, () => {
+        expect(errorsOf(value)).toBeNull();
+      });
+    });
+
+    it('„0,5“ ist größer als 0 (Validators.min läse 0), „0,004“ nicht', () => {
+      expect(errorsOf('0,5')).toBeNull();
+      expect(errorsOf('0,004')?.['min']).toBeDefined();
     });
   });
 
