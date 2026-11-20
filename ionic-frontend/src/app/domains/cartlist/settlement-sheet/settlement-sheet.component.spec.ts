@@ -211,6 +211,55 @@ describe('SettlementSheetComponent (DIV-70)', () => {
     });
   });
 
+  // DIV-77 (D9): mehr als zwei Nachkommastellen werden gerundet statt abgelehnt
+  describe('Betrag runden', () => {
+    const blurAmount = () => {
+      el().querySelector('ion-input.input-amount')!.dispatchEvent(new CustomEvent('ionBlur'));
+      detect();
+    };
+
+    it('rundet beim Verlassen des Feldes sichtbar auf Cent, der Betrag ist gültig', () => {
+      component.form.patchValue({ amount: 65.349875, memberId: anna.id });
+      blurAmount();
+
+      expect(component.form.controls.amount.value).toBe(65.35);
+      expect(component.form.controls.amount.valid).toBeTrue();
+      expect(button('btn-save')!.disabled).toBeFalse();
+    });
+
+    it('Speichern ohne vorheriges Verlassen des Feldes sendet den gerundeten Betrag', async () => {
+      component.form.setValue({ amount: 65.349875, memberId: anna.id, datePurchased: '2025-06-10' });
+      detect();
+
+      await component.save();
+
+      expect(addSettlementPayment).toHaveBeenCalledOnceWith(jasmine.objectContaining({ amount: 65.35 }));
+    });
+
+    it('auf 0 gerundet (0.004): Hinweis „größer als 0“, kein Request', async () => {
+      component.form.patchValue({ amount: 0.004, memberId: anna.id });
+      component.form.controls.amount.markAsTouched();
+      blurAmount();
+
+      expect(component.form.controls.amount.value).toBe(0);
+      expect(component.form.controls.amount.errors?.['min']).toBeDefined();
+      expect(el().querySelector('.error-amount')?.textContent).toContain(key('amount_positive'));
+
+      await component.save();
+      expect(addSettlementPayment).not.toHaveBeenCalled();
+    });
+
+    it('ungültiges Format bleibt stehen und meldet wie bisher den Formatfehler', () => {
+      component.form.patchValue({ amount: 'abc' as unknown as number, memberId: anna.id });
+      component.form.controls.amount.markAsTouched();
+      blurAmount();
+
+      expect(component.form.controls.amount.value as unknown).toBe('abc');
+      expect(component.form.controls.amount.errors?.['pattern']).toBeDefined();
+      expect(el().querySelector('.error-amount')?.textContent).toContain('global.errors.invalid_amount');
+    });
+  });
+
   describe('Speichern (FA3)', () => {
     it('übergibt den Request wie bisher und schließt nach Erfolg das eigene Modal mit Rolle saved (AC 6)', async () => {
       fillValid();

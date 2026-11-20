@@ -16,6 +16,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { LanguageService } from 'src/app/service/language.service';
 import { calculateNextExecutionDate } from './next-execution-date';
 import { duplicateFormValues, duplicateSource } from './duplicate-cart';
+import { roundedAmountInput } from 'src/app/service/amount';
 
 
 @Component({
@@ -145,10 +146,20 @@ export class NewEditCartPage implements OnInit {
 
 
   /**
-   * Reihenfolge (DIV-73): Kategorien der eigenen Anfrage geladen → Formular gültig → Kategorie vorhanden → nicht bereits
+   * Mehr als zwei Nachkommastellen auf Cent runden und sichtbar ins Feld schreiben (DIV-77, D9): beim Verlassen des
+   * Feldes und vor dem Absenden. Ungültige Eingaben bleiben unverändert (der Formatvalidator meldet sie).
+   */
+  roundAmount() {
+    const rounded = roundedAmountInput(this.amount?.value);
+    if (rounded !== null) this.amount?.setValue(rounded);
+  }
+
+  /**
+   * Reihenfolge (DIV-73): Betrag runden (DIV-77) → Kategorien der eigenen Anfrage geladen → Formular gültig → Kategorie vorhanden → nicht bereits
    * gesendet. Alle Abbrüche liegen vor dem Setzen von `saving`, die Sperre bleibt also nie nach einer Ablehnung stehen.
    */
   onSubmit() {
+    this.roundAmount();
     if (!this.categoriesLoaded()) return;
 
     if (this.form.invalid) {

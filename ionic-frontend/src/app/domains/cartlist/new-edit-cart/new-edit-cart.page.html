@@ -44,7 +44,8 @@
               type="number"
               min="-99999"
               maxlength="20"
-              formControlName="amount">
+              formControlName="amount"
+              (ionBlur)="roundAmount()">
             </ion-input>
           </ion-item>
           <ion-item lines="none" *ngIf="amount?.invalid && (amount?.dirty || amount?.touched)">

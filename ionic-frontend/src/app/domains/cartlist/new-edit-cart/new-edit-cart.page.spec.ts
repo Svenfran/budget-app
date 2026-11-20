@@ -283,6 +283,62 @@ describe('NewEditCartPage', () => {
     });
   });
 
+  // DIV-77 (D9): mehr als zwei Nachkommastellen werden gerundet statt abgelehnt
+  describe('Betrag runden', () => {
+    const amountInput = () => fixture.nativeElement.querySelector('ion-input[formcontrolname="amount"]') as HTMLElement;
+
+    function fillAddForm(amount: unknown) {
+      createPage();
+      answerCategories([lebensmittel, drogerie]);
+      page.form.patchValue({ title: 'Pizza', categoryId: 42, amount });
+      page.form.markAsDirty();
+    }
+
+    it('rundet beim Verlassen des Feldes sichtbar und sendet den gerundeten Betrag', async () => {
+      fillAddForm('65.349875');
+
+      amountInput().dispatchEvent(new CustomEvent('ionBlur'));
+      fixture.detectChanges();
+      expect(page.form.value.amount).toBe(65.35);
+      expect(page.amount?.valid).toBeTrue();
+
+      page.onSubmit();
+      await resolveLoadings();
+      expect(cartService.addCart).toHaveBeenCalledOnceWith(jasmine.objectContaining({ amount: 65.35 }));
+    });
+
+    it('rundet vor dem Absenden auch ohne vorheriges Verlassen des Feldes (negativ: -1.005 → -1.01)', async () => {
+      fillAddForm('-1.005');
+
+      page.onSubmit();
+      await resolveLoadings();
+
+      expect(cartService.addCart).toHaveBeenCalledOnceWith(jasmine.objectContaining({ amount: -1.01 }));
+    });
+
+    it('lässt einen Betrag mit höchstens zwei Nachkommastellen unverändert', async () => {
+      fillAddForm('12.34');
+
+      amountInput().dispatchEvent(new CustomEvent('ionBlur'));
+      page.onSubmit();
+      await resolveLoadings();
+
+      expect(cartService.addCart).toHaveBeenCalledOnceWith(jasmine.objectContaining({ amount: '12.34' }));
+    });
+
+    it('ungültiges Format bleibt stehen und wird wie bisher abgelehnt, ohne Request', async () => {
+      fillAddForm('abc');
+
+      amountInput().dispatchEvent(new CustomEvent('ionBlur'));
+      page.onSubmit();
+      await resolveLoadings();
+
+      expect(page.form.value.amount).toBe('abc');
+      expect(errorTexts()).toContain('global.errors.invalid_amount');
+      expect(cartService.addCart).not.toHaveBeenCalled();
+    });
+  });
+
   describe('Bestand (AC 13)', () => {
     it('ohne duplicateOf: leeres Formular wie bisher, ohne Hinweis', () => {
       createPage();

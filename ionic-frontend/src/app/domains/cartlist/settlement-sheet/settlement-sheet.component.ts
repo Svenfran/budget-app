@@ -6,6 +6,7 @@ import { take } from 'rxjs';
 import { AuthService } from 'src/app/auth/auth.service';
 import { GroupService } from 'src/app/service/group.service';
 import { LanguageService } from 'src/app/service/language.service';
+import { roundedAmountInput } from 'src/app/service/amount';
 import { formatDisplayDate, isoDayOf, toIsoDay } from '../iso-day';
 import { CartService } from '../service/cart.service';
 import {
@@ -160,7 +161,18 @@ export class SettlementSheetComponent implements OnInit {
       : 'domains.spendings.overlay.settlementpayment.placeholder_member';
   }
 
+  /**
+   * Mehr als zwei Nachkommastellen auf Cent runden und sichtbar ins Feld schreiben (DIV-77, D9): beim Verlassen des
+   * Feldes und vor dem Speichern. Ungültige Eingaben bleiben unverändert (Validatoren melden sie).
+   */
+  roundAmount() {
+    if (this.saving()) return;
+    const rounded = roundedAmountInput(this.amount.value);
+    if (rounded !== null) this.amount.setValue(rounded);
+  }
+
   async save() {
+    this.roundAmount();
     if (this.form.invalid || this.saving()) return;
     const recipients = this.settlement ? [...this.selectableRecipients(), this.settlement.receiver] : this.recipients();
     const receivedBy = this.direction() === 'received' ? { id: this.userId()!, userName: this.userName() } : undefined;

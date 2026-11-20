@@ -34,7 +34,7 @@
         <ion-input formControlName="amount" class="input-amount" type="number" inputmode="decimal"
                    enterkeyhint="done" labelPlacement="floating"
                    [label]="'domains.spendings.overlay.settlementpayment.amount' | translate"
-                   (keyup.enter)="blurInput($event)"></ion-input>
+                   (ionBlur)="roundAmount()" (keyup.enter)="blurInput($event)"></ion-input>
       </ion-item>
       <p class="field-error error-amount" *ngIf="showError(amount)" role="alert">
         <ng-container *ngIf="amount.errors?.['required']">{{ 'global.errors.required' | translate }}</ng-container>

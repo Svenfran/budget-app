@@ -625,6 +625,29 @@ class VerificationServiceSpec extends Specification {
         true        | true      || false
     }
 
+    def "Cart-Betrag #betrag: abgelehnt #erwartetAbgelehnt (DIV-77)"() {
+        when:
+        def abgelehnt = false
+        try {
+            service.verifyCartAmountHasAtMostTwoDecimals(betrag)
+        } catch (InvalidAmountException ignored) {
+            abgelehnt = true
+        }
+
+        then:
+        abgelehnt == erwartetAbgelehnt
+
+        where:
+        betrag               || erwartetAbgelehnt
+        12d                  || false
+        12.5d                || false
+        12.50d               || false
+        -3.99d               || false
+        null                 || false
+        12.345d              || true
+        0.30000000000000004d || true
+    }
+
     /** BindingResult wie nach @Valid, mit genau einem Feldfehler (Fehlercode beliebig). */
     private static BindingResult bindingResultMitFehlerAn(Object dto, String feld) {
         def bindingResult = new BeanPropertyBindingResult(dto, "request")

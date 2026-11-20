@@ -11,13 +11,15 @@ import { purchaseDayOf } from '../filter-sheet/cart-filter-form';
  */
 
 /**
- * Betrag: Pflichtfeld, größer als 0 und höchstens zwei Nachkommastellen, Dezimaltrennung nur mit Punkt (DIV-74; vorher
- * waren 0 und negative Werte erlaubt). Die Richtung ergibt sich aus Zahler und Empfänger, nicht aus dem Vorzeichen.
- * Das Backend prüft dieselben Regeln.
+ * Betrag: Pflichtfeld, größer als 0, Dezimaltrennung nur mit Punkt, ohne Vorzeichen (DIV-74; vorher waren 0 und negative
+ * Werte erlaubt). Die Richtung ergibt sich aus Zahler und Empfänger, nicht aus dem Vorzeichen. Mehr als zwei
+ * Nachkommastellen lehnt das Formular nicht mehr ab, sondern das Sheet rundet sie beim Verlassen des Feldes und vor dem
+ * Speichern auf Cent (DIV-77, D9: `roundedAmountInput`); wird dabei auf 0 gerundet, greift `min`. Das Backend lehnt
+ * weiterhin ab, was mit mehr als zwei Nachkommastellen ankommt.
  */
 export const AMOUNT_VALIDATORS: ValidatorFn[] = [
   Validators.required,
-  Validators.pattern('[0-9]*([.][0-9]{1,2})?'),
+  Validators.pattern('[0-9]*([.][0-9]+)?'),
   Validators.min(0.01),
 ];
 

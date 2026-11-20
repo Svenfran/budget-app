@@ -122,6 +122,37 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
         response.contentAsString.contains('not within membership period')
     }
 
+    // ----- DIV-77: Cart-Betrag höchstens zwei Nachkommastellen -----
+
+    def "#endpoint mit Betrag #betrag: #status"() {
+        given:
+        def wg = fixtures.group()
+        def cart = fixtures.cart(wg, title: 'Pizza', amount: 20d)
+        def body = [title: 'Pizza', amount: betrag, datePurchased: '2025-06-15', groupId: wg.group.id,
+                    categoryDto: [id: wg.category.id]] + (endpoint == 'PUT /api/carts/update' ? [id: cart.id] : [:])
+        def request = endpoint == 'PUT /api/carts/update' ? put('/api/carts/update') : post('/api/carts/add')
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), Einkauf {} (20.00); {} mit Betrag {}', wg.group.id,
+                wg.owner.id, cart.id, endpoint, betrag)
+
+        when:
+        def response = send(request, user: wg.owner, body: body)
+        def antwort = response.status == 400 ? response.contentAsString : json(response).amount
+        LOG.info('Antwort: {}', antwort)
+        def gespeichert = json(send(get('/api/carts/carts-by-groupid/{id}', wg.group.id), user: wg.owner))*.amount.sort()
+
+        then:
+        response.status == status
+        gespeichert == erwartetGespeichert
+
+        where:
+        endpoint                | betrag || status | erwartetGespeichert
+        'POST /api/carts/add'   | 12.345 || 400    | [20d]
+        'POST /api/carts/add'   | 12.34  || 201    | [12.34d, 20d]
+        'POST /api/carts/add'   | -3.99  || 201    | [-3.99d, 20d]
+        'PUT /api/carts/update' | 12.345 || 400    | [20d]
+        'PUT /api/carts/update' | 12.34  || 201    | [12.34d]
+    }
+
     // ----- DIV-73: Neuanlage ignoriert eine mitgeschickte ID -----
 
     def "POST /api/carts/add mit manipulierter ID eines fremden Einkaufs: 201, neue ID, Original unverändert"() {
@@ -495,6 +526,7 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
         'Dritter Mitglied: 403'                     | 'cleo'     | 'ben'      | [:]                           || 403    | 'neither payer nor receiver'
         'unbekannte Id: 404'                        | 'owner'    | 'ben'      | [id: -1]                      || 404    | 'Settlement with Id -1 not found'
         'Betrag 0: 400'                             | 'owner'    | 'ben'      | [amount: 0]                   || 400    | 'greater than 0'
+        'Betrag mit 3 Nachkommastellen: 400'        | 'owner'    | 'ben'      | [amount: 12.345]              || 400    | 'at most 2 decimal'
         'fehlende Id: 400'                          | 'owner'    | 'ben'      | [id: null]                    || 400    | "'id'"
         'Datum vor der Mitgliedschaft: 400 (M1)'    | 'owner'    | 'ben'      | [datePurchased: '2020-01-01'] || 400    | 'not within membership period'
     }

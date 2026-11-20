@@ -102,10 +102,10 @@ describe('settlement-form (DIV-70)', () => {
   });
 
   // Nur der Validator, nicht der Ionic-Eingabeweg (ion-input type="number" wandelt die Eingabe vorher per parseFloat um).
-  describe('AMOUNT_VALIDATORS (DIV-74: größer als 0, höchstens zwei Nachkommastellen)', () => {
+  describe('AMOUNT_VALIDATORS (DIV-74: größer als 0; DIV-77: mehr Nachkommastellen rundet das Sheet)', () => {
     const errorsOf = (value: unknown) => new FormControl(value, AMOUNT_VALIDATORS).errors;
 
-    [25, 1.5, 0.5, 0.01, 12.34, '25', '1.5', '.5', '0.01', '12.30'].forEach(value => {
+    [25, 1.5, 0.5, 0.01, 12.34, '25', '1.5', '.5', '0.01', '12.30', 1.234, '65.349875'].forEach(value => {
       it(`akzeptiert ${JSON.stringify(value)}`, () => {
         expect(errorsOf(value)).toBeNull();
       });
@@ -119,8 +119,8 @@ describe('settlement-form (DIV-70)', () => {
       });
     });
 
-    [-5, '-5', '+3', 1.234, '1.234', '-0.5'].forEach(value => {
-      it(`lehnt ${JSON.stringify(value)} ab (Vorzeichen oder mehr als zwei Nachkommastellen)`, () => {
+    [-5, '-5', '+3', '-0.5'].forEach(value => {
+      it(`lehnt ${JSON.stringify(value)} ab (Vorzeichen)`, () => {
         expect(errorsOf(value)?.['pattern']).toBeDefined();
       });
     });

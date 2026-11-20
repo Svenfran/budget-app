@@ -51,7 +51,8 @@ public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionH
             InvalidStatisticsRequestException.class,
             InvalidSettlementPaymentException.class,
             SettlementCategoryNotAllowedException.class,
-            UnsupportedCurrencyException.class
+            UnsupportedCurrencyException.class,
+            InvalidAmountException.class
     })
     protected ResponseEntity<Object> handleBadRequest(Exception ex, WebRequest request) {
         return buildResponse(ex, HttpStatus.BAD_REQUEST);
