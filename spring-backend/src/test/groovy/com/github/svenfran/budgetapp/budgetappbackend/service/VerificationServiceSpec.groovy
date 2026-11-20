@@ -603,6 +603,28 @@ class VerificationServiceSpec extends Specification {
         ergebnis = erwartetAbgelehnt ? 'darf keine' : 'darf die'
     }
 
+    def "Währungswechsel: Buchungen #hasBookings, Bestätigung #confirmed -> abgelehnt #erwartetAbgelehnt"() {
+        when: "nur bei tatsächlichem Wechsel aufgerufen (DIV-77)"
+        def abgelehnt = false
+        try {
+            service.verifyCurrencyChangeConfirmed(hasBookings, confirmed)
+        } catch (CurrencyChangeConfirmationRequiredException ignored) {
+            abgelehnt = true
+        }
+
+        then:
+        abgelehnt == erwartetAbgelehnt
+
+        where:
+        hasBookings | confirmed || erwartetAbgelehnt
+        false       | null      || false
+        false       | false     || false
+        false       | true      || false
+        true        | null      || true
+        true        | false     || true
+        true        | true      || false
+    }
+
     /** BindingResult wie nach @Valid, mit genau einem Feldfehler (Fehlercode beliebig). */
     private static BindingResult bindingResultMitFehlerAn(Object dto, String feld) {
         def bindingResult = new BeanPropertyBindingResult(dto, "request")

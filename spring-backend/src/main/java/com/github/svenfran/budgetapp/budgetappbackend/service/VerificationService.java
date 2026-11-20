@@ -213,6 +213,17 @@ public class VerificationService {
         }
     }
 
+    /**
+     * Ein Währungswechsel einer Gruppe mit Buchungen braucht die ausdrückliche Bestätigung (DIV-77). Nur aufrufen, wenn
+     * sich die Währung tatsächlich ändert.
+     */
+    public void verifyCurrencyChangeConfirmed(boolean hasBookings, Boolean confirmed) throws CurrencyChangeConfirmationRequiredException {
+        if (hasBookings && !Boolean.TRUE.equals(confirmed)) {
+            throw new CurrencyChangeConfirmationRequiredException(
+                    "Changing the currency of a group with bookings requires confirmation");
+        }
+    }
+
     public void verifyPayerIsNotReceiver(User payer, User receiver) throws InvalidSettlementPaymentException {
         if (payer.getId().equals(receiver.getId())) {
             throw new InvalidSettlementPaymentException("Payer and receiver of a settlement payment must differ");

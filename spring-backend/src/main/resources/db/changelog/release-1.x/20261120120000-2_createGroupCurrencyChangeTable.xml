@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!-- DIV-77: Protokoll der Währungswechsel einer Gruppe (alt, neu, Nutzer, Zeitpunkt). ON DELETE CASCADE statt
+         explizitem Löschen in deleteGroup: ein gleichzeitig committeter Währungswechsel könnte sonst nach dem Löschen der
+         Protokollzeilen eine neue einfügen und das Löschen der Gruppe am Foreign Key scheitern lassen. -->
+    <changeSet author="sven" id="20261120120000-2">
+        <createTable tableName="group_currency_change">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="group_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_group_currency_change_group"
+                             referencedTableName="group_details" referencedColumnNames="id" deleteCascade="true"/>
+            </column>
+            <column name="old_currency_code" type="VARCHAR(3)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="new_currency_code" type="VARCHAR(3)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="changed_by_user_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_group_currency_change_user"
+                             referencedTableName="user_details" referencedColumnNames="id"/>
+            </column>
+            <column name="changed_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <createIndex tableName="group_currency_change" indexName="idx_group_currency_change_group">
+            <column name="group_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

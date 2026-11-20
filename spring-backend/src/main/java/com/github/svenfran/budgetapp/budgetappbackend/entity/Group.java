@@ -1,6 +1,7 @@
 package com.github.svenfran.budgetapp.budgetappbackend.entity;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.github.svenfran.budgetapp.budgetappbackend.constants.SupportedCurrency;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -36,6 +37,13 @@ public class Group implements Serializable {
     // Einkaufslisten-Pfade speichern die Gruppe per save/merge und würden sonst den gespeicherten Wert überschreiben
     @Column(name = "list_order_revision", nullable = false, updatable = false)
     private long listOrderRevision;
+
+    // Gruppenwährung (DIV-77). Ändert nur updateGroup per Update-Query (updatable = false): Mitglieder-, Owner- und
+    // Einkaufslisten-Pfade speichern eine evtl. vor dem Wechsel geladene Gruppe per save/merge und würden sonst die alte
+    // Währung zurückschreiben. Beim Anlegen wird sie normal geschrieben (insertable).
+    @Enumerated(EnumType.STRING)
+    @Column(name = "currency_code", nullable = false, updatable = false, length = 3)
+    private SupportedCurrency currencyCode = SupportedCurrency.DEFAULT;
 
     @OneToMany(mappedBy = "group")
     @JsonBackReference
@@ -193,6 +201,14 @@ public class Group implements Serializable {
         this.listOrderRevision = listOrderRevision;
     }
 
+    public SupportedCurrency getCurrencyCode() {
+        return currencyCode;
+    }
+
+    public void setCurrencyCode(SupportedCurrency currencyCode) {
+        this.currencyCode = currencyCode;
+    }
+
     @Override
     public String toString() {
         return "Group{" +
@@ -202,6 +218,7 @@ public class Group implements Serializable {
                 ", lastUpdate=" + lastUpdate +
                 ", lastUpdateShoppingList=" + lastUpdateShoppingList +
                 ", listOrderRevision=" + listOrderRevision +
+                ", currencyCode=" + currencyCode +
                 ", ownerId=" + (owner == null ? null : owner.getId()) +
                 '}';
     }

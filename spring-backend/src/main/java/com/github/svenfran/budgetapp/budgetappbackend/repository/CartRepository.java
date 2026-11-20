@@ -7,9 +7,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public interface CartRepository extends CrudRepository<Cart, Long> {
 
@@ -21,6 +23,16 @@ public interface CartRepository extends CrudRepository<Cart, Long> {
     List<Cart> findBySettlementIdOrderByIdAsc(Long settlementId);
 
     Optional<Cart> findById(Long id);
+
+    /**
+     * Hat die Gruppe Buchungen? (DIV-77, D5: jeder Cart zählt, auch is_deleted und Ausgleichszahlungs-Carts; Vorlagen
+     * ohne Cart zählen nicht.) Steuert die Bestätigungspflicht beim Währungswechsel.
+     */
+    boolean existsByGroupId(Long groupId);
+
+    /** IDs der Gruppen aus {@code groupIds}, die Buchungen haben (wie existsByGroupId, eine Abfrage für die Übersicht). */
+    @Query("select distinct c.group.id from Cart c where c.group.id in :groupIds")
+    Set<Long> findGroupIdsWithCarts(@Param("groupIds") Collection<Long> groupIds);
 
     @Override
     void deleteById(Long id);

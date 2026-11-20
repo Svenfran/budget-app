@@ -39,6 +39,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * X1  userprofile.service.ts (=== exakt)             400 'Invalid Email'                          UserProfileControllerApiSpec
  * X2  userprofile.service.ts changePassword (===)    400 'Incorrect password'                     UserProfileControllerApiSpec
  * X3  auth-error-message.ts Login/Registr. (===)     400 'DeviceId is required'                   AuthenticationControllerApiSpec
+ * S1  group.service.ts updateGroup (Status, kein Text) 409 PUT /api/groups/update: Währungswechsel  GroupControllerApiSpec
+ *     (DIV-77)                                          ohne Bestätigung bei vorhandenen Buchungen
  * </pre>
  * Nicht abgedeckt: Bei parallelen Registrierungen/E-Mail-Änderungen liefert der Unique-Constraint-Handler
  * 'User with email already exists' ohne Adresse; das Frontend erkennt diesen Fall nicht (bekannt seit DIV-22).

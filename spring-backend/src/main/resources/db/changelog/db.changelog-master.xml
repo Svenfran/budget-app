@@ -71,4 +71,8 @@
 
     <include context="dev,test,prod" file="db/changelog/release-1.x/20261116120000-2_linkExistingSettlementPayments.xml" relativeToChangelogFile="false"/>
 
+    <include context="dev,test,prod" file="db/changelog/release-1.x/20261120120000-1_addGroupCurrency.xml" relativeToChangelogFile="false"/>
+
+    <include context="dev,test,prod" file="db/changelog/release-1.x/20261120120000-2_createGroupCurrencyChangeTable.xml" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

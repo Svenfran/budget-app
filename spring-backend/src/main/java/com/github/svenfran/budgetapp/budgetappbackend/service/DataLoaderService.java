@@ -69,6 +69,12 @@ public class DataLoaderService {
         return categoryRepository.findAllByGroup_IdOrderByName(groupId);
     }
 
+    /** Gruppe mit Zeilensperre laden (DIV-77, updateGroup); als erster Zugriff auf die Gruppe in der Transaktion aufrufen. */
+    public Group loadGroupForUpdate(Long groupId) throws GroupNotFoundException {
+        return groupRepository.findByIdForUpdate(groupId)
+                        .orElseThrow(() -> new GroupNotFoundException(String.format("Group with Id %s not found", groupId)));
+    }
+
     /** Settlement mit Zeilensperre laden (DIV-74); als erster Zugriff auf das Settlement in der Transaktion aufrufen. */
     public Settlement loadSettlementForUpdate(Long settlementId) throws SettlementNotFoundException {
         return settlementRepository.findByIdForUpdate(settlementId)
