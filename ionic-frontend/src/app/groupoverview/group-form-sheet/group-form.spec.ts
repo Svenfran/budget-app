@@ -1,5 +1,5 @@
 import { REFERENCE_DATE } from 'src/testing/test-data';
-import { GROUP_NAME_MAX_LENGTH, groupForm, needsCurrencyConfirmation, toGroup } from './group-form';
+import { currencyOptions, GROUP_NAME_MAX_LENGTH, groupForm, needsCurrencyConfirmation, toGroup } from './group-form';
 
 describe('group-form (DIV-80)', () => {
   describe('groupForm', () => {
@@ -46,11 +46,30 @@ describe('group-form (DIV-80)', () => {
 
   // DIV-77: Währung
   describe('Währung', () => {
-    it('neue Gruppe: EUR vorausgewählt; Bearbeiten: Währung der Gruppe; unbekannt oder fehlend: EUR', () => {
+    it('neue Gruppe: EUR vorausgewählt; Bearbeiten: Währung der Gruppe; fehlend oder kein ISO-Code: EUR', () => {
       expect(groupForm('Neu').controls.currencyCode.value).toBe('EUR');
       expect(groupForm('WG', 'CHF').controls.currencyCode.value).toBe('CHF');
-      expect(groupForm('WG', 'JPY').controls.currencyCode.value).toBe('EUR');
       expect(groupForm('WG', undefined).controls.currencyCode.value).toBe('EUR');
+      ['', 'usd', 'EURO', 'E1R'].forEach(code => expect(groupForm('WG', code).controls.currencyCode.value).toBe('EUR'));
+    });
+
+    it('dieser App-Version unbekannte Währung (z. B. später eingeführt) bleibt beim Bearbeiten erhalten', () => {
+      const form = groupForm('WG', 'JPY');
+
+      expect(form.controls.currencyCode.value).toBe('JPY');
+      expect(toGroup(form.getRawValue(), { id: 7, dateCreated: new Date(0) }).currencyCode).toBe('JPY');
+      expect(needsCurrencyConfirmation({ currencyCode: 'JPY', hasBookings: true }, form.getRawValue())).toBeFalse();
+    });
+
+    it('currencyOptions: alle unterstützten Währungen; eine unbekannte aktuelle am Ende ohne Namen', () => {
+      const standard = currencyOptions('EUR');
+      expect(standard.map(o => o.code)).toEqual(['EUR', 'USD', 'GBP', 'CHF', 'CAD', 'AUD', 'MXN', 'BRL', 'PLN', 'CZK', 'NOK', 'SEK']);
+      expect(standard.every(o => o.known)).toBeTrue();
+      expect(currencyOptions()).toEqual(standard);
+
+      const mitUnbekannter = currencyOptions('JPY');
+      expect(mitUnbekannter.length).toBe(13);
+      expect(mitUnbekannter[12]).toEqual({ code: 'JPY', symbol: '¥', known: false });
     });
 
     ([

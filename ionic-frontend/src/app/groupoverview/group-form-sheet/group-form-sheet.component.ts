@@ -1,13 +1,15 @@
 import { Component, effect, Input, OnInit, signal, WritableSignal } from '@angular/core';
 import { AlertController, ModalController } from '@ionic/angular';
 import { TranslateService } from '@ngx-translate/core';
-import { CurrencyCode, DEFAULT_CURRENCY, SUPPORTED_CURRENCIES } from 'src/app/constants/currency';
+import { DEFAULT_CURRENCY, isSupportedCurrency } from 'src/app/constants/currency';
 import { Group } from 'src/app/model/group';
 import { currencySymbol, ScientificCurrencyPipe } from 'src/app/pipe/scientific.pipe';
 import { GroupService, UpdateGroupResult } from 'src/app/service/group.service';
 import { GROUP_GONE_ROLE, GROUP_SHEET_SAVED_ROLE } from '../group-sheet-roles';
 import { GroupOverview } from '../model/group-overview';
-import { GROUP_NAME_MAX_LENGTH, groupForm, GroupFormGroup, needsCurrencyConfirmation, toGroup } from './group-form';
+import {
+  currencyOptions, CurrencyOption, GROUP_NAME_MAX_LENGTH, groupForm, GroupFormGroup, needsCurrencyConfirmation, toGroup,
+} from './group-form';
 
 export type GroupFormSheetMode = 'create' | 'edit';
 
@@ -47,8 +49,11 @@ export class GroupFormSheetComponent implements OnInit {
   @Input() callingPage?: string;
 
   readonly maxLength = GROUP_NAME_MAX_LENGTH;
-  /** Auswahl „USD – US-Dollar ($)“: Name per i18n im Template, Symbol wie in der Betragsanzeige */
-  readonly currencyOptions = SUPPORTED_CURRENCIES.map(code => ({ code, symbol: currencySymbol(code) }));
+  /**
+   * Auswahl „USD – US-Dollar ($)“: Name per i18n im Template, Symbol wie in der Betragsanzeige; eine dieser App-Version
+   * unbekannte Gruppenwährung steht ohne Namen am Ende und bleibt so erhalten.
+   */
+  currencyOptions: CurrencyOption[] = currencyOptions();
   form: GroupFormGroup = groupForm();
   /** Speichern mit ungültigem Formular versucht: ab dann zeigt das Feld seinen Fehler auch ohne Eingabe. */
   readonly submitted = signal(false);
@@ -81,6 +86,7 @@ export class GroupFormSheetComponent implements OnInit {
     this.form = this.mode === 'edit'
       ? groupForm(this.group?.name ?? '', this.group?.currencyCode)
       : groupForm('');
+    this.currencyOptions = currencyOptions(this.form.controls.currencyCode.value);
   }
 
   get name() { return this.form.controls.name; }
@@ -164,12 +170,13 @@ export class GroupFormSheetComponent implements OnInit {
    * umgerechnet wird; true nur bei ausdrücklicher Bestätigung. Der Dialog gehört zum Sheet (Muster MembersSheet): Ist
    * das Sheet beim Fertigstellen schon zu, erscheint er nicht; schließt das Sheet, schließt er mit.
    */
-  private async confirmCurrencyChange(newCurrency: CurrencyCode): Promise<boolean> {
+  private async confirmCurrencyChange(newCurrency: string): Promise<boolean> {
     const oldCurrency = this.group?.currencyCode ?? DEFAULT_CURRENCY;
+    const newName = isSupportedCurrency(newCurrency) ? this.translate.instant(`currency.name.${newCurrency}`) : newCurrency;
     const alert = await this.alertCtrl.create({
       header: this.translate.instant(`${CURRENCY_CONFIRM_KEY}.header`),
       message: this.translate.instant(`${CURRENCY_CONFIRM_KEY}.message`, {
-        currency: `${this.translate.instant(`currency.name.${newCurrency}`)} (${currencySymbol(newCurrency)})`,
+        currency: `${newName} (${currencySymbol(newCurrency)})`,
         before: this.amountPipe.transform(EXAMPLE_AMOUNT, oldCurrency),
         after: this.amountPipe.transform(EXAMPLE_AMOUNT, newCurrency),
       }),

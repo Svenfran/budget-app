@@ -622,7 +622,9 @@
             "MXN": "Peso mexicano",
             "BRL": "Real brasileño",
             "PLN": "Esloti polaco",
-            "CZK": "Corona checa"
+            "CZK": "Corona checa",
+            "NOK": "Corona noruega",
+            "SEK": "Corona sueca"
         }
     }
 }

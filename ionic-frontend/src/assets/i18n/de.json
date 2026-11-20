@@ -622,7 +622,9 @@
             "MXN": "Mexikanischer Peso",
             "BRL": "Brasilianischer Real",
             "PLN": "Polnischer Złoty",
-            "CZK": "Tschechische Krone"
+            "CZK": "Tschechische Krone",
+            "NOK": "Norwegische Krone",
+            "SEK": "Schwedische Krone"
         }
     }
 }

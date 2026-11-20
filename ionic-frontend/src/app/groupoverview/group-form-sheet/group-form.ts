@@ -1,7 +1,8 @@
 import { AbstractControl, FormControl, FormGroup, ValidationErrors, Validators } from '@angular/forms';
-import { CurrencyCode, DEFAULT_CURRENCY, isSupportedCurrency } from 'src/app/constants/currency';
+import { DEFAULT_CURRENCY, isSupportedCurrency, SUPPORTED_CURRENCIES } from 'src/app/constants/currency';
 import { INIT_NUMBERS } from 'src/app/constants/default-values';
 import { Group } from 'src/app/model/group';
+import { currencySymbol } from 'src/app/pipe/scientific.pipe';
 import { GroupOverview } from '../model/group-overview';
 
 /*
@@ -12,30 +13,55 @@ import { GroupOverview } from '../model/group-overview';
 
 export const GROUP_NAME_MAX_LENGTH = INIT_NUMBERS.MAX_LENGTH;
 
+/**
+ * `currencyCode` ist bewusst `string`, nicht `CurrencyCode`: Eine Gruppe kann eine Währung haben, die diese App-Version
+ * noch nicht kennt (neuere Version hat sie eingeführt) – sie bleibt beim Bearbeiten erhalten.
+ */
 export interface GroupFormValue {
   name: string;
-  currencyCode: CurrencyCode;
+  currencyCode: string;
 }
 
-export type GroupFormGroup = FormGroup<{ name: FormControl<string>; currencyCode: FormControl<CurrencyCode> }>;
+export type GroupFormGroup = FormGroup<{ name: FormControl<string>; currencyCode: FormControl<string> }>;
+
+/** Eintrag der Währungsauswahl; `known`: in dieser App-Version unterstützt (nur dann gibt es einen übersetzten Namen). */
+export interface CurrencyOption {
+  code: string;
+  symbol: string;
+  known: boolean;
+}
+
+/** ISO-4217-Form; nur so ein Code wird übernommen (Intl.NumberFormat wirft bei anderen). */
+const ISO_CODE = /^[A-Z]{3}$/;
 
 /** Nur Leerzeichen zählen als leer (bisher: `trim() === ""` wurde verworfen). */
 export function notBlank(control: AbstractControl<string | null>): ValidationErrors | null {
   return (control.value ?? '').trim() === '' ? { required: true } : null;
 }
 
-/** `initialCurrency`: Währung der bearbeiteten Gruppe; fehlt sie oder ist sie unbekannt, EUR. */
+/**
+ * `initialCurrency`: Währung der bearbeiteten Gruppe. Fehlt sie (Daten von vor DIV-77) oder ist sie kein ISO-Code, EUR.
+ * Ein gültiger, dieser App-Version aber unbekannter Code bleibt erhalten – sonst stellte eine ältere App die Gruppe beim
+ * Umbenennen still auf EUR um.
+ */
 export function groupForm(initialName = '', initialCurrency?: string): GroupFormGroup {
   return new FormGroup({
     name: new FormControl(initialName, {
       nonNullable: true,
       validators: [notBlank, Validators.maxLength(GROUP_NAME_MAX_LENGTH)],
     }),
-    currencyCode: new FormControl<CurrencyCode>(
-      isSupportedCurrency(initialCurrency) ? initialCurrency : DEFAULT_CURRENCY,
+    currencyCode: new FormControl<string>(
+      initialCurrency && ISO_CODE.test(initialCurrency) ? initialCurrency : DEFAULT_CURRENCY,
       { nonNullable: true, validators: [Validators.required] },
     ),
   });
+}
+
+/** Auswahl: alle unterstützten Währungen, dazu die aktuelle, falls diese App-Version sie nicht kennt (am Ende). */
+export function currencyOptions(current?: string): CurrencyOption[] {
+  const codes: string[] = [...SUPPORTED_CURRENCIES];
+  if (current && ISO_CODE.test(current) && !codes.includes(current)) codes.push(current);
+  return codes.map(code => ({ code, symbol: currencySymbol(code), known: isSupportedCurrency(code) }));
 }
 
 /**

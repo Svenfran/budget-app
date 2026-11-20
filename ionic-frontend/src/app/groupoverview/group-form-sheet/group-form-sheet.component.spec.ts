@@ -230,12 +230,12 @@ describe('GroupFormSheetComponent (DIV-80)', () => {
     const confirmKey = (suffix: string) => `groups.form_sheet.currency_confirm.${suffix}`;
     const conflict = 'confirmation-required';
 
-    it('Anlegen: Auswahl mit allen zehn Währungen, EUR vorausgewählt; gewählte Währung geht mit, ohne Dialog', async () => {
+    it('Anlegen: Auswahl mit allen zwölf Währungen, EUR vorausgewählt; gewählte Währung geht mit, ohne Dialog', async () => {
       create('create');
 
       expect(select()).not.toBeNull();
       expect(options().map(o => o.getAttribute('ng-reflect-value') ?? (o as HTMLIonSelectOptionElement).value))
-        .toEqual(['EUR', 'USD', 'GBP', 'CHF', 'CAD', 'AUD', 'MXN', 'BRL', 'PLN', 'CZK']);
+        .toEqual(['EUR', 'USD', 'GBP', 'CHF', 'CAD', 'AUD', 'MXN', 'BRL', 'PLN', 'CZK', 'NOK', 'SEK']);
       expect(options()[1].textContent!.replace(/\s+/g, ' ').trim()).toBe('USD – currency.name.USD ($)');
       expect(el().querySelector('.currency-hint')!.textContent!.trim()).toBe('groups.form_sheet.currency_hint');
       expect(component.form.controls.currencyCode.value).toBe('EUR');
@@ -257,6 +257,22 @@ describe('GroupFormSheetComponent (DIV-80)', () => {
       expect(alertCreate).not.toHaveBeenCalled();
       expect(updateGroup).toHaveBeenCalledOnceWith(jasmine.objectContaining({ name: 'WG neu', currencyCode: 'CHF' }));
       expect(updateGroup.calls.mostRecent().args[0].confirmCurrencyChange).toBeUndefined();
+    });
+
+    it('dieser App-Version unbekannte Gruppenwährung: als letzte Option ohne Namen, Umbenennen sendet sie unverändert', async () => {
+      create('edit', { ...wg, currencyCode: 'JPY', hasBookings: true });
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(component.form.controls.currencyCode.value).toBe('JPY');
+      expect(options().length).toBe(13);
+      expect(options()[12].textContent!.replace(/\s+/g, ' ').trim()).toBe('JPY (¥)');
+
+      component.form.patchValue({ name: 'WG neu' });
+      await component.save();
+
+      expect(alertCreate).not.toHaveBeenCalled();
+      expect(updateGroup).toHaveBeenCalledOnceWith(jasmine.objectContaining({ name: 'WG neu', currencyCode: 'JPY' }));
     });
 
     it('Wechsel ohne Buchungen: kein Dialog, Request ohne Bestätigung, Sheet schließt', async () => {

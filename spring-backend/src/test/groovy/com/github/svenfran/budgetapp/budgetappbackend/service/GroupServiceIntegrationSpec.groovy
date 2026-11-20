@@ -770,6 +770,8 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
         gesendet || erwartet
         'USD'    || SupportedCurrency.USD
         'CZK'    || SupportedCurrency.CZK
+        'NOK'    || SupportedCurrency.NOK
+        'SEK'    || SupportedCurrency.SEK
         null     || SupportedCurrency.EUR
     }
 

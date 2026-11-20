@@ -33,7 +33,7 @@
                   [label]="'groups.form_sheet.currency_label' | translate"
                   [cancelText]="'groups.form_sheet.btn_cancel' | translate">
         <ion-select-option *ngFor="let option of currencyOptions" [value]="option.code">
-          {{ option.code }} – {{ ('currency.name.' + option.code) | translate }} ({{ option.symbol }})
+          {{ option.code }}<ng-container *ngIf="option.known"> – {{ ('currency.name.' + option.code) | translate }}</ng-container> ({{ option.symbol }})
         </ion-select-option>
       </ion-select>
     </ion-item>

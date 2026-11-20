@@ -9,9 +9,9 @@ import spock.lang.Specification
  */
 class SupportedCurrencySpec extends Specification {
 
-    def "Unterstützt genau die zehn Währungen der Story in deren Reihenfolge, Standard ist EUR"() {
+    def "Unterstützt genau die zwölf Währungen in deren Reihenfolge (Story + NOK, SEK), Standard ist EUR"() {
         expect:
-        SupportedCurrency.values()*.name() == ['EUR', 'USD', 'GBP', 'CHF', 'CAD', 'AUD', 'MXN', 'BRL', 'PLN', 'CZK']
+        SupportedCurrency.values()*.name() == ['EUR', 'USD', 'GBP', 'CHF', 'CAD', 'AUD', 'MXN', 'BRL', 'PLN', 'CZK', 'NOK', 'SEK']
         SupportedCurrency.DEFAULT == SupportedCurrency.EUR
     }
 
@@ -23,6 +23,8 @@ class SupportedCurrencySpec extends Specification {
         code  || erwartet
         'EUR' || SupportedCurrency.EUR
         'CZK' || SupportedCurrency.CZK
+        'NOK' || SupportedCurrency.NOK
+        'SEK' || SupportedCurrency.SEK
         null  || null
     }
 

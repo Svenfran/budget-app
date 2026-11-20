@@ -2,8 +2,8 @@ import { DEFAULT_CURRENCY, isSupportedCurrency, SUPPORTED_CURRENCIES } from './c
 
 // Pinnt die Liste (DIV-77); muss mit dem Backend-Enum SupportedCurrency übereinstimmen (SupportedCurrencySpec).
 describe('currency (DIV-77)', () => {
-  it('unterstützt genau die zehn Währungen der Story in deren Reihenfolge, Standard EUR', () => {
-    expect([...SUPPORTED_CURRENCIES]).toEqual(['EUR', 'USD', 'GBP', 'CHF', 'CAD', 'AUD', 'MXN', 'BRL', 'PLN', 'CZK']);
+  it('unterstützt genau die zwölf Währungen in deren Reihenfolge (Story + NOK, SEK), Standard EUR', () => {
+    expect([...SUPPORTED_CURRENCIES]).toEqual(['EUR', 'USD', 'GBP', 'CHF', 'CAD', 'AUD', 'MXN', 'BRL', 'PLN', 'CZK', 'NOK', 'SEK']);
     expect(DEFAULT_CURRENCY).toBe('EUR');
   });
 

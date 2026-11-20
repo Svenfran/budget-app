@@ -21,6 +21,8 @@ describe('ScientificCurrencyPipe (DIV-77)', () => {
     BRL: '1.234,50 R$',
     PLN: '1.234,50 PLN',
     CZK: '1.234,50 CZK',
+    NOK: '1.234,50 NOK',
+    SEK: '1.234,50 SEK',
   };
 
   SUPPORTED_CURRENCIES.forEach(code => {
@@ -41,6 +43,6 @@ describe('ScientificCurrencyPipe (DIV-77)', () => {
 
   it('currencySymbol liefert das Symbol der Betragsanzeige', () => {
     expect(SUPPORTED_CURRENCIES.map(code => currencySymbol(code)))
-      .toEqual(['€', '$', '£', 'CHF', 'CA$', 'AU$', 'MX$', 'R$', 'PLN', 'CZK']);
+      .toEqual(['€', '$', '£', 'CHF', 'CA$', 'AU$', 'MX$', 'R$', 'PLN', 'CZK', 'NOK', 'SEK']);
   });
 });
