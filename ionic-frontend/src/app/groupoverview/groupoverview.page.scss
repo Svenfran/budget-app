@@ -29,6 +29,14 @@ ion-item.active-group {
         max-width: 100%;
         white-space: nowrap;
     }
+    // Währung (DIV-77): bei großer Schrift Umbruch zwischen „Währung:“ und Wert, der Wert „EUR (€)“ bleibt zusammen
+    .group-currency {
+        max-width: 100%;
+        white-space: normal;
+        .currency-value {
+            white-space: nowrap;
+        }
+    }
     // Der Admin-Name bricht wie der Gruppenname darüber als normaler Text um und ist so immer vollständig lesbar, auch
     // bei 200 % Schrift auf schmalen Geräten (Nutzerentscheidung statt Ellipsis); `anywhere` auch für Namen ohne
     // Leerzeichen. Der volle Text steht im DOM (DIV-79-Konvention, kein `slice`).

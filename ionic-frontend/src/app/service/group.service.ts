@@ -283,8 +283,13 @@ export class GroupService {
       }));
   }
 
-  /** Benennt die Gruppe um; State erst nach Erfolg, Promise wie `addGroup` (DIV-80). */
-  updateGroup(group: Group): Promise<boolean> {
+  /**
+   * Ändert Name und Währung der Gruppe; State erst nach Erfolg, weist nie zurück (DIV-80). Ergebnis (DIV-77):
+   * `'ok'`; `'confirmation-required'`, wenn der Server einen Währungswechsel ohne Bestätigung ablehnt (409 – erkannt am
+   * Status, nicht am Text): kein Hinweis, die Gruppe gilt in der Übersicht danach als „mit Buchungen“, das Sheet fragt
+   * nach und sendet erneut; sonst `'error'` mit Hinweis.
+   */
+  updateGroup(group: Group): Promise<UpdateGroupResult> {
     return new Promise(resolve => this.http
       .put<Group>(this.updateGroupUrl, group)
       .subscribe({
@@ -300,12 +305,18 @@ export class GroupService {
           
           // aktive Gruppe muss nochmal gesetzt werden, damit Überschriften der einzelnen Views aktualisiert wird.
           if (this.activeGroup().id === result.id)  this.setActiveGroup(result);
-          resolve(true);
+          resolve('ok');
         },
         error: (err) => {
+          if (err?.status === 409) {
+            // Inzwischen gibt es Buchungen: hasBookings nachziehen, damit der nächste Wechsel gleich nachfragt
+            this.groupOverviewList.update(groups => groups.map(gr => gr.id === group.id ? {...gr, hasBookings: true} : gr));
+            resolve('confirmation-required');
+            return;
+          }
           console.error("Error updating group:", err);
           this.showErrorToast("alerts.group.error.update_group");
-          resolve(false);
+          resolve('error');
         }
       }));
   }
@@ -491,6 +502,9 @@ export class GroupService {
     this.alertService.showToast(this.translate.instant(key));
   }
 }
+
+/** Ergebnis von `GroupService.updateGroup` (DIV-77). */
+export type UpdateGroupResult = 'ok' | 'confirmation-required' | 'error';
 
 /**
  * Fehlermeldung beim Hinzufügen eines Mitglieds als i18n-Key. Die Texte vergleicht das Frontend mit der Backend-Meldung

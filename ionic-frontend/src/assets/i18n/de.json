@@ -160,13 +160,6 @@
     },
     "alerts": {
         "group": {
-            "new": {
-                "header": "Neue Gruppe:",
-                "cancel": "Abbrechen",
-                "ok": "OK",
-                "loading": "Erstelle Gruppe...",
-                "placeholder": "Gruppenname"
-            },
             "delete": {
                 "header": "Gruppe löschen?",
                 "message": "Möchtest du die Gruppe „{{groupName}}“ wirklich löschen? Dabei werden alle Ausgaben, Ausgleichszahlungen, Einkaufslisten, Kategorien und weiteren Gruppendaten endgültig entfernt.",
@@ -479,14 +472,15 @@
         "header": "MEINE GRUPPEN",
         "empty": "Keine Gruppen vorhanden.",
         "group": {
-            "members": "Mitglieder:"
+            "members": "Mitglieder:",
+            "currency": "Währung:"
         },
         "menu": {
             "more_actions": "Weitere Aktionen",
             "members": "Mitglieder verwalten",
             "members_hint": "Mitglieder anzeigen, Admin festlegen und Mitglieder hinzufügen",
             "edit": "Gruppe bearbeiten",
-            "edit_hint": "Namen ändern",
+            "edit_hint": "Name und Währung ändern",
             "delete": "Gruppe löschen",
             "delete_hint": "Gruppe und alle Daten endgültig entfernen"
         },
@@ -498,7 +492,15 @@
             "name_too_long": "Der Gruppenname ist zu lang.",
             "btn_cancel": "Abbrechen",
             "btn_create": "Erstellen",
-            "btn_save": "Speichern"
+            "btn_save": "Speichern",
+            "currency_label": "Währung",
+            "currency_hint": "Beim Ändern werden keine Beträge umgerechnet.",
+            "currency_confirm": {
+                "header": "Währung ändern?",
+                "message": "Alle bisherigen Beträge dieser Gruppe gelten danach in {{currency}}. Es wird nichts umgerechnet: Aus {{before}} wird {{after}}.",
+                "cancel": "Abbrechen",
+                "ok": "Währung ändern"
+            }
         },
         "members_sheet": {
             "title": "Mitglieder verwalten",
@@ -607,6 +609,20 @@
             "footer": {
                 "exit_app": "Exit"
             }
+        }
+    },
+    "currency": {
+        "name": {
+            "EUR": "Euro",
+            "USD": "US-Dollar",
+            "GBP": "Britisches Pfund",
+            "CHF": "Schweizer Franken",
+            "CAD": "Kanadischer Dollar",
+            "AUD": "Australischer Dollar",
+            "MXN": "Mexikanischer Peso",
+            "BRL": "Brasilianischer Real",
+            "PLN": "Polnischer Złoty",
+            "CZK": "Tschechische Krone"
         }
     }
 }

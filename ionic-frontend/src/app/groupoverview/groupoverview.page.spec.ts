@@ -98,6 +98,41 @@ describe('GroupoverviewPage – Gruppe auswählen', () => {
     expect(modal.present).toHaveBeenCalledTimes(2);
   });
 
+  it('setzt den Fokus nur beim Anlegen ins Namensfeld, beim Bearbeiten nicht (DIV-77: Tastatur bleibt zu)', async () => {
+    const setFocus = jasmine.createSpy('setFocus').and.resolveTo();
+    const modal = { present: jasmine.createSpy('present').and.resolveTo(), querySelector: () => ({ setFocus }) };
+    spyOn(TestBed.inject(ModalController), 'create').and.resolveTo(modal as unknown as HTMLIonModalElement);
+
+    await page.onUpdateGroup(wg);
+    expect(setFocus).not.toHaveBeenCalled();
+
+    await page.onCreateGroup();
+    expect(setFocus).toHaveBeenCalledTimes(1);
+  });
+
+  it('zeigt je Gruppe ihre Währung, Symbol nur wenn es vom Code abweicht (DIV-77)', () => {
+    groupService.groupOverviewList.set([
+      aGroupOverview({ id: 1, name: 'A', currencyCode: 'USD' }),
+      aGroupOverview({ id: 2, name: 'B', currencyCode: 'CHF' }),
+      aGroupOverview({ id: 3, name: 'C', currencyCode: undefined }),
+    ]);
+    fixture.detectChanges();
+
+    const texts = Array.from<HTMLElement>(fixture.nativeElement.querySelectorAll('.group-currency'))
+      .map(row => row.textContent!.trim());
+    expect(texts).toEqual(['groups.group.currency USD ($)', 'groups.group.currency CHF', 'groups.group.currency EUR (€)']);
+  });
+
+  it('baut einen Eintrag bei einer Änderung nicht neu auf (trackBy ID)', () => {
+    const before = fixture.nativeElement.querySelector('ion-item.group-item');
+
+    groupService.groupOverviewList.update(groups => groups.map(gr => gr.id === haushalt.id ? { ...gr, currencyCode: 'USD' } : gr));
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('ion-item.group-item')).toBe(before);
+    expect(before.querySelector('.group-currency').textContent.trim()).toBe('groups.group.currency USD ($)');
+  });
+
   it('hat keine Sliding-Aktionen mehr, sondern je Gruppe einen ⋮-Button (DIV-80)', () => {
     const host = fixture.nativeElement as HTMLElement;
 
@@ -320,7 +355,7 @@ describe('GroupoverviewPage – Detailzeile bei großer Schrift (DIV-80)', () =>
       ],
     });
     const translate = TestBed.inject(TranslateService);
-    translate.setTranslation('de', { groups: { group: { members: 'Mitglieder:' } } }, true);
+    translate.setTranslation('de', { groups: { group: { members: 'Mitglieder:', currency: 'Währung:' } } }, true);
     translate.use('de');
     const groupService = TestBed.inject(GroupService);
     spyOn(groupService, 'getGroupsForOverview');
@@ -372,9 +407,16 @@ describe('GroupoverviewPage – Detailzeile bei großer Schrift (DIV-80)', () =>
 
     const admin = rect('.admin');
     const members = rect('.group-members');
+    const currency = rect('.group-currency');
     const adminEl = (fixture.nativeElement as HTMLElement).querySelector('.admin') as HTMLElement;
     expect(overlap(admin, members)).toBeFalse();
     expect(members.top).toBeGreaterThanOrEqual(admin.bottom - 1);
+    // Währung (DIV-77) als eigene Zeile darunter, vollständig lesbar (bricht zwischen Label und Wert um, nicht abgeschnitten)
+    const currencyEl = (fixture.nativeElement as HTMLElement).querySelector('.group-currency') as HTMLElement;
+    expect(currency.top).toBeGreaterThanOrEqual(members.bottom - 1);
+    expect(currency.right).toBeLessThanOrEqual(width + 0.5);
+    expect(currencyEl.scrollWidth).toBeLessThanOrEqual(currencyEl.clientWidth + 1);
+    expect(currencyEl.textContent).toContain('EUR (€)');
     // Name vollständig lesbar (umgebrochen statt abgeschnitten)
     expect(adminEl.scrollWidth).toBeLessThanOrEqual(adminEl.clientWidth + 1);
     expect(adminEl.textContent).toContain('Sven Beispiel');

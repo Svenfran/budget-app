@@ -8,7 +8,7 @@ import { GroupoverviewPageRoutingModule } from './groupoverview-routing.module';
 
 import { GroupoverviewPage } from './groupoverview.page';
 import { TranslateModule } from '@ngx-translate/core';
-import { GroupFormSheetComponent } from './group-form-sheet/group-form-sheet.component';
+import { GroupFormSheetModule } from './group-form-sheet/group-form-sheet.module';
 import { MembersSheetComponent } from './members-sheet/members-sheet.component';
 
 @NgModule({
@@ -18,8 +18,9 @@ import { MembersSheetComponent } from './members-sheet/members-sheet.component';
     ReactiveFormsModule,
     IonicModule,
     GroupoverviewPageRoutingModule,
-    TranslateModule
+    TranslateModule,
+    GroupFormSheetModule
   ],
-  declarations: [GroupoverviewPage, GroupFormSheetComponent, MembersSheetComponent]
+  declarations: [GroupoverviewPage, MembersSheetComponent]
 })
 export class GroupoverviewPageModule {}

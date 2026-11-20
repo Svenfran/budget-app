@@ -10,9 +10,11 @@ import { Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
 import { isGroupAdmin } from './group-permissions';
 import { GroupFormSheetMode } from './group-form-sheet/group-form-sheet.component';
-import { groupFormSheetModalOptions } from './group-form-sheet/group-form-sheet-options';
+import { openGroupFormSheet } from './group-form-sheet/group-form-sheet-options';
 import { MembersSheetView } from './members-sheet/members-sheet.component';
 import { membersSheetModalOptions } from './members-sheet/members-sheet-options';
+import { DEFAULT_CURRENCY } from '../constants/currency';
+import { currencySymbol } from '../pipe/scientific.pipe';
 
 @Component({
   selector: 'app-groupoverview',
@@ -74,6 +76,18 @@ export class GroupoverviewPage implements OnInit {
     return isGroupAdmin(group, this.user);
   }
 
+  /** Währung im Eintrag (DIV-77): „USD ($)“; ist das Symbol der Code selbst (CHF), nur der Code. */
+  currencyLabel(group: GroupOverview): string {
+    const code = group.currencyCode ?? DEFAULT_CURRENCY;
+    const symbol = currencySymbol(code);
+    return symbol === code ? code : `${code} (${symbol})`;
+  }
+
+  /** Einträge per ID wiederverwenden: Eine Änderung (Name, Währung) baut nicht den ganzen Eintrag neu auf. */
+  trackByGroupId(_index: number, group: GroupOverview): number {
+    return group.id;
+  }
+
   /** ⋮ am Gruppeneintrag (DIV-80): öffnet das Aktionsmenü, ohne die Gruppe auszuwählen. */
   openGroupMenu(event: Event, group: GroupOverview) {
     event.stopPropagation();
@@ -117,12 +131,10 @@ export class GroupoverviewPage implements OnInit {
 
   /**
    * Öffnet „Gruppe hinzufügen / bearbeiten“. Das Sheet speichert selbst und schließt erst nach Erfolg; `saving` sperrt das
-   * Schließen, solange der Request läuft. Fokus wie bisher im Alert direkt ins Namensfeld.
+   * Schließen, solange der Request läuft.
    */
-  async openGroupFormSheet(mode: GroupFormSheetMode, group?: GroupOverview) {
-    const modal = await this.modalCtrl.create(groupFormSheetModalOptions({ mode, group, saving: signal(false) }));
-    await modal.present();
-    await (modal.querySelector('ion-input.group-name-input') as HTMLIonInputElement | null)?.setFocus();
+  openGroupFormSheet(mode: GroupFormSheetMode, group?: GroupOverview) {
+    return openGroupFormSheet(this.modalCtrl, { mode, group, saving: signal(false) });
   }
 
   /**

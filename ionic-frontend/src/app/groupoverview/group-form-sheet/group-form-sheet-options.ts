@@ -1,5 +1,5 @@
 import { WritableSignal } from '@angular/core';
-import { ModalOptions } from '@ionic/angular';
+import { ModalController, ModalOptions } from '@ionic/angular';
 import { GroupOverview } from '../model/group-overview';
 import { GROUP_GONE_ROLE } from '../group-sheet-roles';
 import { GroupFormSheetComponent, GroupFormSheetMode } from './group-form-sheet.component';
@@ -11,6 +11,8 @@ export interface GroupFormSheetState {
   group?: GroupOverview;
   /** Speichern läuft: Sheet ist gegen Schließen gesperrt. */
   saving: WritableSignal<boolean>;
+  /** Aufrufende Seite (nur `create`): von „Keine Gruppe“ aus navigiert GroupService.addGroup nach Erfolg weiter. */
+  callingPage?: string;
 }
 
 /** Laufende Nummer für eindeutige Modal-IDs. */
@@ -29,8 +31,21 @@ export function groupFormSheetModalOptions(state: GroupFormSheetState): ModalOpt
   return {
     id,
     component: GroupFormSheetComponent,
-    componentProps: { modalId: id, mode: state.mode, group: state.group, saving: state.saving },
+    componentProps: { modalId: id, mode: state.mode, group: state.group, saving: state.saving, callingPage: state.callingPage },
     cssClass: ['bottom-sheet', 'bottom-sheet-auto', 'group-form-sheet'],
     canDismiss: async (_data?: unknown, role?: string) => role === GROUP_GONE_ROLE || !state.saving(),
   };
+}
+
+/**
+ * Öffnet „Gruppe hinzufügen / bearbeiten“ (Gruppenübersicht, Seitenmenü, „Keine Gruppe“; DIV-77 ersetzt dort die
+ * Alerts). Fokus ins Namensfeld nur beim Anlegen: Beim Bearbeiten ändert man oft nur die Währung, die Tastatur soll dann
+ * nicht aufgehen.
+ */
+export async function openGroupFormSheet(modalCtrl: ModalController, state: GroupFormSheetState): Promise<void> {
+  const modal = await modalCtrl.create(groupFormSheetModalOptions(state));
+  await modal.present();
+  if (state.mode === 'create') {
+    await (modal.querySelector('ion-input.group-name-input') as HTMLIonInputElement | null)?.setFocus();
+  }
 }

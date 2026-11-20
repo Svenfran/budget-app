@@ -478,7 +478,7 @@ describe('GroupService', () => {
       expect(req.request.body).toEqual(renamed);
       req.flush(renamed);
 
-      expect(await result).toBeTrue();
+      expect(await result).toBe('ok');
       expect(service.groupsSideNav()).toEqual([renamed, urlaub]);
       expect(service.groupOverviewList()).toEqual([{ ...overview[0], name: 'Wohngemeinschaft' }, overview[1], overview[2]]);
       expect(service.activeGroup()).toEqual(jasmine.objectContaining({ id: 1, name: 'Wohngemeinschaft' }));
@@ -493,7 +493,7 @@ describe('GroupService', () => {
       const result = service.updateGroup({ ...wg, currencyCode: 'USD' });
       http.expectOne(`${api}/update`).flush({ ...wg, currencyCode: 'USD' });
 
-      expect(await result).toBeTrue();
+      expect(await result).toBe('ok');
       expect(service.groupsSideNav()).toEqual([{ ...wg, currencyCode: 'USD' }, urlaub]);
       expect(service.groupOverviewList()[0]).toEqual({ ...overview[0], currencyCode: 'USD', hasBookings: true });
       expect(service.activeCurrency()).toBe('USD');
@@ -511,18 +511,51 @@ describe('GroupService', () => {
       expect(service.activeGroup()).toBe(wg);
     });
 
-    it('lässt beide Listen bei einem Fehler unverändert, meldet false und zeigt einen Hinweis', async () => {
+    it('lässt beide Listen bei einem Fehler unverändert, meldet „error“ und zeigt einen Hinweis', async () => {
       const { wg, sideNav, overview } = givenGroups();
       service.activeGroup.set(wg);
 
       const result = service.updateGroup({ ...wg, name: 'Wohngemeinschaft' });
       http.expectOne(`${api}/update`).flush(notOwnerOfGroup, forbidden);
 
-      expect(await result).toBeFalse();
+      expect(await result).toBe('error');
       expect(service.groupsSideNav()).toEqual(sideNav);
       expect(service.groupOverviewList()).toEqual(overview);
       expect(service.activeGroup()).toBe(wg);
       expect(alerts.showToast).toHaveBeenCalledOnceWith('alerts.group.error.update_group');
+    });
+
+    // DIV-77: 409 = Währungswechsel ohne Bestätigung bei vorhandenen Buchungen (erkannt am Status, nicht am Text)
+    it('409: meldet confirmation-required ohne Hinweis, ändert nichts außer hasBookings der Gruppe', async () => {
+      const { wg, urlaub, sideNav, overview } = givenGroups();
+      service.activeGroup.set({ ...wg, currencyCode: 'EUR' });
+      const activeBefore = service.activeGroup();
+
+      const result = service.updateGroup({ ...wg, currencyCode: 'USD' });
+      const req = http.expectOne(`${api}/update`);
+      expect(req.request.body).toEqual({ ...wg, currencyCode: 'USD' });
+      req.flush('Changing the currency of a group with bookings requires confirmation', { status: 409, statusText: 'Conflict' });
+
+      expect(await result).toBe('confirmation-required');
+      expect(alerts.showToast).not.toHaveBeenCalled();
+      expect(service.groupsSideNav()).toEqual(sideNav);
+      expect(service.groupOverviewList()).toEqual([{ ...overview[0], hasBookings: true }, overview[1], overview[2]]);
+      expect(service.activeGroup()).toBe(activeBefore);
+      expect(urlaub.currencyCode).toBeUndefined();
+    });
+
+    it('sendet die Bestätigung mit und übernimmt danach die neue Währung', async () => {
+      const { wg } = givenGroups();
+      service.activeGroup.set({ ...wg, currencyCode: 'EUR' });
+
+      const result = service.updateGroup({ ...wg, currencyCode: 'GBP', confirmCurrencyChange: true });
+      const req = http.expectOne(`${api}/update`);
+      expect(req.request.body).toEqual(jasmine.objectContaining({ currencyCode: 'GBP', confirmCurrencyChange: true }));
+      req.flush({ ...wg, currencyCode: 'GBP' });
+
+      expect(await result).toBe('ok');
+      expect(service.activeCurrency()).toBe('GBP');
+      expect(service.groupOverviewList()[0].currencyCode).toBe('GBP');
     });
 
     it('ein Fehler verwirft keine zwischenzeitliche Änderung (z. B. Live-Event), Regression DIV-1', () => {

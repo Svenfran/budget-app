@@ -27,7 +27,17 @@
       <ng-container *ngIf="name.errors?.['required']">{{ 'groups.form_sheet.name_required' | translate }}</ng-container>
       <ng-container *ngIf="name.errors?.['maxlength']">{{ 'groups.form_sheet.name_too_long' | translate }}</ng-container>
     </p>
-    <!-- Folgestory (Währung): weiteres Feld hier, Control in group-form.ts -->
+    <!-- Währung (DIV-77): Action-Sheet statt Popover, damit lange Einträge bei großer Schrift umbrechen können -->
+    <ion-item lines="none" class="group-form-field currency-field">
+      <ion-select formControlName="currencyCode" class="currency-select" interface="action-sheet" labelPlacement="stacked"
+                  [label]="'groups.form_sheet.currency_label' | translate"
+                  [cancelText]="'groups.form_sheet.btn_cancel' | translate">
+        <ion-select-option *ngFor="let option of currencyOptions" [value]="option.code">
+          {{ option.code }} – {{ ('currency.name.' + option.code) | translate }} ({{ option.symbol }})
+        </ion-select-option>
+      </ion-select>
+    </ion-item>
+    <p class="field-hint currency-hint">{{ 'groups.form_sheet.currency_hint' | translate }}</p>
   </div>
 
   <!-- Footer wie im Ausgabenfilter (DIV-71): Nebenaktion als Text-Button, Hauptaktion breiter mit Icon -->

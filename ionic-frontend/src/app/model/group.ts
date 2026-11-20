@@ -8,4 +8,9 @@ export interface Group {
      * keine hat; gelesen wird sie über `GroupService.activeCurrency` (Rückfall EUR).
      */
     currencyCode?: string,
+    /**
+     * Nur Request (`PUT /api/groups/update`, DIV-77): ausdrückliche Bestätigung eines Währungswechsels bei vorhandenen
+     * Buchungen; ohne sie antwortet der Server bei Buchungen mit 409.
+     */
+    confirmCurrencyChange?: boolean,
 }

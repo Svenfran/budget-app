@@ -1,4 +1,4 @@
-import { Component, effect, NgZone, Renderer2 } from '@angular/core';
+import { Component, effect, NgZone, Renderer2, signal } from '@angular/core';
 import {Subscription } from 'rxjs';
 import { AuthService } from './auth/auth.service';
 import { Router } from '@angular/router';
@@ -6,7 +6,7 @@ import { User } from './auth/user';
 import { WebSocketService } from './service/websocket.service';
 import { GroupService } from './service/group.service';
 import { Group } from './model/group';
-import { AlertController, isPlatform, LoadingController, NavController, Platform } from '@ionic/angular';
+import { AlertController, isPlatform, LoadingController, ModalController, NavController, Platform } from '@ionic/angular';
 import { App } from '@capacitor/app';
 import { Keyboard } from '@capacitor/keyboard';
 import { PluginListenerHandle } from '@capacitor/core';
@@ -27,6 +27,7 @@ import { LanguageService } from './service/language.service';
 import { ShoppinglistService } from './domains/shoppinglist/service/shoppinglist.service';
 import { isLongBackground, ResyncThrottle } from './service/resync-throttle';
 import { KeyboardOffset, offsetMinusViewportShift } from './service/keyboard-offset';
+import { openGroupFormSheet } from './groupoverview/group-form-sheet/group-form-sheet-options';
 
 @Component({
   selector: 'app-root',
@@ -66,6 +67,7 @@ export class AppComponent {
     private groupService: GroupService,
     private loadingCtrl: LoadingController,
     private alertCtrl: AlertController,
+    private modalCtrl: ModalController,
     private platform: Platform,
     private navCtrl: NavController,
     private renderer: Renderer2,
@@ -96,43 +98,9 @@ export class AppComponent {
     return foundGroup?.memberCount! > 0;
   }
 
+  /** Seitenmenü „Gruppe hinzufügen“: dasselbe Bottom Sheet wie in der Gruppenübersicht, mit Währungsauswahl (DIV-77). */
   onCreateGroup() {
-    this.alertCtrl.create({
-      header: this.translate.instant('alerts.group.new.header'),
-      buttons: [{
-        text: this.translate.instant('alerts.group.new.cancel'),
-        role: "cancel"
-      }, {
-        text: this.translate.instant('alerts.group.new.ok'),
-        handler: (data) => {
-          this.loadingCtrl.create({
-            message: this.translate.instant('alerts.group.new.loading')
-          }).then(loadingEl => {
-            if (!data) return;
-            const trimmedGroupName = data.groupName.trim();
-            if (trimmedGroupName === "") return;
-
-            const newGroup: Group = { id: new Date().getTime(), name: trimmedGroupName, dateCreated: new Date() };
-            this.groupService.addGroup(newGroup);
-            loadingEl.dismiss();
-          })
-        }
-      }],
-      inputs: [
-        {
-          name: "groupName",
-          placeholder: this.translate.instant('alerts.group.new.placeholder'),
-          attributes: {
-            maxlength: INIT_NUMBERS.MAX_LENGTH
-          }
-        }
-      ]
-    }).then(alertEl => alertEl.present().then(() => {
-      const inputField = document.querySelector("ion-alert input") as HTMLElement;
-      if (inputField) {
-        inputField.focus();
-      }
-    }));
+    return openGroupFormSheet(this.modalCtrl, { mode: 'create', saving: signal(false) });
   }
 
   onCreateCategory() {
