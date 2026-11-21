@@ -22,6 +22,7 @@ import spock.util.concurrent.PollingConditions
 
 import java.util.concurrent.Callable
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
@@ -108,13 +109,15 @@ class GroupCurrencyTransactionIntegrationSpec extends IntegrationSpec {
         inTransaction(wg.owner) { groupService.updateGroup(new GroupDto(id: groupId, name: wg.group.name, currencyCode: 'USD')) }
         gewechselt.countDown()
         def waehrungInA = a.get(TIMEOUT, TimeUnit.SECONDS)
-        pool.shutdownNow()
         def (name, waehrung) = gruppe(groupId)
         LOG.info('A (Währung beim Laden {}) und B committet -> gespeicherte Währung {}', waehrungInA, waehrung)
 
         then:
         waehrungInA == SupportedCurrency.EUR
         waehrung == SupportedCurrency.USD
+
+        cleanup: 'auch nach einem Fehler: wartenden Thread freigeben, Pool schließen (Codex-Re-Review F-001)'
+        schliessen(pool, gewechselt)
     }
 
     def "Zwei gleichzeitige Wechsel laufen nacheinander, das Protokoll ist die Kette EUR→USD, USD→CHF"() {
@@ -147,7 +150,6 @@ class GroupCurrencyTransactionIntegrationSpec extends IntegrationSpec {
         commitFreigabe.countDown()
         def erste = t1.get(TIMEOUT, TimeUnit.SECONDS)
         def zweite = t2.get(TIMEOUT, TimeUnit.SECONDS)
-        pool.shutdownNow()
         def protokoll = currencyChangeRepository.findByGroupIdOrderByChangedAtAscIdAsc(groupId)
                 .collect { [it.oldCurrencyCode.name(), it.newCurrencyCode.name(), it.changedByUserId] }
         def (gespeicherterName, waehrung) = gruppe(groupId)
@@ -158,6 +160,22 @@ class GroupCurrencyTransactionIntegrationSpec extends IntegrationSpec {
         zweite.currencyCode == 'CHF'
         waehrung == SupportedCurrency.CHF
         protokoll == [['EUR', 'USD', ownerId], ['USD', 'CHF', ownerId]]
+
+        cleanup: 'auch nach einem Fehler: T1 committen lassen (T2 wartet sonst auf die Sperre), Pool schließen'
+        schliessen(pool, commitFreigabe)
+    }
+
+    /**
+     * Gibt die Latches frei, auf die Test-Threads warten, und schließt den Pool – im `cleanup:`-Block, damit auch nach
+     * einer fehlgeschlagenen Bedingung oder einem Timeout keine Threads weiterlaufen. Ein Thread, der in der Datenbank auf
+     * eine Zeilensperre wartet, reagiert nicht auf Interrupts; er endet, sobald die sperrende Transaktion fertig ist.
+     */
+    private static void schliessen(ExecutorService pool, CountDownLatch... freigaben) {
+        freigaben.each { it.countDown() }
+        pool.shutdownNow()
+        if (!pool.awaitTermination(TIMEOUT, TimeUnit.SECONDS)) {
+            LOG.warn('Test-Threads nach {} s nicht beendet', TIMEOUT)
+        }
     }
 
     /** Name und Währung der Gruppe aus der Datenbank (eigene Transaktion, alles committet). */
