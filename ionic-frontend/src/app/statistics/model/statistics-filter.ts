@@ -8,11 +8,18 @@ export interface StatisticsFilter {
   year: number;
   /** 1–12, nur bei MONTH verwendet */
   month: number;
+  /**
+   * Währung bei „Alle Gruppen“ (DIV-77): Beträge verschiedener Währungen werden nie addiert. `null` = Währung der aktiven
+   * Gruppe (Standard und Rückfall, wenn die gewählte Währung unter den Gruppen nicht mehr vorkommt). Mit `groupId` ohne
+   * Wirkung – dann gilt die Gruppenwährung. `string` statt `CurrencyCode`: Das Backend kann Währungen liefern, die
+   * diese App-Version noch nicht kennt (neuere Version hat sie eingeführt); sie werden wie bekannte behandelt.
+   */
+  currency: string | null;
 }
 
 /** Standard beim ersten Öffnen und nach einem Sitzungswechsel (AC2): alle Gruppen, aktuelles Jahr. */
 export function defaultStatisticsFilter(now: Date): StatisticsFilter {
-  return { groupId: null, period: 'YEAR', year: now.getFullYear(), month: now.getMonth() + 1 };
+  return { groupId: null, period: 'YEAR', year: now.getFullYear(), month: now.getMonth() + 1, currency: null };
 }
 
 /**

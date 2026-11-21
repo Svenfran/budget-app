@@ -91,6 +91,24 @@ describe('GroupService', () => {
       expect(service.activeGroup()).toEqual(jasmine.objectContaining({ id: 2, name: 'Neuer Name' }));
     }));
 
+    // DIV-77: gespeicherte aktive Gruppe von vor DIV-77 (ohne Währung) und Währungswechsel
+    it('ergänzt die Währung einer gespeicherten aktiven Gruppe ohne currencyCode (activeCurrency vorher EUR)', fakeAsync(() => {
+      storage.setItem('ACTIVE_GROUP', aGroup({ id: 2, name: 'WG' }));
+      service.activeGroup.set(aGroup({ id: 2, name: 'WG' }));
+      expect(service.activeCurrency()).toBe('EUR');
+
+      service.getGroupsForSideNav();
+      http.expectOne(`${api}/sidenav`).flush([aGroup({ id: 2, name: 'WG', currencyCode: 'USD' })]);
+      flushMicrotasks();
+
+      expect(service.activeGroup()).toEqual(jasmine.objectContaining({ id: 2, currencyCode: 'USD' }));
+      expect(service.activeCurrency()).toBe('USD');
+      let stored: Group | null = null;
+      storage.getItem<Group>('ACTIVE_GROUP').then(g => stored = g);
+      flushMicrotasks();
+      expect(stored).toEqual(jasmine.objectContaining({ id: 2, currencyCode: 'USD' }));
+    }));
+
     it('macht die erste Gruppe aktiv, wenn die gespeicherte Gruppe nicht mehr existiert', fakeAsync(() => {
       storage.setItem('ACTIVE_GROUP', aGroup({ id: 99 }));
 
@@ -161,6 +179,16 @@ describe('GroupService', () => {
 
       expect(service.activeGroup().name).toBe('Neue WG');
       expect(service.activeGroupId()).toBe(1);
+    }));
+
+    it('übernimmt eine reine Währungsänderung der aktiven Gruppe (DIV-77)', fakeAsync(() => {
+      givenActive(aGroup({ id: 1, name: 'WG', currencyCode: 'EUR' }));
+
+      resyncSideNav([aGroup({ id: 1, name: 'WG', currencyCode: 'CHF' })]);
+
+      expect(service.activeGroup()).toEqual(jasmine.objectContaining({ id: 1, name: 'WG', currencyCode: 'CHF' }));
+      expect(service.activeCurrency()).toBe('CHF');
+      expect(stored).toHaveBeenCalledWith('ACTIVE_GROUP', jasmine.objectContaining({ currencyCode: 'CHF' }));
     }));
 
     it('macht die erste Gruppe aktiv, wenn die aktive Gruppe nicht mehr existiert', fakeAsync(() => {
@@ -394,10 +422,12 @@ describe('GroupService', () => {
       expect(req.request.body).toEqual(newGroup);
       req.flush({ ...newGroup, id: 4 });
 
-      const created = { id: 4, name: 'Verein', dateCreated: newGroup.dateCreated };
+      // ohne currencyCode in der Antwort (Backend vor DIV-77) gilt EUR; neue Gruppe hat noch keine Buchungen
+      const created = { id: 4, name: 'Verein', dateCreated: newGroup.dateCreated, currencyCode: 'EUR' };
       expect(await result).toBeTrue();
       expect(service.groupsSideNav()).toEqual([...sideNav, created]);
-      expect(service.groupOverviewList()).toEqual([...overview, { ...created, ownerName: 'Anna', ownerId: me.id, memberCount: 0 }]);
+      expect(service.groupOverviewList()).toEqual([...overview,
+        { ...created, ownerName: 'Anna', ownerId: me.id, memberCount: 0, hasBookings: false }]);
       expect(service.activeGroup()).toEqual(created);
       expect(navigate).not.toHaveBeenCalled();
       expect(alerts.showToast).not.toHaveBeenCalled();
@@ -448,11 +478,26 @@ describe('GroupService', () => {
       expect(req.request.body).toEqual(renamed);
       req.flush(renamed);
 
-      expect(await result).toBeTrue();
+      expect(await result).toBe('ok');
       expect(service.groupsSideNav()).toEqual([renamed, urlaub]);
       expect(service.groupOverviewList()).toEqual([{ ...overview[0], name: 'Wohngemeinschaft' }, overview[1], overview[2]]);
       expect(service.activeGroup()).toEqual(jasmine.objectContaining({ id: 1, name: 'Wohngemeinschaft' }));
       expect(await storage.getItem('ACTIVE_GROUP')).toEqual(jasmine.objectContaining({ id: 1, name: 'Wohngemeinschaft' }));
+    });
+
+    it('übernimmt die Währung der Antwort in Seitenleiste, Übersicht und aktive Gruppe; hasBookings bleibt (DIV-77)', async () => {
+      const { wg, urlaub, overview } = givenGroups();
+      service.groupOverviewList.set([{ ...overview[0], currencyCode: 'EUR', hasBookings: true }, overview[1], overview[2]]);
+      service.activeGroup.set({ ...wg, currencyCode: 'EUR' });
+
+      const result = service.updateGroup({ ...wg, currencyCode: 'USD' });
+      http.expectOne(`${api}/update`).flush({ ...wg, currencyCode: 'USD' });
+
+      expect(await result).toBe('ok');
+      expect(service.groupsSideNav()).toEqual([{ ...wg, currencyCode: 'USD' }, urlaub]);
+      expect(service.groupOverviewList()[0]).toEqual({ ...overview[0], currencyCode: 'USD', hasBookings: true });
+      expect(service.activeCurrency()).toBe('USD');
+      expect(await storage.getItem('ACTIVE_GROUP')).toEqual(jasmine.objectContaining({ id: wg.id, currencyCode: 'USD' }));
     });
 
     it('lässt die aktive Gruppe unverändert, wenn eine andere Gruppe umbenannt wird', () => {
@@ -466,18 +511,51 @@ describe('GroupService', () => {
       expect(service.activeGroup()).toBe(wg);
     });
 
-    it('lässt beide Listen bei einem Fehler unverändert, meldet false und zeigt einen Hinweis', async () => {
+    it('lässt beide Listen bei einem Fehler unverändert, meldet „error“ und zeigt einen Hinweis', async () => {
       const { wg, sideNav, overview } = givenGroups();
       service.activeGroup.set(wg);
 
       const result = service.updateGroup({ ...wg, name: 'Wohngemeinschaft' });
       http.expectOne(`${api}/update`).flush(notOwnerOfGroup, forbidden);
 
-      expect(await result).toBeFalse();
+      expect(await result).toBe('error');
       expect(service.groupsSideNav()).toEqual(sideNav);
       expect(service.groupOverviewList()).toEqual(overview);
       expect(service.activeGroup()).toBe(wg);
       expect(alerts.showToast).toHaveBeenCalledOnceWith('alerts.group.error.update_group');
+    });
+
+    // DIV-77: 409 = Währungswechsel ohne Bestätigung bei vorhandenen Buchungen (erkannt am Status, nicht am Text)
+    it('409: meldet confirmation-required ohne Hinweis, ändert nichts außer hasBookings der Gruppe', async () => {
+      const { wg, urlaub, sideNav, overview } = givenGroups();
+      service.activeGroup.set({ ...wg, currencyCode: 'EUR' });
+      const activeBefore = service.activeGroup();
+
+      const result = service.updateGroup({ ...wg, currencyCode: 'USD' });
+      const req = http.expectOne(`${api}/update`);
+      expect(req.request.body).toEqual({ ...wg, currencyCode: 'USD' });
+      req.flush('Changing the currency of a group with bookings requires confirmation', { status: 409, statusText: 'Conflict' });
+
+      expect(await result).toBe('confirmation-required');
+      expect(alerts.showToast).not.toHaveBeenCalled();
+      expect(service.groupsSideNav()).toEqual(sideNav);
+      expect(service.groupOverviewList()).toEqual([{ ...overview[0], hasBookings: true }, overview[1], overview[2]]);
+      expect(service.activeGroup()).toBe(activeBefore);
+      expect(urlaub.currencyCode).toBeUndefined();
+    });
+
+    it('sendet die Bestätigung mit und übernimmt danach die neue Währung', async () => {
+      const { wg } = givenGroups();
+      service.activeGroup.set({ ...wg, currencyCode: 'EUR' });
+
+      const result = service.updateGroup({ ...wg, currencyCode: 'GBP', confirmCurrencyChange: true });
+      const req = http.expectOne(`${api}/update`);
+      expect(req.request.body).toEqual(jasmine.objectContaining({ currencyCode: 'GBP', confirmCurrencyChange: true }));
+      req.flush({ ...wg, currencyCode: 'GBP' });
+
+      expect(await result).toBe('ok');
+      expect(service.activeCurrency()).toBe('GBP');
+      expect(service.groupOverviewList()[0].currencyCode).toBe('GBP');
     });
 
     it('ein Fehler verwirft keine zwischenzeitliche Änderung (z. B. Live-Event), Regression DIV-1', () => {
@@ -492,6 +570,60 @@ describe('GroupService', () => {
       expect(service.groupsSideNav()[1].name).toBe('Sommerurlaub');
       expect(service.groupOverviewList()[1].name).toBe('Sommerurlaub');
     });
+  });
+
+  // DIV-77 (D8): eigene Aufnahme → Seitenleiste und Übersicht still neu laden
+  describe('refreshAfterMembershipEvent', () => {
+    it('lädt nach der eigenen Aufnahme genau einmal Seitenleiste und Übersicht', () => {
+      service.refreshAfterMembershipEvent({ updatedMember: aUser({ id: me.id }) }, me);
+
+      http.expectOne(`${api}/sidenav`);
+      http.expectOne(`${api}/overview`);
+    });
+
+    it('lädt nicht bei der Aufnahme eines anderen Mitglieds oder ohne angemeldeten Nutzer', () => {
+      service.refreshAfterMembershipEvent({ updatedMember: aUser({ id: me.id + 1 }) }, me);
+      service.refreshAfterMembershipEvent({ updatedMember: aUser({ id: me.id }) }, undefined);
+
+      http.expectNone(`${api}/sidenav`);
+      http.expectNone(`${api}/overview`);
+    });
+
+    // Regression überholende Nachrichten (Codex-Review 3 F-001): update-group(USD) kam vor add-group-member(EUR)
+    it('korrigiert nach verspätetem Aufnahme-Event mit alter Währung Seitenleiste, Übersicht und aktive Währung', fakeAsync(() => {
+      const wg = aGroup({ id: 7, name: 'WG', currencyCode: 'EUR' });
+      service.groupsSideNav.set([wg]);
+      service.groupOverviewList.set([aGroupOverview({ id: 7, name: 'WG', currencyCode: 'EUR' })]);
+      service.activeGroup.set(wg);
+
+      service.refreshAfterMembershipEvent({ updatedMember: aUser({ id: me.id }) }, me);
+      http.expectOne(`${api}/sidenav`).flush([{ ...wg, currencyCode: 'USD' }]);
+      http.expectOne(`${api}/overview`).flush([aGroupOverview({ id: 7, name: 'WG', currencyCode: 'USD', hasBookings: true })]);
+      flushMicrotasks();
+
+      expect(service.groupsSideNav()[0].currencyCode).toBe('USD');
+      expect(service.groupOverviewList()[0].currencyCode).toBe('USD');
+      expect(service.activeCurrency()).toBe('USD');
+      expect(alerts.showToast).not.toHaveBeenCalled();
+    }));
+
+    it('behält bei einem Fehler des stillen Neuladens den Stand, ohne Hinweis', fakeAsync(() => {
+      const wg = aGroup({ id: 7, name: 'WG', currencyCode: 'EUR' });
+      const overview = [aGroupOverview({ id: 7, currencyCode: 'EUR' })];
+      service.groupsSideNav.set([wg]);
+      service.groupOverviewList.set(overview);
+      service.activeGroup.set(wg);
+
+      service.refreshAfterMembershipEvent({ updatedMember: aUser({ id: me.id }) }, me);
+      http.expectOne(`${api}/sidenav`).flush('boom', { status: 500, statusText: 'Server Error' });
+      http.expectOne(`${api}/overview`).flush('boom', { status: 500, statusText: 'Server Error' });
+      flushMicrotasks();
+
+      expect(service.groupsSideNav()).toEqual([wg]);
+      expect(service.groupOverviewList()).toEqual(overview);
+      expect(service.activeCurrency()).toBe('EUR');
+      expect(alerts.showToast).not.toHaveBeenCalled();
+    }));
   });
 
   describe('deleteGroup', () => {

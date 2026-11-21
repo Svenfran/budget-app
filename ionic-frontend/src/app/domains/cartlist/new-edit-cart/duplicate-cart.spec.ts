@@ -6,7 +6,7 @@ describe('duplicateFormValues (DIV-73)', () => {
   it('übernimmt Titel, Betrag mit zwei Nachkommastellen, Beschreibung und Kategorie', () => {
     const cart = aCart({ title: 'Pizza', amount: 12.5, description: 'Freitag', categoryDto: aCategory({ id: 42 }) });
 
-    expect(duplicateFormValues(cart)).toEqual({ title: 'Pizza', amount: '12.50', description: 'Freitag', categoryId: 42 });
+    expect(duplicateFormValues(cart)).toEqual({ title: 'Pizza', amount: '12,50', description: 'Freitag', categoryId: 42 });
   });
 
   it('macht aus einer fehlenden Beschreibung einen leeren Text', () => {

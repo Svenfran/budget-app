@@ -66,7 +66,7 @@ public class CartService {
     }
 
     @Transactional
-    public CartDto addCart(@Validated CartDto cartDto) throws UserNotFoundException, CategoryNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, DatePurchasedNotWithinMembershipPeriodException, SettlementCategoryNotAllowedException {
+    public CartDto addCart(@Validated CartDto cartDto) throws UserNotFoundException, CategoryNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, DatePurchasedNotWithinMembershipPeriodException, SettlementCategoryNotAllowedException, InvalidAmountException {
         var user = dataLoaderService.getAuthenticatedUser();
         var category = dataLoaderService.loadCategory(cartDto.getCategoryDto().getId());
         var group = dataLoaderService.loadGroup(cartDto.getGroupId());
@@ -75,6 +75,7 @@ public class CartService {
         // Ausgleichszahlungen nur über SettlementService (DIV-74)
         verificationService.verifyCategoryIsNotSettlement(category);
         verificationService.verifyDatePurchasedWithinMembershipPeriod(gmh, cartDto.getDatePurchased());
+        verificationService.verifyCartAmountHasAtMostTwoDecimals(cartDto.getAmount());
         var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(cartDto.getDatePurchased(), group.getId());
         var cart = cartDtoMapper.cartDtoToEntity(cartDto, category, user, group, groupMemberCount);
         // Neuanlage erzwingen (DIV-73): mit gesetzter ID würde save() per merge einen bestehenden, auch fremden Cart
@@ -85,7 +86,7 @@ public class CartService {
     }
 
     @Transactional
-    public CartDto updateCart(@Validated CartDto cartDto) throws UserNotFoundException, CategoryNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, DatePurchasedNotWithinMembershipPeriodException, CartNotFoundException, NotOwnerOfCartException, SettlementCartNotEditableException, SettlementCategoryNotAllowedException {
+    public CartDto updateCart(@Validated CartDto cartDto) throws UserNotFoundException, CategoryNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException, DatePurchasedNotWithinMembershipPeriodException, CartNotFoundException, NotOwnerOfCartException, SettlementCartNotEditableException, SettlementCategoryNotAllowedException, InvalidAmountException {
         var user = dataLoaderService.getAuthenticatedUser();
         var cart = dataLoaderService.loadCart(cartDto.getId());
         var group = dataLoaderService.loadGroup(cartDto.getGroupId());
@@ -97,6 +98,7 @@ public class CartService {
         verificationService.verifyDatePurchasedWithinMembershipPeriod(gmh, cartDto.getDatePurchased());
         var category = dataLoaderService.loadCategory(cartDto.getCategoryDto().getId());
         verificationService.verifyCategoryIsNotSettlement(category);
+        verificationService.verifyCartAmountHasAtMostTwoDecimals(cartDto.getAmount());
         var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(cartDto.getDatePurchased(), group.getId());
         return updateCartAndTemplateIfValid(cart, cartDto, user, group, category, groupMemberCount);
     }

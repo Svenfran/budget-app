@@ -24,10 +24,16 @@ export function aGroup(overrides: Partial<Group> = {}): Group {
   return { id, name: `Gruppe ${id}`, dateCreated: REFERENCE_DATE, ...overrides };
 }
 
-/** Eintrag der Gruppenübersicht (DIV-80: mit `ownerId`); Owner und Mitgliederzahl bei Bedarf im Test setzen. */
+/**
+ * Eintrag der Gruppenübersicht (DIV-80: mit `ownerId`; DIV-77: `currencyCode` EUR, `hasBookings` nicht gesetzt); Owner,
+ * Mitgliederzahl und Währung bei Bedarf im Test setzen.
+ */
 export function aGroupOverview(overrides: Partial<GroupOverview> = {}): GroupOverview {
   const id = nextId();
-  return { id, name: `Gruppe ${id}`, dateCreated: REFERENCE_DATE, ownerName: 'Anna', ownerId: nextId(), memberCount: 1, ...overrides };
+  return {
+    id, name: `Gruppe ${id}`, dateCreated: REFERENCE_DATE, ownerName: 'Anna', ownerId: nextId(), memberCount: 1,
+    currencyCode: 'EUR', ...overrides,
+  };
 }
 
 export function aCategory(overrides: Partial<CategoryDto> = {}): CategoryDto {

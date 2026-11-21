@@ -31,10 +31,11 @@
 
       <ion-item lines="none" class="settlement-field">
         <ion-icon name="cash-outline" slot="start" aria-hidden="true"></ion-icon>
-        <ion-input formControlName="amount" class="input-amount" type="number" inputmode="decimal"
+        <!-- Textfeld statt type="number" (DIV-77): das Zahlenfeld meldet „45.“ als leer; Komma und Punkt erlaubt -->
+        <ion-input formControlName="amount" class="input-amount" type="text" inputmode="decimal"
                    enterkeyhint="done" labelPlacement="floating"
-                   [label]="'domains.spendings.overlay.settlementpayment.amount' | translate"
-                   (keyup.enter)="blurInput($event)"></ion-input>
+                   [label]="'domains.spendings.overlay.settlementpayment.amount' | translate: { currency: currencySymbol() }"
+                   (ionBlur)="roundAmount()" (keyup.enter)="blurInput($event)"></ion-input>
       </ion-item>
       <p class="field-error error-amount" *ngIf="showError(amount)" role="alert">
         <ng-container *ngIf="amount.errors?.['required']">{{ 'global.errors.required' | translate }}</ng-container>

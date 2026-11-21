@@ -1,4 +1,5 @@
-import { ValidatorFn, Validators } from '@angular/forms';
+import { AbstractControl, ValidationErrors, ValidatorFn, Validators } from '@angular/forms';
+import { amountFromInput, parseAmountText } from 'src/app/service/amount';
 import { GroupMembers } from 'src/app/groupmembers/model/groupmembers-dto';
 import { UserDto } from 'src/app/model/user-dto';
 import { Zeitraum } from '../new-edit-cart/model/gmh-zeitraum';
@@ -11,19 +12,32 @@ import { purchaseDayOf } from '../filter-sheet/cart-filter-form';
  */
 
 /**
- * Betrag: Pflichtfeld, größer als 0 und höchstens zwei Nachkommastellen, Dezimaltrennung nur mit Punkt (DIV-74; vorher
- * waren 0 und negative Werte erlaubt). Die Richtung ergibt sich aus Zahler und Empfänger, nicht aus dem Vorzeichen.
- * Das Backend prüft dieselben Regeln.
+ * Betrag: Pflichtfeld, größer als 0, ohne Vorzeichen (DIV-74; vorher waren 0 und negative Werte erlaubt); Punkt oder
+ * Komma als Dezimaltrenner (DIV-77 Phase 9: Textfeld statt Zahlenfeld, damit „45.“ und „45,5“ ankommen). Die Richtung ergibt sich aus Zahler und Empfänger, nicht aus dem Vorzeichen. Mehr als zwei
+ * Nachkommastellen lehnt das Formular nicht mehr ab, sondern das Sheet rundet sie beim Verlassen des Feldes und vor dem
+ * Speichern auf Cent und schreibt den Betrag mit zwei Nachkommastellen ins Feld (DIV-77, D9: `formattedAmountInput`,
+ * wie im Cart-Formular); wird dabei auf 0 gerundet, greift `min`. Das Backend lehnt weiterhin ab, was mit mehr als
+ * zwei Nachkommastellen ankommt.
  */
 export const AMOUNT_VALIDATORS: ValidatorFn[] = [
   Validators.required,
-  Validators.pattern('[0-9]*([.][0-9]{1,2})?'),
-  Validators.min(0.01),
+  // Textfeld (Nutzerentscheidung Phase 9): Punkt oder Komma, Trennzeichen am Ende erlaubt; ohne Vorzeichen
+  Validators.pattern('(?:[0-9]+(?:[.,][0-9]*)?|[.,][0-9]+)'),
+  positiveAmount,
 ];
+
+/** Größer als 0 (Fehler `min` wie bisher `Validators.min(0.01)`), auch mit Komma: `Validators.min` liest „0,5“ als 0. */
+export function positiveAmount(control: AbstractControl<number | string | null>): ValidationErrors | null {
+  const value = control.value;
+  if (value === null || value === '') return null;
+  const amount = typeof value === 'number' ? value : parseAmountText(value);
+  return amount !== null && amount < 0.01 ? { min: { min: 0.01, actual: amount } } : null;
+}
 
 /** Formularwerte, wenn das Formular gültig ist; `datePurchased` als ISO-Tag `YYYY-MM-DD`. */
 export interface SettlementFormValue {
-  amount: number;
+  /** Zahl (Eingabe) oder Text mit zwei Nachkommastellen (nach dem Formatieren, Vorbelegung im Edit-Modus) */
+  amount: number | string;
   memberId: number;
   datePurchased: string;
 }
@@ -79,7 +93,7 @@ export function toSettlementPaymentDto(value: SettlementFormValue, groupId: numb
   return {
     ...(options.settlementId !== undefined ? { id: options.settlementId } : {}),
     ...(received ? { payer: counterpart } : {}),
-    amount: value.amount,
+    amount: amountFromInput(value.amount)!,
     groupId,
     member: received ? { id: options.receivedBy!.id, userName: options.receivedBy!.userName } : counterpart,
     datePurchased: new Date(value.datePurchased),

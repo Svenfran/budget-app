@@ -1,5 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service
 
+import com.github.svenfran.budgetapp.budgetappbackend.constants.SupportedCurrency
 import com.github.svenfran.budgetapp.budgetappbackend.constants.TypeEnum
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.GroupNotFoundException
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOrMemberOfGroupException
@@ -191,6 +192,32 @@ class ExportServiceIntegrationSpec extends IntegrationSpec {
 
         then:
         result.isEmpty()
+    }
+
+    def "Alle Gruppen mit EUR- und USD-Gruppe: jede Zeile trägt die Währung ihrer Gruppe, Beträge unverändert (DIV-77)"() {
+        given:
+        def anna = fixtures.user(name: 'Anna')
+        def haushalt = fixtures.group(owner: anna, memberSince: SEIT)
+        def urlaub = fixtures.group(owner: anna, memberSince: SEIT)
+        einkauf(haushalt, anna, 'Pizza', 30d, of(2025, 3, 1))
+        einkauf(urlaub, anna, 'Hotel', 300.5d, of(2025, 8, 1))
+        einkauf(urlaub, anna, 'Taxi', 12.345d, of(2025, 8, 2))
+        flushAndClear()
+        entityManager.createQuery('update Group g set g.currencyCode = :c where g.id = :id')
+                .setParameter('c', SupportedCurrency.USD).setParameter('id', urlaub.group.id).executeUpdate()
+        loginAs(anna)
+        def (haushaltId, urlaubId) = [haushalt.group.id, urlaub.group.id]
+        LOG.info('Szenario: Anna {}; Haushalt {} (EUR, Pizza 30), Urlaub {} (USD, Hotel 300.5, Taxi 12.345)', anna.id, haushaltId, urlaubId)
+
+        when:
+        def result = exportService.loadExportData(null)
+        def zeilen = result.collectEntries { [(it.groupId()): it.carts().collect { [it.title(), it.amount(), it.currencyCode()] }] }
+        LOG.info('exportService.loadExportData(null) -> {}', zeilen)
+
+        then:
+        result*.groupId() == [haushaltId, urlaubId]
+        zeilen[haushaltId] == [['Pizza', 30d, 'EUR']]
+        zeilen[urlaubId] == [['Taxi', 12.345d, 'USD'], ['Hotel', 300.5d, 'USD']]
     }
 
     def "Betrag mit mehr als zwei Nachkommastellen wird als gespeicherter Rohwert übernommen"() {

@@ -1,14 +1,17 @@
 import { signal, WritableSignal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { ReactiveFormsModule } from '@angular/forms';
 import { IonicModule, ModalController } from '@ionic/angular';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AuthService } from 'src/app/auth/auth.service';
 import { GroupMembers } from 'src/app/groupmembers/model/groupmembers-dto';
 import { GroupService } from 'src/app/service/group.service';
+import { Group } from 'src/app/model/group';
 import { aGroup, aLoggedInUser, aUser, REFERENCE_DATE } from 'src/testing/test-data';
 import { authServiceStub, provideServiceTesting } from 'src/testing/test-providers';
 import { removeOverlays } from 'src/testing/overlay-cleanup';
+import { ionicReady } from 'src/testing/ionic-ready';
 import { toIsoDay } from '../iso-day';
 import { Zeitraum } from '../new-edit-cart/model/gmh-zeitraum';
 import { CartService } from '../service/cart.service';
@@ -86,6 +89,7 @@ describe('SettlementSheetComponent (DIV-70)', () => {
         {
           provide: GroupService, useValue: {
             activeGroup: signal(group),
+            groupsSideNav: signal([group]),
             groupMembers,
             groupMembershipHistory: history,
             getGroupMembers,
@@ -103,6 +107,32 @@ describe('SettlementSheetComponent (DIV-70)', () => {
   });
 
   afterEach(() => jasmine.clock().uninstall());
+
+  // Codex F-001: Währungswechsel bei offenem Sheet (Live-Event) aktualisiert das Betrags-Label
+  it('Betrags-Label folgt der aktuellen Währung der beim Öffnen festgehaltenen Gruppe', () => {
+    const groupService = TestBed.inject(GroupService);
+    const sideNav = groupService.groupsSideNav as WritableSignal<Group[]>;
+    const activeGroup = groupService.activeGroup as WritableSignal<Group>;
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('de', { domains: { spendings: { overlay: { settlementpayment: { amount: 'Betrag in {{currency}}' } } } } }, true);
+    translate.use('de');
+    // gebundenes Property (Template-Bindung); das Ionic-Element selbst übernimmt Änderungen im Test nicht synchron
+    const label = () => fixture.debugElement.query(By.css('ion-input.input-amount')).properties['label'];
+    sideNav.set([{ ...group, currencyCode: 'EUR' }]);
+    detect();
+    expect(label()).toBe('Betrag in €');
+
+    // Live-Event: Gruppenliste (und aktive Gruppe) mit neuer Währung
+    sideNav.set([{ ...group, currencyCode: 'USD' }, aGroup({ id: 99, currencyCode: 'GBP' })]);
+    activeGroup.set({ ...group, currencyCode: 'USD' });
+    detect();
+    expect(label()).toBe('Betrag in $');
+
+    // andere aktive Gruppe (Wechsel bei offenem Sheet): Request und Label bleiben bei der festgehaltenen Gruppe
+    activeGroup.set(aGroup({ id: 99, currencyCode: 'GBP' }));
+    detect();
+    expect(label()).toBe('Betrag in $');
+  });
 
   it('lädt beim Öffnen Mitglieder und Mitgliedschaftshistorie der aktiven Gruppe genau einmal', () => {
     expect(getGroupMembers).toHaveBeenCalledOnceWith(7);
@@ -200,7 +230,9 @@ describe('SettlementSheetComponent (DIV-70)', () => {
       expect(el().querySelector('.error-member')).toBeNull();
     });
 
-    it('Betragsfeld ohne Autofokus (Feedback Phase 2)', () => {
+    it('Betragsfeld ohne Autofokus (Feedback Phase 2)', async () => {
+      // erst nach dem Hydrieren: vorher ist die Ionic-Eigenschaft undefined (je nach Testreihenfolge)
+      await ionicReady(el());
       expect(el().querySelector('ion-input.input-amount')!.hasAttribute('autofocus')).toBeFalse();
       expect((el().querySelector('ion-input.input-amount') as HTMLIonInputElement).autofocus).toBeFalse();
     });
@@ -208,6 +240,112 @@ describe('SettlementSheetComponent (DIV-70)', () => {
     it('gültige Eingaben geben „Speichern“ frei', () => {
       fillValid();
       expect(button('btn-save')!.disabled).toBeFalse();
+    });
+  });
+
+  // DIV-77 (D9): mehr als zwei Nachkommastellen werden gerundet statt abgelehnt
+  describe('Betrag runden', () => {
+    const blurAmount = () => {
+      el().querySelector('ion-input.input-amount')!.dispatchEvent(new CustomEvent('ionBlur'));
+      detect();
+    };
+
+    it('rundet beim Verlassen des Feldes sichtbar auf Cent, der Betrag ist gültig', () => {
+      component.form.patchValue({ amount: 65.349875, memberId: anna.id });
+      blurAmount();
+
+      expect(component.form.controls.amount.value).toBe('65,35');
+      expect(component.form.controls.amount.valid).toBeTrue();
+      expect(button('btn-save')!.disabled).toBeFalse();
+    });
+
+    it('Speichern ohne vorheriges Verlassen des Feldes sendet den gerundeten Betrag', async () => {
+      component.form.setValue({ amount: 65.349875, memberId: anna.id, datePurchased: '2025-06-10' });
+      detect();
+
+      await component.save();
+
+      expect(addSettlementPayment).toHaveBeenCalledOnceWith(jasmine.objectContaining({ amount: 65.35 }));
+    });
+
+    it('auf 0 gerundet (0.004): Hinweis „größer als 0“, kein Request', async () => {
+      component.form.patchValue({ amount: 0.004, memberId: anna.id });
+      component.form.controls.amount.markAsTouched();
+      blurAmount();
+
+      expect(component.form.controls.amount.value).toBe('0,00');
+      expect(component.form.controls.amount.errors?.['min']).toBeDefined();
+      expect(el().querySelector('.error-amount')?.textContent).toContain(key('amount_positive'));
+
+      await component.save();
+      expect(addSettlementPayment).not.toHaveBeenCalled();
+    });
+
+    it('sehr kleine Zahl (Textform „1e-7“) wird ebenfalls gerundet: 0, Hinweis „größer als 0“ (Codex F-002)', () => {
+      component.form.patchValue({ amount: 0.0000001, memberId: anna.id });
+      component.form.controls.amount.markAsTouched();
+      blurAmount();
+
+      expect(component.form.controls.amount.value).toBe('0,00');
+      expect(el().querySelector('.error-amount')?.textContent).toContain(key('amount_positive'));
+    });
+
+    // Phase 9: Textfeld statt Zahlenfeld – „45.“ meldete im Zahlenfeld „Pflichtfeld“
+    it('ist ein Textfeld mit Dezimaltastatur', () => {
+      const input = el().querySelector('ion-input.input-amount')!;
+      expect(input.getAttribute('type')).toBe('text');
+      expect(input.getAttribute('inputmode')).toBe('decimal');
+    });
+
+    ([
+      ['45.', '45,00'],
+      ['45,', '45,00'],
+      ['45,5', '45,50'],
+      ['0,5', '0,50'],
+    ] as [string, string][]).forEach(([eingabe, anzeige]) => {
+      it(`„${eingabe}“ ist gültig und wird beim Verlassen zu „${anzeige}“`, () => {
+        component.form.patchValue({ amount: eingabe, memberId: anna.id });
+        component.form.controls.amount.markAsTouched();
+        detect();
+        expect(component.form.controls.amount.valid).toBeTrue();
+
+        blurAmount();
+
+        expect(component.form.controls.amount.value).toBe(anzeige);
+        expect(el().querySelector('.error-amount')).toBeNull();
+      });
+    });
+
+    it('mit Komma gespeichert: Request mit dem gerundeten Betrag als Zahl', async () => {
+      component.form.setValue({ amount: '12,345', memberId: anna.id, datePurchased: '2025-06-10' });
+      detect();
+
+      await component.save();
+
+      expect(addSettlementPayment).toHaveBeenCalledOnceWith(jasmine.objectContaining({ amount: 12.35 }));
+    });
+
+    it('„0,004“: auf 0 gerundet, Hinweis „größer als 0“; Vorzeichen: Formatfehler', () => {
+      component.form.patchValue({ amount: '0,004', memberId: anna.id });
+      component.form.controls.amount.markAsTouched();
+      blurAmount();
+      expect(component.form.controls.amount.value).toBe('0,00');
+      expect(el().querySelector('.error-amount')?.textContent).toContain(key('amount_positive'));
+
+      component.form.patchValue({ amount: '-5' });
+      blurAmount();
+      expect(component.form.controls.amount.errors?.['pattern']).toBeDefined();
+      expect(el().querySelector('.error-amount')?.textContent).toContain('global.errors.invalid_amount');
+    });
+
+    it('ungültiges Format bleibt stehen und meldet wie bisher den Formatfehler', () => {
+      component.form.patchValue({ amount: 'abc' as unknown as number, memberId: anna.id });
+      component.form.controls.amount.markAsTouched();
+      blurAmount();
+
+      expect(component.form.controls.amount.value as unknown).toBe('abc');
+      expect(component.form.controls.amount.errors?.['pattern']).toBeDefined();
+      expect(el().querySelector('.error-amount')?.textContent).toContain('global.errors.invalid_amount');
     });
   });
 
@@ -262,7 +400,8 @@ describe('SettlementSheetComponent (DIV-70)', () => {
       detect();
 
       expect(modalCtrl.dismiss).not.toHaveBeenCalled();
-      expect(component.form.getRawValue()).toEqual({ amount: 25.5, memberId: anna.id, datePurchased: '2025-06-10' });
+      // vor dem Speichern auf zwei Nachkommastellen formatiert (D9, einheitlich mit dem Cart-Formular)
+      expect(component.form.getRawValue()).toEqual({ amount: '25,50', memberId: anna.id, datePurchased: '2025-06-10' });
       expect(component.form.enabled).toBeTrue();
       expect(saving()).toBeFalse();
       expect(button('btn-save')!.disabled).toBeFalse();
@@ -279,7 +418,8 @@ describe('SettlementSheetComponent (DIV-70)', () => {
 
       expect(saving()).toBeFalse();
       expect(modalCtrl.dismiss).not.toHaveBeenCalled();
-      expect(component.form.getRawValue()).toEqual({ amount: 25.5, memberId: anna.id, datePurchased: '2025-06-10' });
+      // vor dem Speichern auf zwei Nachkommastellen formatiert (D9, einheitlich mit dem Cart-Formular)
+      expect(component.form.getRawValue()).toEqual({ amount: '25,50', memberId: anna.id, datePurchased: '2025-06-10' });
     });
 
     // Codex-Review 2, F-001: simuliert eine neu geladene Liste (direktes Setzen des Signals), keine WebSocket-Sync.
@@ -390,7 +530,8 @@ describe('SettlementSheetComponent (DIV-70)', () => {
     it('Eingabe eines Betrags macht das Sheet geändert', () => {
       typeAmount('12');
 
-      expect(component.form.controls.amount.value).toBe(12);
+      // Textfeld (Phase 9): der Wert ist der eingegebene Text
+      expect(component.form.controls.amount.value).toBe('12');
       expect(dirty()).toBeTrue();
     });
 
@@ -477,6 +618,7 @@ describe('SettlementSheetComponent – Edit-Modus (DIV-74)', () => {
         {
           provide: GroupService, useValue: {
             activeGroup: signal(group),
+            groupsSideNav: signal([group]),
             activeGroupId,
             groupMembers,
             groupMembershipHistory: signal<Zeitraum[]>([]),
@@ -508,7 +650,7 @@ describe('SettlementSheetComponent – Edit-Modus (DIV-74)', () => {
 
     expect(el().querySelector('h2')?.textContent).toContain(key('title_edit'));
     expect(el().querySelector('.sheet-subtitle')?.textContent).toContain(key('subtitle_edit'));
-    expect(component.form.getRawValue()).toEqual({ amount: 30, memberId: ben.id, datePurchased: '2025-06-10' });
+    expect(component.form.getRawValue()).toEqual({ amount: '30,00', memberId: ben.id, datePurchased: '2025-06-10' });
     expect(component.memberId.enabled).toBeTrue();
     expect(dirty()).toBeFalse();
   });
@@ -576,7 +718,7 @@ describe('SettlementSheetComponent – Edit-Modus (DIV-74)', () => {
     await component.save();
 
     expect(modalCtrl.dismiss).not.toHaveBeenCalled();
-    expect(component.form.getRawValue().amount).toBe(99);
+    expect(component.form.getRawValue().amount).toBe('99,00');
   });
 });
 
@@ -609,6 +751,7 @@ describe('SettlementSheetComponent – Richtungsumschalter (DIV-74, Phase 5)', (
         {
           provide: GroupService, useValue: {
             activeGroup: signal(group),
+            groupsSideNav: signal([group]),
             activeGroupId: signal(group.id),
             groupMembers: signal<GroupMembers>({ id: group.id, name: group.name, ownerId: me.id, ownerName: 'Ich',
               members: [{ id: me.id, userName: 'Ich' }, ben] }),

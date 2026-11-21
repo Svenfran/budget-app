@@ -1,16 +1,20 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service
 
+import com.github.svenfran.budgetapp.budgetappbackend.constants.SupportedCurrency
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddGroupMemberDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.ChangeGroupOwnerDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.GroupDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.RemoveGroupMemberDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.CurrencyChangeConfirmationRequiredException
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOfGroupException
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UnsupportedCurrencyException
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartTemplateRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CategoryRepository
+import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupCurrencyChangeRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupMembershipHistoryRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.SettlementRepository
@@ -19,6 +23,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingListRep
 import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingPurchaseRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
+import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
@@ -46,6 +51,7 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
     @Autowired UserRepository userRepository
     @Autowired SettlementService settlementService
     @Autowired SettlementRepository settlementRepository
+    @Autowired GroupCurrencyChangeRepository currencyChangeRepository
 
     def "Neuberechnung setzt den Durchschnitt pro Mitglied auf 0, wenn zum Kaufdatum niemand Mitglied ist"() {
         given: "Owner und Ben sind seit REFERENCE_DATE - 1 Jahr Mitglied"
@@ -739,6 +745,320 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
 
         where:
         rolle << ['Mitglied', 'Außenstehender']
+    }
+
+    // ----- Gruppenwährung (DIV-77) -----
+
+    def "Gruppe anlegen mit #gesendet speichert #erwartet"() {
+        given:
+        def anna = fixtures.user()
+        flushAndClear()
+        loginAs(anna)
+        LOG.info('Szenario: Nutzer {} (angemeldet) legt Gruppe "Reise" an, currencyCode {}', anna.id, gesendet)
+
+        when:
+        def dto = groupService.addGroup(new GroupDto(name: 'Reise', currencyCode: gesendet))
+        flushAndClear()
+        def gespeichert = groupRepository.findById(dto.id).get().currencyCode
+        LOG.info('groupService.addGroup(currencyCode {}) -> Gruppe {}, Antwort {}, gespeichert {}', gesendet, dto.id, dto.currencyCode, gespeichert)
+
+        then:
+        dto.currencyCode == erwartet.name()
+        gespeichert == erwartet
+
+        where:
+        gesendet || erwartet
+        'USD'    || SupportedCurrency.USD
+        'CZK'    || SupportedCurrency.CZK
+        'NOK'    || SupportedCurrency.NOK
+        'SEK'    || SupportedCurrency.SEK
+        null     || SupportedCurrency.EUR
+    }
+
+    def "Gruppe anlegen mit nicht unterstützter Währung wird abgelehnt"() {
+        given:
+        def anna = fixtures.user()
+        def annaId = anna.id
+        flushAndClear()
+        loginAs(anna)
+        LOG.info('Szenario: Nutzer {} (angemeldet) legt Gruppe "Reise" mit JPY an', annaId)
+
+        when:
+        LOG.info('groupService.addGroup(currencyCode JPY), erwartet UnsupportedCurrencyException')
+        groupService.addGroup(new GroupDto(name: 'Reise', currencyCode: 'JPY'))
+
+        then:
+        thrown(UnsupportedCurrencyException)
+        flushAndClear()
+        groupRepository.findGroupsByOwnerOrderById(userRepository.findById(annaId).get()).isEmpty()
+    }
+
+    def "Standardgruppe bei der Registrierung hat EUR"() {
+        given:
+        def anna = fixtures.user()
+        flushAndClear()
+        LOG.info('Szenario: neuer Nutzer {}', anna.id)
+
+        when:
+        groupService.createDefaultGroup(anna)
+        flushAndClear()
+        def waehrung = groupRepository.findGroupsByOwnerOrderById(userRepository.findById(anna.id).get()).first().currencyCode
+        LOG.info('groupService.createDefaultGroup(Nutzer {}) -> Währung {}', anna.id, waehrung)
+
+        then:
+        waehrung == SupportedCurrency.EUR
+    }
+
+    def "Währungswechsel einer Gruppe ohne Einkäufe braucht keine Bestätigung, wird protokolliert und synchronisiert"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def (groupId, ownerId) = [wg.group.id, wg.owner.id]
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: Gruppe {} (EUR, ohne Einkäufe), Owner {} (angemeldet), Mitglied {}; heute {}; Wechsel auf USD ohne Bestätigung',
+                groupId, ownerId, ben.id, testClock.today)
+
+        when:
+        def dto = groupService.updateGroup(new GroupDto(id: groupId, name: 'WG', currencyCode: 'USD'))
+        flushAndClear()
+        def gespeichert = groupRepository.findById(groupId).get().currencyCode
+        def protokoll = protokoll(groupId)
+        LOG.info('groupService.updateGroup(Gruppe {}, USD) -> Antwort {}, gespeichert {}, Protokoll {}', groupId, dto.currencyCode, gespeichert, protokoll)
+
+        then:
+        1 * notificationService.sendGroupUpdateNotification(groupId, { it.id == groupId && it.currencyCode == 'USD' })
+        0 * notificationService._
+        dto.currencyCode == 'USD'
+        gespeichert == SupportedCurrency.USD
+        protokoll == [['EUR', 'USD', ownerId, REFERENCE_DATE]]
+    }
+
+    def "Währungswechsel ohne Bestätigung bei #buchung wird abgelehnt und ändert nichts"() {
+        given:
+        LocaleContextHolder.setLocale(Locale.GERMAN)
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def groupId = wg.group.id
+        def alterName = wg.group.name
+        flushAndClear()
+        loginAs(wg.owner)
+        if (buchung == 'Ausgabe') fixtures.cart(wg)
+        if (buchung == 'Ausgleichszahlung') settlementService.addSettlementPayment(
+                new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), DateUtils.toDate(REFERENCE_DATE)))
+        if (buchung == 'nur gelöschten Einkäufen') fixtures.cart(wg, user: ben, deleted: true)
+        flushAndClear()
+        LOG.info('Szenario: Gruppe {} (EUR) mit {}, Owner {} (angemeldet); Wechsel auf USD mit neuem Namen, confirmCurrencyChange {}',
+                groupId, buchung, wg.owner.id, bestaetigung)
+
+        when:
+        LOG.info('groupService.updateGroup(Gruppe {}, USD, confirm {}), erwartet CurrencyChangeConfirmationRequiredException', groupId, bestaetigung)
+        groupService.updateGroup(new GroupDto(id: groupId, name: 'Neu', currencyCode: 'USD', confirmCurrencyChange: bestaetigung))
+
+        then:
+        thrown(CurrencyChangeConfirmationRequiredException)
+        0 * notificationService._
+        flushAndClear()
+        def gruppe = groupRepository.findById(groupId).get()
+        gruppe.currencyCode == SupportedCurrency.EUR
+        gruppe.name == alterName
+        protokoll(groupId).isEmpty()
+
+        cleanup:
+        LocaleContextHolder.resetLocaleContext()
+
+        where:
+        buchung                    | bestaetigung
+        'Ausgabe'                  | null
+        'Ausgabe'                  | false
+        'Ausgleichszahlung'        | null
+        'nur gelöschten Einkäufen' | null
+    }
+
+    def "Gruppe nur mit Vorlage ohne Einkauf wechselt die Währung ohne Bestätigung"() {
+        given: "Altdaten: aktive Vorlage, aber kein Cart (D5: Vorlagen zählen nicht als Buchung)"
+        def wg = fixtures.group()
+        def groupId = wg.group.id
+        def vorlage = templateRepository.save(TestData.cartTemplate(userId: wg.owner.id, groupId: groupId, categoryId: wg.category.id))
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: Gruppe {} (EUR) nur mit Vorlage {}, Owner {} (angemeldet); Wechsel auf CHF ohne Bestätigung',
+                groupId, vorlage.id, wg.owner.id)
+
+        when:
+        def dto = groupService.updateGroup(new GroupDto(id: groupId, name: 'WG', currencyCode: 'CHF'))
+        LOG.info('groupService.updateGroup(Gruppe {}, CHF) -> {}', groupId, dto.currencyCode)
+
+        then:
+        dto.currencyCode == 'CHF'
+    }
+
+    def "Bestätigter Währungswechsel ändert keine Beträge von Einkäufen, Vorlagen und Ausgleichszahlungen"() {
+        given:
+        LocaleContextHolder.setLocale(Locale.GERMAN)
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def (groupId, ownerId) = [wg.group.id, wg.owner.id]
+        def einkauf = fixtures.cart(wg, amount: 65.349875d)
+        def vorlage = fixtures.template(einkauf)
+        flushAndClear()
+        loginAs(wg.owner)
+        def zahlung = settlementService.addSettlementPayment(
+                new SettlementPaymentDto(30.5d, groupId, new UserDto(id: ben.id), DateUtils.toDate(REFERENCE_DATE)))
+        flushAndClear()
+        def settlementId = zahlung[0].settlementId
+        def cartIds = [einkauf.id] + zahlung*.id
+        def vorher = [cartIds.collect { cartRepository.findById(it).get().amount },
+                      templateRepository.findById(vorlage.id).get().amount,
+                      settlementRepository.findById(settlementId).get().amount]
+        flushAndClear()
+        LOG.info('Szenario: Gruppe {} (EUR), Owner {} (angemeldet); Einkäufe {}, Vorlage {}, Settlement {}; Beträge vorher {}; Wechsel auf GBP mit Bestätigung',
+                groupId, ownerId, cartIds, vorlage.id, settlementId, vorher)
+
+        when:
+        def dto = groupService.updateGroup(new GroupDto(id: groupId, name: 'WG', currencyCode: 'GBP', confirmCurrencyChange: true))
+        flushAndClear()
+        def nachher = [cartIds.collect { cartRepository.findById(it).get().amount },
+                       templateRepository.findById(vorlage.id).get().amount,
+                       settlementRepository.findById(settlementId).get().amount]
+        def protokoll = protokoll(groupId)
+        LOG.info('groupService.updateGroup(Gruppe {}, GBP, bestätigt) -> {}; Beträge nachher {}, Protokoll {}', groupId, dto.currencyCode, nachher, protokoll)
+
+        then:
+        1 * notificationService.sendGroupUpdateNotification(groupId, { it.currencyCode == 'GBP' })
+        dto.currencyCode == 'GBP'
+        nachher == vorher
+        nachher[1] == 65.349875d
+        nachher[2] == 30.5d
+        protokoll == [['EUR', 'GBP', ownerId, REFERENCE_DATE]]
+
+        cleanup:
+        LocaleContextHolder.resetLocaleContext()
+    }
+
+    def "Umbenennen #fall lässt die Währung unverändert und schreibt kein Protokoll"() {
+        given:
+        def wg = fixtures.group()
+        def groupId = wg.group.id
+        flushAndClear()
+        entityManager.createQuery('update Group g set g.currencyCode = :c where g.id = :id')
+                .setParameter('c', SupportedCurrency.USD).setParameter('id', groupId).executeUpdate()
+        loginAs(wg.owner)
+        LOG.info('Szenario: Gruppe {} (USD), Owner {} (angemeldet); Rename auf "Neu" mit currencyCode {}', groupId, wg.owner.id, gesendet)
+
+        when:
+        def dto = groupService.updateGroup(new GroupDto(id: groupId, name: 'Neu', currencyCode: gesendet))
+        flushAndClear()
+        def gruppe = groupRepository.findById(groupId).get()
+        def (name, waehrung) = [gruppe.name, gruppe.currencyCode]
+        LOG.info('groupService.updateGroup(Gruppe {}, "Neu", {}) -> Antwort {}, gespeichert "{}" {}', groupId, gesendet, dto.currencyCode, name, waehrung)
+
+        then:
+        1 * notificationService.sendGroupUpdateNotification(groupId, { it.name == 'Neu' && it.currencyCode == 'USD' })
+        dto.currencyCode == 'USD'
+        name == 'Neu'
+        waehrung == SupportedCurrency.USD
+        protokoll(groupId).isEmpty()
+
+        where:
+        fall                                        | gesendet
+        'ohne currencyCode (alte App-Version)'      | null
+        'mit derselben Währung'                     | 'USD'
+    }
+
+    def "Umbenennen lässt lastUpdateShoppingList unverändert"() {
+        given: "Regression: updateGroup speicherte früher eine neu gebaute Gruppe per Merge und überschrieb das Feld mit null"
+        def wg = fixtures.group()
+        def groupId = wg.group.id
+        def stand = DateUtils.toDate(LocalDate.of(2025, 5, 1))
+        wg.group.lastUpdateShoppingList = stand
+        groupRepository.save(wg.group)
+        flushAndClear()
+        loginAs(wg.owner)
+        LOG.info('Szenario: Gruppe {} mit lastUpdateShoppingList {}, Owner {} (angemeldet); Rename auf "Neu"', groupId, stand, wg.owner.id)
+
+        when:
+        groupService.updateGroup(new GroupDto(id: groupId, name: 'Neu'))
+        flushAndClear()
+        def gespeichert = groupRepository.findById(groupId).get().lastUpdateShoppingList
+        LOG.info('groupService.updateGroup(Gruppe {}, "Neu") -> lastUpdateShoppingList {}', groupId, gespeichert)
+
+        then:
+        DateUtils.toLocalDate(gespeichert) == LocalDate.of(2025, 5, 1)
+    }
+
+    def "Mitglied kann die Währung nicht ändern"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def groupId = wg.group.id
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {} (EUR, ohne Einkäufe), Owner {}, Mitglied {} (angemeldet); Wechsel auf USD', groupId, wg.owner.id, ben.id)
+
+        when:
+        LOG.info('groupService.updateGroup(Gruppe {}, USD) als Mitglied {}, erwartet NotOwnerOfGroupException', groupId, ben.id)
+        groupService.updateGroup(new GroupDto(id: groupId, name: 'Neu', currencyCode: 'USD'))
+
+        then:
+        thrown(NotOwnerOfGroupException)
+        0 * notificationService._
+        flushAndClear()
+        groupRepository.findById(groupId).get().currencyCode == SupportedCurrency.EUR
+        protokoll(groupId).isEmpty()
+    }
+
+    def "Gruppe mit protokollierten Währungswechseln löschen entfernt auch das Protokoll"() {
+        given:
+        def wg = fixtures.group()
+        def groupId = wg.group.id
+        flushAndClear()
+        loginAs(wg.owner)
+        groupService.updateGroup(new GroupDto(id: groupId, name: 'WG', currencyCode: 'USD'))
+        groupService.updateGroup(new GroupDto(id: groupId, name: 'WG', currencyCode: 'CHF'))
+        flushAndClear()
+        def eintraege = protokoll(groupId).size()
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), {} Protokolleinträge', groupId, wg.owner.id, eintraege)
+
+        when:
+        groupService.deleteGroup(groupId)
+        flushAndClear()
+        def gruppeVorhanden = groupRepository.existsById(groupId)
+        def verbleibend = currencyChangeRepository.findByGroupIdOrderByChangedAtAscIdAsc(groupId).size()
+        LOG.info('groupService.deleteGroup(Gruppe {}) -> Gruppe vorhanden {}, verbleibende Protokolleinträge {}', groupId, gruppeVorhanden, verbleibend)
+
+        then:
+        eintraege == 2
+        !gruppeVorhanden
+        verbleibend == 0
+    }
+
+    def "Übersicht meldet hasBookings je Gruppe"() {
+        given:
+        def anna = fixtures.user()
+        def mitEinkauf = fixtures.group(owner: anna)
+        def mitGeloeschtem = fixtures.group(owner: anna)
+        def leer = fixtures.group(owner: anna)
+        fixtures.cart(mitEinkauf)
+        fixtures.cart(mitGeloeschtem, deleted: true)
+        def ids = [mitEinkauf, mitGeloeschtem, leer]*.group*.id
+        flushAndClear()
+        loginAs(anna)
+        LOG.info('Szenario: Owner {} (angemeldet); Gruppe {} mit Einkauf, Gruppe {} nur mit gelöschtem Einkauf, Gruppe {} leer', anna.id, *ids)
+
+        when:
+        def overview = groupService.getGroupsForGroupOverview()
+        def hasBookings = ids.collect { id -> overview.find { it.id == id }.hasBookings }
+        LOG.info('groupService.getGroupsForGroupOverview() -> hasBookings {}', hasBookings)
+
+        then:
+        hasBookings == [true, true, false]
+    }
+
+    /** Protokoll der Währungswechsel als [alt, neu, Nutzer-ID, Tag], in Reihenfolge. */
+    private List<List> protokoll(Long groupId) {
+        currencyChangeRepository.findByGroupIdOrderByChangedAtAscIdAsc(groupId)
+                .collect { [it.oldCurrencyCode.name(), it.newCurrencyCode.name(), it.changedByUserId, DateUtils.toLocalDate(it.changedAt)] }
     }
 
     /** Mitglieder-IDs der Gruppe (ohne Owner), aus der Datenbank geladen. */

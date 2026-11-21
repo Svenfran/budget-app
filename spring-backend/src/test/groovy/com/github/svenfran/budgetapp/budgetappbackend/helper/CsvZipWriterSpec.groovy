@@ -18,7 +18,7 @@ class CsvZipWriterSpec extends Specification {
         given:
         def gruppe = TestData.groupExport(groupName: 'Haushalt',
                 carts: [TestData.cartExportRow(userName: 'Anna', title: 'Pizza', description: 'Freitag',
-                        datePurchased: of(2025, 3, 7), amount: 12.5d, category: 'Essen', groupName: 'Haushalt')],
+                        datePurchased: of(2025, 3, 7), amount: 12.5d, currencyCode: 'USD', category: 'Essen', groupName: 'Haushalt')],
                 memberships: [TestData.membershipExportRow(userName: 'Anna', start: of(2024, 1, 1), type: 'OWNER'),
                               TestData.membershipExportRow(userName: 'Ben', start: of(2024, 2, 1), end: of(2024, 6, 30))])
 
@@ -28,8 +28,8 @@ class CsvZipWriterSpec extends Specification {
         then:
         dateien.keySet().toList() == ['ausgaben.csv', 'mitgliederhistorie.csv']
         dateien['ausgaben.csv'] == BOM +
-                'Benutzername;Titel;Beschreibung;Datum;Betrag;Kategorie;Gruppe\r\n' +
-                'Anna;Pizza;Freitag;2025-03-07;12.50;Essen;Haushalt\r\n'
+                'Benutzername;Titel;Beschreibung;Datum;Betrag;Währung;Kategorie;Gruppe\r\n' +
+                'Anna;Pizza;Freitag;2025-03-07;12.50;USD;Essen;Haushalt\r\n'
         dateien['mitgliederhistorie.csv'] == BOM +
                 'Benutzername;Startdatum;Enddatum;Status\r\n' +
                 'Anna;2024-01-01;;OWNER\r\n' +
@@ -48,8 +48,8 @@ class CsvZipWriterSpec extends Specification {
         def zeilen = schreiben([gruppe], false)['ausgaben.csv'].split('\r\n', -1).toList()
 
         then:
-        zeilen[1] == 'Zoë;"Brot; ""Bio""";;2025-05-01;-20.00;"\'=HYPERLINK(""x"")";WG 🏠'
-        zeilen[2] == 'Anna;Auto;"Zeile1\nZeile2";2025-04-01;1234567.89;Mobilität;WG 🏠'
+        zeilen[1] == 'Zoë;"Brot; ""Bio""";;2025-05-01;-20.00;EUR;"\'=HYPERLINK(""x"")";WG 🏠'
+        zeilen[2] == 'Anna;Auto;"Zeile1\nZeile2";2025-04-01;1234567.89;EUR;Mobilität;WG 🏠'
         zeilen[3] == ''
         zeilen.size() == 4
     }
@@ -93,7 +93,7 @@ class CsvZipWriterSpec extends Specification {
         def dateien = schreiben([], allGroups)
 
         then:
-        dateien == ['ausgaben.csv'          : BOM + 'Benutzername;Titel;Beschreibung;Datum;Betrag;Kategorie;Gruppe\r\n',
+        dateien == ['ausgaben.csv'          : BOM + 'Benutzername;Titel;Beschreibung;Datum;Betrag;Währung;Kategorie;Gruppe\r\n',
                     'mitgliederhistorie.csv': BOM + 'Benutzername;Startdatum;Enddatum;Status\r\n']
 
         where:
@@ -112,9 +112,9 @@ class CsvZipWriterSpec extends Specification {
 
         where:
         locale                     || dateinamen                                       | kopf
-        Locale.GERMAN              || ['ausgaben.csv', 'mitgliederhistorie.csv']       | 'Benutzername;Titel;'
-        Locale.ENGLISH             || ['expenses.csv', 'membership-history.csv']       | 'Username;Title;'
-        Locale.forLanguageTag('es')|| ['gastos.csv', 'historial-miembros.csv']         | 'Nombre de usuario;Título;'
+        Locale.GERMAN              || ['ausgaben.csv', 'mitgliederhistorie.csv']       | 'Benutzername;Titel;Beschreibung;Datum;Betrag;Währung;Kategorie;Gruppe\r\n'
+        Locale.ENGLISH             || ['expenses.csv', 'membership-history.csv']       | 'Username;Title;Description;Date;Amount;Currency;Category;Group\r\n'
+        Locale.forLanguageTag('es')|| ['gastos.csv', 'historial-miembros.csv']         | 'Nombre de usuario;Título;Descripción;Fecha;Importe;Moneda;Categoría;Grupo\r\n'
     }
 
     // Gesamttest (Phase 10/11): ein eigener, relativer Ordner je Gruppe, eindeutig auch ohne Groß-/Kleinschreibung, und

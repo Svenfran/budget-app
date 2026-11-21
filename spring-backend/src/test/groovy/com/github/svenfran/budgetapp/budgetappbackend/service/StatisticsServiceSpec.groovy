@@ -2,6 +2,7 @@ package com.github.svenfran.budgetapp.budgetappbackend.service
 
 import com.github.svenfran.budgetapp.budgetappbackend.constants.StatisticsPeriod
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.InvalidStatisticsRequestException
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UnsupportedCurrencyException
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository
 import org.springframework.security.crypto.password.PasswordEncoder
@@ -22,7 +23,7 @@ class StatisticsServiceSpec extends Specification {
 
     def "getStatistics läuft in einer lesenden Transaktion mit REPEATABLE_READ"() {
         when:
-        def transactional = StatisticsService.getMethod('getStatistics', Long, StatisticsPeriod, Integer, Integer)
+        def transactional = StatisticsService.getMethod('getStatistics', Long, String, StatisticsPeriod, Integer, Integer)
                 .getAnnotation(Transactional)
 
         then:
@@ -35,7 +36,7 @@ class StatisticsServiceSpec extends Specification {
         // Regression: year 999999999 bestand die Prüfung, die Kalenderwochen im Dezember reichten über LocalDate.MAX
         // hinaus und lösten eine DateTimeException (500) statt 400 aus.
         when:
-        service.getStatistics(null, period, year, month)
+        service.getStatistics(null, null, period, year, month)
 
         then:
         thrown(InvalidStatisticsRequestException)
@@ -47,5 +48,19 @@ class StatisticsServiceSpec extends Specification {
         StatisticsPeriod.MONTH  | -999_999_999      | 1
         StatisticsPeriod.YEAR   | 999_999_999       | null
         StatisticsPeriod.YEAR   | Integer.MAX_VALUE | null
+    }
+
+    def "Nicht unterstützte Währung '#currency' wird abgelehnt, bevor etwas geladen wird (DIV-77)"() {
+        when:
+        service.getStatistics(groupId, currency, StatisticsPeriod.ALL, null, null)
+
+        then:
+        thrown(UnsupportedCurrencyException)
+        0 * dataLoaderService._
+
+        where:
+        groupId | currency
+        null    | 'JPY'
+        7L      | 'usd'
     }
 }

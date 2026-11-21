@@ -50,7 +50,9 @@ public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionH
             ShoppingItemMoveWithinSameListException.class,
             InvalidStatisticsRequestException.class,
             InvalidSettlementPaymentException.class,
-            SettlementCategoryNotAllowedException.class
+            SettlementCategoryNotAllowedException.class,
+            UnsupportedCurrencyException.class,
+            InvalidAmountException.class
     })
     protected ResponseEntity<Object> handleBadRequest(Exception ex, WebRequest request) {
         return buildResponse(ex, HttpStatus.BAD_REQUEST);
@@ -72,7 +74,8 @@ public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionH
 
     /** Gültige Anfrage, die dem Zustand der Ressource widerspricht (DIV-74: Settlement-Cart über normalen Endpoint). */
     @ExceptionHandler(value = {
-            SettlementCartNotEditableException.class
+            SettlementCartNotEditableException.class,
+            CurrencyChangeConfirmationRequiredException.class
     })
     protected ResponseEntity<Object> handleConflict(Exception ex, WebRequest request) {
         return buildResponse(ex, HttpStatus.CONFLICT);

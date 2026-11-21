@@ -213,6 +213,29 @@ public class VerificationService {
         }
     }
 
+    /**
+     * Ein Währungswechsel einer Gruppe mit Buchungen braucht die ausdrückliche Bestätigung (DIV-77). Nur aufrufen, wenn
+     * sich die Währung tatsächlich ändert.
+     */
+    public void verifyCurrencyChangeConfirmed(boolean hasBookings, Boolean confirmed) throws CurrencyChangeConfirmationRequiredException {
+        if (hasBookings && !Boolean.TRUE.equals(confirmed)) {
+            throw new CurrencyChangeConfirmationRequiredException(
+                    "Changing the currency of a group with bookings requires confirmation");
+        }
+    }
+
+    /**
+     * Cart-Betrag mit höchstens zwei Nachkommastellen (DIV-77, gleiche Prüfung wie {@link #verifyValidSettlementAmount}).
+     * {@code null} und Vorzeichen verhalten sich wie bisher (keine Pflicht hier, negative Beträge erlaubt). Das Frontend
+     * rundet vor dem Senden; abgelehnt wird, was ungerundet ankommt (alte Clients, direkte API-Aufrufe).
+     */
+    public void verifyCartAmountHasAtMostTwoDecimals(Double amount) throws InvalidAmountException {
+        if (amount == null || amount.isNaN() || amount.isInfinite()) return;
+        if (BigDecimal.valueOf(amount).stripTrailingZeros().scale() > 2) {
+            throw new InvalidAmountException("Amount must have at most 2 decimal places");
+        }
+    }
+
     public void verifyPayerIsNotReceiver(User payer, User receiver) throws InvalidSettlementPaymentException {
         if (payer.getId().equals(receiver.getId())) {
             throw new InvalidSettlementPaymentException("Payer and receiver of a settlement payment must differ");

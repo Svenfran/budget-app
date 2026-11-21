@@ -39,6 +39,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * X1  userprofile.service.ts (=== exakt)             400 'Invalid Email'                          UserProfileControllerApiSpec
  * X2  userprofile.service.ts changePassword (===)    400 'Incorrect password'                     UserProfileControllerApiSpec
  * X3  auth-error-message.ts Login/Registr. (===)     400 'DeviceId is required'                   AuthenticationControllerApiSpec
+ * S1  group.service.ts updateGroup (Status, kein Text) 409 PUT /api/groups/update: Währungswechsel  GroupControllerApiSpec
+ *     (DIV-77)                                          ohne Bestätigung bei vorhandenen Buchungen
  * </pre>
  * Nicht abgedeckt: Bei parallelen Registrierungen/E-Mail-Änderungen liefert der Unique-Constraint-Handler
  * 'User with email already exists' ohne Adresse; das Frontend erkennt diesen Fall nicht (bekannt seit DIV-22).
@@ -118,6 +120,37 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
         then:
         response.status == 400
         response.contentAsString.contains('not within membership period')
+    }
+
+    // ----- DIV-77: Cart-Betrag höchstens zwei Nachkommastellen -----
+
+    def "#endpoint mit Betrag #betrag: #status"() {
+        given:
+        def wg = fixtures.group()
+        def cart = fixtures.cart(wg, title: 'Pizza', amount: 20d)
+        def body = [title: 'Pizza', amount: betrag, datePurchased: '2025-06-15', groupId: wg.group.id,
+                    categoryDto: [id: wg.category.id]] + (endpoint == 'PUT /api/carts/update' ? [id: cart.id] : [:])
+        def request = endpoint == 'PUT /api/carts/update' ? put('/api/carts/update') : post('/api/carts/add')
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), Einkauf {} (20.00); {} mit Betrag {}', wg.group.id,
+                wg.owner.id, cart.id, endpoint, betrag)
+
+        when:
+        def response = send(request, user: wg.owner, body: body)
+        def antwort = response.status == 400 ? response.contentAsString : json(response).amount
+        LOG.info('Antwort: {}', antwort)
+        def gespeichert = json(send(get('/api/carts/carts-by-groupid/{id}', wg.group.id), user: wg.owner))*.amount.sort()
+
+        then:
+        response.status == status
+        gespeichert == erwartetGespeichert
+
+        where:
+        endpoint                | betrag || status | erwartetGespeichert
+        'POST /api/carts/add'   | 12.345 || 400    | [20d]
+        'POST /api/carts/add'   | 12.34  || 201    | [12.34d, 20d]
+        'POST /api/carts/add'   | -3.99  || 201    | [-3.99d, 20d]
+        'PUT /api/carts/update' | 12.345 || 400    | [20d]
+        'PUT /api/carts/update' | 12.34  || 201    | [12.34d]
     }
 
     // ----- DIV-73: Neuanlage ignoriert eine mitgeschickte ID -----
@@ -493,6 +526,7 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
         'Dritter Mitglied: 403'                     | 'cleo'     | 'ben'      | [:]                           || 403    | 'neither payer nor receiver'
         'unbekannte Id: 404'                        | 'owner'    | 'ben'      | [id: -1]                      || 404    | 'Settlement with Id -1 not found'
         'Betrag 0: 400'                             | 'owner'    | 'ben'      | [amount: 0]                   || 400    | 'greater than 0'
+        'Betrag mit 3 Nachkommastellen: 400'        | 'owner'    | 'ben'      | [amount: 12.345]              || 400    | 'at most 2 decimal'
         'fehlende Id: 400'                          | 'owner'    | 'ben'      | [id: null]                    || 400    | "'id'"
         'Datum vor der Mitgliedschaft: 400 (M1)'    | 'owner'    | 'ben'      | [datePurchased: '2020-01-01'] || 400    | 'not within membership period'
     }
@@ -567,14 +601,15 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
         def xlsx = TestData.workbook(exportieren(anna, [format: 'XLSX', groupId: gid]).contentAsByteArray)
         def csvZeile = TestData.unzip(exportieren(anna, [format: 'CSV', groupId: gid]).contentAsByteArray)['ausgaben.csv'].readLines()[1]
         def zeile = xlsx.getSheet('Ausgaben').getRow(1)
-        def (titel, betrag) = [zeile.getCell(1).stringCellValue, zeile.getCell(4).numericCellValue]
-        LOG.info('Antwort: XLSX Titel {} Betrag {}, CSV-Zeile {}', titel, betrag, csvZeile)
+        def (titel, betrag, waehrung) = [zeile.getCell(1).stringCellValue, zeile.getCell(4).numericCellValue, zeile.getCell(5).stringCellValue]
+        LOG.info('Antwort: XLSX Titel {} Betrag {} Währung {}, CSV-Zeile {}', titel, betrag, waehrung, csvZeile)
 
         then:
         titel == 'Pizza'
         betrag == 12.5d
+        waehrung == 'EUR'
         csvZeile.startsWith('Anna;Pizza;')
-        csvZeile.contains(';12.50;')
+        csvZeile.contains(';12.50;EUR;')
     }
 
     def "Export mit manipulierter groupId einer fremden Gruppe (#format): 403"() {

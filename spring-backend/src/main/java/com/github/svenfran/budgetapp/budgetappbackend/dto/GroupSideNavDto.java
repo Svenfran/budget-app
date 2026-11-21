@@ -11,6 +11,8 @@ public class GroupSideNavDto {
     private String name;
     private Date dateCreated;
     private UserDto userDto;
+    /** Gruppenwährung (ISO 4217, DIV-77). Im Request optional: fehlt sie, gilt EUR (Anlegen) bzw. bleibt sie (Ändern). */
+    private String currencyCode;
 
 
     public GroupSideNavDto(Group group) {
@@ -18,6 +20,7 @@ public class GroupSideNavDto {
         this.name = group.getName();
         this.dateCreated = group.getDateCreated();
         this.userDto = new UserDto(group.getOwner());
+        this.currencyCode = group.getCurrencyCode().name();
     }
 
     public GroupSideNavDto() {
@@ -45,6 +48,14 @@ public class GroupSideNavDto {
 
     public void setDateCreated(Date dateCreated) {
         this.dateCreated = dateCreated;
+    }
+
+    public String getCurrencyCode() {
+        return currencyCode;
+    }
+
+    public void setCurrencyCode(String currencyCode) {
+        this.currencyCode = currencyCode;
     }
 
     public UserDto getUserDto() {

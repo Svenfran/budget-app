@@ -8,6 +8,10 @@ public class StatisticsDto {
 
     // null = alle Gruppen des Nutzers
     private Long groupId;
+    /** Währung aller Beträge dieser Antwort (DIV-77): Gruppenwährung bzw. die gefilterte Währung bei „Alle Gruppen“. */
+    private String currencyCode;
+    /** Alle Währungen der Gruppen des Nutzers, unabhängig vom Filter (DIV-77, Auswahl im Frontend). */
+    private List<String> availableCurrencies;
     private StatisticsPeriod period;
     private Integer year;
     private Integer month;
@@ -35,6 +39,22 @@ public class StatisticsDto {
 
     public void setGroupId(Long groupId) {
         this.groupId = groupId;
+    }
+
+    public String getCurrencyCode() {
+        return currencyCode;
+    }
+
+    public void setCurrencyCode(String currencyCode) {
+        this.currencyCode = currencyCode;
+    }
+
+    public List<String> getAvailableCurrencies() {
+        return availableCurrencies;
+    }
+
+    public void setAvailableCurrencies(List<String> availableCurrencies) {
+        this.availableCurrencies = availableCurrencies;
     }
 
     public StatisticsPeriod getPeriod() {

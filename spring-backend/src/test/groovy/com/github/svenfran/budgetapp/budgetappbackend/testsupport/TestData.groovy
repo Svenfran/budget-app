@@ -147,9 +147,10 @@ class TestData {
 
     static CartExportRow cartExportRow(Map overrides = [:]) {
         def values = [userName: 'Anna', title: 'Einkauf', description: 'Wocheneinkauf', datePurchased: REFERENCE_DATE,
-                      amount: 40.0d, category: 'Lebensmittel', groupName: 'Haushalt'] + overrides
+                      amount: 40.0d, currencyCode: 'EUR', category: 'Lebensmittel', groupName: 'Haushalt'] + overrides
         new CartExportRow(values.userName as String, values.title as String, values.description as String,
-                values.datePurchased as LocalDate, values.amount as double, values.category as String, values.groupName as String)
+                values.datePurchased as LocalDate, values.amount as double, values.currencyCode as String,
+                values.category as String, values.groupName as String)
     }
 
     /** Mitgliedschaft ab einem Jahr vor REFERENCE_DATE, offen (end null). */

@@ -97,6 +97,14 @@ export function yearOptions(availableYears: number[], currentYear: number, selec
   return [...new Set([...availableYears, currentYear, selectedYear])].sort((a, b) => b - a);
 }
 
+/**
+ * Währungsauswahl anzeigen (DIV-77, FA6): nur bei „Alle Gruppen“ und wenn die Gruppen des Nutzers mehr als eine Währung
+ * haben. Mit einer Gruppe gilt deren Währung, bei nur einer Währung gibt es nichts zu wählen.
+ */
+export function showCurrencyFilter(groupId: number | null, availableCurrencies: string[]): boolean {
+  return groupId === null && availableCurrencies.length > 1;
+}
+
 /** Was die Diagramme in der gewählten Perspektive zeigen (DIV-72). */
 export interface PerspectiveView {
   timeline: StatisticsTimelineEntryDto[];

@@ -1,3 +1,4 @@
+import { amountInputText } from 'src/app/service/amount';
 import { Cart } from '../model/cart';
 
 /** Formularwerte, die beim Duplizieren aus der Vorlage übernommen werden (DIV-73). */
@@ -15,7 +16,7 @@ export interface DuplicateFormValues {
 export function duplicateFormValues(cart: Cart): DuplicateFormValues {
   return {
     title: cart.title,
-    amount: (+cart.amount).toFixed(2),
+    amount: amountInputText(+cart.amount),
     description: cart.description ?? '',
     categoryId: cart.categoryDto?.id,
   };

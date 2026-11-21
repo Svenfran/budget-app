@@ -1,8 +1,9 @@
 import { signal } from '@angular/core';
+import { ModalController } from '@ionic/angular';
 import { aGroupOverview } from 'src/testing/test-data';
 import { GROUP_GONE_ROLE, GROUP_SHEET_SAVED_ROLE } from '../group-sheet-roles';
 import { GroupFormSheetComponent } from './group-form-sheet.component';
-import { groupFormSheetModalOptions, GroupFormSheetState } from './group-form-sheet-options';
+import { groupFormSheetModalOptions, GroupFormSheetState, openGroupFormSheet } from './group-form-sheet-options';
 
 // canDismiss direkt geprüft (Codex-Plan-Review F-002), nicht über ein gemocktes dismiss()
 describe('groupFormSheetModalOptions (DIV-80)', () => {
@@ -18,7 +19,7 @@ describe('groupFormSheetModalOptions (DIV-80)', () => {
     const options = groupFormSheetModalOptions(shared);
 
     expect(options.component).toBe(GroupFormSheetComponent);
-    expect(options.componentProps).toEqual({ modalId: options.id, mode: 'edit', group, saving: shared.saving });
+    expect(options.componentProps).toEqual({ modalId: options.id, mode: 'edit', group, saving: shared.saving, callingPage: undefined });
     expect(options.componentProps?.['saving']).toBe(shared.saving);
   });
 
@@ -30,6 +31,35 @@ describe('groupFormSheetModalOptions (DIV-80)', () => {
     expect(erstes.breakpoints).toBeUndefined();
     expect(erstes.id).toMatch(/^group-form-sheet-\d+$/);
     expect(zweites.id).not.toBe(erstes.id);
+  });
+
+  // DIV-77: gemeinsamer Öffner für Gruppenübersicht, Seitenmenü und „Keine Gruppe“
+  describe('openGroupFormSheet', () => {
+    let setFocus: jasmine.Spy;
+    let create: jasmine.Spy;
+    let present: jasmine.Spy;
+
+    beforeEach(() => {
+      setFocus = jasmine.createSpy('setFocus').and.resolveTo();
+      present = jasmine.createSpy('present').and.resolveTo();
+      create = jasmine.createSpy('create').and.resolveTo({ present, querySelector: () => ({ setFocus }) });
+    });
+    const modalCtrl = () => ({ create } as unknown as ModalController);
+
+    it('Anlegen: öffnet das Sheet mit der aufrufenden Seite und setzt den Fokus ins Namensfeld', async () => {
+      await openGroupFormSheet(modalCtrl(), state({ callingPage: '/no-group' }));
+
+      expect(create.calls.mostRecent().args[0].componentProps).toEqual(jasmine.objectContaining({ mode: 'create', callingPage: '/no-group' }));
+      expect(present).toHaveBeenCalledTimes(1);
+      expect(setFocus).toHaveBeenCalledTimes(1);
+    });
+
+    it('Bearbeiten: kein Fokus (Tastatur bleibt zu)', async () => {
+      await openGroupFormSheet(modalCtrl(), state({ mode: 'edit', group: aGroupOverview() }));
+
+      expect(present).toHaveBeenCalledTimes(1);
+      expect(setFocus).not.toHaveBeenCalled();
+    });
   });
 
   describe('canDismiss', () => {

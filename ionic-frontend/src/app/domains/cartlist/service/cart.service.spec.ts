@@ -55,6 +55,21 @@ describe('CartService', () => {
       expect(service.cartUpdated()).toBe(updatesBefore);
     });
 
+    // DIV-77: Summe in Cent wie im Backend (toCents), ohne Gleitkommafehler
+    [
+      { amounts: [0.1, 0.2], sum: 0.3 },
+      { amounts: [1.005, -1.005], sum: 0 },
+      { amounts: [65.349875, 10], sum: 75.35 },
+    ].forEach(({ amounts, sum }) => {
+      it(`summiert ${JSON.stringify(amounts)} centgenau zu ${sum}`, () => {
+        service.getCartListByGroupId(aGroup({ id: 7 }), false);
+        http.expectOne(`${api}/carts-by-groupid/7`).flush(amounts.map(amount => aCart({ amount })));
+
+        expect(service.sum()).toBe(sum);
+        expect(Object.is(service.sum(), -0)).toBeFalse();
+      });
+    });
+
     it('meldet beim Neuladen mit refresh eine Änderung', () => {
       const updatesBefore = service.cartUpdated();
 

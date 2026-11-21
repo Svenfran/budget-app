@@ -1,5 +1,6 @@
 import { Group } from "../model/group";
 import { GroupMembers } from '../groupmembers/model/groupmembers-dto';
+import { DEFAULT_CURRENCY } from './currency';
 
 export enum INIT_VALUES {
     DEFAULT = "DEFAULT",
@@ -10,7 +11,7 @@ export enum INIT_VALUES {
 }
 
 export class Init {
-    public static DEFAULT_GROUP: Group = { id: 0, name: '', dateCreated: new Date(), flag: INIT_VALUES.DEFAULT };
+    public static DEFAULT_GROUP: Group = { id: 0, name: '', dateCreated: new Date(), flag: INIT_VALUES.DEFAULT, currencyCode: DEFAULT_CURRENCY };
     public static DEFAULT_GROUP_MEMBERS: GroupMembers = { id: 0, name: '', ownerName: '', ownerId: 0, members: [], flag: INIT_VALUES.DEFAULT };
 }
 

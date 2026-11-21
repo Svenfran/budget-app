@@ -1,4 +1,5 @@
 import { HttpClient } from '@angular/common/http';
+import { toCents } from 'src/app/service/amount';
 import { computed, Injectable, signal, WritableSignal } from '@angular/core';
 import { environment } from 'src/environments/environment';
 import { Cart } from '../model/cart';
@@ -31,7 +32,11 @@ export class CartService {
   
   public cartList: WritableSignal<Cart[]> = signal<Cart[]>([]);
   public initCartList: WritableSignal<Cart[]> = signal<Cart[]>([]);
-  public sum = computed(() => this.cartList().reduce((s, c) => s + (+c.amount), 0));
+  /**
+   * Summe in Cent wie im Backend (DIV-77, `toCents`: HALF_UP auf der kürzesten Dezimaldarstellung je Betrag), damit
+   * weder Gleitkommafehler (0.1 + 0.2) noch Altbeträge mit mehr als zwei Nachkommastellen die Anzeige verfälschen.
+   */
+  public sum = computed(() => this.cartList().reduce((cents, c) => cents + toCents(+c.amount), 0) / 100 || 0);
   public count = computed(() => this.cartList().length);
 
   public cartUpdated = signal(0);

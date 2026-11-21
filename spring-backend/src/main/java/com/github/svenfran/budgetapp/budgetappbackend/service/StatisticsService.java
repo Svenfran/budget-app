@@ -1,6 +1,7 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
 import com.github.svenfran.budgetapp.budgetappbackend.constants.StatisticsPeriod;
+import com.github.svenfran.budgetapp.budgetappbackend.constants.SupportedCurrency;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.StatisticsCategoryDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.StatisticsDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.StatisticsGroupViewDto;
@@ -11,6 +12,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.GroupNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.InvalidStatisticsRequestException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.NotOwnerOrMemberOfGroupException;
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UnsupportedCurrencyException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.StatisticsCalculator;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository;
@@ -30,6 +32,10 @@ import static com.github.svenfran.budgetapp.budgetappbackend.helper.CostShareCal
  * <p>
  * Jede Antwort enthält beide Perspektiven (DIV-72): die persönlichen Felder und {@code groupView} mit allen Carts der
  * gewählten Gruppen sowie der Anzahl ihrer aktuellen Personen. Der Perspektivwechsel im Frontend braucht keinen Request.
+ * <p>
+ * Währungen (DIV-77): Beträge verschiedener Währungen werden nie addiert. Ohne {@code groupId} zählen nur die Gruppen der
+ * gewählten Währung ({@code currency}, ohne Angabe EUR – alte App-Versionen); mit {@code groupId} gilt deren Währung.
+ * {@code availableCurrencies} nennt unabhängig vom Filter alle Währungen der Gruppen des Nutzers (für die Auswahl).
  */
 @Service
 public class StatisticsService {
@@ -54,15 +60,22 @@ public class StatisticsService {
      * Ein Snapshot für Berechtigung, Carts, Jahre und Saldo: Ausgaben und Saldo einer Antwort passen auch bei parallel
      * committeten Änderungen zusammen.
      *
-     * @param groupId ohne Angabe alle Gruppen, in denen der Nutzer Owner oder Mitglied ist
+     * @param groupId  ohne Angabe alle Gruppen, in denen der Nutzer Owner oder Mitglied ist
+     * @param currency nur ohne groupId wirksam: Währung der zusammengefassten Gruppen, ohne Angabe EUR; ein nicht
+     *                 unterstützter Code wird immer abgelehnt (400)
      */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-    public StatisticsDto getStatistics(Long groupId, StatisticsPeriod period, Integer year, Integer month)
+    public StatisticsDto getStatistics(Long groupId, String currency, StatisticsPeriod period, Integer year, Integer month)
             throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException,
-            InvalidStatisticsRequestException {
+            InvalidStatisticsRequestException, UnsupportedCurrencyException {
         validate(period, year, month);
+        var requestedCurrency = SupportedCurrency.fromCode(currency);
         var user = dataLoaderService.getAuthenticatedUser();
-        var groups = loadGroups(user, groupId);
+        var allGroups = groupService.getDistinctGroupsByMemberOrOwner();
+        var selectedCurrency = groupId != null ? null
+                : (requestedCurrency != null ? requestedCurrency : SupportedCurrency.DEFAULT);
+        var groups = loadGroups(user, groupId, allGroups, selectedCurrency);
+        var currencyCode = groupId != null ? groups.get(0).getCurrencyCode() : selectedCurrency;
 
         var carts = new ArrayList<Cart>();
         var availableYears = new TreeSet<Integer>(Comparator.reverseOrder());
@@ -80,6 +93,8 @@ public class StatisticsService {
 
         var dto = new StatisticsDto();
         dto.setGroupId(groupId);
+        dto.setCurrencyCode(currencyCode.name());
+        dto.setAvailableCurrencies(availableCurrencies(allGroups));
         dto.setPeriod(period);
         dto.setYear(effectiveYear);
         dto.setMonth(effectiveMonth);
@@ -136,14 +151,24 @@ public class StatisticsService {
         }
     }
 
-    /** Mit groupId nur diese Gruppe (Berechtigung geprüft), sonst alle Gruppen des Nutzers, jede genau einmal. */
-    private List<Group> loadGroups(User user, Long groupId)
-            throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
+    /**
+     * Mit groupId nur diese Gruppe (Berechtigung geprüft), sonst die Gruppen des Nutzers in der gewählten Währung, jede
+     * genau einmal. Keine passende Gruppe ergibt leere Zahlen, keinen Fehler.
+     */
+    private List<Group> loadGroups(User user, Long groupId, List<Group> allGroups, SupportedCurrency currency)
+            throws GroupNotFoundException, NotOwnerOrMemberOfGroupException {
         if (groupId != null) {
             var group = dataLoaderService.loadGroup(groupId);
             verificationService.verifyIsPartOfGroup(user, group);
             return List.of(group);
         }
-        return groupService.getDistinctGroupsByMemberOrOwner();
+        return allGroups.stream().filter(group -> group.getCurrencyCode() == currency).toList();
+    }
+
+    /** Verschiedene Währungen aller Gruppen des Nutzers, in der Reihenfolge von SupportedCurrency. */
+    private static List<String> availableCurrencies(List<Group> groups) {
+        var codes = EnumSet.noneOf(SupportedCurrency.class);
+        groups.forEach(group -> codes.add(group.getCurrencyCode()));
+        return codes.stream().map(Enum::name).toList();
     }
 }

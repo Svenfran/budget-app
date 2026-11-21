@@ -1,6 +1,7 @@
 import { StatisticsCategoryDto, StatisticsDto, StatisticsGroupViewDto, StatisticsTimelineEntryDto } from './model/statistics-dto';
 import {
-  categoryRows, DONUT_OTHER_COLOR_INDEX, donutSegments, hasSpendings, perspectiveView, timelineLabels, yearOptions,
+  categoryRows, DONUT_OTHER_COLOR_INDEX, donutSegments, hasSpendings, perspectiveView, showCurrencyFilter, timelineLabels,
+  yearOptions,
 } from './statistics-calc';
 
 describe('statistics-calc', () => {
@@ -11,7 +12,8 @@ describe('statistics-calc', () => {
   const entry = (overrides: Partial<StatisticsTimelineEntryDto>): StatisticsTimelineEntryDto =>
     ({ year: 2025, month: null, week: null, from: null, to: null, amount: 0, ...overrides });
   const dto = (overrides: Partial<StatisticsDto>): StatisticsDto => ({
-    groupId: null, period: 'YEAR', year: 2025, month: null, totalSpent: 0, paidByUser: 0, paidCartCount: 0, currentBalance: 0,
+    groupId: null, currencyCode: 'EUR', availableCurrencies: ['EUR'],
+    period: 'YEAR', year: 2025, month: null, totalSpent: 0, paidByUser: 0, paidCartCount: 0, currentBalance: 0,
     availableYears: [], timeline: [], categories: [],
     groupView: { cartCount: 0, averagePerCart: 0, memberCount: 0, timeline: [], categories: [] }, ...overrides,
   });
@@ -219,6 +221,19 @@ describe('statistics-calc', () => {
       expect(yearOptions([2025], 2026, 2024)).toEqual([2026, 2025, 2024]);
       expect(yearOptions([2026, 2025], 2026, 2025)).toEqual([2026, 2025]);
       expect(yearOptions([], 2026, 2026)).toEqual([2026]);
+    });
+  });
+
+  // DIV-77: Währungsauswahl nur bei „Alle Gruppen“ mit mehreren Währungen
+  describe('showCurrencyFilter', () => {
+    it('zeigt die Auswahl bei „Alle Gruppen“ und mehreren Währungen', () => {
+      expect(showCurrencyFilter(null, ['EUR', 'USD'])).toBeTrue();
+    });
+
+    it('verbirgt sie mit gewählter Gruppe oder bei höchstens einer Währung', () => {
+      expect(showCurrencyFilter(3, ['EUR', 'USD'])).toBeFalse();
+      expect(showCurrencyFilter(null, ['EUR'])).toBeFalse();
+      expect(showCurrencyFilter(null, [])).toBeFalse();
     });
   });
 });

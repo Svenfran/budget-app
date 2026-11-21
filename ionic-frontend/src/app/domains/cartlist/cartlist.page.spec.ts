@@ -1449,12 +1449,29 @@ describe('CartlistPage – Zusammenfassung und Filterzeile (DIV-79)', () => {
 
   it('große, negative und sehr große Beträge erscheinen vollständig (AC 5)', () => {
     const pipe = new ScientificCurrencyPipe();
-    expect(plain(pipe.transform(999999.99))).toBe('999.999,99 €');
+    expect(plain(pipe.transform(999999.99, 'EUR'))).toBe('999.999,99 €');
     for (const amount of [999999.99, -999999.99, 123456789]) {
       cartList.set([aCart({ amount, userDto: sven, categoryDto: lebensmittel })]);
       render();
-      expect(sum()).toBe(plain(pipe.transform(amount)));
+      expect(sum()).toBe(plain(pipe.transform(amount, 'EUR')));
     }
+  });
+
+  // DIV-77: Summe und Zeilen in der Währung der aktiven Gruppe; ein Wechsel der Gruppenwährung zeigt sofort das neue Symbol
+  it('zeigt Summe und Beträge in der Währung der aktiven Gruppe (USD, danach CHF)', () => {
+    TestBed.inject(GroupService).setActiveGroup(aGroup({ id: 3, name: 'WG', currencyCode: 'USD' }));
+    cartList.set([aCart({ amount: 12.5, userDto: sven, categoryDto: lebensmittel })]);
+    render();
+    const rowAmount = () => plain(root().querySelector('ion-item .cart-details h2:not(.titlestyle)')?.textContent ?? '');
+
+    expect(sum()).toBe('12,50 $');
+    expect(rowAmount()).toBe('12,50 $');
+
+    TestBed.inject(GroupService).setActiveGroup(aGroup({ id: 3, name: 'WG', currencyCode: 'CHF' }));
+    render();
+
+    expect(sum()).toBe('12,50 CHF');
+    expect(rowAmount()).toBe('12,50 CHF');
   });
 
   it('Zusammenfassung und Filterzeile liegen genau über der Listenspalte (schmal und breit, z. B. im Browser)', async () => {
