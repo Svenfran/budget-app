@@ -300,9 +300,8 @@ class SettlementTransactionIntegrationSpec extends IntegrationSpec {
         carts*.amount == [20d, -20d]
         carts*.user_id == [wg.owner.id, ben.id]
 
-        and: "Löschkennzeichen des entfernten Empfängers und Legacy-Anteil (2 Mitglieder am Kaufdatum) korrekt"
+        and: "Löschkennzeichen des entfernten Empfängers korrekt"
         carts*.is_deleted == [false, true]
-        carts*.average_per_member == [10d, -10d]
 
         where:
         zuerst << ['Settlement-Änderung', 'Mitgliedschaftsänderung']
@@ -321,7 +320,7 @@ class SettlementTransactionIntegrationSpec extends IntegrationSpec {
 
     private List<Map<String, Object>> cartZeilen(Long settlementId) {
         jdbcTemplate.queryForList(
-                'select id, amount, date_purchased, user_id, is_deleted, average_per_member from cart where settlement_id = ? order by id',
+                'select id, amount, date_purchased, user_id, is_deleted from cart where settlement_id = ? order by id',
                 settlementId)
     }
 

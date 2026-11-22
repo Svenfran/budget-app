@@ -163,23 +163,20 @@ public class SettlementService {
 
     /**
      * Setzt beide Carts vollständig aus dem Settlement: Zahler +amount, Empfänger -amount, gleiches Datum, Gruppe,
-     * Kategorie, Titel in Request-Sprache und Legacy-Anteil je Mitglied. {@code isDeleted} bleibt unverändert.
+     * Kategorie und Titel in Request-Sprache. {@code isDeleted} bleibt unverändert.
      */
     private void projectCarts(Settlement settlement, Cart payerCart, Cart receiverCart, Category category) {
-        var memberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(
-                settlement.getDatePurchased(), settlement.getGroup().getId());
-        projectCart(payerCart, settlement, category, settlement.getPayer(), settlement.getAmount(), memberCount,
+        projectCart(payerCart, settlement, category, settlement.getPayer(), settlement.getAmount(),
                 translator.translate("cart.settlement_to") + " " + formatUsername(settlement.getReceiver().getName()));
-        projectCart(receiverCart, settlement, category, settlement.getReceiver(), -settlement.getAmount(), memberCount,
+        projectCart(receiverCart, settlement, category, settlement.getReceiver(), -settlement.getAmount(),
                 translator.translate("cart.settlement_from") + " " + formatUsername(settlement.getPayer().getName()));
     }
 
     private static void projectCart(Cart cart, Settlement settlement, Category category, User user, double amount,
-                                    int memberCount, String title) {
+                                    String title) {
         cart.setTitle(title);
         cart.setDescription("");
         cart.setAmount(amount);
-        cart.setAveragePerMember(memberCount > 0 ? amount / memberCount : 0.0);
         cart.setDatePurchased(settlement.getDatePurchased());
         cart.setGroup(settlement.getGroup());
         cart.setCategory(category);
