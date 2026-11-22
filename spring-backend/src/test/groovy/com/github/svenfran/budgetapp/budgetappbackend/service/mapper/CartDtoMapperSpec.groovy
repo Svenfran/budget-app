@@ -11,7 +11,7 @@ class CartDtoMapperSpec extends Specification {
 
     def mapper = new CartDtoMapper()
 
-    def "Cart-DTO wird mit Gruppe, Kategorie, Nutzer und Durchschnitt pro Mitglied übernommen"() {
+    def "Cart-DTO wird mit Gruppe, Kategorie und Nutzer übernommen, averagePerMember bleibt leer (DIV-39)"() {
         given:
         def dto = TestData.cartDto(id: 1L, title: 'Pizza', description: 'Freitag', amount: 55d,
                 datePurchased: TestData.REFERENCE_DATE)
@@ -20,30 +20,19 @@ class CartDtoMapperSpec extends Specification {
         def category = TestData.category(id: 20L)
 
         when:
-        def cart = mapper.cartDtoToEntity(dto, category, user, group, 5)
+        def cart = mapper.cartDtoToEntity(dto, category, user, group)
 
         then:
         cart.id == 1L
         cart.title == 'Pizza'
         cart.description == 'Freitag'
         cart.amount == 55d
-        cart.averagePerMember == 11d
+        cart.averagePerMember == null
         !cart.deleted
         DateUtils.toLocalDate(cart.datePurchased) == TestData.REFERENCE_DATE
         cart.group.id == 10L
         cart.user.id == 5L
         cart.category.id == 20L
-    }
-
-    def "Durchschnitt pro Mitglied ist 0 bei 0 Mitgliedern"() {
-        given:
-        def dto = TestData.cartDto(amount: 55d, datePurchased: TestData.REFERENCE_DATE)
-
-        when:
-        def cart = mapper.cartDtoToEntity(dto, TestData.category(), TestData.user(), TestData.group(), 0)
-
-        then:
-        cart.averagePerMember == 0d
     }
 
     def "Kaufdatum #tag bleibt beim Weg Entity → DTO → Entity derselbe Kalendertag"() {
@@ -54,7 +43,7 @@ class CartDtoMapperSpec extends Specification {
 
         when:
         def dto = new CartDto(cart)
-        def zurueck = mapper.cartDtoToEntity(dto, cart.category, cart.user, group, 1)
+        def zurueck = mapper.cartDtoToEntity(dto, cart.category, cart.user, group)
 
         then: 'die API überträgt den Kalendertag, und die Entity erhält wieder denselben Tag'
         dto.datePurchased == tag
@@ -73,7 +62,7 @@ class CartDtoMapperSpec extends Specification {
 
         when:
         def dto = new CartDto(cart)
-        def zurueck = mapper.cartDtoToEntity(dto, cart.category, cart.user, group, 1)
+        def zurueck = mapper.cartDtoToEntity(dto, cart.category, cart.user, group)
 
         then:
         dto.datePurchased == null

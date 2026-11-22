@@ -319,7 +319,7 @@ class RecurringCartsIntegrationSpec extends IntegrationSpec {
         ''                  | null
     }
 
-    def "Nachgeholte Einkäufe teilen durch die Mitgliederzahl am jeweiligen Termin"() {
+    def "Nachgeholte Einkäufe werden je Termin ohne averagePerMember angelegt (DIV-39)"() {
         given:
         def today = testClock.today
         def ben = fixtures.user()
@@ -335,9 +335,9 @@ class RecurringCartsIntegrationSpec extends IntegrationSpec {
         LOG.info('cartService.generateRecurringCarts() am {} -> neue Einkäufe [Datum, averagePerMember] {}', testClock.today,
                 created.collect { [DateUtils.toLocalDate(it.datePurchased), it.averagePerMember] })
 
-        then: "vor Bens Beitritt ein Mitglied, danach zwei"
+        then: "ein Einkauf je verpasstem Termin (vor und nach Bens Beitritt), keiner mit averagePerMember"
         created.collect { [DateUtils.toLocalDate(it.datePurchased), it.averagePerMember] } ==
-                [[today, 15d], [today.minusWeeks(1), 15d], [today.minusWeeks(2), 30d]]
+                [[today, null], [today.minusWeeks(1), null], [today.minusWeeks(2), null]]
     }
 
     def "Scheduler deaktiviert ein Template, wenn am verpassten Termin keine Mitglieder in der Gruppe sind"() {

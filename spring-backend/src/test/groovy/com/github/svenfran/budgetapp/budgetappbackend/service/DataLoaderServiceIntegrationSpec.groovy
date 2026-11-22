@@ -107,10 +107,16 @@ class DataLoaderServiceIntegrationSpec extends IntegrationSpec {
         anzahl == erwartet
 
         where:
-        fall                          | benStart                    | benEnde                      || erwartet
-        'Owner und Mitglied'          | null                        | null                         || 2
-        'Mitglied ausgetreten'        | null                        | REFERENCE_DATE.minusDays(10) || 1
-        'Mitglied später eingetreten' | REFERENCE_DATE.plusDays(10) | null                         || 1
+        fall                            | benStart                    | benEnde                      || erwartet
+        'Owner und Mitglied'            | null                        | null                         || 2
+        'Mitglied ausgetreten'          | null                        | REFERENCE_DATE.minusDays(10) || 1
+        'Mitglied später eingetreten'   | REFERENCE_DATE.plusDays(10) | null                         || 1
+        // Grenztage inklusiv (zuvor über den Durchschnitt in CartServiceIntegrationSpec geprüft, DIV-39); maßgeblich
+        // für die Template-Deaktivierung in CartService.generateRecurringCarts
+        'Kauf am Eintrittstag'          | REFERENCE_DATE              | null                         || 2
+        'Kauf am Tag vor dem Eintritt'  | REFERENCE_DATE.plusDays(1)  | null                         || 1
+        'Kauf am Austrittstag'          | null                        | REFERENCE_DATE               || 2
+        'Kauf am Tag nach dem Austritt' | null                        | REFERENCE_DATE.minusDays(1)  || 1
     }
 
     def "Ohne Mitgliedschaft zum Kaufdatum ist die Mitgliederzahl 0"() {

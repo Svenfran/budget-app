@@ -76,8 +76,7 @@ public class CartService {
         verificationService.verifyCategoryIsNotSettlement(category);
         verificationService.verifyDatePurchasedWithinMembershipPeriod(gmh, cartDto.getDatePurchased());
         verificationService.verifyCartAmountHasAtMostTwoDecimals(cartDto.getAmount());
-        var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(asDate(cartDto.getDatePurchased()), group.getId());
-        var cart = cartDtoMapper.cartDtoToEntity(cartDto, category, user, group, groupMemberCount);
+        var cart = cartDtoMapper.cartDtoToEntity(cartDto, category, user, group);
         // Neuanlage erzwingen (DIV-73): mit gesetzter ID würde save() per merge einen bestehenden, auch fremden Cart
         // überschreiben – ohne Eigentümerprüfung. Der Mapper behält die ID, weil updateCart sie braucht.
         cart.setId(null);
@@ -99,8 +98,7 @@ public class CartService {
         var category = dataLoaderService.loadCategory(cartDto.getCategoryDto().getId());
         verificationService.verifyCategoryIsNotSettlement(category);
         verificationService.verifyCartAmountHasAtMostTwoDecimals(cartDto.getAmount());
-        var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(asDate(cartDto.getDatePurchased()), group.getId());
-        return updateCartAndTemplateIfValid(cart, cartDto, user, group, category, groupMemberCount);
+        return updateCartAndTemplateIfValid(cart, cartDto, user, group, category);
     }
 
     // Transaktional (DIV-74): Template-Deaktivierung und Löschen gemeinsam
@@ -151,7 +149,7 @@ public class CartService {
                     if (nextDate.isBefore(today)) {
                         logger.info("CartTemplate {}: verpasster Termin {} wird nachgeholt", template.getId(), nextDate);
                     }
-                    createCartFromTemplate(template, nextDate, groupMemberCount);
+                    createCartFromTemplate(template, nextDate);
                 }
                 nextDate = RecurrenceCalculator.nextOccurrence(nextDate, template.getRecurrenceType(), template.getAnchorDay());
             }
@@ -184,7 +182,7 @@ public class CartService {
         }
     }
 
-    private void createCartFromTemplate(CartTemplate template, LocalDate nextDate, int groupMemberCount) throws UserNotFoundException, GroupNotFoundException, CategoryNotFoundException {
+    private void createCartFromTemplate(CartTemplate template, LocalDate nextDate) throws UserNotFoundException, GroupNotFoundException, CategoryNotFoundException {
         var newCart = new Cart();
         var user = dataLoaderService.loadUser(template.getUserId());
         var group = dataLoaderService.loadGroup(template.getGroupId());
@@ -194,8 +192,6 @@ public class CartService {
         newCart.setTitle(template.getTitle());
         newCart.setDescription(template.getDescription());
         newCart.setAmount(template.getAmount());
-        newCart.setAveragePerMember(template.getAmount() / groupMemberCount);
-        newCart.setDescription(template.getDescription());
         newCart.setCategory(category);
         newCart.setDatePurchased(asDate(nextDate));
         newCart.setTemplate(template);
@@ -239,7 +235,7 @@ public class CartService {
         cart.setTemplate(newTemplate);
     }
 
-    public CartDto updateCartAndTemplateIfValid(Cart cart, CartDto cartDto, User user, Group group, Category category, int groupMemberCount) {
+    public CartDto updateCartAndTemplateIfValid(Cart cart, CartDto cartDto, User user, Group group, Category category) {
         // --- Flags ---
         boolean cartChanged = hasCartChanged(cartDto, cart);
         boolean recurrenceTypeChanged = hasRecurrenceTypeChanged(cartDto, cart);
@@ -256,7 +252,7 @@ public class CartService {
                 handleTemplateUpdate(cart, cartDto, user, group);
             }
 
-            var updatedCart = cartDtoMapper.cartDtoToEntity(cartDto, category, user, group, groupMemberCount);
+            var updatedCart = cartDtoMapper.cartDtoToEntity(cartDto, category, user, group);
             updatedCart.setTemplate(cart.getTemplate());
 
             var dto = new CartDto(cartRepository.save(updatedCart));
