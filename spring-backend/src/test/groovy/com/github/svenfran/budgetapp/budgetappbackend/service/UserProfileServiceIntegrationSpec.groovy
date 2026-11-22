@@ -139,15 +139,15 @@ class UserProfileServiceIntegrationSpec extends IntegrationSpec {
     }
 
     def "Konto löschen als Mitglied lässt die Einkäufe der übrigen Gruppenmitglieder unverändert (DIV-39)"() {
-        given: "Einkauf des Owners mit Altwert 99, der eine Neuberechnung sichtbar machen würde"
+        given: "Einkauf des Owners"
         def ben = fixtures.user()
         def wg = fixtures.group(members: [ben])
-        def ownerCart = fixtures.cart(wg, amount: 60d, averagePerMember: 99d)
+        def ownerCart = fixtures.cart(wg, amount: 60d)
         def (groupId, benId, ownerCartId) = [wg.group.id, ben.id, ownerCart.id]
         flushAndClear()
         loginAs(ben)
-        LOG.info('Szenario: Gruppe {}, Owner {}, Mitglied {} (angemeldet) löscht sein Konto; Einkauf {} des Owners 60.00 ' +
-                '(averagePerMember 99)', groupId, wg.owner.id, benId, ownerCartId)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Mitglied {} (angemeldet) löscht sein Konto; Einkauf {} des Owners 60.00',
+                groupId, wg.owner.id, benId, ownerCartId)
 
         when:
         LOG.info('Start: userProfileService.deleteUserProfile(Nutzer {})', benId)
@@ -155,11 +155,10 @@ class UserProfileServiceIntegrationSpec extends IntegrationSpec {
         flushAndClear()
         LOG.info('Ende: userProfileService.deleteUserProfile(Nutzer {}) inkl. Flush', benId)
         def gespeichert = cartRepository.findById(ownerCartId).get()
-        LOG.info('userProfileService.deleteUserProfile(Nutzer {}) -> Einkauf {}: averagePerMember {}, deleted {}', benId,
-                ownerCartId, gespeichert.averagePerMember, gespeichert.deleted)
+        LOG.info('userProfileService.deleteUserProfile(Nutzer {}) -> Einkauf {}: deleted {}', benId, ownerCartId,
+                gespeichert.deleted)
 
-        then: "kein Neuberechnen und kein Löschkennzeichen für den Einkauf des Owners"
-        gespeichert.averagePerMember == 99d
+        then: "kein Löschkennzeichen für den Einkauf des Owners"
         !gespeichert.deleted
     }
 }

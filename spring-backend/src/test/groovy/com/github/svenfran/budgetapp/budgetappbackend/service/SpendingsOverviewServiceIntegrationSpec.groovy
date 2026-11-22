@@ -25,8 +25,7 @@ import static java.time.LocalDate.of
  * Jahres- und Monatswerte der Ausgabenübersicht mit Ein- und Austritten.
  *
  * - Anteile werden exakt aus Betrag und Mitgliedschaftshistorie am Kaufdatum berechnet, gerundet wird erst der Saldo
- *   je Periode, sodass die Salden zusammen 0 ergeben (DIV-38, D6). averagePerMember wird dafür nicht gelesen und seit
- *   DIV-39 nicht mehr geschrieben; gesetzt nur noch im Altdaten-Feature.
+ *   je Periode, sodass die Salden zusammen 0 ergeben (DIV-38, D6).
  * - Nutzerwerte werden als [userId: [sum, diff]] verglichen; die Reihenfolge der Nutzer ist nicht garantiert.
  * - Anteil eines Nutzers = sum - diff.
  * - Summen von Salden werden in Cent verglichen (diffSummeInCent), nicht als Double-Addition.
@@ -392,38 +391,6 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         werte(jahr.spendingsTotalYear.spendingsTotalUser) ==
                 [(annaId): [10d, 6.66d], (benId): [0d, -3.33d], (cleoId): [0d, -3.33d]]
         diffSummeInCent(jahr.spendingsTotalYear.spendingsTotalUser) == 0
-    }
-
-    def "Altdaten: averagePerMember wird ignoriert, Salden centgenau aus Betrag und Historie (AC8)"() {
-        given:
-        def anna = fixtures.user(name: 'Anna')
-        def ben = fixtures.user(name: 'Ben')
-        def cleo = fixtures.user(name: 'Cleo')
-        def (annaId, benId, cleoId) = [anna, ben, cleo]*.id
-        assert annaId < benId && benId < cleoId
-        def wg = fixtures.group(owner: anna, members: [ben, cleo])
-
-        and: "ein ungerundeter Altwert (so wie ihn die NUMERIC-Spalte für 10/3 speichert) und ein bewusst falscher Wert"
-        def c1 = fixtures.cart(wg, user: anna, amount: 10d, averagePerMember: 3.33333333333333d, datePurchased: DateUtils.toDate(TestData.REFERENCE_DATE))
-        def c2 = fixtures.cart(wg, user: ben, amount: 5d, averagePerMember: 99d, datePurchased: DateUtils.toDate(TestData.REFERENCE_DATE))
-        def (c1Id, c2Id) = [c1, c2]*.id
-        flushAndClear()
-        loginAs(anna)
-        LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {}, Cleo {}; Einkauf {} Anna 10 (averagePerMember 3.333…), ' +
-                'Einkauf {} Ben 5 (averagePerMember 99)', wg.group.id, annaId, benId, cleoId, c1Id, c2Id)
-
-        when:
-        def gesamt = spendingsOverviewService.getSpendingsForGroupAndAllYears(wg.group.id)
-        logUebersicht('spendingsOverviewService.getSpendingsForGroupAndAllYears', gesamt)
-
-        then: "exakter Anteil je Person (10 + 5) / 3 = 5,00: Anna +5, Ben 0, Cleo −5"
-        werte(gesamt.spendingsTotalYear.spendingsTotalUser) ==
-                [(annaId): [10d, 5d], (benId): [5d, 0d], (cleoId): [0d, -5d]]
-        diffSummeInCent(gesamt.spendingsTotalYear.spendingsTotalUser) == 0
-
-        and: "Beträge und Altwerte bleiben unverändert gespeichert"
-        [c1Id, c2Id].collect { cartRepository.findById(it).get() }.collect { [it.amount, it.averagePerMember] } ==
-                [[10d, 3.33333333333333d], [5d, 99d]]
     }
 
     def "Ausgleichszahlungen in Höhe der Salden gleichen centgenau aus, Unbeteiligte bleiben unverändert (AC10, D4)"() {

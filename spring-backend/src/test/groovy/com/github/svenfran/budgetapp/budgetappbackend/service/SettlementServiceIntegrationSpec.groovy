@@ -77,10 +77,10 @@ class SettlementServiceIntegrationSpec extends IntegrationSpec {
         def empfaenger = cartRepository.findById(result[1].id).get()
         def settlements = settlementsDerGruppe(groupId)
         def kategorien = settlementCategories(groupId)
-        LOG.info('settlementService.addSettlementPayment(30.00 an User {}) -> Settlements {}, Cart {} "{}" {} (User {}, averagePerMember {}), ' +
-                'Cart {} "{}" {} (User {}, averagePerMember {}); Settlement-Kategorien {}', partnerId, settlements*.id, sender.id, sender.title,
-                sender.amount, sender.user.id, sender.averagePerMember, empfaenger.id, empfaenger.title, empfaenger.amount,
-                empfaenger.user.id, empfaenger.averagePerMember, kategorien*.id)
+        LOG.info('settlementService.addSettlementPayment(30.00 an User {}) -> Settlements {}, Cart {} "{}" {} (User {}), ' +
+                'Cart {} "{}" {} (User {}); Settlement-Kategorien {}', partnerId, settlements*.id, sender.id, sender.title,
+                sender.amount, sender.user.id, empfaenger.id, empfaenger.title, empfaenger.amount, empfaenger.user.id,
+                kategorien*.id)
 
         then: "Carts werden nicht live synchronisiert"
         0 * notificationService._
@@ -108,7 +108,6 @@ class SettlementServiceIntegrationSpec extends IntegrationSpec {
         sender.title == "Ausgleichszahlung an ${partnerName}".toString()
         sender.user.id == zahlerId
         sender.amount == 30d
-        sender.averagePerMember == null
         sender.category.id == kategorieId
         DateUtils.toLocalDate(sender.datePurchased) == TestData.REFERENCE_DATE
 
@@ -117,7 +116,6 @@ class SettlementServiceIntegrationSpec extends IntegrationSpec {
         empfaenger.title == "Ausgleichszahlung von ${zahlerName}".toString()
         empfaenger.user.id == partnerId
         empfaenger.amount == -30d
-        empfaenger.averagePerMember == null
         empfaenger.category.id == kategorieId
         DateUtils.toLocalDate(empfaenger.datePurchased) == TestData.REFERENCE_DATE
 
@@ -490,9 +488,9 @@ class SettlementServiceIntegrationSpec extends IntegrationSpec {
         flushAndClear()
         def settlement = settlementRepository.findById(settlementId).get()
         def carts = paar*.id.collect { cartRepository.findById(it).get() }
-        LOG.info('settlementService.updateSettlementPayment({}) -> Settlement {} {} am {}; Carts {} Beträge {}, averagePerMember {}, Daten {}',
+        LOG.info('settlementService.updateSettlementPayment({}) -> Settlement {} {} am {}; Carts {} Beträge {}, Daten {}',
                 settlementId, settlement.id, settlement.amount, settlement.datePurchased, carts*.id, carts*.amount,
-                carts*.averagePerMember, carts*.datePurchased)
+                carts*.datePurchased)
 
         then:
         0 * notificationService._
@@ -502,43 +500,11 @@ class SettlementServiceIntegrationSpec extends IntegrationSpec {
         DateUtils.toLocalDate(settlement.datePurchased) == neuesDatum
         settlement.receiver.id == ben.id
         carts*.amount == [45.5d, -45.5d]
-        carts*.averagePerMember == [null, null]
         carts.every { DateUtils.toLocalDate(it.datePurchased) == neuesDatum }
         carts*.title == ["Ausgleichszahlung an ${benName}".toString(), "Ausgleichszahlung von ${ownerName}".toString()]
 
         where:
         rolle << ['Zahler', 'Empfänger']
-    }
-
-    def "Ändern einer Ausgleichszahlung lässt gespeicherte Altwerte von averagePerMember unverändert (DIV-39)"() {
-        given: "Owner zahlte 30.00 an Ben; beide Einkäufe tragen Altwerte, wie die Vorversion sie geschrieben hat"
-        def ben = fixtures.user()
-        def wg = fixtures.group(members: [ben])
-        def paar = anlegen(wg.owner, ben, wg.group.id, 30d)
-        def (settlementId, cartIds) = [paar[0].settlementId, paar*.id]
-        def altwerte = [15d, -15d]
-        [cartIds, altwerte].transpose().each { id, wert ->
-            def cart = cartRepository.findById(id).get()
-            cart.averagePerMember = wert
-            cartRepository.save(cart)
-        }
-        flushAndClear()
-        def neuesDatum = TestData.REFERENCE_DATE.minusDays(10)
-        loginAs(userRepository.findById(wg.owner.id).get())
-        LOG.info('Szenario: Gruppe {}, Owner {} zahlte 30.00 an Ben {} (Settlement {}, Carts {}, Altwerte {}); Owner ändert ' +
-                'auf 45.50 am {}', wg.group.id, wg.owner.id, ben.id, settlementId, cartIds, altwerte, neuesDatum)
-
-        when:
-        settlementService.updateSettlementPayment(dto(settlementId, 45.5d, ben.id, neuesDatum))
-        flushAndClear()
-        def carts = cartIds.collect { cartRepository.findById(it).get() }
-        LOG.info('settlementService.updateSettlementPayment({}) -> Carts {} Beträge {}, averagePerMember {}, Daten {}',
-                settlementId, carts*.id, carts*.amount, carts*.averagePerMember, carts*.datePurchased)
-
-        then: "Betrag und Datum geändert, Altwerte nicht neu berechnet und nicht geleert"
-        carts*.amount == [45.5d, -45.5d]
-        carts.every { DateUtils.toLocalDate(it.datePurchased) == neuesDatum }
-        carts*.averagePerMember == altwerte
     }
 
     def "Zahler wechselt den Empfänger: Empfänger-Einkauf gehört dem neuen Empfänger, beide Titel neu"() {

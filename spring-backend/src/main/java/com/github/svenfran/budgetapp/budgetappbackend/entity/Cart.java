@@ -25,11 +25,6 @@ public class Cart implements Serializable {
     @Column(name = "amount")
     private Double amount;
 
-    // Legacy-Wert (ungerundet), nicht Grundlage der Salden: SpendingsOverviewService berechnet die Anteile
-    // centgenau aus Betrag und Mitgliedschaftshistorie (DIV-38).
-    @Column(name = "average_per_member")
-    private Double averagePerMember;
-
     @Column(name = "is_deleted")
     private boolean isDeleted;
 
@@ -66,13 +61,12 @@ public class Cart implements Serializable {
     @JoinColumn(name = "settlement_id")
     private Settlement settlement;
 
-    public Cart(Long id, String title, String description, Double amount, Double averagePerMember, boolean isDeleted,
+    public Cart(Long id, String title, String description, Double amount, boolean isDeleted,
                 Date datePurchased, Date dateCreated, Date lastUpdate, Group group, User user, Category category, CartTemplate template) {
         this.id = id;
         this.title = title;
         this.description = description;
         this.amount = amount;
-        this.averagePerMember = averagePerMember;
         this.isDeleted = isDeleted;
         this.datePurchased = datePurchased;
         this.dateCreated = dateCreated;
@@ -174,14 +168,6 @@ public class Cart implements Serializable {
         isDeleted = deleted;
     }
 
-    public Double getAveragePerMember() {
-        return averagePerMember;
-    }
-
-    public void setAveragePerMember(Double averagePerMember) {
-        this.averagePerMember = averagePerMember;
-    }
-
     public CartTemplate getTemplate() {
         return template;
     }
@@ -205,7 +191,6 @@ public class Cart implements Serializable {
                 ", title='" + title + '\'' +
                 ", description='" + description + '\'' +
                 ", amount=" + amount +
-                ", averagePerMember=" + averagePerMember +
                 ", isDeleted=" + isDeleted +
                 ", datePurchased=" + datePurchased +
                 ", dateCreated=" + dateCreated +
