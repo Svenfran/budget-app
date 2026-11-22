@@ -14,6 +14,7 @@ import { aCart, aCategory, aGroup, aLoggedInUser, aUser, REFERENCE_DATE } from '
 import { authServiceStub, provideServiceTesting } from 'src/testing/test-providers';
 import { Cart } from '../model/cart';
 import { CartService } from '../service/cart.service';
+import moment from 'moment';
 import { NewEditCartPage } from './new-edit-cart.page';
 
 /**
@@ -28,7 +29,7 @@ describe('NewEditCartPage', () => {
   const vorlage = aCart({
     id: 1, title: 'Pizza', amount: 12.5, description: 'Freitag', groupId: GROUP_ID, userDto: anna,
     categoryDto: lebensmittel, recurrenceType: RECURRENCE_TYPE.MONTHLY, hasActiveTemplate: true, templateId: 7,
-    datePurchased: new Date('2025-05-01T00:00:00Z'),
+    datePurchased: '2025-05-01',
   });
   const fremde = aCart({ id: 2, groupId: GROUP_ID, userDto: aUser({ userName: 'Ben' }), categoryDto: lebensmittel });
 
@@ -443,7 +444,7 @@ describe('NewEditCartPage', () => {
   describe('Ausgleichszahlungs-Kategorie (DIV-73 Phase 4, F3; DIV-74: per Kennzeichen, auch beim Bearbeiten gesperrt)', () => {
     const ausgleich = aCategory({ id: 44, name: 'Ausgleichszahlung', groupId: GROUP_ID, settlement: true });
     const ausgleichszahlung = aCart({ id: 3, title: 'Ausgleich an Ben', amount: 20, groupId: GROUP_ID, userDto: anna,
-      categoryDto: ausgleich, datePurchased: new Date('2025-05-01T00:00:00Z'), settlementId: 70 });
+      categoryDto: ausgleich, datePurchased: '2025-05-01', settlementId: 70 });
     const umbenannt = aCategory({ id: 45, name: 'Rückzahlungen', groupId: GROUP_ID, settlement: true });
     const namensgleich = aCategory({ id: 46, name: 'Ausgleichszahlung', groupId: GROUP_ID });
 
@@ -497,5 +498,61 @@ describe('NewEditCartPage', () => {
       expect(categoryCallbacks.length).toBe(0);
       expect(cartService.updateCart).not.toHaveBeenCalled();
     });
+  });
+
+  // DIV-81: Kaufdatum als ISO-Tag. Erwartungen als ISO-Tag bzw. „DD.MM.YYYY“, Uhr auf lokalen Mittag – damit laufen die
+  // Tests in jeder Gerätezone gleich (CI: Europe/Berlin und America/Mexico_City).
+  describe('Kaufdatum als Kalendertag (DIV-81)', () => {
+    const formatiert = (date: Date | null) => moment(date).format('DD.MM.YYYY');
+
+    for (const [kaufdatum, anzeige] of [['2026-11-15', '15.11.2026'], ['2026-12-31', '31.12.2026']]) {
+      it(`Bearbeiten ohne Datumsänderung: ${kaufdatum} steht als ${anzeige} im Formular und geht unverändert zurück (AC 4)`,
+        async () => {
+          jasmine.clock().mockDate(new Date(2027, 0, 5, 12, 0));
+          const cart = aCart({ id: 11, title: 'Miete', amount: 900, groupId: GROUP_ID, userDto: anna,
+            categoryDto: lebensmittel, datePurchased: kaufdatum });
+          createPage({ id: '11' }, [cart]);
+          answerCategories([lebensmittel]);
+
+          expect(page.form.value.datePurchased).toBe(anzeige);
+
+          page.form.patchValue({ amount: '950,00' });
+          page.onSubmit();
+          await resolveLoadings();
+
+          expect(cartService.updateCart).toHaveBeenCalledOnceWith(jasmine.objectContaining({
+            id: 11, amount: 950, datePurchased: kaufdatum,
+          }));
+        });
+    }
+
+    it('Neuanlage sendet den gewählten Tag als ISO-Tag', async () => {
+      createPage();
+      answerCategories([lebensmittel]);
+      page.form.patchValue({ title: 'Brot', amount: '3,50', categoryId: 42, datePurchased: '01.06.2025' });
+
+      page.onSubmit();
+      await resolveLoadings();
+
+      expect(cartService.addCart).toHaveBeenCalledOnceWith(jasmine.objectContaining({ datePurchased: '2025-06-01' }));
+    });
+
+    const vorschauFaelle: [string, Date, string, string][] = [
+      ['Monatsmitte', new Date(2026, 10, 20, 12, 0), '15.11.2026', '15.12.2026'],
+      ['Monatserster', new Date(2026, 10, 20, 12, 0), '01.11.2026', '01.12.2026'],
+      ['Jahreswechsel', new Date(2027, 0, 5, 12, 0), '15.12.2026', '15.01.2027'],
+    ];
+    for (const [fall, heute, kaufdatum, erwartet] of vorschauFaelle) {
+      it(`Vorschau monatlich (${fall}): Kaufdatum ${kaufdatum} → nächster Termin ${erwartet}, nicht der Vortag (AC 7)`, () => {
+        jasmine.clock().mockDate(heute);
+        createPage();
+        answerCategories([lebensmittel]);
+
+        page.form.patchValue({ datePurchased: kaufdatum, recurrenceType: RECURRENCE_TYPE.MONTHLY });
+        page.recurrenceTypeChanged(RECURRENCE_TYPE.MONTHLY);
+
+        expect(formatiert(page.nextExecutionDate)).toBe(erwartet);
+      });
+    }
   });
 });

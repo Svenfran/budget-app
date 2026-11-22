@@ -81,7 +81,7 @@ export interface SettlementDtoOptions {
 }
 
 /**
- * Request der Ausgleichszahlung. `datePurchased` ist wie bisher Mitternacht UTC des gewählten Tages. Ist die gewählte
+ * Request der Ausgleichszahlung. `datePurchased` ist der gewählte Tag als ISO-Tag `YYYY-MM-DD` (DIV-81). Ist die gewählte
  * Gegenpartei nicht mehr in `recipients` (Liste inzwischen neu geladen), bleibt ihr Name leer; das Backend prüft die
  * Mitgliedschaft. Ohne Optionen wie bisher: Zahler ist der angemeldete Nutzer (kein `payer`), `member` der Empfänger.
  */
@@ -96,7 +96,7 @@ export function toSettlementPaymentDto(value: SettlementFormValue, groupId: numb
     amount: amountFromInput(value.amount)!,
     groupId,
     member: received ? { id: options.receivedBy!.id, userName: options.receivedBy!.userName } : counterpart,
-    datePurchased: new Date(value.datePurchased),
+    datePurchased: value.datePurchased,
   };
 }
 

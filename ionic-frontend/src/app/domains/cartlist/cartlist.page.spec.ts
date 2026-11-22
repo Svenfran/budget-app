@@ -323,9 +323,9 @@ describe('CartlistPage – Wischaktionen bei Ausgleichszahlungen (DIV-74)', () =
   const anna = aUser({ userName: 'Anna' });
   const ben = aUser({ userName: 'Ben' });
   const settlementCart = aCart({ id: 11, title: 'Ausgleichszahlung an Ben', amount: 30, userDto: anna, settlementId: 70,
-    datePurchased: '2025-06-10' as unknown as Date });
+    datePurchased: '2025-06-10' });
   const partnerCart = aCart({ id: 13, title: 'Ausgleichszahlung von Anna', amount: -30, userDto: ben, settlementId: 70,
-    datePurchased: '2025-06-10' as unknown as Date });
+    datePurchased: '2025-06-10' });
   const normalCart = aCart({ id: 12, title: 'Pizza' });
 
   /** Optionen des zuletzt erzeugten Alerts und der Handler des „Ja“-Buttons. */
@@ -489,13 +489,13 @@ describe('CartlistPage – Filter (Bestand)', () => {
   const freizeit = aCategory({ name: 'Freizeit' });
 
   const edeka = aCart({ title: 'Edeka', description: 'Wocheneinkauf', amount: 40, userDto: sven,
-    categoryDto: lebensmittel, datePurchased: new Date(2025, 5, 1) });
+    categoryDto: lebensmittel, datePurchased: '2025-06-01' });
   const rossmann = aCart({ title: 'Rossmann', description: 'Zahnpasta', amount: 10.5, userDto: anna,
-    categoryDto: drogerie, datePurchased: new Date(2025, 5, 10) });
+    categoryDto: drogerie, datePurchased: '2025-06-10' });
   const kino = aCart({ title: 'Kino', description: 'Film mit Edeka-Gutschein', amount: 25, userDto: ben,
-    categoryDto: freizeit, datePurchased: new Date(2025, 5, 20) });
+    categoryDto: freizeit, datePurchased: '2025-06-20' });
   const edekaSpaet = aCart({ title: 'EDEKA Markt', description: 'Getränke', amount: 12, userDto: anna,
-    categoryDto: lebensmittel, datePurchased: new Date(2025, 5, 20, 18, 0) });
+    categoryDto: lebensmittel, datePurchased: '2025-06-20' });
   const alle = [edeka, rossmann, kino, edekaSpaet];
 
   const titles = () => cartList().map(cart => cart.title);
@@ -578,7 +578,7 @@ describe('CartlistPage – Filter (Bestand)', () => {
     page.filterCarts({ startDate: new Date(2025, 5, 15) });
     expect(titles()).toEqual(['Kino', 'EDEKA Markt']);
 
-    erfolgreichGeaendert({ ...kino, datePurchased: new Date(2025, 5, 1) });
+    erfolgreichGeaendert({ ...kino, datePurchased: '2025-06-01' });
 
     expect(titles()).toEqual(['EDEKA Markt']);
     expect(count()).toBe(1);
@@ -598,7 +598,7 @@ describe('CartlistPage – Filter (Bestand)', () => {
   });
 
   it('ohne aktiven Filter lässt eine erfolgreiche Änderung die Liste, wie der Service sie gesetzt hat (DIV-74)', () => {
-    erfolgreichGeaendert({ ...kino, datePurchased: new Date(2025, 5, 1) });
+    erfolgreichGeaendert({ ...kino, datePurchased: '2025-06-01' });
 
     expect(titles()).toEqual(['Edeka', 'Rossmann', 'Kino', 'EDEKA Markt']);
     expect(page.filterMode()).toBeFalse();
@@ -633,16 +633,20 @@ describe('CartlistPage – Filter (Bestand)', () => {
     expect(titles()).toEqual(['Kino', 'EDEKA Markt']);
   });
 
-  // Format aus dem Backend (DATE-Spalte, JSON ohne Uhrzeit): zählt wie in der Anzeige (date-Pipe) zu genau diesem
-  // Tag, unabhängig von der Zeitzone (Codex-Review F-001).
-  it('Datum von/bis: Kaufdatum im Backend-Format „yyyy-MM-dd“ zählt zu diesem Tag', () => {
+  // Format aus dem Backend (seit DIV-81 „YYYY-MM-DD“ ohne Uhrzeit): zählt wie in der Anzeige (date-Pipe) zu genau
+  // diesem Tag, unabhängig von der Zeitzone (Codex-Review F-001, DIV-81 AC 6).
+  it('Datum von/bis: Kaufdatum im Backend-Format „yyyy-MM-dd“ zählt zu diesem Tag und nicht zum Folgetag', () => {
     const backendCart = aCart({ title: 'Backend', amount: 5, userDto: sven, categoryDto: lebensmittel,
-      datePurchased: '2025-06-20' as unknown as Date });
+      datePurchased: '2025-06-20' });
     initCartList.set([...alle, backendCart]);
 
     page.filterCarts({ startDate: new Date(2025, 5, 20), endDate: new Date(2025, 5, 20) });
 
     expect(titles()).toEqual(['Kino', 'EDEKA Markt', 'Backend']);
+
+    page.filterCarts({ startDate: new Date(2025, 5, 21) });
+
+    expect(titles()).not.toContain('Backend');
   });
 
   it('kombiniert mehrere Kriterien mit UND (AC 4)', () => {
@@ -1538,7 +1542,7 @@ describe('CartlistPage – Mitgliedsname in der Liste (DIV-79)', () => {
   const otherName = 'Bartholomäus Friedrich Beispielmann-Oberhausen';
   const recurring = { recurrenceType: RECURRENCE_TYPE.MONTHLY, hasActiveTemplate: true, deleted: false };
   const own = aCart({ title: 'Miete', userDto: aUser({ userName: ownName }), categoryDto: aCategory({ name: 'Wohnen' }),
-    ...recurring });
+    datePurchased: '2026-11-15', ...recurring });
   const other = aCart({ title: 'Strom', userDto: aUser({ userName: otherName }), categoryDto: aCategory({ name: 'Wohnen' }),
     ...recurring });
   // aus der Gruppe entfernte Person (Phase 5): kursiv mit Zusatz „(entfernt)“
@@ -1594,6 +1598,11 @@ describe('CartlistPage – Mitgliedsname in der Liste (DIV-79)', () => {
     fixture.detectChanges();
     await ionicReady(root());
     await nextFrame();
+  });
+
+  // DIV-81: Das Backend liefert den Kalendertag „YYYY-MM-DD“; die date-Pipe liest ihn als lokalen Tag – in jeder Zone.
+  it('zeigt das Kaufdatum als Kalendertag an (AC 3)', () => {
+    expect(row('Miete').querySelector('.cart-name-date')!.textContent!.trim()).toBe('15.11.2026');
   });
 
   for (const [kind, title, name] of [['eigener', 'Miete', ownName], ['fremder', 'Strom', otherName]]) {

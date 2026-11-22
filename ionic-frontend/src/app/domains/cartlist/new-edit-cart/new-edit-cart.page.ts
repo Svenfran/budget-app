@@ -293,18 +293,16 @@ export class NewEditCartPage implements OnInit {
     }
   }
 
-  formatToISODate(date: Date | string): string {
-    return new Date(date).toISOString().split('T')[0] + 'T00:00:00';
-  }
-
   setToday() {
     this.formattedString = moment().format('DD.MM.YYYY');
     this.dateValue = moment().startOf('day').format('YYYY-MM-DD') + 'T00:00:00';
   }
   
-  setDate(date: Date) {
-    this.formattedString = moment(date).format('DD.MM.YYYY');
-    this.dateValue = moment(date).startOf('day').format('YYYY-MM-DD') + 'T00:00:00';
+  /** Kaufdatum eines Carts (ISO-Tag `YYYY-MM-DD`) ins Formular – explizit geparst, ohne Umweg über UTC (DIV-81). */
+  setDate(date: string) {
+    const day = moment(date, 'YYYY-MM-DD');
+    this.formattedString = day.format('DD.MM.YYYY');
+    this.dateValue = day.format('YYYY-MM-DD') + 'T00:00:00';
   }
   
   dateChanged(value: string | string[] | null | undefined) {
@@ -323,7 +321,9 @@ export class NewEditCartPage implements OnInit {
   }
 
   updateNextExecutionDate() {
-    const lastDate = this.getDateFromString(this.form.value.datePurchased);
+    // Lokale Mitternacht des gewählten Tages (DIV-81): new Date('YYYY-MM-DD') wäre Mitternacht UTC und westlich von UTC
+    // der Vortag – die Vorschau zeigte dann einen Tag zu früh an.
+    const lastDate = moment(this.form.value.datePurchased, 'DD.MM.YYYY').toDate();
 
     if (this.isAddMode && this.form.value.recurrenceType !== RECURRENCE_TYPE.NONE) {
       this.calculateNextDate(lastDate, this.form.value.recurrenceType);
@@ -364,8 +364,9 @@ export class NewEditCartPage implements OnInit {
     this.datetime.confirm(true);
   }
 
-  getDateFromString(formattedString: string) {
-    return new Date(formattedString.replace(/(\d{2}).(\d{2}).(\d{4})/, "$3-$2-$1"));
+  /** Formularwert `DD.MM.YYYY` → ISO-Tag `YYYY-MM-DD` für den Request (DIV-81). */
+  getDateFromString(formattedString: string): string {
+    return formattedString.replace(/(\d{2}).(\d{2}).(\d{4})/, "$3-$2-$1");
   }
 
 

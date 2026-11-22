@@ -7,7 +7,8 @@ export interface Cart {
     title: string;
     description: string;
     amount: number;
-    datePurchased: Date;
+    /** Kaufdatum als ISO-Kalendertag `YYYY-MM-DD` (DIV-81), ohne Uhrzeit und Zeitzone. */
+    datePurchased: string;
     groupId: number;
     userDto: UserDto;
     categoryDto: CategoryDto;
