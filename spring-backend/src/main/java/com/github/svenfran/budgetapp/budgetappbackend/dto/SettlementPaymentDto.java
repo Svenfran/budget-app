@@ -2,7 +2,7 @@ package com.github.svenfran.budgetapp.budgetappbackend.dto;
 
 
 import javax.validation.constraints.NotNull;
-import java.util.Date;
+import java.time.LocalDate;
 
 public class SettlementPaymentDto {
 
@@ -15,9 +15,10 @@ public class SettlementPaymentDto {
     @NotNull
     private Long groupId;
     private UserDto member;
-    private Date datePurchased;
+    // Fachlicher Kalendertag (DIV-81), JSON "YYYY-MM-DD".
+    private LocalDate datePurchased;
 
-    public SettlementPaymentDto(Double amount, Long groupId, UserDto member, Date datePurchased) {
+    public SettlementPaymentDto(Double amount, Long groupId, UserDto member, LocalDate datePurchased) {
         this.amount = amount;
         this.groupId = groupId;
         this.member = member;
@@ -67,11 +68,11 @@ public class SettlementPaymentDto {
         this.groupId = groupId;
     }
 
-    public Date getDatePurchased() {
+    public LocalDate getDatePurchased() {
         return datePurchased;
     }
 
-    public void setDatePurchased(Date datePurchased) {
+    public void setDatePurchased(LocalDate datePurchased) {
         this.datePurchased = datePurchased;
     }
 }

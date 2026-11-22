@@ -12,7 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.validation.BindingResult;
 
 import java.math.BigDecimal;
-import java.util.Date;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -146,13 +146,13 @@ public class VerificationService {
         }
     }
 
-    public void verifyDatePurchasedWithinMembershipPeriod (List<GroupMembershipHistory> gmh, Date datePurchased) throws DatePurchasedNotWithinMembershipPeriodException {
+    public void verifyDatePurchasedWithinMembershipPeriod (List<GroupMembershipHistory> gmh, LocalDate datePurchased) throws DatePurchasedNotWithinMembershipPeriodException {
         for (var timePeriod : gmh) {
             var startDate = toLocalDate(timePeriod.getMembershipStart());
             var endDate = timePeriod.getMembershipEnd() != null ? toLocalDate(timePeriod.getMembershipEnd()) : null;
 
-            var isAfterStart = !toLocalDate(datePurchased).isBefore(startDate);
-            var isBeforeEnd = (endDate == null) || !toLocalDate(datePurchased).isAfter(endDate);
+            var isAfterStart = !datePurchased.isBefore(startDate);
+            var isBeforeEnd = (endDate == null) || !datePurchased.isAfter(endDate);
 
             if (isAfterStart && isBeforeEnd) {
                 return;

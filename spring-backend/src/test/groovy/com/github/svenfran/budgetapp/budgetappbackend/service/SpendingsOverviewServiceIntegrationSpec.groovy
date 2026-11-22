@@ -473,7 +473,7 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         when: "Ben zahlt Anna 8,00 €"
         loginAs(userRepository.findById(benId).get())
         def settlementId = settlementService.addSettlementPayment(new SettlementPaymentDto(8d, wg.group.id, new UserDto(id: annaId),
-                DateUtils.toDate(TestData.REFERENCE_DATE)))[0].settlementId
+                TestData.REFERENCE_DATE))[0].settlementId
         flushAndClear()
         def nachAnlage = diffs(annaId, wg)
         LOG.info('settlementService.addSettlementPayment(Ben -> Anna 8.00) -> Salden {}', nachAnlage)
@@ -537,7 +537,7 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         when: "Cleo zahlt Anna 1,00 €"
         loginAs(userRepository.findById(cleoId).get())
         settlementService.addSettlementPayment(new SettlementPaymentDto(1d, wg.group.id, new UserDto(id: annaId),
-                DateUtils.toDate(TestData.REFERENCE_DATE)))
+                TestData.REFERENCE_DATE))
         flushAndClear()
         def nachher = diffs(annaId, wg)
         LOG.info('settlementService.addSettlementPayment(Cleo -> Anna 1.00) -> Salden {}', nachher)
@@ -549,7 +549,7 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
     }
 
     private static SettlementPaymentDto aenderung(Long settlementId, Double betrag, Long empfaengerId, LocalDate datum) {
-        def dto = new SettlementPaymentDto(betrag, null, new UserDto(id: empfaengerId), DateUtils.toDate(datum))
+        def dto = new SettlementPaymentDto(betrag, null, new UserDto(id: empfaengerId), datum)
         dto.id = settlementId
         dto
     }
@@ -689,7 +689,7 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
     private void zahlung(Long vonId, Long anId, Double betrag, GroupScenario wg, Date tag) {
         loginAs(userRepository.findById(vonId).get())
         def an = userRepository.findById(anId).get()
-        settlementService.addSettlementPayment(new SettlementPaymentDto(betrag, wg.group.id, new UserDto(an), tag))
+        settlementService.addSettlementPayment(new SettlementPaymentDto(betrag, wg.group.id, new UserDto(an), DateUtils.toLocalDate(tag)))
         flushAndClear()
         LOG.info('settlementService.addSettlementPayment(User {} an User {}, {})', vonId, anId, betrag)
     }

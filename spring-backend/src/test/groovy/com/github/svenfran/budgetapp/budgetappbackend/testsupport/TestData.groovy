@@ -131,7 +131,7 @@ class TestData {
 
     static CartDto cartDto(Map overrides = [:]) {
         new CartDto([title: 'Einkauf', description: 'Wocheneinkauf', amount: 40.0d,
-                     datePurchased: DateUtils.toDate(REFERENCE_DATE), recurrenceType: RecurrenceType.NONE] + overrides)
+                     datePurchased: REFERENCE_DATE, recurrenceType: RecurrenceType.NONE] + overrides)
     }
 
     static CategoryDto categoryDto(Category category) {

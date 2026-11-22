@@ -118,7 +118,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         saved.title == dto.title
         saved.description == dto.description
         saved.amount == dto.amount
-        DateUtils.toLocalDate(saved.datePurchased) == DateUtils.toLocalDate(dto.datePurchased)
+        DateUtils.toLocalDate(saved.datePurchased) == dto.datePurchased
         saved.category.id == dto.categoryDto.id
 
         where:
@@ -128,7 +128,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         'title'         | { CartDto c, otherCategory -> c.title = 'Neu' }                                                || 20d
         'description'   | { CartDto c, otherCategory -> c.description = 'Andere' }                                       || 20d
         'amount'        | { CartDto c, otherCategory -> c.amount = 60d }                                                 || 30d
-        'datePurchased' | { CartDto c, otherCategory -> c.datePurchased = DateUtils.toDate(TestData.REFERENCE_DATE.plusDays(1)) } || 20d
+        'datePurchased' | { CartDto c, otherCategory -> c.datePurchased = TestData.REFERENCE_DATE.plusDays(1) } || 20d
         'category'      | { CartDto c, otherCategory -> c.categoryDto = TestData.categoryDto(otherCategory) }            || 20d
         'noChange'      | { CartDto c, otherCategory -> }                                                                || 40d
     }
@@ -350,7 +350,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
 
         and:
         def dto = new CartDto(cart)
-        dto.datePurchased = DateUtils.toDate(neuesDatum)
+        dto.datePurchased = neuesDatum
         dto.templateUpdateSelected = true
         LOG.info('Szenario: heute {}, Gruppe {}, Einkauf {} Miete vom 2025-03-31, Template MONTHLY anchorDay 31; ' +
                 'neues Datum {}', testClock.today, wg.group.id, cart.id, neuesDatum)
@@ -408,7 +408,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
 
         and: "Datum auf den 31.01., sonst unverändert"
         def dto = new CartDto(cart)
-        dto.datePurchased = DateUtils.toDate(LocalDate.of(2025, 1, 31))
+        dto.datePurchased = LocalDate.of(2025, 1, 31)
         dto.templateUpdateSelected = true
         LOG.info('Szenario: heute {}, Gruppe {}, Einkauf {} Miete vom 2025-01-30, Template {} MONTHLY anchorDay 30, ' +
                 'nextExecutionDate 2025-02-28; neues Datum 2025-01-31', testClock.today, wg.group.id, cart.id, original.id)
@@ -439,7 +439,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         def wg = fixtures.group(members: [ben])
         def (groupId, benId) = [wg.group.id, ben.id]
         def dto = TestData.cartDto(groupId: groupId, categoryDto: TestData.categoryDto(wg.category), title: 'Pizza',
-                amount: 40d, datePurchased: DateUtils.toDate(TestData.REFERENCE_DATE))
+                amount: 40d, datePurchased: TestData.REFERENCE_DATE)
         flushAndClear()
         loginAs(ben)
         LOG.info('Szenario: Gruppe {}, Owner {}, Ben {} (angemeldet); Einkauf Pizza 40.00 am {}', groupId, wg.owner.id,
@@ -531,7 +531,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
                 membershipEnd: DateUtils.toDate(austritt))
         def kaufdatum = austritt.minusDays(10)
         def dto = TestData.cartDto(groupId: groupId, categoryDto: TestData.categoryDto(wg.category),
-                datePurchased: DateUtils.toDate(kaufdatum))
+                datePurchased: kaufdatum)
         flushAndClear()
         loginAs(ehemalig)
         LOG.info('Szenario: Gruppe {}, Owner {}, Ehemaliger {} (angemeldet, Mitglied bis {}); Kaufdatum {}', groupId,
@@ -554,7 +554,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         def groupId = wg.group.id
         def kaufdatum = TestData.REFERENCE_DATE.minusYears(1).minusDays(1)
         def dto = TestData.cartDto(groupId: groupId, categoryDto: TestData.categoryDto(wg.category),
-                datePurchased: DateUtils.toDate(kaufdatum), recurrenceType: MONTHLY)
+                datePurchased: kaufdatum, recurrenceType: MONTHLY)
         flushAndClear()
         loginAs(ben)
         LOG.info('Szenario: Gruppe {}, Owner {}, Ben {} (angemeldet, Mitglied seit {}); Kaufdatum {}, MONTHLY', groupId,
@@ -576,7 +576,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         def wg = fixtures.group()
         def (groupId, ownerId, categoryId) = [wg.group.id, wg.owner.id, wg.category.id]
         def dto = TestData.cartDto(groupId: groupId, categoryDto: TestData.categoryDto(wg.category), title: 'Miete',
-                amount: 900d, datePurchased: DateUtils.toDate(testClock.today), recurrenceType: typ)
+                amount: 900d, datePurchased: testClock.today, recurrenceType: typ)
         flushAndClear()
         loginAs(wg.owner)
         LOG.info('Szenario: heute {}, Gruppe {}, Owner {} (angemeldet); Einkauf Miete 900.00 am {}, {}', testClock.today,
@@ -656,7 +656,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         benMembership.membershipEnd = benEnde ? DateUtils.toDate(benEnde) : null
         membershipRepository.save(benMembership)
         def dto = TestData.cartDto(groupId: groupId, categoryDto: TestData.categoryDto(wg.category), amount: 40d,
-                datePurchased: DateUtils.toDate(TestData.REFERENCE_DATE))
+                datePurchased: TestData.REFERENCE_DATE)
         flushAndClear()
         loginAs(wg.owner)
         LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), Ben {} (Beginn {}, Ende {}); Einkauf 40.00 am {}', groupId,
@@ -694,7 +694,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         fixtures.membership(wg, ben, membershipStart: DateUtils.toDate(LocalDate.of(2024, 6, 15)),
                 membershipEnd: DateUtils.toDate(LocalDate.of(2025, 5, 20)))
         def dto = TestData.cartDto(groupId: groupId, categoryDto: TestData.categoryDto(wg.category), amount: 40d,
-                datePurchased: DateUtils.toDate(kaufdatum))
+                datePurchased: kaufdatum)
         flushAndClear()
         loginAs(ben)
         LOG.info('Szenario: Gruppe {}, Owner {}, Ben {} (angemeldet, Mitglied 2024-06-15..2025-05-20 und ab 2025-06-01); ' +
@@ -726,7 +726,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         fixtures.membership(wg, ben, membershipStart: DateUtils.toDate(LocalDate.of(2024, 6, 15)),
                 membershipEnd: DateUtils.toDate(LocalDate.of(2025, 5, 20)))
         def dto = TestData.cartDto(groupId: groupId, categoryDto: TestData.categoryDto(wg.category),
-                datePurchased: DateUtils.toDate(kaufdatum))
+                datePurchased: kaufdatum)
         flushAndClear()
         loginAs(ben)
         LOG.info('Szenario: Gruppe {}, Owner {}, Ben {} (angemeldet, Mitglied 2024-06-15..2025-05-20 und ab 2025-06-01); ' +
@@ -836,7 +836,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         def template = fixtures.template(cart, recurrenceType: MONTHLY)
         def neuesDatum = TestData.REFERENCE_DATE.minusYears(1).minusDays(1)
         def dto = new CartDto(cart)
-        dto.datePurchased = DateUtils.toDate(neuesDatum)
+        dto.datePurchased = neuesDatum
         dto.templateUpdateSelected = true
         def (groupId, templateId) = [wg.group.id, template.id]
         flushAndClear()
@@ -1063,7 +1063,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         flushAndClear()
         loginAs(wg.owner)
         def paar = settlementService.addSettlementPayment(
-                new SettlementPaymentDto(30d, wg.group.id, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE)))
+                new SettlementPaymentDto(30d, wg.group.id, new UserDto(id: ben.id), TestData.REFERENCE_DATE))
         flushAndClear()
         def eigener = rolle == 'Zahler' ? paar[0] : paar[1]
         def bearbeiter = rolle == 'Zahler' ? wg.owner : ben
@@ -1097,7 +1097,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         flushAndClear()
         loginAs(wg.owner)
         def paar = settlementService.addSettlementPayment(
-                new SettlementPaymentDto(30d, wg.group.id, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE)))
+                new SettlementPaymentDto(30d, wg.group.id, new UserDto(id: ben.id), TestData.REFERENCE_DATE))
         flushAndClear()
         LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet) zahlt an Ben {}; Settlement {} mit Carts {}', wg.group.id,
                 wg.owner.id, ben.id, paar[0].settlementId, paar*.id)

@@ -63,7 +63,7 @@ class SettlementServiceIntegrationSpec extends IntegrationSpec {
         def (zahler, partner) = rolle == 'Gruppen-Owner' ? [anna, ben] : [ben, anna]
         def (groupId, zahlerId, partnerId, standardKategorieId) = [wg.group.id, zahler.id, partner.id, wg.category.id]
         def (zahlerName, partnerName) = [zahler.name, partner.name]
-        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: partnerId), DateUtils.toDate(TestData.REFERENCE_DATE))
+        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: partnerId), TestData.REFERENCE_DATE)
         flushAndClear()
         loginAs(zahler)
         LOG.info('Szenario: Locale de, Gruppe {} ohne Settlement-Kategorie (Standardkategorie {}), Owner {}, Mitglied {}; ' +
@@ -133,7 +133,7 @@ class SettlementServiceIntegrationSpec extends IntegrationSpec {
         def namensgleich = fixtures.category(wg, name: 'Ausgleichszahlung')
         def umbenannt = fixtures.category(wg, name: 'Rückzahlungen', settlement: true)
         def (groupId, namensgleichId, umbenanntId) = [wg.group.id, namensgleich.id, umbenannt.id]
-        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE))
+        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), TestData.REFERENCE_DATE)
         flushAndClear()
         loginAs(wg.owner)
         LOG.info('Szenario: Locale de, Gruppe {} mit ungekennzeichneter Kategorie {} "Ausgleichszahlung" und gekennzeichneter ' +
@@ -159,7 +159,7 @@ class SettlementServiceIntegrationSpec extends IntegrationSpec {
         def wg = fixtures.group(members: [ben])
         def vorhanden = fixtures.category(wg, name: 'Ausgleichszahlung', settlement: true)
         def (groupId, vorhandenId) = [wg.group.id, vorhanden.id]
-        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE))
+        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), TestData.REFERENCE_DATE)
         flushAndClear()
         loginAs(wg.owner)
         LOG.info('Szenario: Locale {}, Gruppe {} mit gekennzeichneter Kategorie {} "Ausgleichszahlung", Owner {} zahlt an Ben {}',
@@ -189,7 +189,7 @@ class SettlementServiceIntegrationSpec extends IntegrationSpec {
         def ben = fixtures.user(name: "Maximilian${TestData.nextId()}")
         def wg = fixtures.group(members: [ben])
         def (groupId, benName) = [wg.group.id, ben.name]
-        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE))
+        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), TestData.REFERENCE_DATE)
         flushAndClear()
         loginAs(wg.owner)
         LOG.info('Szenario: Locale de, Gruppe {}, Owner {} (angemeldet), Mitglied {} "{}" ({} Zeichen); Ausgleichszahlung an ihn',
@@ -211,7 +211,7 @@ class SettlementServiceIntegrationSpec extends IntegrationSpec {
         def ben = fixtures.user(name: "Ben${TestData.nextId()}")
         def wg = fixtures.group(members: [ben])
         def (groupId, ownerId, benId, ownerName, benName) = [wg.group.id, wg.owner.id, ben.id, wg.owner.name, ben.name]
-        def dto = new SettlementPaymentDto(25d, groupId, new UserDto(id: benId), DateUtils.toDate(TestData.REFERENCE_DATE))
+        def dto = new SettlementPaymentDto(25d, groupId, new UserDto(id: benId), TestData.REFERENCE_DATE)
         dto.payer = new UserDto(id: ownerId)
         flushAndClear()
         loginAs(userRepository.findById(benId).get())
@@ -243,7 +243,7 @@ class SettlementServiceIntegrationSpec extends IntegrationSpec {
         def cleo = fixtures.user()
         def wg = fixtures.group(members: [ben, cleo])
         def groupId = wg.group.id
-        def dto = new SettlementPaymentDto(25d, groupId, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE))
+        def dto = new SettlementPaymentDto(25d, groupId, new UserDto(id: ben.id), TestData.REFERENCE_DATE)
         dto.payer = new UserDto(id: wg.owner.id)
         flushAndClear()
         loginAs(userRepository.findById(cleo.id).get())
@@ -269,7 +269,7 @@ class SettlementServiceIntegrationSpec extends IntegrationSpec {
         def (zahler, empfaenger) = fall == 'Ausgleichszahlung an ein Nicht-Mitglied' ? [wg.owner, fremder] : [fremder, ben]
         def groupId = wg.group.id
         def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: empfaenger.id),
-                DateUtils.toDate(TestData.REFERENCE_DATE))
+                TestData.REFERENCE_DATE)
         flushAndClear()
         loginAs(zahler)
         LOG.info('Szenario: Gruppe {}, Owner {}, Ben {}, Fremder {}; angemeldet User {} zahlt an User {}', groupId,
@@ -298,7 +298,7 @@ class SettlementServiceIntegrationSpec extends IntegrationSpec {
         def membership = membershipRepository.findByGroupIdAndUserId(groupId, spaeter.id).first()
         membership.membershipStart = DateUtils.toDate(TestData.REFERENCE_DATE.plusDays(1))
         membershipRepository.save(membership)
-        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE))
+        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), TestData.REFERENCE_DATE)
         flushAndClear()
         loginAs(wg.owner)
         LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet, Sender), Ben {} (Empfänger); User {} Mitglied erst ab {}; ' +
@@ -327,7 +327,7 @@ class SettlementServiceIntegrationSpec extends IntegrationSpec {
         def empfaengerId = an == 'Ben' ? ben.id : wg.owner.id
         def dto = new SettlementPaymentDto(betrag, ohneGruppe ? null : groupId,
                 ohneEmpfaenger ? null : new UserDto(id: ohneEmpfaengerId ? null : empfaengerId),
-                ohneDatum ? null : DateUtils.toDate(TestData.REFERENCE_DATE))
+                ohneDatum ? null : TestData.REFERENCE_DATE)
         flushAndClear()
         loginAs(wg.owner)
         LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), Ben {}; Anfrage: Betrag {}, Gruppe {}, Empfänger {}, Datum {}',
@@ -366,7 +366,7 @@ class SettlementServiceIntegrationSpec extends IntegrationSpec {
         flushAndClear()
         loginAs(wg.owner)
         def paar = settlementService.addSettlementPayment(
-                new SettlementPaymentDto(30d, wg.group.id, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE)))
+                new SettlementPaymentDto(30d, wg.group.id, new UserDto(id: ben.id), TestData.REFERENCE_DATE))
         def settlementId = paar[0].settlementId
         flushAndClear()
         def loeschender = rolle == 'Zahler' ? wg.owner : ben
@@ -401,7 +401,7 @@ class SettlementServiceIntegrationSpec extends IntegrationSpec {
         flushAndClear()
         loginAs(wg.owner)
         def paar = settlementService.addSettlementPayment(
-                new SettlementPaymentDto(30d, wg.group.id, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE)))
+                new SettlementPaymentDto(30d, wg.group.id, new UserDto(id: ben.id), TestData.REFERENCE_DATE))
         def settlementId = paar[0].settlementId
         if (fall == 'Entfernter Empfänger') {
             entferne(wg.group.id, ben.id)
@@ -435,7 +435,7 @@ class SettlementServiceIntegrationSpec extends IntegrationSpec {
         flushAndClear()
         loginAs(wg.owner)
         def paar = settlementService.addSettlementPayment(
-                new SettlementPaymentDto(30d, wg.group.id, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE)))
+                new SettlementPaymentDto(30d, wg.group.id, new UserDto(id: ben.id), TestData.REFERENCE_DATE))
         def settlementId = paar[0].settlementId
         entferne(wg.group.id, ben.id)
         flushAndClear()
@@ -632,13 +632,13 @@ class SettlementServiceIntegrationSpec extends IntegrationSpec {
     private List<CartDto> anlegen(def zahler, def empfaenger, Long groupId, Double betrag) {
         loginAs(zahler)
         def paar = settlementService.addSettlementPayment(
-                new SettlementPaymentDto(betrag, groupId, new UserDto(id: empfaenger.id), DateUtils.toDate(TestData.REFERENCE_DATE)))
+                new SettlementPaymentDto(betrag, groupId, new UserDto(id: empfaenger.id), TestData.REFERENCE_DATE))
         flushAndClear()
         paar
     }
 
     private static SettlementPaymentDto dto(Long settlementId, Double betrag, Long empfaengerId, LocalDate datum) {
-        def dto = new SettlementPaymentDto(betrag, null, new UserDto(id: empfaengerId), DateUtils.toDate(datum))
+        def dto = new SettlementPaymentDto(betrag, null, new UserDto(id: empfaengerId), datum)
         dto.id = settlementId
         dto
     }

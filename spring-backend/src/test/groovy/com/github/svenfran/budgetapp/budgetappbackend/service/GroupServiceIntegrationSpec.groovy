@@ -637,9 +637,9 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
         flushAndClear()
         loginAs(wg.owner)
         def carts = settlementService.addSettlementPayment(
-                new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), DateUtils.toDate(REFERENCE_DATE)))
+                new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), REFERENCE_DATE))
         def andereCarts = settlementService.addSettlementPayment(
-                new SettlementPaymentDto(20d, andereGroupId, new UserDto(id: ben.id), DateUtils.toDate(REFERENCE_DATE)))
+                new SettlementPaymentDto(20d, andereGroupId, new UserDto(id: ben.id), REFERENCE_DATE))
         def (settlementId, andereSettlementId) = [carts[0].settlementId, andereCarts[0].settlementId]
         flushAndClear()
         LOG.info('Szenario: Gruppe {} (Owner {} angemeldet, Ben {}) mit Settlement {} (Carts {}); Gruppe {} mit Settlement {} (Carts {})',
@@ -845,7 +845,7 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
         loginAs(wg.owner)
         if (buchung == 'Ausgabe') fixtures.cart(wg)
         if (buchung == 'Ausgleichszahlung') settlementService.addSettlementPayment(
-                new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), DateUtils.toDate(REFERENCE_DATE)))
+                new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), REFERENCE_DATE))
         if (buchung == 'nur gelöschten Einkäufen') fixtures.cart(wg, user: ben, deleted: true)
         flushAndClear()
         LOG.info('Szenario: Gruppe {} (EUR) mit {}, Owner {} (angemeldet); Wechsel auf USD mit neuem Namen, confirmCurrencyChange {}',
@@ -904,7 +904,7 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
         flushAndClear()
         loginAs(wg.owner)
         def zahlung = settlementService.addSettlementPayment(
-                new SettlementPaymentDto(30.5d, groupId, new UserDto(id: ben.id), DateUtils.toDate(REFERENCE_DATE)))
+                new SettlementPaymentDto(30.5d, groupId, new UserDto(id: ben.id), REFERENCE_DATE))
         flushAndClear()
         def settlementId = zahlung[0].settlementId
         def cartIds = [einkauf.id] + zahlung*.id

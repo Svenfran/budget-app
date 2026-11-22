@@ -74,7 +74,7 @@ class SettlementTransactionIntegrationSpec extends IntegrationSpec {
         def groupId = wg.group.id
         loginAs(wg.owner)
         installiereTrigger('cart', 'BEFORE INSERT', 'NEW.settlement_id IS NOT NULL AND NEW.amount < 0')
-        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE))
+        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), TestData.REFERENCE_DATE)
         LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet) zahlt 30.00 an Ben {}; Trigger lehnt Insert des Empfänger-Carts ab',
                 groupId, wg.owner.id, ben.id)
 
@@ -102,7 +102,7 @@ class SettlementTransactionIntegrationSpec extends IntegrationSpec {
         def groupId = wg.group.id
         loginAs(wg.owner)
         def paar = settlementService.addSettlementPayment(
-                new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE)))
+                new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), TestData.REFERENCE_DATE))
         def settlementId = paar[0].settlementId
         installiereTrigger('settlement', 'BEFORE DELETE', 'true')
         LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet) zahlte an Ben {}; Settlement {} mit Carts {}; Trigger lehnt Settlement-Delete ab',
@@ -131,7 +131,7 @@ class SettlementTransactionIntegrationSpec extends IntegrationSpec {
         def groupId = wg.group.id
         loginAs(wg.owner)
         def paar = settlementService.addSettlementPayment(
-                new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE)))
+                new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), TestData.REFERENCE_DATE))
         def settlementId = paar[0].settlementId
         LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet) zahlte an Ben {}; Settlement {} mit Carts {}', groupId,
                 wg.owner.id, ben.id, settlementId, paar*.id)
@@ -193,7 +193,7 @@ class SettlementTransactionIntegrationSpec extends IntegrationSpec {
         def groupId = wg.group.id
         loginAs(wg.owner)
         def paar = settlementService.addSettlementPayment(
-                new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE)))
+                new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), TestData.REFERENCE_DATE))
         def settlementId = paar[0].settlementId
         installiereZaehlTrigger()
         LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet) zahlte 30.00 an Ben {}; Settlement {} mit Carts {}; Trigger wirft beim 2. Cart-Update',
@@ -221,7 +221,7 @@ class SettlementTransactionIntegrationSpec extends IntegrationSpec {
         def wg = fixtures.group(members: [ben])
         loginAs(wg.owner)
         def paar = settlementService.addSettlementPayment(
-                new SettlementPaymentDto(30d, wg.group.id, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE)))
+                new SettlementPaymentDto(30d, wg.group.id, new UserDto(id: ben.id), TestData.REFERENCE_DATE))
         def settlementId = paar[0].settlementId
         SecurityContextHolder.clearContext()
         LOG.info('Szenario: Gruppe {}, Settlement {} (Owner {} -> Ben {}, 30.00); T1 Owner -> 40.00 hält offen, T2 Ben -> 50.00 am Vortag',
@@ -250,7 +250,7 @@ class SettlementTransactionIntegrationSpec extends IntegrationSpec {
         def wg = fixtures.group(members: [ben])
         loginAs(wg.owner)
         def paar = settlementService.addSettlementPayment(
-                new SettlementPaymentDto(30d, wg.group.id, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE)))
+                new SettlementPaymentDto(30d, wg.group.id, new UserDto(id: ben.id), TestData.REFERENCE_DATE))
         def settlementId = paar[0].settlementId
         SecurityContextHolder.clearContext()
         LOG.info('Szenario: Gruppe {}, Settlement {}; T1 Owner {} löscht und hält offen, T2 Ben {} ändert auf 50.00', wg.group.id,
@@ -276,7 +276,7 @@ class SettlementTransactionIntegrationSpec extends IntegrationSpec {
         def wg = fixtures.group(members: [ben])
         loginAs(wg.owner)
         def paar = settlementService.addSettlementPayment(
-                new SettlementPaymentDto(10d, wg.group.id, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE)))
+                new SettlementPaymentDto(10d, wg.group.id, new UserDto(id: ben.id), TestData.REFERENCE_DATE))
         def settlementId = paar[0].settlementId
         SecurityContextHolder.clearContext()
         def aendern = { settlementService.updateSettlementPayment(aenderung(settlementId, 20d, ben.id)) }
@@ -310,7 +310,7 @@ class SettlementTransactionIntegrationSpec extends IntegrationSpec {
 
     private static SettlementPaymentDto aenderung(Long settlementId, Double betrag, Long empfaengerId,
                                                   java.time.LocalDate datum = TestData.REFERENCE_DATE) {
-        def dto = new SettlementPaymentDto(betrag, null, new UserDto(id: empfaengerId), DateUtils.toDate(datum))
+        def dto = new SettlementPaymentDto(betrag, null, new UserDto(id: empfaengerId), datum)
         dto.id = settlementId
         dto
     }

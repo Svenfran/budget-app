@@ -666,7 +666,7 @@ class StatisticsServiceIntegrationSpec extends IntegrationSpec {
     /** Ausgleichszahlung über SettlementService, wie sie die App anlegt (Sender- und Empfänger-Cart). */
     private void zahlung(User von, User an, Double betrag, GroupScenario wg, LocalDate tag) {
         loginAs(userRepository.findById(von.id).get())
-        settlementService.addSettlementPayment(new SettlementPaymentDto(betrag, wg.group.id, new UserDto(an), DateUtils.toDate(tag)))
+        settlementService.addSettlementPayment(new SettlementPaymentDto(betrag, wg.group.id, new UserDto(an), tag))
         flushAndClear()
         LOG.info('settlementService.addSettlementPayment(User {} an User {}, {})', von.id, an.id, betrag)
     }

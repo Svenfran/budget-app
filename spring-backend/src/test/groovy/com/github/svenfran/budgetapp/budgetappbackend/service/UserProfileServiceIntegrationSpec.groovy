@@ -60,7 +60,7 @@ class UserProfileServiceIntegrationSpec extends IntegrationSpec {
         flushAndClear()
         loginAs(wg.owner)
         def carts = settlementService.addSettlementPayment(
-                new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE)))
+                new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), TestData.REFERENCE_DATE))
         def settlementId = carts[0].settlementId
         flushAndClear()
         LOG.info('Szenario: Nutzer {} (angemeldet) ist Owner von Gruppe {} mit Mitglied {} und Settlement {} (Carts {})',

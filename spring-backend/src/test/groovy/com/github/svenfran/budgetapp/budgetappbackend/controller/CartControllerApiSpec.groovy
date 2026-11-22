@@ -1,7 +1,10 @@
 package com.github.svenfran.budgetapp.budgetappbackend.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.github.svenfran.budgetapp.budgetappbackend.entity.Cart
+import com.github.svenfran.budgetapp.budgetappbackend.entity.Settlement
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User
+import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.ApiRequests
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
@@ -9,6 +12,8 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.mock.web.MockHttpServletResponse
+
+import java.time.LocalDate
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
@@ -120,6 +125,137 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
         then:
         response.status == 400
         response.contentAsString.contains('not within membership period')
+    }
+
+    // ----- DIV-81: Kaufdatum als Kalendertag -----
+
+    def "Kaufdatum wird in allen Antworten als Kalendertag YYYY-MM-DD übertragen"() {
+        given: 'Einkauf vom 15.06.2025, Ben ist Mitglied'
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def cart = fixtures.cart(wg, title: 'Pizza', amount: 20d)
+        def (groupId, cartId, benId) = [wg.group.id, cart.id, ben.id]
+        def cartBody = [title: 'Pizza', amount: 20, datePurchased: '2025-06-15', groupId: groupId,
+                        categoryDto: [id: wg.category.id]]
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), Ben {}, Einkauf {} vom 2025-06-15', groupId, wg.owner.id,
+                benId, cartId)
+
+        when:
+        def einzeln = json(send(get('/api/carts/{id}', cartId), user: wg.owner))
+        def liste = json(send(get('/api/carts/carts-by-groupid/{id}', groupId), user: wg.owner))
+        def angelegt = json(send(post('/api/carts/add'), user: wg.owner, body: cartBody))
+        def geaendert = json(send(put('/api/carts/update'), user: wg.owner, body: cartBody + [id: cartId, amount: 25]))
+        def zahlung = json(addSettlement(wg.owner, [amount: 30, groupId: groupId, member: [id: benId], datePurchased: '2025-06-15']))
+        def zahlungGeaendert = json(updateSettlement(wg.owner, [id: zahlung[0].settlementId, amount: 35, member: [id: benId],
+                                                                datePurchased: '2025-06-15']))
+        LOG.info('Antwort datePurchased: GET {}, Liste {}, add {}, update {}, Ausgleich add {}, Ausgleich update {}',
+                einzeln.datePurchased, liste*.datePurchased, angelegt.datePurchased, geaendert.datePurchased,
+                zahlung*.datePurchased, zahlungGeaendert*.datePurchased)
+
+        then: 'Regression F-01: bisher "2025-06-15T00:00:00.000+00:00"'
+        einzeln.datePurchased == '2025-06-15'
+        liste*.datePurchased == ['2025-06-15']
+        angelegt.datePurchased == '2025-06-15'
+        geaendert.datePurchased == '2025-06-15'
+        zahlung*.datePurchased == ['2025-06-15', '2025-06-15']
+        zahlungGeaendert*.datePurchased == ['2025-06-15', '2025-06-15']
+    }
+
+    def "#endpoint nimmt das Kaufdatum im Format #datum an und speichert den 15.06.2025"() {
+        given: 'alte App-Versionen senden einen UTC-Zeitstempel, neue den Kalendertag'
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def cart = fixtures.cart(wg, title: 'Pizza', amount: 20d, datePurchased: DateUtils.toDate(LocalDate.of(2025, 6, 1)))
+        def settlementId = endpoint == 'PUT /api/carts/settlement-payment/update'
+                ? json(addSettlement(wg.owner, [amount: 30, groupId: wg.group.id, member: [id: ben.id],
+                                                datePurchased: '2025-06-01']))[0].settlementId as Long
+                : null
+        def (groupId, cartId, benId, categoryId) = [wg.group.id, cart.id, ben.id, wg.category.id]
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), Ben {}, Einkauf {} vom 2025-06-01, Settlement {}; {} mit {}',
+                groupId, wg.owner.id, benId, cartId, settlementId, endpoint, datum)
+
+        when:
+        def cartBody = [title: 'Pizza', amount: 20, datePurchased: datum, groupId: groupId, categoryDto: [id: categoryId]]
+        def response
+        switch (endpoint) {
+            case 'POST /api/carts/add':
+                response = send(post('/api/carts/add'), user: wg.owner, body: cartBody)
+                break
+            case 'PUT /api/carts/update':
+                response = send(put('/api/carts/update'), user: wg.owner, body: cartBody + [id: cartId])
+                break
+            case 'POST /api/carts/settlement-payment/add':
+                response = addSettlement(wg.owner, [amount: 30, groupId: groupId, member: [id: benId], datePurchased: datum])
+                break
+            default:
+                response = updateSettlement(wg.owner, [id: settlementId, amount: 30, member: [id: benId], datePurchased: datum])
+        }
+        def antwort = json(response)
+        def antwortTage = antwort instanceof List ? antwort*.datePurchased : [antwort.datePurchased]
+        flushAndClear()
+        def gespeicherteTage = (antwort instanceof List ? antwort*.id : [antwort.id]).collect {
+            DateUtils.toLocalDate(entityManager.find(Cart, it as Long).datePurchased)
+        }
+        def settlementTag = antwort instanceof List
+                ? DateUtils.toLocalDate(entityManager.find(Settlement, antwort[0].settlementId as Long).datePurchased)
+                : null
+        LOG.info('Antwort {}: datePurchased {}; gespeichert Carts {}, Settlement {}', response.status, antwortTage,
+                gespeicherteTage, settlementTag)
+
+        then: 'Cart-Endpunkte antworten mit 201, Ausgleichszahlungen mit 200 (Ist-Verhalten)'
+        response.status == (endpoint.contains('settlement-payment') ? 200 : 201)
+        antwortTage.every { it == '2025-06-15' }
+        gespeicherteTage.every { it == LocalDate.of(2025, 6, 15) }
+        settlementTag == null || settlementTag == LocalDate.of(2025, 6, 15)
+
+        where:
+        [endpoint, datum] << [['POST /api/carts/add', 'PUT /api/carts/update', 'POST /api/carts/settlement-payment/add',
+                               'PUT /api/carts/settlement-payment/update'],
+                              ['2025-06-15', '2025-06-15T00:00:00.000Z']].combinations()
+    }
+
+    def "Bearbeiten eines Einkaufs mit unverändertem Kaufdatum lässt den Kalendertag unverändert"() {
+        given:
+        def wg = fixtures.group()
+        def cart = fixtures.cart(wg, title: 'Pizza', amount: 20d, datePurchased: DateUtils.toDate(LocalDate.of(2026, 11, 15)))
+        def cartId = cart.id
+        def gelesen = json(send(get('/api/carts/{id}', cartId), user: wg.owner))
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), Einkauf {}; gelesen datePurchased {}', wg.group.id,
+                wg.owner.id, cartId, gelesen.datePurchased)
+
+        when: 'die App schickt das gelesene Datum unverändert zurück und ändert nur den Betrag'
+        def response = send(put('/api/carts/update'), user: wg.owner, body: gelesen + [amount: 25])
+        LOG.info('Antwort {}: datePurchased {}', response.status, json(response).datePurchased)
+        flushAndClear()
+        def gespeichert = entityManager.find(Cart, cartId)
+
+        then:
+        response.status == 201
+        DateUtils.toLocalDate(gespeichert.datePurchased) == LocalDate.of(2026, 11, 15)
+        gespeichert.amount == 25d
+    }
+
+    def "Bearbeiten einer Ausgleichszahlung mit unverändertem Kaufdatum lässt den Kalendertag unverändert"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def benId = ben.id
+        def paar = json(addSettlement(wg.owner, [amount: 30, groupId: wg.group.id, member: [id: benId], datePurchased: '2026-11-15']))
+        def settlementId = paar[0].settlementId as Long
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet) zahlte an Ben {}; Settlement {}, gelesen datePurchased {}',
+                wg.group.id, wg.owner.id, benId, settlementId, paar*.datePurchased)
+
+        when: 'die App schickt das gelesene Datum unverändert zurück und ändert nur den Betrag'
+        def response = updateSettlement(wg.owner, [id: settlementId, amount: 42.5, member: [id: benId],
+                                                   datePurchased: paar[0].datePurchased])
+        LOG.info('Antwort {}: datePurchased {}', response.status, json(response)*.datePurchased)
+        flushAndClear()
+
+        then:
+        response.status == 200
+        DateUtils.toLocalDate(entityManager.find(Settlement, settlementId).datePurchased) == LocalDate.of(2026, 11, 15)
+        paar*.id.collect { DateUtils.toLocalDate(entityManager.find(Cart, it as Long).datePurchased) } ==
+                [LocalDate.of(2026, 11, 15), LocalDate.of(2026, 11, 15)]
     }
 
     // ----- DIV-77: Cart-Betrag höchstens zwei Nachkommastellen -----
