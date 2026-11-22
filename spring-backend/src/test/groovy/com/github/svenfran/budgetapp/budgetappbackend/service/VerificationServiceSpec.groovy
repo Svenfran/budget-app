@@ -381,6 +381,18 @@ class VerificationServiceSpec extends Specification {
         ergebnis = erlaubt ? 'akzeptiert' : 'abgelehnt'
     }
 
+    def "Fehlendes Kaufdatum wird mit eigener Meldung abgelehnt"() {
+        given:
+        def gmh = [TestData.membership(membershipStart: DateUtils.toDate(BEGINN), membershipEnd: null)]
+
+        when:
+        service.verifyDatePurchasedWithinMembershipPeriod(gmh, null)
+
+        then:
+        def fehler = thrown(DatePurchasedNotWithinMembershipPeriodException)
+        fehler.message == 'Date purchased is required'
+    }
+
     // ----- Ausgleichszahlung (DIV-74) -----
 
     def "Gültige Ausgleichszahlung (Betrag #betrag) wird akzeptiert"() {

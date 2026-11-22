@@ -258,6 +258,34 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
                 [LocalDate.of(2026, 11, 15), LocalDate.of(2026, 11, 15)]
     }
 
+    def "#endpoint ohne Kaufdatum: 400 statt 500, nichts gespeichert"() {
+        given: 'Einkauf vom 15.06.2025 über 20.00'
+        def wg = fixtures.group()
+        def cart = fixtures.cart(wg, title: 'Pizza', amount: 20d)
+        def (groupId, cartId) = [wg.group.id, cart.id]
+        def body = [title: 'Pizza', amount: 25, groupId: groupId, categoryDto: [id: wg.category.id]] +
+                (endpoint == 'PUT /api/carts/update' ? [id: cartId] : [:])
+        def request = endpoint == 'PUT /api/carts/update' ? put('/api/carts/update') : post('/api/carts/add')
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), Einkauf {} (20.00, 2025-06-15); {} ohne datePurchased',
+                groupId, wg.owner.id, cartId, endpoint)
+
+        when:
+        def response = send(request, user: wg.owner, body: body)
+        LOG.info('Antwort: {}', response.contentAsString)
+        def carts = json(send(get('/api/carts/carts-by-groupid/{id}', groupId), user: wg.owner))
+        LOG.info('Einkäufe der Gruppe danach: Ids {}, Beträge {}, Daten {}', carts*.id, carts*.amount, carts*.datePurchased)
+
+        then: 'Regression: bisher NullPointerException → 500'
+        response.status == 400
+        response.contentAsString == 'Date purchased is required'
+        carts*.id == [cartId]
+        carts*.amount == [20]
+        carts*.datePurchased == ['2025-06-15']
+
+        where:
+        endpoint << ['POST /api/carts/add', 'PUT /api/carts/update']
+    }
+
     // ----- DIV-77: Cart-Betrag höchstens zwei Nachkommastellen -----
 
     def "#endpoint mit Betrag #betrag: #status"() {

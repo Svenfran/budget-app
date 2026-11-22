@@ -147,6 +147,10 @@ public class VerificationService {
     }
 
     public void verifyDatePurchasedWithinMembershipPeriod (List<GroupMembershipHistory> gmh, LocalDate datePurchased) throws DatePurchasedNotWithinMembershipPeriodException {
+        // DIV-81: fehlendes Kaufdatum → 400 statt NPE/500. Eigene Meldung ohne 'not within membership period' (M1).
+        if (datePurchased == null) {
+            throw new DatePurchasedNotWithinMembershipPeriodException("Date purchased is required");
+        }
         for (var timePeriod : gmh) {
             var startDate = toLocalDate(timePeriod.getMembershipStart());
             var endDate = timePeriod.getMembershipEnd() != null ? toLocalDate(timePeriod.getMembershipEnd()) : null;
