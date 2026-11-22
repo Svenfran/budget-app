@@ -74,7 +74,7 @@ describe('settlement-form (DIV-70)', () => {
   describe('toSettlementPaymentDto', () => {
     const longName = aUser({ userName: 'Maximilian Mustermann' });
 
-    it('baut den Request wie bisher: voller Name, Betrag unverändert, Datum als Mitternacht UTC', () => {
+    it('baut den Request: voller Name, Betrag unverändert, Datum als ISO-Tag (DIV-81)', () => {
       const dto = toSettlementPaymentDto(
         { amount: 25.5, memberId: longName.id, datePurchased: '2025-02-01' }, 7, [longName]);
 
@@ -82,9 +82,8 @@ describe('settlement-form (DIV-70)', () => {
         amount: 25.5,
         groupId: 7,
         member: { id: longName.id, userName: 'Maximilian Mustermann' },
-        datePurchased: new Date('2025-02-01'),
+        datePurchased: '2025-02-01',
       });
-      expect(dto.datePurchased.toISOString()).toBe('2025-02-01T00:00:00.000Z');
     });
 
     it('Owner als Empfänger', () => {
@@ -96,7 +95,7 @@ describe('settlement-form (DIV-70)', () => {
     it('Empfänger nicht mehr in der Liste: kein Fehler, leerer Name, übrige Felder unverändert', () => {
       const dto = toSettlementPaymentDto({ amount: 10, memberId: 999, datePurchased: '2025-02-01' }, 1, [anna]);
       expect(dto).toEqual({
-        amount: 10, groupId: 1, member: { id: 999, userName: '' }, datePurchased: new Date('2025-02-01'),
+        amount: 10, groupId: 1, member: { id: 999, userName: '' }, datePurchased: '2025-02-01',
       });
     });
   });
@@ -157,7 +156,7 @@ describe('settlement-form (DIV-70)', () => {
       const dto = toSettlementPaymentDto({ amount: 30, memberId: ben.id, datePurchased: '2025-06-10' }, 7, [ben], { settlementId: 70 });
 
       expect(dto).toEqual({
-        id: 70, amount: 30, groupId: 7, member: { id: ben.id, userName: 'Ben' }, datePurchased: new Date('2025-06-10'),
+        id: 70, amount: 30, groupId: 7, member: { id: ben.id, userName: 'Ben' }, datePurchased: '2025-06-10',
       });
     });
 
@@ -169,7 +168,7 @@ describe('settlement-form (DIV-70)', () => {
           { receivedBy: ich });
 
         expect(dto).toEqual({
-          payer: { id: ben.id, userName: 'Ben' }, amount: 25, groupId: 7, member: ich, datePurchased: new Date('2025-06-10'),
+          payer: { id: ben.id, userName: 'Ben' }, amount: 25, groupId: 7, member: ich, datePurchased: '2025-06-10',
         });
       });
 
@@ -191,8 +190,8 @@ describe('settlement-form (DIV-70)', () => {
     });
 
     describe('settlementEditData', () => {
-      const zahlerCart = aCart({ id: 1, amount: 30, userDto: anna, settlementId: 70, datePurchased: '2025-06-10' as unknown as Date });
-      const empfaengerCart = aCart({ id: 2, amount: -30, userDto: ben, settlementId: 70, datePurchased: '2025-06-10' as unknown as Date });
+      const zahlerCart = aCart({ id: 1, amount: 30, userDto: anna, settlementId: 70, datePurchased: '2025-06-10' });
+      const empfaengerCart = aCart({ id: 2, amount: -30, userDto: ben, settlementId: 70, datePurchased: '2025-06-10' });
       const andere = aCart({ id: 3, amount: 12, userDto: anna, settlementId: 71 });
 
       it('aus dem eigenen Zahler-Cart: Rolle Zahler, Parteien aus dem Paar, Betrag positiv, ISO-Tag', () => {
@@ -200,6 +199,13 @@ describe('settlement-form (DIV-70)', () => {
           id: 70, role: 'payer', payer: { id: anna.id, userName: 'Anna' }, receiver: { id: ben.id, userName: 'Ben' },
           amount: 30, datePurchased: '2025-06-10',
         });
+      });
+
+      it('übernimmt das Kaufdatum unverändert, auch am Jahresende (DIV-81, AC 5)', () => {
+        const zahler = { ...zahlerCart, datePurchased: '2026-12-31' };
+        const empfaenger = { ...empfaengerCart, datePurchased: '2026-12-31' };
+
+        expect(settlementEditData(zahler, [zahler, empfaenger])?.datePurchased).toBe('2026-12-31');
       });
 
       it('aus dem eigenen Empfänger-Cart: Rolle Empfänger, Zahler ist der User des positiven Carts', () => {

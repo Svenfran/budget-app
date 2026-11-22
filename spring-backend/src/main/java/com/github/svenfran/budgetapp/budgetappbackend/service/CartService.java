@@ -76,7 +76,7 @@ public class CartService {
         verificationService.verifyCategoryIsNotSettlement(category);
         verificationService.verifyDatePurchasedWithinMembershipPeriod(gmh, cartDto.getDatePurchased());
         verificationService.verifyCartAmountHasAtMostTwoDecimals(cartDto.getAmount());
-        var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(cartDto.getDatePurchased(), group.getId());
+        var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(asDate(cartDto.getDatePurchased()), group.getId());
         var cart = cartDtoMapper.cartDtoToEntity(cartDto, category, user, group, groupMemberCount);
         // Neuanlage erzwingen (DIV-73): mit gesetzter ID würde save() per merge einen bestehenden, auch fremden Cart
         // überschreiben – ohne Eigentümerprüfung. Der Mapper behält die ID, weil updateCart sie braucht.
@@ -99,7 +99,7 @@ public class CartService {
         var category = dataLoaderService.loadCategory(cartDto.getCategoryDto().getId());
         verificationService.verifyCategoryIsNotSettlement(category);
         verificationService.verifyCartAmountHasAtMostTwoDecimals(cartDto.getAmount());
-        var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(cartDto.getDatePurchased(), group.getId());
+        var groupMemberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(asDate(cartDto.getDatePurchased()), group.getId());
         return updateCartAndTemplateIfValid(cart, cartDto, user, group, category, groupMemberCount);
     }
 
@@ -229,7 +229,7 @@ public class CartService {
         newTemplate.setActive(true);
         newTemplate.setStartDate(LocalDate.now(clock));
         // cart trägt hier noch Kaufdatum und Template vor der Bearbeitung
-        var datePurchased = asLocalDate(cartDto.getDatePurchased());
+        var datePurchased = cartDto.getDatePurchased();
         var anchorDay = resolveAnchorDay(datePurchased, cart);
         newTemplate.setAnchorDay(anchorDay);
         newTemplate.setNextExecutionDate(
@@ -317,7 +317,7 @@ public class CartService {
         if (!Objects.equals(dto.getTitle(), entity.getTitle())) return true;
         if (!Objects.equals(dto.getDescription(), entity.getDescription())) return true;
         if (!Objects.equals(dto.getAmount(), entity.getAmount())) return true;
-        if (!Objects.equals(asLocalDate(dto.getDatePurchased()), asLocalDate(entity.getDatePurchased()))) return true;
+        if (!Objects.equals(dto.getDatePurchased(), asLocalDate(entity.getDatePurchased()))) return true;
         if (!Objects.equals(dto.getCategoryDto().getId(), entity.getCategory().getId())) return true;
 
         return false;
@@ -338,7 +338,7 @@ public class CartService {
         if (!Objects.equals(tpl.getCategoryId(), dto.getCategoryDto().getId())) return true;
         // Ohne Wiederholung gibt es kein Folgedatum
         if (newType != RecurrenceType.NONE) {
-            var datePurchased = asLocalDate(dto.getDatePurchased());
+            var datePurchased = dto.getDatePurchased();
             var anchorDay = resolveAnchorDay(datePurchased, cart);
             var nextDate = RecurrenceCalculator.firstOccurrenceAfter(datePurchased, newType, anchorDay, LocalDate.now(clock));
             if (!Objects.equals(tpl.getNextExecutionDate(), nextDate)) return true;

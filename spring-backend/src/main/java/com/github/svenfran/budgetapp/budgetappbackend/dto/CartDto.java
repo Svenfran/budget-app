@@ -2,10 +2,10 @@ package com.github.svenfran.budgetapp.budgetappbackend.dto;
 
 import com.github.svenfran.budgetapp.budgetappbackend.constants.RecurrenceType;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Cart;
+import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils;
 
 import javax.validation.constraints.NotNull;
 import java.time.LocalDate;
-import java.util.Date;
 
 public class CartDto {
 
@@ -13,7 +13,8 @@ public class CartDto {
     private String title;
     private String description;
     private Double amount;
-    private Date datePurchased;
+    // Fachlicher Kalendertag (DIV-81): JSON "YYYY-MM-DD"; Requests im alten Format "…T00:00:00.000Z" werden als UTC-Tag gelesen.
+    private LocalDate datePurchased;
     @NotNull
     private Long groupId;
     private UserDto userDto;
@@ -33,7 +34,7 @@ public class CartDto {
         this.title = cart.getTitle();
         this.description = cart.getDescription();
         this.amount = cart.getAmount();
-        this.datePurchased = cart.getDatePurchased();
+        this.datePurchased = cart.getDatePurchased() != null ? DateUtils.toLocalDate(cart.getDatePurchased()) : null;
         this.groupId = cart.getGroup().getId();
         this.userDto = new UserDto(cart.getUser());
         this.categoryDto = new CategoryDto(cart.getCategory());
@@ -72,11 +73,11 @@ public class CartDto {
         this.description = description;
     }
 
-    public Date getDatePurchased() {
+    public LocalDate getDatePurchased() {
         return datePurchased;
     }
 
-    public void setDatePurchased(Date datePurchased) {
+    public void setDatePurchased(LocalDate datePurchased) {
         this.datePurchased = datePurchased;
     }
 

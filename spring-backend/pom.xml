@@ -211,6 +211,8 @@
 						<exclude>**/*ApiSpec.*</exclude>
 					</excludes>
 					<useModulePath>false</useModulePath>
+					<!-- DIV-81: Tests laufen wie Prod in UTC (unabhängig von der Zeitzone des Rechners) -->
+					<argLine>-Duser.timezone=UTC</argLine>
 				</configuration>
 			</plugin>
 
@@ -225,6 +227,8 @@
 						<include>**/*ApiSpec.*</include>
 					</includes>
 					<useModulePath>false</useModulePath>
+					<!-- DIV-81: Tests laufen wie Prod in UTC (unabhängig von der Zeitzone des Rechners) -->
+					<argLine>-Duser.timezone=UTC</argLine>
 				</configuration>
 				<executions>
 					<execution>

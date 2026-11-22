@@ -10,6 +10,13 @@ import { UserDto } from 'src/app/model/user-dto';
 
 // Festes Datum für alle Testdaten – Tests hängen nie von der aktuellen Uhrzeit ab.
 export const REFERENCE_DATE = new Date('2025-06-15T00:00:00Z');
+/** `REFERENCE_DATE` als ISO-Kalendertag, wie das Backend Kaufdaten liefert (DIV-81). */
+export const REFERENCE_DAY = '2025-06-15';
+/**
+ * Lokale Mittagszeit an `REFERENCE_DAY` für die Testuhr, wenn „heute“ der 15.06.2025 sein soll – in jeder Zeitzone
+ * (`REFERENCE_DATE` ist UTC-Mitternacht und in Mexiko noch der 14.06., DIV-81).
+ */
+export const REFERENCE_NOON = new Date(2025, 5, 15, 12, 0);
 
 let sequence = 0;
 const nextId = () => ++sequence;
@@ -46,7 +53,7 @@ export function aCart(overrides: Partial<Cart> = {}): Cart {
     title: 'Einkauf',
     description: 'Wocheneinkauf',
     amount: 40,
-    datePurchased: REFERENCE_DATE,
+    datePurchased: REFERENCE_DAY,
     groupId: 1,
     userDto: aUser(),
     categoryDto: aCategory(),

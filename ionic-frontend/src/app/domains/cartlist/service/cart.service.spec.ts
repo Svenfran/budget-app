@@ -137,12 +137,12 @@ describe('CartService', () => {
 
   describe('addCart', () => {
     it('fügt einen neuen Einkauf nach dem Speichern sortiert in beide Listen ein und meldet die Änderung', () => {
-      const older = aCart({ id: 1, datePurchased: new Date('2025-01-01') });
-      const filteredOut = aCart({ id: 3, datePurchased: new Date('2025-03-01') });
+      const older = aCart({ id: 1, datePurchased: '2025-01-01' });
+      const filteredOut = aCart({ id: 3, datePurchased: '2025-03-01' });
       service.cartList.set([older]);
       service.initCartList.set([older, filteredOut]);
       const updatesBefore = service.cartUpdated();
-      const newCart = aCart({ id: null, title: 'Pizza', datePurchased: new Date('2025-02-01') });
+      const newCart = aCart({ id: null, title: 'Pizza', datePurchased: '2025-02-01' });
 
       service.addCart(newCart);
       const req = http.expectOne(`${api}/add`);
@@ -191,13 +191,13 @@ describe('CartService', () => {
 
   describe('updateCart', () => {
     it('ersetzt den Einkauf nach dem Speichern in beiden Listen, sortiert neu und meldet die Änderung', () => {
-      const newest = aCart({ id: 1, datePurchased: new Date('2025-03-01') });
-      const edited = aCart({ id: 2, title: 'Alt', datePurchased: new Date('2025-02-01') });
-      const filteredOut = aCart({ id: 3, datePurchased: new Date('2025-01-01') });
+      const newest = aCart({ id: 1, datePurchased: '2025-03-01' });
+      const edited = aCart({ id: 2, title: 'Alt', datePurchased: '2025-02-01' });
+      const filteredOut = aCart({ id: 3, datePurchased: '2025-01-01' });
       service.cartList.set([newest, edited]);
       service.initCartList.set([newest, edited, filteredOut]);
       const updatesBefore = service.cartUpdated();
-      const changed = { ...edited, title: 'Neu', datePurchased: new Date('2025-04-01') };
+      const changed = { ...edited, title: 'Neu', datePurchased: '2025-04-01' };
 
       service.updateCart(changed);
       const req = http.expectOne(`${api}/update`);
@@ -239,11 +239,11 @@ describe('CartService', () => {
       it(c.name, () => {
         const edited = aCart({
           id: 1, recurrenceType: RECURRENCE_TYPE.MONTHLY, hasActiveTemplate: true, templateId: 50,
-          datePurchased: new Date('2025-02-01'),
+          datePurchased: '2025-02-01',
         });
         const sibling = aCart({
           id: 2, recurrenceType: RECURRENCE_TYPE.MONTHLY, hasActiveTemplate: true, templateId: c.siblingTemplateId,
-          datePurchased: new Date('2025-01-01'),
+          datePurchased: '2025-01-01',
         });
         service.cartList.set([edited, sibling]);
         service.initCartList.set([edited, sibling]);
@@ -317,17 +317,17 @@ describe('CartService', () => {
   describe('updateSettlementPayment (DIV-74)', () => {
     const group = aGroup({ id: 7 });
     const payment = (): SettlementPaymentDto => ({
-      id: 70, amount: 45, groupId: 7, member: aUser({ userName: 'Ben' }), datePurchased: new Date('2025-06-10'),
+      id: 70, amount: 45, groupId: 7, member: aUser({ userName: 'Ben' }), datePurchased: '2025-06-10',
     });
     const paar = () => [
-      aCart({ id: 1, amount: 30, settlementId: 70, datePurchased: new Date('2025-06-15') }),
-      aCart({ id: 2, amount: -30, settlementId: 70, datePurchased: new Date('2025-06-15') }),
+      aCart({ id: 1, amount: 30, settlementId: 70, datePurchased: '2025-06-15' }),
+      aCart({ id: 2, amount: -30, settlementId: 70, datePurchased: '2025-06-15' }),
     ];
 
     it('sendet PUT, ersetzt beide Einkäufe per Id in beiden Listen, sortiert neu, meldet die Änderung und liefert true', async () => {
-      const neuer = aCart({ id: 3, datePurchased: new Date('2025-06-12') });
+      const neuer = aCart({ id: 3, datePurchased: '2025-06-12' });
       service.cartList.set([...paar(), neuer]);
-      service.initCartList.set([...paar(), neuer, aCart({ id: 4, datePurchased: new Date('2025-01-01') })]);
+      service.initCartList.set([...paar(), neuer, aCart({ id: 4, datePurchased: '2025-01-01' })]);
       const updatesBefore = service.cartUpdated();
       const dto = payment();
 
@@ -336,8 +336,8 @@ describe('CartService', () => {
       expect(req.request.method).toBe('PUT');
       expect(req.request.body).toEqual(dto);
       req.flush([
-        aCart({ id: 1, amount: 45, settlementId: 70, datePurchased: new Date('2025-06-10') }),
-        aCart({ id: 2, amount: -45, settlementId: 70, datePurchased: new Date('2025-06-10') }),
+        aCart({ id: 1, amount: 45, settlementId: 70, datePurchased: '2025-06-10' }),
+        aCart({ id: 2, amount: -45, settlementId: 70, datePurchased: '2025-06-10' }),
       ]);
 
       expect(await result).toBeTrue();
@@ -520,12 +520,12 @@ describe('CartService', () => {
 
   describe('addSettlementPayment', () => {
     const payment = (): SettlementPaymentDto => ({
-      amount: 25, groupId: 1, member: aUser({ userName: 'Anna' }), datePurchased: new Date('2025-02-01'),
+      amount: 25, groupId: 1, member: aUser({ userName: 'Anna' }), datePurchased: '2025-02-01',
     });
 
     it('fügt die erzeugten Ausgleichsbuchungen sortiert in beide Listen ein, meldet die Änderung und liefert true', async () => {
-      const older = aCart({ id: 1, datePurchased: new Date('2025-01-01') });
-      const newest = aCart({ id: 4, datePurchased: new Date('2025-03-01') });
+      const older = aCart({ id: 1, datePurchased: '2025-01-01' });
+      const newest = aCart({ id: 4, datePurchased: '2025-03-01' });
       service.cartList.set([older]);
       service.initCartList.set([newest, older]);
       const updatesBefore = service.cartUpdated();
@@ -536,8 +536,8 @@ describe('CartService', () => {
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual(dto);
       req.flush([
-        aCart({ id: 2, datePurchased: new Date('2025-02-01') }),
-        aCart({ id: 3, datePurchased: new Date('2025-02-02') }),
+        aCart({ id: 2, datePurchased: '2025-02-01' }),
+        aCart({ id: 3, datePurchased: '2025-02-02' }),
       ]);
 
       expect(ids(service.cartList())).toEqual([3, 2, 1]);

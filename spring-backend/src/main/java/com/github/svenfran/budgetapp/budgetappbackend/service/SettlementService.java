@@ -4,6 +4,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.*;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
+import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.Translator;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CategoryRepository;
@@ -11,7 +12,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.repository.SettlementRepos
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Date;
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -73,7 +74,7 @@ public class SettlementService {
         settlement.setReceiver(receiver);
         settlement.setCreatedBy(user);
         settlement.setAmount(dto.getAmount());
-        settlement.setDatePurchased(dto.getDatePurchased());
+        settlement.setDatePurchased(DateUtils.toDate(dto.getDatePurchased()));
         settlementRepository.save(settlement);
 
         var category = settlementCategory(group);
@@ -125,7 +126,7 @@ public class SettlementService {
         }
 
         settlement.setAmount(dto.getAmount());
-        settlement.setDatePurchased(dto.getDatePurchased());
+        settlement.setDatePurchased(DateUtils.toDate(dto.getDatePurchased()));
         settlement.setReceiver(receiver);
         if (receiverChanged) {
             // Neuer Empfänger ist aktuell Teil der Gruppe; ein Altwert eines entfernten Empfängers gilt nicht mehr
@@ -152,7 +153,7 @@ public class SettlementService {
         settlementRepository.delete(settlement);
     }
 
-    private void verifyPartiesWereMembersAt(Group group, User payer, User receiver, Date date)
+    private void verifyPartiesWereMembersAt(Group group, User payer, User receiver, LocalDate date)
             throws DatePurchasedNotWithinMembershipPeriodException {
         verificationService.verifyDatePurchasedWithinMembershipPeriod(
                 dataLoaderService.loadMembershipHistoryForGroupAndUser(group.getId(), payer.getId()), date);

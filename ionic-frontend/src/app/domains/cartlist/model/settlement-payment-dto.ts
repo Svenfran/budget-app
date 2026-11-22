@@ -8,5 +8,6 @@ export interface SettlementPaymentDto {
     amount: number;
     groupId: number;
     member: UserDto;
-    datePurchased: Date;
+    /** ISO-Kalendertag `YYYY-MM-DD` (DIV-81). */
+    datePurchased: string;
 }

@@ -53,8 +53,8 @@ export const dateRangeValidator: ValidatorFn = (group: AbstractControl): Validat
 
 /**
  * Kalendertag eines Kaufdatums für den Zeitraumfilter, so wie die Liste ihn anzeigt (date-Pipe): ein reines Datum
- * `YYYY-MM-DD` (Backend, DATE-Spalte) unverändert – `new Date(...)` läse es als Mitternacht UTC und verschöbe es westlich
- * von UTC auf den Vortag –, alles andere (Zeitstempel, `Date`) als lokaler Kalendertag.
+ * `YYYY-MM-DD` (liefert das Backend seit DIV-81) unverändert – `new Date(...)` läse es als Mitternacht UTC und verschöbe
+ * es westlich von UTC auf den Vortag –, alles andere (Zeitstempel eines alten Backends, `Date`) als lokaler Kalendertag.
  */
 export function purchaseDayOf(datePurchased: Date | string): string {
   if (typeof datePurchased === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(datePurchased)) {

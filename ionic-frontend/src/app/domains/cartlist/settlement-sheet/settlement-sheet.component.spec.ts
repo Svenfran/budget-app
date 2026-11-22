@@ -8,11 +8,10 @@ import { AuthService } from 'src/app/auth/auth.service';
 import { GroupMembers } from 'src/app/groupmembers/model/groupmembers-dto';
 import { GroupService } from 'src/app/service/group.service';
 import { Group } from 'src/app/model/group';
-import { aGroup, aLoggedInUser, aUser, REFERENCE_DATE } from 'src/testing/test-data';
+import { aGroup, aLoggedInUser, aUser, REFERENCE_DAY, REFERENCE_NOON } from 'src/testing/test-data';
 import { authServiceStub, provideServiceTesting } from 'src/testing/test-providers';
 import { removeOverlays } from 'src/testing/overlay-cleanup';
 import { ionicReady } from 'src/testing/ionic-ready';
-import { toIsoDay } from '../iso-day';
 import { Zeitraum } from '../new-edit-cart/model/gmh-zeitraum';
 import { CartService } from '../service/cart.service';
 import { settlementSheetModalOptions } from './settlement-sheet-options';
@@ -32,7 +31,7 @@ describe('SettlementSheetComponent (DIV-70)', () => {
   let dirty: WritableSignal<boolean>;
 
   const MODAL_ID = 'settlement-sheet-42';
-  const today = toIsoDay(REFERENCE_DATE);
+  const today = REFERENCE_DAY;
   const me = aLoggedInUser({ id: 50, name: 'Ich' });
   const owner = aUser({ userName: 'Olga' });
   const anna = aUser({ userName: 'Anna' });
@@ -68,7 +67,7 @@ describe('SettlementSheetComponent (DIV-70)', () => {
 
   beforeEach(() => {
     jasmine.clock().install();
-    jasmine.clock().mockDate(REFERENCE_DATE);
+    jasmine.clock().mockDate(REFERENCE_NOON);
     modalCtrl = jasmine.createSpyObj<ModalController>('ModalController', ['dismiss']);
     modalCtrl.dismiss.and.resolveTo(true);
     addSettlementPayment = jasmine.createSpy('addSettlementPayment').and.resolveTo(true);
@@ -356,7 +355,7 @@ describe('SettlementSheetComponent (DIV-70)', () => {
       await component.save();
 
       expect(addSettlementPayment).toHaveBeenCalledOnceWith({
-        amount: 25.5, groupId: 7, member: { id: anna.id, userName: 'Anna' }, datePurchased: new Date('2025-06-10'),
+        amount: 25.5, groupId: 7, member: { id: anna.id, userName: 'Anna' }, datePurchased: '2025-06-10',
       });
       expect(modalCtrl.dismiss).toHaveBeenCalledOnceWith(undefined, 'saved', MODAL_ID);
       expect(saving()).toBeFalse();
@@ -640,7 +639,7 @@ describe('SettlementSheetComponent – Edit-Modus (DIV-74)', () => {
 
   beforeEach(() => {
     jasmine.clock().install();
-    jasmine.clock().mockDate(REFERENCE_DATE);
+    jasmine.clock().mockDate(REFERENCE_NOON);
   });
 
   afterEach(() => jasmine.clock().uninstall());
@@ -665,7 +664,7 @@ describe('SettlementSheetComponent – Edit-Modus (DIV-74)', () => {
     expect(addSettlementPayment).not.toHaveBeenCalled();
     expect(updateSettlementPayment).toHaveBeenCalledTimes(1);
     const [dto, gruppe] = updateSettlementPayment.calls.mostRecent().args;
-    expect(dto).toEqual({ id: 70, amount: 45, groupId: 7, member: { id: cleo.id, userName: 'Cleo' }, datePurchased: new Date('2025-06-10') });
+    expect(dto).toEqual({ id: 70, amount: 45, groupId: 7, member: { id: cleo.id, userName: 'Cleo' }, datePurchased: '2025-06-10' });
     expect(gruppe).toEqual(group);
     expect(modalCtrl.dismiss).toHaveBeenCalledOnceWith(undefined, 'saved', MODAL_ID);
   });
@@ -774,7 +773,7 @@ describe('SettlementSheetComponent – Richtungsumschalter (DIV-74, Phase 5)', (
 
   beforeEach(() => {
     jasmine.clock().install();
-    jasmine.clock().mockDate(REFERENCE_DATE);
+    jasmine.clock().mockDate(REFERENCE_NOON);
   });
 
   afterEach(() => jasmine.clock().uninstall());
@@ -803,7 +802,7 @@ describe('SettlementSheetComponent – Richtungsumschalter (DIV-74, Phase 5)', (
 
     expect(addSettlementPayment).toHaveBeenCalledOnceWith({
       payer: { id: ben.id, userName: 'Ben' }, amount: 25, groupId: 7, member: { id: me.id, userName: 'Ich' },
-      datePurchased: new Date('2025-06-10'),
+      datePurchased: '2025-06-10',
     });
   });
 

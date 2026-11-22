@@ -2,6 +2,7 @@ package com.github.svenfran.budgetapp.budgetappbackend.service.mapper;
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.*;
+import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -15,7 +16,7 @@ public class CartDtoMapper {
         cart.setAmount(dto.getAmount());
         cart.setAveragePerMember(groupMemberCount > 0 ? dto.getAmount() / groupMemberCount : 0.0);
         cart.setDeleted(false);
-        cart.setDatePurchased(dto.getDatePurchased());
+        cart.setDatePurchased(dto.getDatePurchased() != null ? DateUtils.toDate(dto.getDatePurchased()) : null);
         cart.setGroup(group);
         cart.setCategory(category);
         cart.setUser(user);
