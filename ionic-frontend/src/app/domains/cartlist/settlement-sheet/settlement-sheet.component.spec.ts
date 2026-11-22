@@ -8,11 +8,10 @@ import { AuthService } from 'src/app/auth/auth.service';
 import { GroupMembers } from 'src/app/groupmembers/model/groupmembers-dto';
 import { GroupService } from 'src/app/service/group.service';
 import { Group } from 'src/app/model/group';
-import { aGroup, aLoggedInUser, aUser, REFERENCE_DATE } from 'src/testing/test-data';
+import { aGroup, aLoggedInUser, aUser, REFERENCE_DAY, REFERENCE_NOON } from 'src/testing/test-data';
 import { authServiceStub, provideServiceTesting } from 'src/testing/test-providers';
 import { removeOverlays } from 'src/testing/overlay-cleanup';
 import { ionicReady } from 'src/testing/ionic-ready';
-import { toIsoDay } from '../iso-day';
 import { Zeitraum } from '../new-edit-cart/model/gmh-zeitraum';
 import { CartService } from '../service/cart.service';
 import { settlementSheetModalOptions } from './settlement-sheet-options';
@@ -32,7 +31,7 @@ describe('SettlementSheetComponent (DIV-70)', () => {
   let dirty: WritableSignal<boolean>;
 
   const MODAL_ID = 'settlement-sheet-42';
-  const today = toIsoDay(REFERENCE_DATE);
+  const today = REFERENCE_DAY;
   const me = aLoggedInUser({ id: 50, name: 'Ich' });
   const owner = aUser({ userName: 'Olga' });
   const anna = aUser({ userName: 'Anna' });
@@ -68,7 +67,7 @@ describe('SettlementSheetComponent (DIV-70)', () => {
 
   beforeEach(() => {
     jasmine.clock().install();
-    jasmine.clock().mockDate(REFERENCE_DATE);
+    jasmine.clock().mockDate(REFERENCE_NOON);
     modalCtrl = jasmine.createSpyObj<ModalController>('ModalController', ['dismiss']);
     modalCtrl.dismiss.and.resolveTo(true);
     addSettlementPayment = jasmine.createSpy('addSettlementPayment').and.resolveTo(true);
@@ -640,7 +639,7 @@ describe('SettlementSheetComponent – Edit-Modus (DIV-74)', () => {
 
   beforeEach(() => {
     jasmine.clock().install();
-    jasmine.clock().mockDate(REFERENCE_DATE);
+    jasmine.clock().mockDate(REFERENCE_NOON);
   });
 
   afterEach(() => jasmine.clock().uninstall());
@@ -774,7 +773,7 @@ describe('SettlementSheetComponent – Richtungsumschalter (DIV-74, Phase 5)', (
 
   beforeEach(() => {
     jasmine.clock().install();
-    jasmine.clock().mockDate(REFERENCE_DATE);
+    jasmine.clock().mockDate(REFERENCE_NOON);
   });
 
   afterEach(() => jasmine.clock().uninstall());

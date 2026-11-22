@@ -10,7 +10,7 @@ import { CategoryDto } from 'src/app/model/category-dto';
 import { CategoryService } from 'src/app/service/category.service';
 import { GroupService } from 'src/app/service/group.service';
 import { LanguageService } from 'src/app/service/language.service';
-import { aCart, aCategory, aGroup, aLoggedInUser, aUser, REFERENCE_DATE } from 'src/testing/test-data';
+import { aCart, aCategory, aGroup, aLoggedInUser, aUser, REFERENCE_NOON } from 'src/testing/test-data';
 import { authServiceStub, provideServiceTesting } from 'src/testing/test-providers';
 import { Cart } from '../model/cart';
 import { CartService } from '../service/cart.service';
@@ -74,7 +74,7 @@ describe('NewEditCartPage', () => {
           groupMembershipHistory: signal([]),
           getGroupMembershipHistoryForGroupAndUser: jasmine.createSpy('getGroupMembershipHistoryForGroupAndUser'),
         } },
-        { provide: AuthService, useValue: authServiceStub(aLoggedInUser({ id: 9, name: 'Anna' })) },
+        { provide: AuthService, useValue: authServiceStub(aLoggedInUser({ id: 9, name: 'Anna', expirationDate: REFERENCE_NOON.getTime() + 60 * 60 * 1000 })) },
         { provide: LoadingController, useValue: { create: loadingCreate } },
         { provide: MenuController, useValue: { enable: jasmine.createSpy('enable').and.resolveTo(true) } },
         { provide: LanguageService, useValue: { currentLang: signal('de') } },
@@ -109,7 +109,7 @@ describe('NewEditCartPage', () => {
     fixture.nativeElement.querySelectorAll('ion-select[formcontrolname="categoryId"] ion-select-option'))
     .map(el => (el as HTMLElement).textContent!.trim());
 
-  beforeEach(() => jasmine.clock().install().mockDate(REFERENCE_DATE));
+  beforeEach(() => jasmine.clock().install().mockDate(REFERENCE_NOON));
   afterEach(() => jasmine.clock().uninstall());
 
   describe('Duplizieren', () => {

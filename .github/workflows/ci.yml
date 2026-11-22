@@ -106,9 +106,18 @@ jobs:
       - name: Lint
         run: npm run lint
       # Tests und Build laufen auch nach einem Lint-Fehler, damit ein Lauf alle Fehler zeigt; der Job bleibt trotzdem rot.
-      - name: Tests (ChromeHeadless)
+      # DIV-81: Die Runner laufen in UTC. Deshalb die Zone explizit setzen: Berlin (Nutzer) und Mexiko (westlich von UTC,
+      # dort zeigen sich Tagesverschiebungen durch UTC-Mitternacht).
+      - name: Tests (ChromeHeadless, Europe/Berlin)
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        env:
+          TZ: Europe/Berlin
         run: npm run test:ci 2>&1 | tee karma-result.log
+      - name: Tests (ChromeHeadless, America/Mexico_City)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        env:
+          TZ: America/Mexico_City
+        run: npm run test:ci 2>&1 | tee karma-result-mx.log
       - name: Build
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run build
@@ -117,7 +126,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: frontend-test-report
-          path: ionic-frontend/karma-result.log
+          path: |
+            ionic-frontend/karma-result.log
+            ionic-frontend/karma-result-mx.log
           if-no-files-found: warn
           retention-days: 14
 
