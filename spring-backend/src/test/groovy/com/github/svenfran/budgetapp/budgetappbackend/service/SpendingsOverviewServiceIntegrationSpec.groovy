@@ -25,8 +25,8 @@ import static java.time.LocalDate.of
  * Jahres- und Monatswerte der Ausgabenübersicht mit Ein- und Austritten.
  *
  * - Anteile werden exakt aus Betrag und Mitgliedschaftshistorie am Kaufdatum berechnet, gerundet wird erst der Saldo
- *   je Periode, sodass die Salden zusammen 0 ergeben (DIV-38, D6). averagePerMember wird dafür nicht gelesen; wo gesetzt,
- *   dann wie von der App geschrieben.
+ *   je Periode, sodass die Salden zusammen 0 ergeben (DIV-38, D6). averagePerMember wird dafür nicht gelesen und seit
+ *   DIV-39 nicht mehr geschrieben; gesetzt nur noch im Altdaten-Feature.
  * - Nutzerwerte werden als [userId: [sum, diff]] verglichen; die Reihenfolge der Nutzer ist nicht garantiert.
  * - Anteil eines Nutzers = sum - diff.
  * - Summen von Salden werden in Cent verglichen (diffSummeInCent), nicht als Double-Addition.
@@ -55,9 +55,9 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         fixtures.membership(wg, cleo, membershipStart: at(of(2025, 1, 1), 10))
 
         and: "c1 31.12.2024 (Anna, Ben), c2 01.01.2025 (Anna, Cleo – zählt nur, weil die Uhrzeit des Beitritts abgeschnitten wird), c3 10.03.2025 (Anna, Cleo)"
-        fixtures.cart(wg, user: anna, amount: 30d, averagePerMember: 15d, datePurchased: DateUtils.toDate(of(2024, 12, 31)))
-        fixtures.cart(wg, user: cleo, amount: 20d, averagePerMember: 10d, datePurchased: DateUtils.toDate(of(2025, 1, 1)))
-        fixtures.cart(wg, user: anna, amount: 10d, averagePerMember: 5d, datePurchased: DateUtils.toDate(of(2025, 3, 10)))
+        fixtures.cart(wg, user: anna, amount: 30d, datePurchased: DateUtils.toDate(of(2024, 12, 31)))
+        fixtures.cart(wg, user: cleo, amount: 20d, datePurchased: DateUtils.toDate(of(2025, 1, 1)))
+        fixtures.cart(wg, user: anna, amount: 10d, datePurchased: DateUtils.toDate(of(2025, 3, 10)))
         flushAndClear()
         loginAs(anna)
         LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {} (2024), Cleo {} (ab 2025-01-01 10 Uhr); Einkäufe ' +
@@ -145,10 +145,10 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         fixtures.membership(wg, ben, membershipStart: DateUtils.toDate(of(2025, 5, 1)))
 
         and: "der Cart vom 28.02. liegt in beiden ersten Mitgliedschaften, der vom 15.04. in der Lücke"
-        fixtures.cart(wg, user: anna, amount: 20d, averagePerMember: 10d, datePurchased: DateUtils.toDate(of(2025, 2, 10)))
-        fixtures.cart(wg, user: anna, amount: 8d, averagePerMember: 4d, datePurchased: DateUtils.toDate(of(2025, 2, 28)))
-        fixtures.cart(wg, user: anna, amount: 10d, averagePerMember: 10d, datePurchased: DateUtils.toDate(of(2025, 4, 15)))
-        fixtures.cart(wg, user: ben, amount: 30d, averagePerMember: 15d, datePurchased: DateUtils.toDate(of(2025, 5, 1)))
+        fixtures.cart(wg, user: anna, amount: 20d, datePurchased: DateUtils.toDate(of(2025, 2, 10)))
+        fixtures.cart(wg, user: anna, amount: 8d, datePurchased: DateUtils.toDate(of(2025, 2, 28)))
+        fixtures.cart(wg, user: anna, amount: 10d, datePurchased: DateUtils.toDate(of(2025, 4, 15)))
+        fixtures.cart(wg, user: ben, amount: 30d, datePurchased: DateUtils.toDate(of(2025, 5, 1)))
         flushAndClear()
         loginAs(anna)
         LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {} mit drei Mitgliedschaften; Einkäufe 2025-02-10, ' +
@@ -206,10 +206,10 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         fixtures.membership(wg, ben, membershipStart: DateUtils.toDate(of(2025, 3, 10)), membershipEnd: DateUtils.toDate(of(2025, 3, 20)))
 
         and: "Anna bezahlt alles; Carts am Tag vor dem Eintritt, am Eintritts-, am Austrittstag und am Tag danach"
-        fixtures.cart(wg, user: anna, amount: 10d, averagePerMember: 10d, datePurchased: DateUtils.toDate(of(2025, 3, 9)))   // nur Anna
-        fixtures.cart(wg, user: anna, amount: 20d, averagePerMember: 10d, datePurchased: DateUtils.toDate(of(2025, 3, 10)))  // Anna, Ben
-        fixtures.cart(wg, user: anna, amount: 8d, averagePerMember: 4d, datePurchased: DateUtils.toDate(of(2025, 3, 20)))    // Anna, Ben
-        fixtures.cart(wg, user: anna, amount: 6d, averagePerMember: 6d, datePurchased: DateUtils.toDate(of(2025, 3, 21)))    // nur Anna
+        fixtures.cart(wg, user: anna, amount: 10d, datePurchased: DateUtils.toDate(of(2025, 3, 9)))   // nur Anna
+        fixtures.cart(wg, user: anna, amount: 20d, datePurchased: DateUtils.toDate(of(2025, 3, 10)))  // Anna, Ben
+        fixtures.cart(wg, user: anna, amount: 8d, datePurchased: DateUtils.toDate(of(2025, 3, 20)))   // Anna, Ben
+        fixtures.cart(wg, user: anna, amount: 6d, datePurchased: DateUtils.toDate(of(2025, 3, 21)))   // nur Anna
         flushAndClear()
         loginAs(anna)
         LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {} 2025-03-10 bis 2025-03-20; Anna zahlt am 09., 10., 20., ' +
@@ -240,8 +240,7 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         def ids = nutzer*.id
         assert ids == ids.sort(false)
         def wg = fixtures.group(owner: nutzer[0], members: nutzer.drop(1))
-        // averagePerMember wie von der App geschrieben (ungerundet); für die Salden ohne Bedeutung
-        fixtures.cart(wg, user: nutzer[zahler], amount: betrag, averagePerMember: betrag / mitglieder,
+        fixtures.cart(wg, user: nutzer[zahler], amount: betrag,
                 datePurchased: DateUtils.toDate(TestData.REFERENCE_DATE))
         flushAndClear()
         loginAs(nutzer[0])
@@ -345,8 +344,8 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         fixtures.membership(wg, cleo, membershipStart: DateUtils.toDate(of(2025, 4, 1)))
 
         and: "Anna bezahlt je 10 € am 01.03. (Anna, Ben: 5,00/5,00) und am 01.05. (alle drei: 3,34/3,33/3,33)"
-        fixtures.cart(wg, user: anna, amount: 10d, averagePerMember: 5d, datePurchased: DateUtils.toDate(of(2025, 3, 1)))
-        fixtures.cart(wg, user: anna, amount: 10d, averagePerMember: 10d / 3, datePurchased: DateUtils.toDate(of(2025, 5, 1)))
+        fixtures.cart(wg, user: anna, amount: 10d, datePurchased: DateUtils.toDate(of(2025, 3, 1)))
+        fixtures.cart(wg, user: anna, amount: 10d, datePurchased: DateUtils.toDate(of(2025, 5, 1)))
         flushAndClear()
         loginAs(anna)
         LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {}, Cleo {} ab 2025-04-01; Anna zahlt 10 am 2025-03-01 ' +
@@ -379,7 +378,7 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         fixtures.membership(wg, cleo, membershipStart: at(of(2025, 3, 10), 18))
 
         and: "Anna bezahlt am 10.03. 10 € – erfasst, als Cleo noch nicht Mitglied war"
-        fixtures.cart(wg, user: anna, amount: 10d, averagePerMember: 5d, datePurchased: DateUtils.toDate(of(2025, 3, 10)))
+        fixtures.cart(wg, user: anna, amount: 10d, datePurchased: DateUtils.toDate(of(2025, 3, 10)))
         flushAndClear()
         loginAs(anna)
         LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {}, Cleo {} ab 2025-03-10 18 Uhr; Anna zahlt 10 am 2025-03-10',
@@ -436,7 +435,7 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         assert annaId < benId && benId < cleoId
         def wg = fixtures.group(owner: anna, members: [ben, cleo])
         def tag = DateUtils.toDate(TestData.REFERENCE_DATE)
-        fixtures.cart(wg, user: anna, amount: 10d, averagePerMember: 10d / 3, datePurchased: tag)
+        fixtures.cart(wg, user: anna, amount: 10d, datePurchased: tag)
         flushAndClear()
         LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {}, Cleo {}; Anna zahlt 10 am {}', wg.group.id, annaId, benId,
                 cleoId, TestData.REFERENCE_DATE)
@@ -464,7 +463,7 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         def (anna, ben, cleo, dora) = (1..4).collect { fixtures.user() }
         def (annaId, benId, cleoId, doraId) = [anna, ben, cleo, dora]*.id
         def wg = fixtures.group(owner: anna, members: [ben, cleo, dora])
-        fixtures.cart(wg, user: anna, amount: 40d, averagePerMember: 10d, datePurchased: DateUtils.toDate(TestData.REFERENCE_DATE))
+        fixtures.cart(wg, user: anna, amount: 40d, datePurchased: DateUtils.toDate(TestData.REFERENCE_DATE))
         flushAndClear()
         def start = diffs(annaId, wg)
         LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {}, Cleo {}, Dora {}; Anna zahlt 40 am {}; Salden {}', wg.group.id,
@@ -528,7 +527,7 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         def (annaId, benId, cleoId) = [anna, ben, cleo]*.id
         assert annaId < benId && benId < cleoId
         def wg = fixtures.group(owner: anna, members: [ben, cleo])
-        fixtures.cart(wg, user: anna, amount: 0.02d, averagePerMember: 0.02d / 3, datePurchased: DateUtils.toDate(TestData.REFERENCE_DATE))
+        fixtures.cart(wg, user: anna, amount: 0.02d, datePurchased: DateUtils.toDate(TestData.REFERENCE_DATE))
         flushAndClear()
         def vorher = diffs(annaId, wg)
         LOG.info('Szenario: Gruppe {}, Anna {}, Ben {}, Cleo {}; Anna zahlt 0.02; Salden vorher {}', wg.group.id, annaId, benId,
@@ -645,7 +644,7 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
     def "Ein Jahr ohne Carts liefert keine Nutzer und keine Monate"() {
         given:
         def wg = fixtures.group(memberSince: of(2024, 1, 1))
-        fixtures.cart(wg, amount: 12.5d, averagePerMember: 12.5d, datePurchased: DateUtils.toDate(of(2024, 3, 1)))
+        fixtures.cart(wg, amount: 12.5d, datePurchased: DateUtils.toDate(of(2024, 3, 1)))
         flushAndClear()
         loginAs(wg.owner)
         LOG.info('Szenario: Gruppe {}, Owner {}, Einkauf 12.50 am 2024-03-01', wg.group.id, wg.owner.id)

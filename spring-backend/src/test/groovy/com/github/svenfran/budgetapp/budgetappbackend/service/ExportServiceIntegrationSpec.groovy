@@ -239,7 +239,7 @@ class ExportServiceIntegrationSpec extends IntegrationSpec {
     }
 
     private void einkauf(GroupScenario scenario, user, String title, double amount, LocalDate date) {
-        fixtures.cart(scenario, user: user, title: title, amount: amount, averagePerMember: amount,
+        fixtures.cart(scenario, user: user, title: title, amount: amount,
                 datePurchased: DateUtils.toDate(date))
     }
 }

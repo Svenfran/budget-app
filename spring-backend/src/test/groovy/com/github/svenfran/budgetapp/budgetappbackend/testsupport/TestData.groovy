@@ -74,7 +74,7 @@ class TestData {
     }
 
     static Cart cart(Map overrides = [:]) {
-        new Cart([title: 'Einkauf', description: 'Wocheneinkauf', amount: 40.0d, averagePerMember: 40.0d,
+        new Cart([title: 'Einkauf', description: 'Wocheneinkauf', amount: 40.0d,
                   datePurchased: DateUtils.toDate(REFERENCE_DATE)] + overrides)
     }
 
