@@ -7,7 +7,6 @@ import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.Translator;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.*;
 import com.github.svenfran.budgetapp.budgetappbackend.service.mapper.GroupDtoMapper;
-import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -185,7 +184,6 @@ public class GroupService {
         groupMembershipHistoryService.startGroupMembershipForMember(newMember, group);
         setIsDeletedForCart(group, newMember, false);
 
-        calculateAveragePerMember(group);
         var groupMemberDto = new GroupMembersDto(groupRepository.save(group), new UserDto(newMember));
         notificationService.sendGroupMemberAddedNotification(
                 group.getId(),
@@ -208,7 +206,6 @@ public class GroupService {
 
         deactivateCartTemplatesForUserAndGroup(removeGroupMemberDto.getMember().getId(), group.getId());
 
-        calculateAveragePerMember(group);
         var groupMemberDto = new GroupMembersDto(groupRepository.save(group), new UserDto(removedMember));
         notificationService.sendGroupMemberRemovedNotification(
                 history,
@@ -287,45 +284,15 @@ public class GroupService {
     }
 
     public void setIsDeletedForCart(Group group, User member, boolean delete) {
-        // DIV-74 (A11): Dieser Weg und calculateAveragePerMember schreiben Carts komplett zurück. Erst alle Settlements der
-        // Gruppe sperren, dann Carts laden – sonst könnte ein gleichzeitig geändertes Settlement-Paar mit Altwerten
-        // überschrieben werden. Alle Aufrufer rufen diese Methode vor calculateAveragePerMember auf.
+        // DIV-74 (A11): Dieser Weg schreibt die Carts des Mitglieds komplett zurück. Erst alle Settlements der Gruppe
+        // sperren, dann Carts laden – sonst könnte ein gleichzeitig geändertes Settlement-Paar mit Altwerten
+        // überschrieben werden.
         settlementRepository.lockAllByGroupId(group.getId());
         var cartsOfMember = cartRepository.findCartsByGroupAndUser(group, member);
         if (!cartsOfMember.isEmpty()) {
             cartsOfMember.forEach(cart -> cart.setDeleted(delete));
             cartRepository.saveAll(cartsOfMember);
         }
-    }
-
-    public void calculateAveragePerMember(@NonNull Group group) {
-        var cartsOfGroup = group.getCarts();
-
-        if (!cartsOfGroup.isEmpty()) {
-            calculateCarts(cartsOfGroup);
-        }
-    }
-
-    public void calculateAveragePerMemberForAllCarts() {
-        var carts = cartRepository.findAll();
-        calculateCarts(carts);
-    }
-
-    private void calculateCarts(Iterable<Cart> carts) {
-        carts.forEach(cart -> {
-            int memberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(
-                    cart.getDatePurchased(),
-                    cart.getGroup().getId()
-            );
-
-            if (memberCount > 0) {
-                cart.setAveragePerMember(cart.getAmount() / memberCount);
-            } else {
-                cart.setAveragePerMember(0.0);
-            }
-        });
-
-        cartRepository.saveAll(carts);
     }
 
     private void deactivateCartTemplatesForUserAndGroup(Long userId, Long groupId) {

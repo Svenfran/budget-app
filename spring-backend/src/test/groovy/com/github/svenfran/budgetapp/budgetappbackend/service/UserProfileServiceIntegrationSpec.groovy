@@ -137,4 +137,29 @@ class UserProfileServiceIntegrationSpec extends IntegrationSpec {
         !gespeichert.active
         gespeichert.endDate == LocalDate.of(2025, 7, 1)
     }
+
+    def "Konto löschen als Mitglied lässt die Einkäufe der übrigen Gruppenmitglieder unverändert (DIV-39)"() {
+        given: "Einkauf des Owners mit Altwert 99, der eine Neuberechnung sichtbar machen würde"
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def ownerCart = fixtures.cart(wg, amount: 60d, averagePerMember: 99d)
+        def (groupId, benId, ownerCartId) = [wg.group.id, ben.id, ownerCart.id]
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Mitglied {} (angemeldet) löscht sein Konto; Einkauf {} des Owners 60.00 ' +
+                '(averagePerMember 99)', groupId, wg.owner.id, benId, ownerCartId)
+
+        when:
+        LOG.info('Start: userProfileService.deleteUserProfile(Nutzer {})', benId)
+        userProfileService.deleteUserProfile(benId)
+        flushAndClear()
+        LOG.info('Ende: userProfileService.deleteUserProfile(Nutzer {}) inkl. Flush', benId)
+        def gespeichert = cartRepository.findById(ownerCartId).get()
+        LOG.info('userProfileService.deleteUserProfile(Nutzer {}) -> Einkauf {}: averagePerMember {}, deleted {}', benId,
+                ownerCartId, gespeichert.averagePerMember, gespeichert.deleted)
+
+        then: "kein Neuberechnen und kein Löschkennzeichen für den Einkauf des Owners"
+        gespeichert.averagePerMember == 99d
+        !gespeichert.deleted
+    }
 }

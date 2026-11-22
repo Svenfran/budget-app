@@ -53,30 +53,6 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
     @Autowired SettlementRepository settlementRepository
     @Autowired GroupCurrencyChangeRepository currencyChangeRepository
 
-    def "Neuberechnung setzt den Durchschnitt pro Mitglied auf 0, wenn zum Kaufdatum niemand Mitglied ist"() {
-        given: "Owner und Ben sind seit REFERENCE_DATE - 1 Jahr Mitglied"
-        def ben = fixtures.user()
-        def wg = fixtures.group(members: [ben])
-        def imZeitraum = fixtures.cart(wg, amount: 60d, datePurchased: DateUtils.toDate(REFERENCE_DATE))
-        def vorZeitraum = fixtures.cart(wg, amount: 40d, datePurchased: DateUtils.toDate(REFERENCE_DATE.minusYears(2)))
-        flushAndClear()
-        LOG.info('Szenario: Gruppe {}, Owner {}, Ben {} (Mitglieder ab {}); Einkauf {} 60.00 am {}, Einkauf {} 40.00 am {}',
-                wg.group.id, wg.owner.id, ben.id, REFERENCE_DATE.minusYears(1), imZeitraum.id, REFERENCE_DATE,
-                vorZeitraum.id, REFERENCE_DATE.minusYears(2))
-
-        when:
-        groupService.calculateAveragePerMember(groupRepository.findById(wg.group.id).get())
-        flushAndClear()
-        def averageImZeitraum = cartRepository.findById(imZeitraum.id).get().averagePerMember
-        def averageVorZeitraum = cartRepository.findById(vorZeitraum.id).get().averagePerMember
-        LOG.info('groupService.calculateAveragePerMember(Gruppe {}) -> averagePerMember Einkauf {}: {}, Einkauf {}: {}',
-                wg.group.id, imZeitraum.id, averageImZeitraum, vorZeitraum.id, averageVorZeitraum)
-
-        then:
-        averageImZeitraum == 30d
-        averageVorZeitraum == 0d
-    }
-
     // Auslösung der Benachrichtigungen (Konzept 3.8, Ebene 1). Topic, Empfänger und Payload prüft NotificationServiceSpec.
 
     def "Gruppe umbenennen löst update-group mit dem neuen Namen aus"() {
@@ -238,8 +214,8 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
         ownerHistorie == [[OWNER, REFERENCE_DATE.minusYears(1), null]]
     }
 
-    def "Hinzufügen rechnet den Durchschnitt aller Einkäufe der Gruppe ab dem Eintrittstag neu"() {
-        given: "Owner und Ben seit 2024-06-15; beide Einkäufe mit falschem Durchschnitt 99, damit die Neuberechnung sichtbar ist"
+    def "Hinzufügen lässt die Einkäufe der Gruppe unverändert, keine Neuberechnung von averagePerMember (DIV-39)"() {
+        given: "Owner und Ben seit 2024-06-15; beide Einkäufe mit Altwert 99, der eine Neuberechnung sichtbar machen würde"
         def ben = fixtures.user()
         def wg = fixtures.group(members: [ben])
         def cleo = fixtures.user()
@@ -254,16 +230,18 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
                 groupId, wg.owner.id, ben.id, cleo.id, testClock.today, vorEintritt.id, amEintritt.id)
 
         when:
+        LOG.info('Start: groupService.addMemberToGroup(Gruppe {}, Cleo)', groupId)
         groupService.addMemberToGroup(new AddGroupMemberDto(id: groupId, newMemberEmail: cleoEmail))
         flushAndClear()
+        LOG.info('Ende: groupService.addMemberToGroup(Gruppe {}, Cleo) inkl. Flush', groupId)
         def averageVorEintritt = cartRepository.findById(vorEintritt.id).get().averagePerMember
         def averageAmEintritt = cartRepository.findById(amEintritt.id).get().averagePerMember
         LOG.info('groupService.addMemberToGroup(Gruppe {}, Cleo) -> averagePerMember Einkauf {}: {}, Einkauf {}: {}',
                 groupId, vorEintritt.id, averageVorEintritt, amEintritt.id, averageAmEintritt)
 
-        then: "am Tag vor dem Eintritt 2 Mitglieder, am Eintrittstag (inklusiv) 3"
-        averageVorEintritt == 30d
-        averageAmEintritt == 20d
+        then: "Altwerte vor und am Eintrittstag bleiben stehen"
+        averageVorEintritt == 99d
+        averageAmEintritt == 99d
     }
 
     def "Wiedereintritt: neuer MEMBER-Eintrag, der alte bleibt beendet, Bens Einkäufe sind wieder sichtbar"() {
@@ -439,8 +417,8 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
                     [true, null]]
     }
 
-    def "Entfernen rechnet den Durchschnitt neu: der Austrittstag zählt noch mit"() {
-        given: "Owner und Ben seit 2024-06-15; Einkäufe mit falschem Durchschnitt 99, damit die Neuberechnung sichtbar ist"
+    def "Entfernen lässt die Einkäufe der Gruppe unverändert, keine Neuberechnung von averagePerMember (DIV-39)"() {
+        given: "Owner und Ben seit 2024-06-15; Einkäufe des Owners mit Altwert 99, der eine Neuberechnung sichtbar machen würde"
         def ben = fixtures.user()
         def wg = fixtures.group(members: [ben])
         def groupId = wg.group.id
@@ -455,16 +433,18 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
                 groupId, wg.owner.id, benId, testClock.today, amAustritt.id, nachAustritt.id)
 
         when:
+        LOG.info('Start: groupService.removeMemberFromGroup(Gruppe {}, Ben {})', groupId, benId)
         groupService.removeMemberFromGroup(new RemoveGroupMemberDto(id: groupId, member: new UserDto(id: benId)))
         flushAndClear()
+        LOG.info('Ende: groupService.removeMemberFromGroup(Gruppe {}, Ben {}) inkl. Flush', groupId, benId)
         def averageAmAustritt = cartRepository.findById(amAustritt.id).get().averagePerMember
         def averageNachAustritt = cartRepository.findById(nachAustritt.id).get().averagePerMember
         LOG.info('groupService.removeMemberFromGroup(Gruppe {}, Ben {}) -> averagePerMember Einkauf {}: {}, Einkauf {}: {}',
                 groupId, benId, amAustritt.id, averageAmAustritt, nachAustritt.id, averageNachAustritt)
 
-        then: "am Austrittstag (inklusiv) 2 Mitglieder, am Tag danach nur noch der Owner"
-        averageAmAustritt == 30d
-        averageNachAustritt == 60d
+        then: "Altwerte am und nach dem Austrittstag bleiben stehen"
+        averageAmAustritt == 99d
+        averageNachAustritt == 99d
     }
 
     def "#rolle kann Ben nicht entfernen"() {

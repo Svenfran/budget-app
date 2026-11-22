@@ -149,7 +149,6 @@ public class UserProfileService {
         group.removeMember(user);
         gmhService.finishGroupMembership(user, group);
         groupService.setIsDeletedForCart(group, user, true);
-        groupService.calculateAveragePerMember(group);
         var templates = cartTemplateRepository.findByUserIdAndGroupIdAndActiveTrue(user.getId(), group.getId());
         for (CartTemplate cartTemplate : templates) {
             cartTemplate.setEndDate(LocalDate.now(clock));
