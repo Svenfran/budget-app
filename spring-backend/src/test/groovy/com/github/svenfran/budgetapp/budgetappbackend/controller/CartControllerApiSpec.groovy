@@ -124,7 +124,7 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
 
         then:
         response.status == 400
-        response.contentAsString.contains('not within membership period')
+        response.contentAsString == 'Date purchased is not within membership period'
     }
 
     // ----- DIV-81: Kaufdatum als Kalendertag -----
@@ -503,7 +503,7 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
 
         then:
         response.status == 400
-        response.contentAsString.contains('not within membership period')
+        response.contentAsString == 'Date purchased is not within membership period'
 
         where:
         endpoint << ['PUT /api/carts/update', 'POST /api/carts/settlement-payment/add']
@@ -692,7 +692,24 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
         'Betrag 0: 400'                             | 'owner'    | 'ben'      | [amount: 0]                   || 400    | 'greater than 0'
         'Betrag mit 3 Nachkommastellen: 400'        | 'owner'    | 'ben'      | [amount: 12.345]              || 400    | 'at most 2 decimal'
         'fehlende Id: 400'                          | 'owner'    | 'ben'      | [id: null]                    || 400    | "'id'"
-        'Datum vor der Mitgliedschaft: 400 (M1)'    | 'owner'    | 'ben'      | [datePurchased: '2020-01-01'] || 400    | 'not within membership period'
+    }
+
+    def "Ausgleichszahlung bearbeiten mit Datum vor der Mitgliedschaft: 400 mit exaktem Legacy-Text (M1)"() {
+        given: 'Mitgliedschaften beginnen 2024-06-15'
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def paar = json(addSettlement(wg.owner, [amount: 30, groupId: wg.group.id, member: [id: ben.id], datePurchased: '2025-06-15']))
+        def settlementId = paar[0].settlementId as Long
+        LOG.info('Szenario: Gruppe {}, Owner {} zahlte an Ben {}; Settlement {} wird auf 2020-01-01 datiert', wg.group.id,
+                wg.owner.id, ben.id, settlementId)
+
+        when:
+        def response = updateSettlement(wg.owner, [id: settlementId, amount: 30, member: [id: ben.id], datePurchased: '2020-01-01'])
+        LOG.info('Antwort: {} {}', response.status, response.contentAsString)
+
+        then:
+        response.status == 400
+        response.contentAsString == 'Date purchased is not within membership period'
     }
 
     def "Kategorien als JSON enthalten das Settlement-Kennzeichen"() {

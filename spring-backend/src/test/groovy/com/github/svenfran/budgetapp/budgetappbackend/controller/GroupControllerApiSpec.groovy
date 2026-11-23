@@ -27,6 +27,15 @@ class GroupControllerApiSpec extends IntegrationSpec implements ApiRequests {
 
     private static final Logger LOG = LoggerFactory.getLogger(GroupControllerApiSpec)
 
+    /** Accept-Header, den der Angular-HttpClient der App standardmäßig sendet. */
+    private static final String ANGULAR_ACCEPT = 'application/json, text/plain, */*'
+    /**
+     * Content-Type der Text-Fehlerantwort, wie ihn ältere App-Versionen bekommen (vor DIV-108 ermittelt): Spring wählt
+     * bei diesem Accept application/json, der Body ist aber reiner Text. Angular scheitert am JSON-Parsen und liefert
+     * den Text als String in err.error – genau darauf beruhen die Text-Auswertungen alter Apps.
+     */
+    private static final String LEGACY_CONTENT_TYPE = 'application/json'
+
     @Autowired ObjectMapper objectMapper
 
     def "Unbekannte E-Mail beim Hinzufügen: 404 mit der E-Mail in der Meldung"() {
@@ -40,8 +49,8 @@ class GroupControllerApiSpec extends IntegrationSpec implements ApiRequests {
 
         then:
         response.status == 404
-        // Frontend erkennt den Fall per Substring der gesendeten Adresse (group.service.ts)
-        response.contentAsString.contains('niemand@divvy.test')
+        // Legacy-Text (ältere App-Versionen erkennen den Fall per Substring der gesendeten Adresse)
+        response.contentAsString == 'User with email niemand@divvy.test not found'
         0 * notificationService._
     }
 
@@ -56,7 +65,7 @@ class GroupControllerApiSpec extends IntegrationSpec implements ApiRequests {
 
         then:
         response.status == 403
-        response.contentAsString.contains('New member equals group owner')
+        response.contentAsString == 'New member equals group owner'
         0 * notificationService._
     }
 
@@ -72,8 +81,72 @@ class GroupControllerApiSpec extends IntegrationSpec implements ApiRequests {
 
         then:
         response.status == 403
-        response.contentAsString.contains('Member already exists')
+        response.contentAsString == 'Member already exists'
         0 * notificationService._
+    }
+
+    def "Mit X-Error-Format json: #fall -> #status mit Code #code und bisherigem Text"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        if (fall == 'Währungswechsel ohne Bestätigung (S1)') fixtures.cart(wg)
+        def request = fall == 'Währungswechsel ohne Bestätigung (S1)' ? put('/api/groups/update') : post('/api/groups/add-new-member')
+        def body = fall == 'Währungswechsel ohne Bestätigung (S1)' ? ([id: wg.group.id, name: 'WG', currencyCode: 'USD'])
+                : fall == 'unbekannte E-Mail (M2)' ? ([id: wg.group.id, newMemberEmail: 'niemand@divvy.test'])
+                : fall == 'Owner fügt sich selbst hinzu (M3)' ? ([id: wg.group.id, newMemberEmail: wg.owner.email])
+                : ([id: wg.group.id, newMemberEmail: ben.email])
+        flushAndClear()
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), Mitglied {}; {}', wg.group.id, wg.owner.id, ben.id, fall)
+
+        when:
+        def response = send(request.header('X-Error-Format', 'json'), user: wg.owner, body: body)
+        def antwort = json(response)
+        LOG.info('Antwort: {} {} ({})', response.status, antwort, response.contentType)
+
+        then:
+        response.status == status
+        response.contentType == 'application/json'
+        antwort.code == code
+        antwort.message == text
+        !antwort.containsKey('details')
+        0 * notificationService._
+
+        where:
+        fall                                    || status | code                                    | text
+        'unbekannte E-Mail (M2)'                || 404    | 'USER_NOT_FOUND'                        | 'User with email niemand@divvy.test not found'
+        'Owner fügt sich selbst hinzu (M3)'     || 403    | 'MEMBER_EQUALS_OWNER'                   | 'New member equals group owner'
+        'Mitglied erneut hinzufügen (M4)'       || 403    | 'MEMBER_ALREADY_EXISTS'                 | 'Member already exists'
+        'Währungswechsel ohne Bestätigung (S1)' || 409    | 'CURRENCY_CHANGE_CONFIRMATION_REQUIRED' | 'Changing the currency of a group with bookings requires confirmation'
+    }
+
+    def "Ohne X-Error-Format bleibt die Fehlerantwort Text wie für ältere App-Versionen (#status)"() {
+        given: 'Accept wie der Angular-HttpClient der App'
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        if (status == 409) fixtures.cart(wg)
+        def request = status == 409 || status == 400 ? put('/api/groups/update') : post('/api/groups/add-new-member')
+        def body = status == 409 ? ([id: wg.group.id, name: 'WG', currencyCode: 'USD'])
+                : status == 400 ? ([id: wg.group.id, name: 'WG', currencyCode: 'XXX'])
+                : ([id: wg.group.id, newMemberEmail: status == 403 ? ben.email : 'niemand@divvy.test'])
+        flushAndClear()
+        LOG.info('Szenario: Gruppe {}, Owner {}, Mitglied {}; erwartet {} ohne X-Error-Format', wg.group.id, wg.owner.id,
+                ben.id, status)
+
+        when:
+        def response = send(request.header('Accept', ANGULAR_ACCEPT), user: wg.owner, body: body)
+        LOG.info('Antwort: {} {} ({})', response.status, response.contentAsString, response.contentType)
+
+        then:
+        response.status == status
+        response.contentAsString == text
+        response.contentType == LEGACY_CONTENT_TYPE
+
+        where:
+        status || text
+        400    || 'Currency XXX is not supported'
+        403    || 'Member already exists'
+        404    || 'User with email niemand@divvy.test not found'
+        409    || 'Changing the currency of a group with bookings requires confirmation'
     }
 
     def "Mitglied ohne Owner-Rechte bei #aktion: 403"() {
