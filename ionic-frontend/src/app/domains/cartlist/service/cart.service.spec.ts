@@ -653,6 +653,19 @@ describe('CartService', () => {
       expect(instant).toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Ben' });
     });
 
+    it('erhaltene Zahlung, userId = angemeldeter Empfänger: Hinweis nennt den eigenen Namen statt der Gegenpartei (DIV-108)', async () => {
+      const instant = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
+      const ben = aUser({ userName: 'Ben' });
+      const dto: SettlementPaymentDto = { ...payment(), payer: ben, member: ich };
+
+      const result = service.addSettlementPayment(dto, ich);
+      http.expectOne(`${api}/settlement-payment/add`).flush(notWithinMembership(ich.id), badRequest);
+
+      expect(await result).toBeFalse();
+      expect(instant).toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Ich' });
+      expect(instant).not.toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Ben' });
+    });
+
     it('gesendete Zahlung ohne payer, userId = angemeldeter Nutzer: Hinweis nennt den eigenen Namen (DIV-108)', async () => {
       const instant = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
 
