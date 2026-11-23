@@ -153,12 +153,13 @@ public class SettlementService {
         settlementRepository.delete(settlement);
     }
 
+    /** Zahler vor Empfänger: Liegen beide außerhalb, nennt die Fehlerantwort den Zahler (details.userId, DIV-108). */
     private void verifyPartiesWereMembersAt(Group group, User payer, User receiver, LocalDate date)
             throws DatePurchasedNotWithinMembershipPeriodException {
         verificationService.verifyDatePurchasedWithinMembershipPeriod(
-                dataLoaderService.loadMembershipHistoryForGroupAndUser(group.getId(), payer.getId()), date);
+                dataLoaderService.loadMembershipHistoryForGroupAndUser(group.getId(), payer.getId()), date, payer.getId());
         verificationService.verifyDatePurchasedWithinMembershipPeriod(
-                dataLoaderService.loadMembershipHistoryForGroupAndUser(group.getId(), receiver.getId()), date);
+                dataLoaderService.loadMembershipHistoryForGroupAndUser(group.getId(), receiver.getId()), date, receiver.getId());
     }
 
     /**

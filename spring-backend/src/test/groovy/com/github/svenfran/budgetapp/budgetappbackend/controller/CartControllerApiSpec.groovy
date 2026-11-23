@@ -694,6 +694,78 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
         'fehlende Id: 400'                          | 'owner'    | 'ben'      | [id: null]                    || 400    | "'id'"
     }
 
+    def "Mit X-Error-Format json: Einkauf #endpoint #fall -> Code #code, details #details"() {
+        given: 'Mitgliedschaft des Owners beginnt 2024-06-15'
+        def wg = fixtures.group()
+        def cart = fixtures.cart(wg, title: 'Pizza', amount: 20d)
+        def ownerId = wg.owner.id
+        def body = [title: 'Pizza', amount: 20, groupId: wg.group.id, categoryDto: [id: wg.category.id]] +
+                (datum == null ? [:] : [datePurchased: datum]) + (endpoint == 'PUT /api/carts/update' ? [id: cart.id] : [:])
+        def request = endpoint == 'PUT /api/carts/update' ? put('/api/carts/update') : post('/api/carts/add')
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet, Mitglied seit 2024-06-15), Einkauf {}; {} mit Datum {}',
+                wg.group.id, ownerId, cart.id, endpoint, datum)
+
+        when:
+        def response = send(request.header('X-Error-Format', 'json'), user: wg.owner, body: body)
+        def antwort = json(response)
+        LOG.info('Antwort: {} {}', response.status, antwort)
+
+        then:
+        response.status == 400
+        response.contentType == 'application/json'
+        antwort.code == code
+        antwort.message == text
+        (antwort.details ?: [:]) == (details == 'userId Owner' ? [userId: ownerId] : [:])
+        details == 'userId Owner' || !antwort.containsKey('details')
+
+        where:
+        endpoint                | fall                       | datum        || code                         | text                                             | details
+        'POST /api/carts/add'   | 'vor der Mitgliedschaft'   | '2020-01-01' || 'DATE_NOT_WITHIN_MEMBERSHIP' | 'Date purchased is not within membership period' | 'userId Owner'
+        'PUT /api/carts/update' | 'vor der Mitgliedschaft'   | '2020-01-01' || 'DATE_NOT_WITHIN_MEMBERSHIP' | 'Date purchased is not within membership period' | 'userId Owner'
+        'POST /api/carts/add'   | 'ohne Datum'               | null         || 'DATE_PURCHASED_REQUIRED'    | 'Date purchased is required'                     | 'keine'
+    }
+
+    def "Mit X-Error-Format json: Ausgleichszahlung #aktion, #fall -> details.userId nennt #betroffen"() {
+        given: 'alle Mitgliedschaften beginnen 2025-06-01; eine Zusatz-Mitgliedschaft 2025-01-01–2025-05-31 deckt den 2025-03-01 ab'
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben], memberSince: LocalDate.of(2025, 6, 1))
+        def (ownerId, benId) = [wg.owner.id, ben.id]
+        def zusatz = fall == 'nur der Empfänger außerhalb' ? wg.owner : fall == 'nur der Zahler außerhalb' ? ben : null
+        if (zusatz != null) {
+            fixtures.membership(wg, zusatz, membershipStart: DateUtils.toDate(LocalDate.of(2025, 1, 1)),
+                    membershipEnd: DateUtils.toDate(LocalDate.of(2025, 5, 31)))
+        }
+        def settlementId = aktion == 'bearbeiten'
+                ? json(addSettlement(wg.owner, [amount: 30, groupId: wg.group.id, member: [id: benId], datePurchased: '2025-06-15']))[0].settlementId as Long
+                : null
+        def request = aktion == 'bearbeiten' ? put('/api/carts/settlement-payment/update') : post('/api/carts/settlement-payment/add')
+        def body = [amount: 30, groupId: wg.group.id, member: [id: benId], datePurchased: '2025-03-01'] +
+                (settlementId != null ? [id: settlementId] : [:])
+        flushAndClear()
+        LOG.info('Szenario: Gruppe {}, Owner {} zahlt an Ben {} am 2025-03-01; Zusatz-Mitgliedschaft für {}; Settlement {}',
+                wg.group.id, ownerId, benId, zusatz?.id, settlementId)
+
+        when:
+        def response = send(request.header('X-Error-Format', 'json'), user: wg.owner, body: body)
+        def antwort = json(response)
+        LOG.info('Antwort: {} {}', response.status, antwort)
+
+        then:
+        response.status == 400
+        antwort.code == 'DATE_NOT_WITHIN_MEMBERSHIP'
+        antwort.message == 'Date purchased is not within membership period'
+        antwort.details == [userId: betroffen == 'Empfänger' ? benId : ownerId]
+
+        where:
+        aktion       | fall                          || betroffen
+        'anlegen'    | 'nur der Empfänger außerhalb' || 'Empfänger'
+        'anlegen'    | 'nur der Zahler außerhalb'    || 'Zahler'
+        'anlegen'    | 'beide außerhalb'             || 'Zahler'
+        'bearbeiten' | 'nur der Empfänger außerhalb' || 'Empfänger'
+        'bearbeiten' | 'nur der Zahler außerhalb'    || 'Zahler'
+        'bearbeiten' | 'beide außerhalb'             || 'Zahler'
+    }
+
     def "Ausgleichszahlung bearbeiten mit Datum vor der Mitgliedschaft: 400 mit exaktem Legacy-Text (M1)"() {
         given: 'Mitgliedschaften beginnen 2024-06-15'
         def ben = fixtures.user()
