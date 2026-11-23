@@ -16,7 +16,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 /**
  * HTTP-Vertrag der Einträge von Einkaufslisten (Status, JSON-Form, Exception-Mapping). Zustand und Rechte im Detail:
  * service/ShoppingItemServiceIntegrationSpec. Das Frontend wertet keine Fehlertexte der Einkaufslisten aus
- * (kein Eintrag im Fehlermeldungs-Vertrag, siehe CartControllerApiSpec).
+ * (kein Eintrag im Fehlercode-Vertrag, siehe CartControllerApiSpec).
  */
 class ShoppingItemControllerApiSpec extends IntegrationSpec implements ApiRequests {
 

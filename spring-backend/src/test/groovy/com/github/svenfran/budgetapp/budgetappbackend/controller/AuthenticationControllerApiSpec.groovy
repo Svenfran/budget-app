@@ -26,7 +26,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * DIV-18: JWT-Filter Ende-zu-Ende – widerrufene/abgelaufene Tokens (DB-Flags und JWT-exp), falsche DeviceId,
  * Logout, nicht verwertbare JWTs (403 statt Serverfehler) und öffentliche Endpunkte mit ungültigem Bearer-Header.
  * DIV-46: DeviceId ist Pflichtfeld bei Login und Registrierung (400, es wird kein Token gespeichert).
- * Enthält auch Fälle des Fehlermeldungs-Vertrags (Liste der Meldungen: {@link CartControllerApiSpec}).
+ * Enthält auch Fälle des Fehlercode-Vertrags mit Legacy-Text-Pins (Liste: {@link CartControllerApiSpec}).
  */
 class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequests {
 
@@ -271,7 +271,7 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
 
         then:
         response.status == 400
-        // Frontend erkennt den Fall am exakten Text (Fehlermeldungs-Vertrag X3)
+        // Legacy-Text: ältere App-Versionen erkennen den Fall am exakten Text (Vertrag X3; neue per Code DEVICE_ID_REQUIRED)
         meldung == 'DeviceId is required'
         !nutzerAngelegt
 

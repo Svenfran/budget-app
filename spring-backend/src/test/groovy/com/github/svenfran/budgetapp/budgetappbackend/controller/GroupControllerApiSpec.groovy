@@ -17,11 +17,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 
 /**
- * Fehlermeldungs-Vertrag beim Hinzufügen von Mitgliedern (Liste der Meldungen: {@link CartControllerApiSpec}) und
+ * Fehlercode-Vertrag beim Hinzufügen von Mitgliedern mit Legacy-Text-Pins (Liste: {@link CartControllerApiSpec}) und
  * Rechte-Mapping (NotOwnerOfGroupException -> 403) für remove/change-owner/delete und JSON-Felder der Übersicht,
  * die das Frontend liest (ownerId, DIV-80).
  * Gruppenwährung (DIV-77): currencyCode in allen Gruppen-Antworten, hasBookings in der Übersicht, 400 bei unbekanntem
- * Code, Status-Vertrag 409 bei unbestätigtem Wechsel (Liste in {@link CartControllerApiSpec}, Eintrag S1).
+ * Code, 409 mit Code CURRENCY_CHANGE_CONFIRMATION_REQUIRED bei unbestätigtem Wechsel (Liste in
+ * {@link CartControllerApiSpec}, Eintrag S1). Legacy-Content-Type der Text-Fehlerantwort (DIV-108).
  */
 class GroupControllerApiSpec extends IntegrationSpec implements ApiRequests {
 

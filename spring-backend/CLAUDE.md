@@ -94,7 +94,7 @@ Schema and seed data are managed by Liquibase, **not** JPA. Changelogs live unde
 |---|---|---|---|
 | `*Spec` | `spock.lang.Specification` | `./mvnw test` (Surefire), no Docker | rules, calculations, verifications, mappers, recipient selection, message bundles — no Spring, no DB |
 | `*IntegrationSpec` | `testsupport/IntegrationSpec` | `./mvnw verify` (Failsafe) | service flows with transactions, permissions via the real `SecurityContext`, own JPQL queries, Liquibase schema, notification interactions |
-| `*ApiSpec` | `IntegrationSpec implements ApiRequests` | `./mvnw verify` (Failsafe) | HTTP status, exception mapping, JSON shape of DTOs, security rules, error-message contract |
+| `*ApiSpec` | `IntegrationSpec implements ApiRequests` | `./mvnw verify` (Failsafe) | HTTP status, exception mapping, JSON shape of DTOs, security rules, error-code contract |
 
 Test as low as possible: plain logic as `*Spec`; the database only when queries, transactions or several services together are under test; MockMvc only for what is visible at HTTP level.
 
@@ -172,9 +172,9 @@ Every spec logs what it does, so a run can be followed without a debugger. INFO,
 - DEBUG: `-Dlogging.level.<package>=DEBUG` works in integration and API specs. Unit specs (no Spring) only read the XML — change the level there locally.
 - Not suppressible by logging: Liquibase 4.9 prints `Running Changeset: …` (one line per changeset, once per run) straight to stdout.
 
-### Error-message contract
+### Error-code contract
 
-The frontend recognizes some error cases by the text of the backend message. The list of these messages (M1–M10, X1–X2: frontend location, expected status and text, covering spec) is in the Groovydoc of `controller/CartControllerApiSpec.groovy`; each one has an API test. When you change such a message or add a frontend check on `err.error`, update the test and the list. **Stopgap until error codes are decided** — not a permanent contract.
+Every exception mapped in `RestResponseEntityExceptionHandler` has a code (`constants/ApiErrorCode`, map `ERROR_CODES`; exceptions with per-instance code or details implement `exceptions/ApiErrorInfo`, e.g. `DatePurchasedNotWithinMembershipPeriodException` with `details.userId`). With the request header `X-Error-Format: json` the body is `dto/ApiErrorDto` `{ code, message, details? }`; without it the body stays the old plain text — older app versions evaluate that text. `RestResponseEntityExceptionHandlerSpec` pins that every class of the four status handlers has its expected code. The cases the frontend evaluates (M1–M10, X1–X3, S1: frontend location, status, code, legacy text, covering spec) are listed in the Groovydoc of `controller/CartControllerApiSpec.groovy`; each one has an API test with the header (code) and one without (exact legacy text; the legacy content type is pinned in `GroupControllerApiSpec`). When you change a code or a legacy text, or the frontend evaluates a new code, update the tests and the list. The legacy texts can only be dropped once a minimum app version is enforced.
 
 ### Reference specs
 
@@ -183,7 +183,7 @@ The frontend recognizes some error cases by the text of the backend message. The
 | Unit | [`service/VerificationServiceSpec.groovy`](src/test/groovy/com/github/svenfran/budgetapp/budgetappbackend/service/VerificationServiceSpec.groovy) |
 | Integration with fixtures (rollback) | [`service/CartServiceIntegrationSpec.groovy`](src/test/groovy/com/github/svenfran/budgetapp/budgetappbackend/service/CartServiceIntegrationSpec.groovy) |
 | Commit-dependent integration + `testClock` | [`service/RecurringCartsIntegrationSpec.groovy`](src/test/groovy/com/github/svenfran/budgetapp/budgetappbackend/service/RecurringCartsIntegrationSpec.groovy) |
-| API (MockMvc) + error-message contract | [`controller/CartControllerApiSpec.groovy`](src/test/groovy/com/github/svenfran/budgetapp/budgetappbackend/controller/CartControllerApiSpec.groovy) |
+| API (MockMvc) + error-code contract | [`controller/CartControllerApiSpec.groovy`](src/test/groovy/com/github/svenfran/budgetapp/budgetappbackend/controller/CartControllerApiSpec.groovy) |
 
 ### Test counts
 
