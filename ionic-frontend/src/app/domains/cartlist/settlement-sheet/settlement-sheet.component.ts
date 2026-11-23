@@ -196,7 +196,7 @@ export class SettlementSheetComponent implements OnInit {
     let ok = false;
     try {
       ok = this.settlement
-        ? await this.cartService.updateSettlementPayment(dto, this.group, this.isCurrent)
+        ? await this.cartService.updateSettlementPayment(dto, this.group, this.isCurrent, this.settlement)
         : await this.cartService.addSettlementPayment(dto);
     } catch (err) {
       // Der Service weist laut Vertrag nie zurück; falls doch, bleibt das Sheet wie bei einem Fehler offen.
