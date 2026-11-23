@@ -19,7 +19,12 @@ describe('CartService', () => {
   let alerts: jasmine.SpyObj<AlertService>;
   let fileExport: jasmine.SpyObj<FileExportService>;
   const api = `${environment.apiBaseUrl}/api/carts`;
-  const notWithinMembership = 'Date purchased is not within membership period';
+  const membershipText = 'Date purchased is not within membership period';
+  /** Mitgliedschaftsfehler im JSON-Format (Vertrag M1, DIV-108); `userId` = betroffene Partei (details.userId). */
+  const notWithinMembership = (userId?: number) => ({
+    code: 'DATE_NOT_WITHIN_MEMBERSHIP', message: membershipText, ...(userId !== undefined ? { details: { userId } } : {}),
+  });
+  const badRequest = { status: 400, statusText: 'Bad Request' };
   const ids = (carts: Cart[]) => carts.map(c => c.id);
 
   beforeEach(() => {
@@ -164,7 +169,7 @@ describe('CartService', () => {
       const updatesBefore = service.cartUpdated();
 
       service.addCart(aCart({ id: null }));
-      http.expectOne(`${api}/add`).flush(notWithinMembership, { status: 400, statusText: 'Bad Request' });
+      http.expectOne(`${api}/add`).flush(notWithinMembership(1), badRequest);
 
       expect(service.cartList()).toEqual(cartList);
       expect(service.initCartList()).toEqual(initCartList);
@@ -271,7 +276,7 @@ describe('CartService', () => {
       const updatesBefore = service.cartUpdated();
 
       service.updateCart({ ...cartList[0], title: 'Neu' });
-      http.expectOne(`${api}/update`).flush(notWithinMembership, { status: 400, statusText: 'Bad Request' });
+      http.expectOne(`${api}/update`).flush(notWithinMembership(1), badRequest);
 
       expect(service.cartList()).toEqual(cartList);
       expect(service.initCartList()).toEqual(initCartList);
@@ -350,16 +355,17 @@ describe('CartService', () => {
       expect(service.cartUpdated()).toBe(updatesBefore + 1);
     });
 
-    it('Mitgliedschaftsfehler, angemeldeter Nutzer ist Zahler: State unverändert, Hinweis mit dem gewählten Empfänger (exakte Backend-Meldung, M1), liefert false', async () => {
+    it('Mitgliedschaftsfehler, Empfänger geändert, userId = neuer Empfänger: State unverändert, Hinweis nennt den neuen Empfänger, liefert false', async () => {
       const translate = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
       const cartList = paar();
       service.cartList.set(cartList);
       service.initCartList.set(cartList);
-      // Der Zahler hat den bisherigen Empfänger (Ben) gegen Cleo getauscht: geprüft und genannt wird der gewählte
-      const dto = { ...payment(), member: aUser({ userName: 'Cleo' }) };
+      // Der Zahler hat den bisherigen Empfänger (Ben) gegen Cleo getauscht: das Backend prüft und nennt den gewählten
+      const cleo = aUser({ userName: 'Cleo' });
+      const dto = { ...payment(), member: cleo };
 
       const result = service.updateSettlementPayment(dto, group, () => true, alsZahler);
-      http.expectOne(`${api}/settlement-payment/update`).flush(notWithinMembership, { status: 400, statusText: 'Bad Request' });
+      http.expectOne(`${api}/settlement-payment/update`).flush(notWithinMembership(cleo.id), badRequest);
 
       expect(await result).toBeFalse();
       expect(service.cartList()).toEqual(cartList);
@@ -376,10 +382,11 @@ describe('CartService', () => {
       service.initCartList.set(cartList);
       // Im Edit-Modus ist `member` immer der Empfänger, hier also der angemeldete Nutzer selbst
       const dto = { ...payment(), member: aUser({ userName: 'Sven' }) };
-      const alsEmpfaenger: Pick<SettlementEditData, 'role' | 'payer'> = { role: 'receiver', payer: aUser({ userName: 'Basti' }) };
+      const basti = aUser({ userName: 'Basti' });
+      const alsEmpfaenger: Pick<SettlementEditData, 'role' | 'payer'> = { role: 'receiver', payer: basti };
 
       const result = service.updateSettlementPayment(dto, group, () => true, alsEmpfaenger);
-      http.expectOne(`${api}/settlement-payment/update`).flush(notWithinMembership, { status: 400, statusText: 'Bad Request' });
+      http.expectOne(`${api}/settlement-payment/update`).flush(notWithinMembership(basti.id), badRequest);
 
       expect(await result).toBeFalse();
       expect(service.cartList()).toEqual(cartList);
@@ -388,6 +395,40 @@ describe('CartService', () => {
         'alerts.cart.invalid_membership.header', 'alerts.cart.invalid_membership.message_settlementpayment');
       expect(translate).toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Basti' });
       expect(translate).not.toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Sven' });
+    });
+
+    it('Mitgliedschaftsfehler, userId = angemeldeter Zahler: Hinweis nennt den Zahler (DIV-108)', async () => {
+      const translate = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
+
+      const result = service.updateSettlementPayment(payment(), group, () => true, alsZahler);
+      http.expectOne(`${api}/settlement-payment/update`).flush(notWithinMembership(alsZahler.payer.id), badRequest);
+
+      expect(await result).toBeFalse();
+      expect(translate).toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Ich' });
+    });
+
+    [
+      { name: 'ohne details.userId', body: notWithinMembership() },
+      { name: 'mit unbekannter userId', body: notWithinMembership(-1) },
+    ].forEach(c => {
+      it(`Mitgliedschaftsfehler ${c.name}: Fallback auf die Gegenpartei (DIV-110)`, async () => {
+        const translate = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
+
+        const result = service.updateSettlementPayment(payment(), group, () => true, alsZahler);
+        http.expectOne(`${api}/settlement-payment/update`).flush(c.body, badRequest);
+
+        expect(await result).toBeFalse();
+        expect(translate).toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Ben' });
+      });
+    });
+
+    it('alter Mitgliedschafts-Text ohne Code: allgemeiner Alert statt Mitgliedschafts-Hinweis', async () => {
+      const result = service.updateSettlementPayment(payment(), group, () => true, alsZahler);
+      http.expectOne(`${api}/settlement-payment/update`).flush(membershipText, badRequest);
+
+      expect(await result).toBeFalse();
+      expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(
+        'alerts.cart.settlement_update_failed.header', 'alerts.cart.settlement_update_failed.message');
     });
 
     it('anderer Fehler: State unverändert, allgemeiner Alert, liefert false', async () => {
@@ -545,9 +586,12 @@ describe('CartService', () => {
   });
 
   describe('addSettlementPayment', () => {
+    const anna = aUser({ userName: 'Anna' });
     const payment = (): SettlementPaymentDto => ({
-      amount: 25, groupId: 1, member: aUser({ userName: 'Anna' }), datePurchased: '2025-02-01',
+      amount: 25, groupId: 1, member: anna, datePurchased: '2025-02-01',
     });
+    /** Angemeldeter Nutzer: bei einer gesendeten Zahlung der implizite Zahler (DIV-108). */
+    const ich = aUser({ userName: 'Ich' });
 
     it('fügt die erzeugten Ausgleichsbuchungen sortiert in beide Listen ein, meldet die Änderung und liefert true', async () => {
       const older = aCart({ id: 1, datePurchased: '2025-01-01' });
@@ -557,7 +601,7 @@ describe('CartService', () => {
       const updatesBefore = service.cartUpdated();
       const dto = payment();
 
-      const result = service.addSettlementPayment(dto);
+      const result = service.addSettlementPayment(dto, ich);
       const req = http.expectOne(`${api}/settlement-payment/add`);
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual(dto);
@@ -572,7 +616,7 @@ describe('CartService', () => {
       expect(await result).toBeTrue();
     });
 
-    it('lässt beide Listen bei einem Fehler unverändert, zeigt den Mitgliedschafts-Hinweis mit dem Mitglied und liefert false', async () => {
+    it('lässt beide Listen bei einem Fehler unverändert, zeigt den Mitgliedschafts-Hinweis mit dem Empfänger (userId) und liefert false', async () => {
       const cartList = [aCart({ id: 1 })];
       const initCartList = [aCart({ id: 1 }), aCart({ id: 3 })];
       service.cartList.set(cartList);
@@ -580,9 +624,8 @@ describe('CartService', () => {
       const updatesBefore = service.cartUpdated();
       const instant = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
 
-      const result = service.addSettlementPayment(payment());
-      http.expectOne(`${api}/settlement-payment/add`).flush(notWithinMembership,
-        { status: 400, statusText: 'Bad Request' });
+      const result = service.addSettlementPayment(payment(), ich);
+      http.expectOne(`${api}/settlement-payment/add`).flush(notWithinMembership(anna.id), badRequest);
 
       expect(service.cartList()).toEqual(cartList);
       expect(service.initCartList()).toEqual(initCartList);
@@ -596,24 +639,61 @@ describe('CartService', () => {
       expect(await result).toBeFalse();
     });
 
-    it('erhaltene Zahlung (DIV-74): sendet payer und nennt im Mitgliedschafts-Hinweis die Gegenpartei (Zahler)', async () => {
+    it('erhaltene Zahlung (DIV-74): sendet payer und nennt im Mitgliedschafts-Hinweis den Zahler (userId)', async () => {
       const instant = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
-      const dto: SettlementPaymentDto = {
-        ...payment(), payer: aUser({ userName: 'Ben' }), member: aUser({ userName: 'Ich' }),
-      };
+      const ben = aUser({ userName: 'Ben' });
+      const dto: SettlementPaymentDto = { ...payment(), payer: ben, member: ich };
 
-      const result = service.addSettlementPayment(dto);
+      const result = service.addSettlementPayment(dto, ich);
       const req = http.expectOne(`${api}/settlement-payment/add`);
       expect(req.request.body.payer.userName).toBe('Ben');
-      req.flush(notWithinMembership, { status: 400, statusText: 'Bad Request' });
+      req.flush(notWithinMembership(ben.id), badRequest);
 
       expect(await result).toBeFalse();
       expect(instant).toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Ben' });
     });
 
-    // DIV-70: Jeder andere Fehler zeigt einen allgemeinen Hinweis und liefert false. Der Fehlerbody ist nicht immer Text
-    // (Netzwerkfehler, JSON, null) – die Prüfung auf den Mitgliedschafts-Text darf daran nicht scheitern.
+    it('gesendete Zahlung ohne payer, userId = angemeldeter Nutzer: Hinweis nennt den eigenen Namen (DIV-108)', async () => {
+      const instant = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
+
+      const result = service.addSettlementPayment(payment(), ich);
+      const req = http.expectOne(`${api}/settlement-payment/add`);
+      expect(req.request.body.payer).toBeUndefined();
+      req.flush(notWithinMembership(ich.id), badRequest);
+
+      expect(await result).toBeFalse();
+      expect(instant).toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Ich' });
+    });
+
     [
+      { name: 'ohne details.userId', body: notWithinMembership() },
+      { name: 'mit unbekannter userId', body: notWithinMembership(-1) },
+    ].forEach(c => {
+      it(`Mitgliedschaftsfehler ${c.name}: Fallback auf die Gegenpartei (DIV-110)`, async () => {
+        const instant = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
+
+        const result = service.addSettlementPayment(payment(), ich);
+        http.expectOne(`${api}/settlement-payment/add`).flush(c.body, badRequest);
+
+        expect(await result).toBeFalse();
+        expect(instant).toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Anna' });
+      });
+    });
+
+    it('nur der Code zählt: Mitgliedschaftsfehler mit geändertem Text zeigt den Mitgliedschafts-Hinweis', async () => {
+      const result = service.addSettlementPayment(payment(), ich);
+      http.expectOne(`${api}/settlement-payment/add`).flush(
+        { code: 'DATE_NOT_WITHIN_MEMBERSHIP', message: 'anderer Text', details: { userId: anna.id } }, badRequest);
+
+      expect(await result).toBeFalse();
+      expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(
+        'alerts.cart.invalid_membership.header', 'alerts.cart.invalid_membership.message_settlementpayment');
+    });
+
+    // DIV-70: Jeder andere Fehler zeigt einen allgemeinen Hinweis und liefert false. Ohne Code (DIV-108) zählt auch der
+    // alte Mitgliedschafts-Text als anderer Fehler; der Body ist nicht immer Text (Netzwerkfehler, JSON, null).
+    [
+      { name: 'alter Mitgliedschafts-Text ohne Code (400)', fail: (req: TestRequest) => req.flush(membershipText, badRequest) },
       {
         name: 'Text-Body (403)',
         fail: (req: TestRequest) => req.flush('User with ID 5 is either a member nor the owner of the group',
@@ -633,7 +713,7 @@ describe('CartService', () => {
         service.initCartList.set(initCartList);
         const updatesBefore = service.cartUpdated();
 
-        const result = service.addSettlementPayment(payment());
+        const result = service.addSettlementPayment(payment(), ich);
         c.fail(http.expectOne(`${api}/settlement-payment/add`));
 
         expect(await result).toBeFalse();
@@ -658,6 +738,21 @@ describe('CartService', () => {
         { status: 403, statusText: 'Forbidden' });
 
       expect(alerts.showErrorAlert).not.toHaveBeenCalled();
+    });
+
+    it(`${c.name}: alter Mitgliedschafts-Text ohne Code zeigt keinen Hinweis (nur der Code zählt, DIV-108)`, () => {
+      c.call(service);
+      http.expectOne(c.url).flush(membershipText, badRequest);
+
+      expect(alerts.showErrorAlert).not.toHaveBeenCalled();
+    });
+
+    it(`${c.name}: Mitgliedschafts-Code mit geändertem Text zeigt den Mitgliedschafts-Hinweis`, () => {
+      c.call(service);
+      http.expectOne(c.url).flush({ code: 'DATE_NOT_WITHIN_MEMBERSHIP', message: 'anderer Text' }, badRequest);
+
+      expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(
+        'alerts.cart.invalid_membership.header', 'alerts.cart.invalid_membership.message_new_edit');
     });
 
     // DIV-70 Phase 4 (A): Der Fehlerbody ist nicht immer Text. `err.error.includes` warf bisher im error-Callback;

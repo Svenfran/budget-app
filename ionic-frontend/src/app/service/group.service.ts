@@ -19,6 +19,7 @@ import { LoadOptions } from '../model/load-options';
 import { AddMemberResult } from '../groupoverview/model/add-member-result';
 import { applyMembersChange, applyOwnerChange, applyOwnerChangeToOverview, GroupMembersEvent, isOwnMembershipEvent } from './group-events';
 import { DEFAULT_CURRENCY } from '../constants/currency';
+import { API_ERROR_CODES, apiErrorCode } from './api-error';
 
 @Injectable({
   providedIn: 'root'
@@ -285,8 +286,8 @@ export class GroupService {
 
   /**
    * Ändert Name und Währung der Gruppe; State erst nach Erfolg, weist nie zurück (DIV-80). Ergebnis (DIV-77):
-   * `'ok'`; `'confirmation-required'`, wenn der Server einen Währungswechsel ohne Bestätigung ablehnt (409 – erkannt am
-   * Status, nicht am Text): kein Hinweis, die Gruppe gilt in der Übersicht danach als „mit Buchungen“, das Sheet fragt
+   * `'ok'`; `'confirmation-required'`, wenn der Server einen Währungswechsel ohne Bestätigung ablehnt (Code
+   * `CURRENCY_CHANGE_CONFIRMATION_REQUIRED`, 409; DIV-108): kein Hinweis, die Gruppe gilt in der Übersicht danach als „mit Buchungen“, das Sheet fragt
    * nach und sendet erneut; sonst `'error'` mit Hinweis.
    */
   updateGroup(group: Group): Promise<UpdateGroupResult> {
@@ -308,7 +309,7 @@ export class GroupService {
           resolve('ok');
         },
         error: (err) => {
-          if (err?.status === 409) {
+          if (apiErrorCode(err) === API_ERROR_CODES.CURRENCY_CHANGE_CONFIRMATION_REQUIRED) {
             // Inzwischen gibt es Buchungen: hasBookings nachziehen, damit der nächste Wechsel gleich nachfragt
             this.groupOverviewList.update(groups => groups.map(gr => gr.id === group.id ? {...gr, hasBookings: true} : gr));
             resolve('confirmation-required');
@@ -405,7 +406,7 @@ export class GroupService {
         },
         error: (err) => {
           console.error("Error adding member to group:", err);
-          resolve({ ok: false, errorKey: addMemberErrorKey(err?.error, newMemberDto.newMemberEmail) });
+          resolve({ ok: false, errorKey: addMemberErrorKey(err) });
         }
       }));
   }
@@ -507,15 +508,15 @@ export class GroupService {
 export type UpdateGroupResult = 'ok' | 'confirmation-required' | 'error';
 
 /**
- * Fehlermeldung beim Hinzufügen eines Mitglieds als i18n-Key. Die Texte vergleicht das Frontend mit der Backend-Meldung
- * (Fehlertext-Vertrag M2–M4, Groovydoc `CartControllerApiSpec`); jeder Body ohne Text (z. B. `ProgressEvent` bei
- * Netzwerkfehler) ergibt die Standardmeldung, damit die Zuordnung nie wirft (DIV-80).
+ * Fehlermeldung beim Hinzufügen eines Mitglieds als i18n-Key, nur nach dem Fehlercode des Backends (Vertrag M2–M4,
+ * DIV-108). Jede Antwort ohne bekannten Code (z. B. `ProgressEvent` bei Netzwerkfehler) ergibt die Standardmeldung.
  */
-export function addMemberErrorKey(body: unknown, email: string): string {
+export function addMemberErrorKey(err: unknown): string {
   const prefix = "alerts.group.add_member.error_message_service.";
-  if (typeof body !== "string") return prefix + "message_default";
-  if (body.includes(email)) return prefix + "message_no_exists";
-  if (body.includes("New member equals group owner")) return prefix + "message_admin_is_member";
-  if (body.includes("Member already exists")) return prefix + "message_already_member";
-  return prefix + "message_default";
+  switch (apiErrorCode(err)) {
+    case API_ERROR_CODES.USER_NOT_FOUND: return prefix + "message_no_exists";
+    case API_ERROR_CODES.MEMBER_EQUALS_OWNER: return prefix + "message_admin_is_member";
+    case API_ERROR_CODES.MEMBER_ALREADY_EXISTS: return prefix + "message_already_member";
+    default: return prefix + "message_default";
+  }
 }

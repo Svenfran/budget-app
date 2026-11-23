@@ -49,9 +49,9 @@ describe('AuthPage – Fehler bei Login', () => {
     expect(alerts.showErrorAlert).not.toHaveBeenCalled();
   }));
 
-  it('fehlende DeviceId (400): Fehler-Alert mit der Meldung aus authErrorMessageKey', fakeAsync(() => {
-    // exakter Backend-Text, Fehlermeldungs-Vertrag X3
-    loginFailsWith({ status: 400, error: 'DeviceId is required' });
+  it('fehlende DeviceId (400, DEVICE_ID_REQUIRED): Fehler-Alert mit der Meldung aus authErrorMessageKey', fakeAsync(() => {
+    // Fehlercode-Vertrag X3 (DIV-108)
+    loginFailsWith({ status: 400, error: { code: 'DEVICE_ID_REQUIRED', message: 'DeviceId is required' } });
 
     expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(
       'alerts.authenticate.error_messages.header_login',

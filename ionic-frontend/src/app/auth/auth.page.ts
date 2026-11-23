@@ -170,7 +170,7 @@ export class AuthPage implements OnInit {
           return;
         } else {
           message = this.translate.instant(
-            authErrorMessageKey(errRes.error, errRes.status, !this.isLogin, USER_EMAIL, USER_NAME));
+            authErrorMessageKey(errRes, !this.isLogin));
         }
         loadingEl.dismiss();
         this.alertService.showErrorAlert(header, message);
