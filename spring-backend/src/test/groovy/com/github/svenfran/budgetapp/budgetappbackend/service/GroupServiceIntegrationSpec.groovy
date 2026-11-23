@@ -214,36 +214,6 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
         ownerHistorie == [[OWNER, REFERENCE_DATE.minusYears(1), null]]
     }
 
-    def "Hinzufügen lässt die Einkäufe der Gruppe unverändert, keine Neuberechnung von averagePerMember (DIV-39)"() {
-        given: "Owner und Ben seit 2024-06-15; beide Einkäufe mit Altwert 99, der eine Neuberechnung sichtbar machen würde"
-        def ben = fixtures.user()
-        def wg = fixtures.group(members: [ben])
-        def cleo = fixtures.user()
-        def groupId = wg.group.id
-        def cleoEmail = cleo.email
-        def vorEintritt = fixtures.cart(wg, amount: 60d, averagePerMember: 99d, datePurchased: DateUtils.toDate(LocalDate.of(2025, 6, 14)))
-        def amEintritt = fixtures.cart(wg, amount: 60d, averagePerMember: 99d, datePurchased: DateUtils.toDate(LocalDate.of(2025, 6, 15)))
-        testClock.today = LocalDate.of(2025, 6, 15)
-        flushAndClear()
-        loginAs(wg.owner)
-        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), Ben {}, neues Mitglied Cleo {} ab {}; Einkauf {} 60.00 am 2025-06-14, Einkauf {} 60.00 am 2025-06-15',
-                groupId, wg.owner.id, ben.id, cleo.id, testClock.today, vorEintritt.id, amEintritt.id)
-
-        when:
-        LOG.info('Start: groupService.addMemberToGroup(Gruppe {}, Cleo)', groupId)
-        groupService.addMemberToGroup(new AddGroupMemberDto(id: groupId, newMemberEmail: cleoEmail))
-        flushAndClear()
-        LOG.info('Ende: groupService.addMemberToGroup(Gruppe {}, Cleo) inkl. Flush', groupId)
-        def averageVorEintritt = cartRepository.findById(vorEintritt.id).get().averagePerMember
-        def averageAmEintritt = cartRepository.findById(amEintritt.id).get().averagePerMember
-        LOG.info('groupService.addMemberToGroup(Gruppe {}, Cleo) -> averagePerMember Einkauf {}: {}, Einkauf {}: {}',
-                groupId, vorEintritt.id, averageVorEintritt, amEintritt.id, averageAmEintritt)
-
-        then: "Altwerte vor und am Eintrittstag bleiben stehen"
-        averageVorEintritt == 99d
-        averageAmEintritt == 99d
-    }
-
     def "Wiedereintritt: neuer MEMBER-Eintrag, der alte bleibt beendet, Bens Einkäufe sind wieder sichtbar"() {
         given: "Ben war bis 2025-03-01 Mitglied und steht nicht mehr in group.members; sein Einkauf ist als gelöscht markiert"
         def wg = fixtures.group()
@@ -415,36 +385,6 @@ class GroupServiceIntegrationSpec extends IntegrationSpec {
                     [false, LocalDate.of(2025, 1, 31)],
                     [true, null],
                     [true, null]]
-    }
-
-    def "Entfernen lässt die Einkäufe der Gruppe unverändert, keine Neuberechnung von averagePerMember (DIV-39)"() {
-        given: "Owner und Ben seit 2024-06-15; Einkäufe des Owners mit Altwert 99, der eine Neuberechnung sichtbar machen würde"
-        def ben = fixtures.user()
-        def wg = fixtures.group(members: [ben])
-        def groupId = wg.group.id
-        def benId = ben.id
-        // Ein Kaufdatum nach heute ist zulässig, solange die Mitgliedschaft des Käufers offen ist.
-        def amAustritt = fixtures.cart(wg, amount: 60d, averagePerMember: 99d, datePurchased: DateUtils.toDate(LocalDate.of(2025, 6, 15)))
-        def nachAustritt = fixtures.cart(wg, amount: 60d, averagePerMember: 99d, datePurchased: DateUtils.toDate(LocalDate.of(2025, 6, 16)))
-        testClock.today = LocalDate.of(2025, 6, 15)
-        flushAndClear()
-        loginAs(wg.owner)
-        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), Ben {} wird am {} entfernt; Einkauf {} 60.00 am 2025-06-15, Einkauf {} 60.00 am 2025-06-16',
-                groupId, wg.owner.id, benId, testClock.today, amAustritt.id, nachAustritt.id)
-
-        when:
-        LOG.info('Start: groupService.removeMemberFromGroup(Gruppe {}, Ben {})', groupId, benId)
-        groupService.removeMemberFromGroup(new RemoveGroupMemberDto(id: groupId, member: new UserDto(id: benId)))
-        flushAndClear()
-        LOG.info('Ende: groupService.removeMemberFromGroup(Gruppe {}, Ben {}) inkl. Flush', groupId, benId)
-        def averageAmAustritt = cartRepository.findById(amAustritt.id).get().averagePerMember
-        def averageNachAustritt = cartRepository.findById(nachAustritt.id).get().averagePerMember
-        LOG.info('groupService.removeMemberFromGroup(Gruppe {}, Ben {}) -> averagePerMember Einkauf {}: {}, Einkauf {}: {}',
-                groupId, benId, amAustritt.id, averageAmAustritt, nachAustritt.id, averageNachAustritt)
-
-        then: "Altwerte am und nach dem Austrittstag bleiben stehen"
-        averageAmAustritt == 99d
-        averageNachAustritt == 99d
     }
 
     def "#rolle kann Ben nicht entfernen"() {

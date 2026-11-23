@@ -11,7 +11,7 @@ class CartDtoMapperSpec extends Specification {
 
     def mapper = new CartDtoMapper()
 
-    def "Cart-DTO wird mit Gruppe, Kategorie und Nutzer übernommen, averagePerMember bleibt leer (DIV-39)"() {
+    def "Cart-DTO wird mit Gruppe, Kategorie und Nutzer übernommen"() {
         given:
         def dto = TestData.cartDto(id: 1L, title: 'Pizza', description: 'Freitag', amount: 55d,
                 datePurchased: TestData.REFERENCE_DATE)
@@ -27,7 +27,6 @@ class CartDtoMapperSpec extends Specification {
         cart.title == 'Pizza'
         cart.description == 'Freitag'
         cart.amount == 55d
-        cart.averagePerMember == null
         !cart.deleted
         DateUtils.toLocalDate(cart.datePurchased) == TestData.REFERENCE_DATE
         cart.group.id == 10L

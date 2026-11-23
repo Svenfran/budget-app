@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!-- DIV-40: Legacy-Spalte average_per_member entfernen. Seit DIV-38 nicht mehr gelesen, seit DIV-39 nicht mehr
+         geschrieben. Bereits angewendete Changesets und Seed-CSVs, die die Spalte befüllen, laufen auf einer frischen
+         Datenbank vorher und bleiben unverändert. Der Rollback legt die Spalte nur leer wieder an; die Altwerte sind
+         nur über ein Backup wiederherstellbar. -->
+    <changeSet author="sven" id="20261122120000-1">
+        <dropColumn tableName="cart" columnName="average_per_member"/>
+        <rollback>
+            <addColumn tableName="cart">
+                <column name="average_per_member" type="NUMERIC"/>
+            </addColumn>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

@@ -86,12 +86,12 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         NONE                   | null                  | 'Lunch'         | false          || 'Lunch'         | []
     }
 
-    def "Änderung an #feld speichert den Einkauf, averagePerMember danach #expectedAverage (DIV-39)"() {
+    def "Änderung an #feld speichert den Einkauf entsprechend dem DTO"() {
         given:
         def ben = fixtures.user()
         def wg = fixtures.group(members: [ben])
         def other = fixtures.category(wg)
-        def cart = fixtures.cart(wg, amount: 40d, averagePerMember: 40d)
+        def cart = fixtures.cart(wg, amount: 40d)
 
         and:
         def dto = new CartDto(cart)
@@ -100,20 +100,17 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         change(dto, other)
         // wie CartService.updateCart: die Kategorie wird über die ID aus dem DTO bestimmt
         def category = [wg.category, other].find { it.id == dto.categoryDto.id }
-        LOG.info('Szenario: Gruppe {}, Owner {}, Ben {}, Einkauf {} 40.00 (Altwert averagePerMember 40.00), Kategorien {} / {}; ' +
-                'geändert: {}', wg.group.id, wg.owner.id, ben.id, cart.id, wg.category.id, other.id, feld)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Ben {}, Einkauf {} 40.00, Kategorien {} / {}; geändert: {}',
+                wg.group.id, wg.owner.id, ben.id, cart.id, wg.category.id, other.id, feld)
 
         when:
         cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, category)
         flushAndClear()
         def saved = cartRepository.findById(cart.id).get()
-        LOG.info('cartService.updateCartAndTemplateIfValid(Cart {}) -> averagePerMember {}', cart.id,
-                saved.averagePerMember)
+        LOG.info('cartService.updateCartAndTemplateIfValid(Cart {}) -> title {}, amount {}, Kategorie {}', cart.id,
+                saved.title, saved.amount, saved.category.id)
 
-        then: "geänderte Einkäufe werden neu gespeichert, ohne averagePerMember; ohne Änderung bleibt der Altwert"
-        saved.averagePerMember == expectedAverage
-
-        and: "der gespeicherte Einkauf entspricht dem DTO"
+        then: "der gespeicherte Einkauf entspricht dem DTO"
         saved.title == dto.title
         saved.description == dto.description
         saved.amount == dto.amount
@@ -123,13 +120,13 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         where:
         // Closure-Parameter: Instanzfelder (fixtures) sind im where:-Block nicht verfügbar, Namen dürfen nicht mit
         // lokalen Variablen des Features kollidieren.
-        feld            | change                                                                                         || expectedAverage
-        'title'         | { CartDto c, otherCategory -> c.title = 'Neu' }                                                || null
-        'description'   | { CartDto c, otherCategory -> c.description = 'Andere' }                                       || null
-        'amount'        | { CartDto c, otherCategory -> c.amount = 60d }                                                 || null
-        'datePurchased' | { CartDto c, otherCategory -> c.datePurchased = TestData.REFERENCE_DATE.plusDays(1) } || null
-        'category'      | { CartDto c, otherCategory -> c.categoryDto = TestData.categoryDto(otherCategory) }            || null
-        'noChange'      | { CartDto c, otherCategory -> }                                                                || 40d
+        feld            | change
+        'title'         | { CartDto c, otherCategory -> c.title = 'Neu' }
+        'description'   | { CartDto c, otherCategory -> c.description = 'Andere' }
+        'amount'        | { CartDto c, otherCategory -> c.amount = 60d }
+        'datePurchased' | { CartDto c, otherCategory -> c.datePurchased = TestData.REFERENCE_DATE.plusDays(1) }
+        'category'      | { CartDto c, otherCategory -> c.categoryDto = TestData.categoryDto(otherCategory) }
+        'noChange'      | { CartDto c, otherCategory -> }
     }
 
     def "Wiederholung #oldType -> #newType: altes Template aktiv = #originalActive, aktive Templates #activeTypes"() {
@@ -432,7 +429,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
     // ----- addCart (DIV-14): öffentlicher Ablauf mit Anmeldung, Prüfungen und Mitgliederzahl -----
     // Kategorien stammen immer aus der eigenen Gruppe (fremde Kategorie wird nicht geprüft, DIV-49, bewusst nicht getestet).
 
-    def "Mitglied legt einen Einkauf an: gespeichert ohne averagePerMember (DIV-39)"() {
+    def "Mitglied legt einen Einkauf an: gespeichert mit Gruppe, Nutzer und Betrag, ohne Template"() {
         given:
         def ben = fixtures.user()
         def wg = fixtures.group(members: [ben])
@@ -448,8 +445,8 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         def result = cartService.addCart(dto)
         flushAndClear()
         def saved = cartRepository.findById(result.id).get()
-        LOG.info('cartService.addCart(Pizza 40.00) -> Cart {}: User {}, averagePerMember {}, recurrenceType {}', result.id,
-                saved.user.id, saved.averagePerMember, result.recurrenceType)
+        LOG.info('cartService.addCart(Pizza 40.00) -> Cart {}: User {}, amount {}, recurrenceType {}', result.id,
+                saved.user.id, saved.amount, result.recurrenceType)
 
         then: "Carts werden nicht live synchronisiert"
         0 * notificationService._
@@ -459,7 +456,6 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         saved.user.id == benId
         saved.title == 'Pizza'
         saved.amount == 40d
-        saved.averagePerMember == null
         saved.template == null
         templateRepository.findByGroupId(groupId).isEmpty()
     }
@@ -710,32 +706,31 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
     // ----- updateCart (DIV-14): öffentlicher Ablauf mit Anmeldung und Prüfungen -----
     // Die Requests senden immer die groupId des Einkaufs (Gruppenwechsel per DTO, DIV-48, bewusst nicht getestet).
 
-    def "#rolle bearbeitet seinen Einkauf: Werte gespeichert, averagePerMember geleert (DIV-39)"() {
+    def "#rolle bearbeitet seinen Einkauf: Werte gespeichert"() {
         given:
         def ben = fixtures.user()
         def wg = fixtures.group(members: [ben])
         def eigentuemer = rolle == 'Gruppen-Owner' ? wg.owner : ben
-        def cart = fixtures.cart(wg, user: eigentuemer, title: 'Einkauf', amount: 40d, averagePerMember: 20d)
+        def cart = fixtures.cart(wg, user: eigentuemer, title: 'Einkauf', amount: 40d)
         def dto = new CartDto(cart)
         dto.title = 'Großeinkauf'
         dto.amount = 60d
         flushAndClear()
         loginAs(eigentuemer)
-        LOG.info('Szenario: Gruppe {}, Owner {}, Ben {}; Einkauf {} von User {} ({}, angemeldet) 40.00 (Altwert averagePerMember 20.00) -> Großeinkauf 60.00',
+        LOG.info('Szenario: Gruppe {}, Owner {}, Ben {}; Einkauf {} von User {} ({}, angemeldet) 40.00 -> Großeinkauf 60.00',
                 wg.group.id, wg.owner.id, ben.id, cart.id, eigentuemer.id, rolle)
 
         when:
         def result = cartService.updateCart(dto)
         flushAndClear()
         def saved = cartRepository.findById(cart.id).get()
-        LOG.info('cartService.updateCart(Cart {}: Großeinkauf 60.00) -> title {}, amount {}, averagePerMember {}', cart.id,
-                result.title, saved.amount, saved.averagePerMember)
+        LOG.info('cartService.updateCart(Cart {}: Großeinkauf 60.00) -> title {}, amount {}', cart.id,
+                result.title, saved.amount)
 
         then:
         result.title == 'Großeinkauf'
         saved.title == 'Großeinkauf'
         saved.amount == 60d
-        saved.averagePerMember == null
 
         where:
         rolle << ['Gruppen-Owner', 'Mitglied']

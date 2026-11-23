@@ -221,8 +221,7 @@ public class SpendingsOverviewService {
 
     /**
      * Beteiligte je Cart (DIV-38): alle, die am Kaufdatum laut Historie Mitglied waren. Anteile werden exakt als
-     * Bruch zum gemeinsamen Nenner geführt und erst als Saldo gerundet (toUserDtos). averagePerMember wird bewusst
-     * nicht verwendet.
+     * Bruch zum gemeinsamen Nenner geführt und erst als Saldo gerundet (toUserDtos).
      */
     private Shares calculateShares(List<Cart> carts, List<GroupMembershipHistory> membership) {
         var participantsByCartId = new HashMap<Long, Set<Long>>();
