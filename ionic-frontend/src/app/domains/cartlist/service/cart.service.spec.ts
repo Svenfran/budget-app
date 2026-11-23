@@ -5,6 +5,7 @@ import { Init } from 'src/app/constants/default-values';
 import { RECURRENCE_TYPE } from 'src/app/constants/recurrence-type';
 import { AlertService } from 'src/app/service/alert.service';
 import { SettlementPaymentDto } from '../model/settlement-payment-dto';
+import { SettlementEditData } from '../settlement-sheet/settlement-form';
 import { environment } from 'src/environments/environment';
 import { aCart, aGroup, aUser } from 'src/testing/test-data';
 import { alertServiceSpy, provideServiceTesting } from 'src/testing/test-providers';
@@ -319,6 +320,8 @@ describe('CartService', () => {
     const payment = (): SettlementPaymentDto => ({
       id: 70, amount: 45, groupId: 7, member: aUser({ userName: 'Ben' }), datePurchased: '2025-06-10',
     });
+    /** Rolle und Zahler aus Sicht des angemeldeten Nutzers (DIV-110). */
+    const alsZahler: Pick<SettlementEditData, 'role' | 'payer'> = { role: 'payer', payer: aUser({ userName: 'Ich' }) };
     const paar = () => [
       aCart({ id: 1, amount: 30, settlementId: 70, datePurchased: '2025-06-15' }),
       aCart({ id: 2, amount: -30, settlementId: 70, datePurchased: '2025-06-15' }),
@@ -331,7 +334,7 @@ describe('CartService', () => {
       const updatesBefore = service.cartUpdated();
       const dto = payment();
 
-      const result = service.updateSettlementPayment(dto, group, () => true);
+      const result = service.updateSettlementPayment(dto, group, () => true, alsZahler);
       const req = http.expectOne(`${api}/settlement-payment/update`);
       expect(req.request.method).toBe('PUT');
       expect(req.request.body).toEqual(dto);
@@ -347,13 +350,15 @@ describe('CartService', () => {
       expect(service.cartUpdated()).toBe(updatesBefore + 1);
     });
 
-    it('Mitgliedschaftsfehler: State unverändert, Hinweis mit dem Empfänger (exakte Backend-Meldung, M1), liefert false', async () => {
+    it('Mitgliedschaftsfehler, angemeldeter Nutzer ist Zahler: State unverändert, Hinweis mit dem gewählten Empfänger (exakte Backend-Meldung, M1), liefert false', async () => {
       const translate = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
       const cartList = paar();
       service.cartList.set(cartList);
       service.initCartList.set(cartList);
+      // Der Zahler hat den bisherigen Empfänger (Ben) gegen Cleo getauscht: geprüft und genannt wird der gewählte
+      const dto = { ...payment(), member: aUser({ userName: 'Cleo' }) };
 
-      const result = service.updateSettlementPayment(payment(), group, () => true);
+      const result = service.updateSettlementPayment(dto, group, () => true, alsZahler);
       http.expectOne(`${api}/settlement-payment/update`).flush(notWithinMembership, { status: 400, statusText: 'Bad Request' });
 
       expect(await result).toBeFalse();
@@ -361,7 +366,28 @@ describe('CartService', () => {
       expect(service.initCartList()).toEqual(cartList);
       expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(
         'alerts.cart.invalid_membership.header', 'alerts.cart.invalid_membership.message_settlementpayment');
-      expect(translate).toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Ben' });
+      expect(translate).toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Cleo' });
+    });
+
+    it('Mitgliedschaftsfehler, angemeldeter Nutzer ist Empfänger: Hinweis nennt den Zahler, nicht sich selbst (DIV-110)', async () => {
+      const translate = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
+      const cartList = paar();
+      service.cartList.set(cartList);
+      service.initCartList.set(cartList);
+      // Im Edit-Modus ist `member` immer der Empfänger, hier also der angemeldete Nutzer selbst
+      const dto = { ...payment(), member: aUser({ userName: 'Sven' }) };
+      const alsEmpfaenger: Pick<SettlementEditData, 'role' | 'payer'> = { role: 'receiver', payer: aUser({ userName: 'Basti' }) };
+
+      const result = service.updateSettlementPayment(dto, group, () => true, alsEmpfaenger);
+      http.expectOne(`${api}/settlement-payment/update`).flush(notWithinMembership, { status: 400, statusText: 'Bad Request' });
+
+      expect(await result).toBeFalse();
+      expect(service.cartList()).toEqual(cartList);
+      expect(service.initCartList()).toEqual(cartList);
+      expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(
+        'alerts.cart.invalid_membership.header', 'alerts.cart.invalid_membership.message_settlementpayment');
+      expect(translate).toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Basti' });
+      expect(translate).not.toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Sven' });
     });
 
     it('anderer Fehler: State unverändert, allgemeiner Alert, liefert false', async () => {
@@ -369,7 +395,7 @@ describe('CartService', () => {
       service.cartList.set(cartList);
       service.initCartList.set(cartList);
 
-      const result = service.updateSettlementPayment(payment(), group, () => true);
+      const result = service.updateSettlementPayment(payment(), group, () => true, alsZahler);
       http.expectOne(`${api}/settlement-payment/update`).flush('Only the payer may change the receiver', { status: 403, statusText: 'Forbidden' });
 
       expect(await result).toBeFalse();
@@ -382,7 +408,7 @@ describe('CartService', () => {
       service.cartList.set(paar());
       service.initCartList.set(paar());
 
-      const result = service.updateSettlementPayment(payment(), group, () => true);
+      const result = service.updateSettlementPayment(payment(), group, () => true, alsZahler);
       http.expectOne(`${api}/settlement-payment/update`).flush('Settlement with Id 70 not found', { status: 404, statusText: 'Not Found' });
 
       expect(await result).toBeTrue();
@@ -396,7 +422,7 @@ describe('CartService', () => {
       service.cartList.set(paar());
       service.initCartList.set(paar());
 
-      const result = service.updateSettlementPayment(payment(), group, () => true);
+      const result = service.updateSettlementPayment(payment(), group, () => true, alsZahler);
       http.expectOne(`${api}/settlement-payment/update`).flush('not found', { status: 404, statusText: 'Not Found' });
       http.expectOne(`${api}/carts-by-groupid/7`).flush('Server error', { status: 500, statusText: 'Server Error' });
 
@@ -410,9 +436,9 @@ describe('CartService', () => {
       service.initCartList.set(cartList);
       const updatesBefore = service.cartUpdated();
 
-      const erfolg = service.updateSettlementPayment(payment(), group, () => false);
+      const erfolg = service.updateSettlementPayment(payment(), group, () => false, alsZahler);
       http.expectOne(`${api}/settlement-payment/update`).flush([aCart({ id: 1, amount: 45, settlementId: 70 })]);
-      const fehler = service.updateSettlementPayment(payment(), group, () => false);
+      const fehler = service.updateSettlementPayment(payment(), group, () => false, alsZahler);
       http.expectOne(`${api}/settlement-payment/update`).flush('not found', { status: 404, statusText: 'Not Found' });
 
       expect(await erfolg).toBeTrue();

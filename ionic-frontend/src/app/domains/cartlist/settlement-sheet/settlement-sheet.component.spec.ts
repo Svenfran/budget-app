@@ -663,9 +663,11 @@ describe('SettlementSheetComponent – Edit-Modus (DIV-74)', () => {
 
     expect(addSettlementPayment).not.toHaveBeenCalled();
     expect(updateSettlementPayment).toHaveBeenCalledTimes(1);
-    const [dto, gruppe] = updateSettlementPayment.calls.mostRecent().args;
+    const [dto, gruppe, , settlement] = updateSettlementPayment.calls.mostRecent().args;
     expect(dto).toEqual({ id: 70, amount: 45, groupId: 7, member: { id: cleo.id, userName: 'Cleo' }, datePurchased: '2025-06-10' });
     expect(gruppe).toEqual(group);
+    // Rolle und Zahler für den Mitgliedschafts-Hinweis (DIV-110)
+    expect(settlement).toEqual(jasmine.objectContaining({ role: 'payer', payer: { id: me.id, userName: 'Ich' } }));
     expect(modalCtrl.dismiss).toHaveBeenCalledOnceWith(undefined, 'saved', MODAL_ID);
   });
 
@@ -680,6 +682,7 @@ describe('SettlementSheetComponent – Edit-Modus (DIV-74)', () => {
     await component.save();
 
     expect(updateSettlementPayment.calls.mostRecent().args[0].member.id).toBe(me.id);
+    expect(updateSettlementPayment.calls.mostRecent().args[3]).toEqual(jasmine.objectContaining({ role: 'receiver', payer: ben }));
     expect(component.memberId.disabled).toBeTrue();
   });
 
