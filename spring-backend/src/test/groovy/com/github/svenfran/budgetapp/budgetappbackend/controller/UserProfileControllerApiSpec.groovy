@@ -14,7 +14,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 /**
  * DIV-22: E-Mail ändern und Passwort zurücksetzen unabhängig von Groß-/Kleinschreibung und Leerzeichen.
- * Enthält auch Fälle des Fehlermeldungs-Vertrags (Liste der Meldungen: {@link CartControllerApiSpec}).
+ * Enthält auch Fälle des Fehlercode-Vertrags mit Legacy-Text-Pins (Liste: {@link CartControllerApiSpec}).
  */
 class UserProfileControllerApiSpec extends IntegrationSpec implements ApiRequests {
 
@@ -119,8 +119,8 @@ class UserProfileControllerApiSpec extends IntegrationSpec implements ApiRequest
 
         then:
         response.status == 400
-        // Frontend erkennt den Fall per Substring des gesendeten Namens (userprofile.service.ts)
-        response.contentAsString.contains(ben.name)
+        // Legacy-Text (ältere App-Versionen erkennen den Fall per Substring des gesendeten Namens)
+        response.contentAsString == "User with name ${ben.name} already exists".toString()
     }
 
     def "Nutzername ändern speichert den Namen ohne umgebende Leerzeichen"() {
@@ -165,7 +165,7 @@ class UserProfileControllerApiSpec extends IntegrationSpec implements ApiRequest
 
         then:
         response.status == 400
-        response.contentAsString.contains('User name is not allowed')
+        response.contentAsString == 'User name is not allowed'
     }
 
     def "Ungültige E-Mail: 400 exakt 'Invalid Email'"() {
@@ -196,6 +196,43 @@ class UserProfileControllerApiSpec extends IntegrationSpec implements ApiRequest
         response.status == 400
         // Frontend vergleicht exakt (=== in userprofile.service.ts)
         response.contentAsString == 'Incorrect password'
+    }
+
+    def "Mit X-Error-Format json: #fall -> #status mit Code #code und bisherigem Text"() {
+        given:
+        def anna = fixtures.user()
+        def berta = fixtures.user(name: 'Berta', email: 'berta@example.de')
+        def (request, body) = switch (fall) {
+            case 'Name vergeben (M7)' -> [put('/api/userprofile/update-username'), [id: anna.id, userName: 'Berta']]
+            case 'Name reserviert (M8)' -> [put('/api/userprofile/update-username'), [id: anna.id, userName: 'DELETED']]
+            case 'E-Mail vergeben (M9)' -> [put('/api/userprofile/update-usermail'), [id: anna.id, userName: anna.name, userEmail: 'berta@example.de']]
+            case 'Reset unbekannte E-Mail (M10)' -> [put('/api/userprofile/password-reset'), [email: 'niemand@example.de']]
+            case 'ungültige E-Mail (X1)' -> [put('/api/userprofile/update-usermail'), [id: anna.id, userName: anna.name, userEmail: 'keine-mail']]
+            default -> [put('/api/userprofile/update-password'), [userId: anna.id, oldPassword: 'falsch', newPassword: 'neu']]
+        }
+        def options = fall == 'Reset unbekannte E-Mail (M10)' ? [body: body] : [user: anna, body: body]
+        LOG.info('Szenario: User {} (angemeldet außer bei M10), User {} Berta berta@example.de; {}', anna.id, berta.id, fall)
+
+        when:
+        def response = send(options, request.header('X-Error-Format', 'json'))
+        def antwort = json(response)
+        LOG.info('Antwort: {} {} ({})', response.status, antwort, response.contentType)
+
+        then:
+        response.status == status
+        response.contentType == 'application/json'
+        antwort.code == code
+        antwort.message == text
+        !antwort.containsKey('details')
+
+        where:
+        fall                            || status | code                       | text
+        'Name vergeben (M7)'            || 400    | 'USER_NAME_ALREADY_EXISTS' | 'User with name Berta already exists'
+        'Name reserviert (M8)'          || 400    | 'USER_NAME_NOT_ALLOWED'    | 'User name is not allowed'
+        'E-Mail vergeben (M9)'          || 400    | 'EMAIL_ALREADY_EXISTS'     | 'User with email berta@example.de already exists'
+        'Reset unbekannte E-Mail (M10)' || 404    | 'USER_NOT_FOUND'           | 'User with email niemand@example.de not found'
+        'ungültige E-Mail (X1)'         || 400    | 'INVALID_EMAIL'            | 'Invalid Email'
+        'falsches Passwort (X2)'        || 400    | 'INCORRECT_PASSWORD'       | 'Incorrect password'
     }
 
     private MockHttpServletResponse changeUserName(User angemeldet, String newName) {

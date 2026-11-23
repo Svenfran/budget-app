@@ -74,7 +74,7 @@ public class CartService {
         verificationService.verifyIsPartOfGroup(user, group);
         // Ausgleichszahlungen nur über SettlementService (DIV-74)
         verificationService.verifyCategoryIsNotSettlement(category);
-        verificationService.verifyDatePurchasedWithinMembershipPeriod(gmh, cartDto.getDatePurchased());
+        verificationService.verifyDatePurchasedWithinMembershipPeriod(gmh, cartDto.getDatePurchased(), user.getId());
         verificationService.verifyCartAmountHasAtMostTwoDecimals(cartDto.getAmount());
         var cart = cartDtoMapper.cartDtoToEntity(cartDto, category, user, group);
         // Neuanlage erzwingen (DIV-73): mit gesetzter ID würde save() per merge einen bestehenden, auch fremden Cart
@@ -94,7 +94,7 @@ public class CartService {
         verificationService.verifyIsOwnerOfCart(user, cart);
         // Ausgleichszahlungen nur über SettlementService (DIV-74): weder Settlement-Carts noch die Settlement-Kategorie
         verificationService.verifyCartIsNotSettlement(cart);
-        verificationService.verifyDatePurchasedWithinMembershipPeriod(gmh, cartDto.getDatePurchased());
+        verificationService.verifyDatePurchasedWithinMembershipPeriod(gmh, cartDto.getDatePurchased(), user.getId());
         var category = dataLoaderService.loadCategory(cartDto.getCategoryDto().getId());
         verificationService.verifyCategoryIsNotSettlement(category);
         verificationService.verifyCartAmountHasAtMostTwoDecimals(cartDto.getAmount());

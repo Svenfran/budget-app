@@ -1,5 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service
 
+import com.github.svenfran.budgetapp.budgetappbackend.constants.ApiErrorCode
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AuthenticationRequest
 import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto
@@ -358,7 +359,7 @@ class VerificationServiceSpec extends Specification {
         when:
         Exception fehler = null
         try {
-            service.verifyDatePurchasedWithinMembershipPeriod(gmh, kaufdatum)
+            service.verifyDatePurchasedWithinMembershipPeriod(gmh, kaufdatum, 7L)
         } catch (DatePurchasedNotWithinMembershipPeriodException e) {
             fehler = e
         }
@@ -366,6 +367,8 @@ class VerificationServiceSpec extends Specification {
         then:
         (fehler == null) == erlaubt
         fehler == null || fehler.message == 'Date purchased is not within membership period'
+        fehler == null || fehler.errorCode == ApiErrorCode.DATE_NOT_WITHIN_MEMBERSHIP
+        fehler == null || fehler.errorDetails == [userId: 7L]
 
         where:
         fall                                    | kaufdatum                 | offenesEnde | zweiterZeitraum || erlaubt
@@ -386,11 +389,13 @@ class VerificationServiceSpec extends Specification {
         def gmh = [TestData.membership(membershipStart: DateUtils.toDate(BEGINN), membershipEnd: null)]
 
         when:
-        service.verifyDatePurchasedWithinMembershipPeriod(gmh, null)
+        service.verifyDatePurchasedWithinMembershipPeriod(gmh, null, 7L)
 
         then:
         def fehler = thrown(DatePurchasedNotWithinMembershipPeriodException)
         fehler.message == 'Date purchased is required'
+        fehler.errorCode == ApiErrorCode.DATE_PURCHASED_REQUIRED
+        fehler.errorDetails == [:]
     }
 
     // ----- Ausgleichszahlung (DIV-74) -----

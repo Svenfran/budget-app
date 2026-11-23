@@ -525,8 +525,8 @@ describe('GroupService', () => {
       expect(alerts.showToast).toHaveBeenCalledOnceWith('alerts.group.error.update_group');
     });
 
-    // DIV-77: 409 = Währungswechsel ohne Bestätigung bei vorhandenen Buchungen (erkannt am Status, nicht am Text)
-    it('409: meldet confirmation-required ohne Hinweis, ändert nichts außer hasBookings der Gruppe', async () => {
+    // DIV-77/DIV-108: Währungswechsel ohne Bestätigung bei vorhandenen Buchungen (Code, Vertrag S1)
+    it('409 CURRENCY_CHANGE_CONFIRMATION_REQUIRED: meldet confirmation-required ohne Hinweis, ändert nichts außer hasBookings der Gruppe', async () => {
       const { wg, urlaub, sideNav, overview } = givenGroups();
       service.activeGroup.set({ ...wg, currencyCode: 'EUR' });
       const activeBefore = service.activeGroup();
@@ -534,7 +534,8 @@ describe('GroupService', () => {
       const result = service.updateGroup({ ...wg, currencyCode: 'USD' });
       const req = http.expectOne(`${api}/update`);
       expect(req.request.body).toEqual({ ...wg, currencyCode: 'USD' });
-      req.flush('Changing the currency of a group with bookings requires confirmation', { status: 409, statusText: 'Conflict' });
+      req.flush({ code: 'CURRENCY_CHANGE_CONFIRMATION_REQUIRED', message: 'Changing the currency of a group with bookings requires confirmation' },
+        { status: 409, statusText: 'Conflict' });
 
       expect(await result).toBe('confirmation-required');
       expect(alerts.showToast).not.toHaveBeenCalled();
@@ -542,6 +543,19 @@ describe('GroupService', () => {
       expect(service.groupOverviewList()).toEqual([{ ...overview[0], hasBookings: true }, overview[1], overview[2]]);
       expect(service.activeGroup()).toBe(activeBefore);
       expect(urlaub.currencyCode).toBeUndefined();
+    });
+
+    it('409 ohne Code (z. B. Text-Body): allgemeiner Fehler mit Hinweis, keine Rückfrage', async () => {
+      const { wg, overview } = givenGroups();
+      service.activeGroup.set({ ...wg, currencyCode: 'EUR' });
+
+      const result = service.updateGroup({ ...wg, currencyCode: 'USD' });
+      http.expectOne(`${api}/update`).flush('Changing the currency of a group with bookings requires confirmation',
+        { status: 409, statusText: 'Conflict' });
+
+      expect(await result).toBe('error');
+      expect(service.groupOverviewList()).toEqual(overview);
+      expect(alerts.showToast).toHaveBeenCalledOnceWith('alerts.group.error.update_group');
     });
 
     it('sendet die Bestätigung mit und übernimmt danach die neue Währung', async () => {
@@ -706,12 +720,14 @@ describe('GroupService', () => {
       expect(service.groupMembers()).toBe(other);
     });
 
-    // Fehlertext-Vertrag M2–M4: exakter Backend-Text als Body (Groovydoc CartControllerApiSpec)
+    // Fehlercode-Vertrag M2–M4 (DIV-108, Groovydoc CartControllerApiSpec)
     [
-      { name: 'unbekannte E-Mail', status: 404, body: 'User with email Neu@Example.com not found', key: 'message_no_exists' },
-      { name: 'Eigentümer als Mitglied', status: 403, body: 'New member equals group owner', key: 'message_admin_is_member' },
-      { name: 'bereits Mitglied', status: 403, body: 'Member already exists', key: 'message_already_member' },
-      { name: 'anderer Fehler', status: 403, body: notOwnerOfGroup, key: 'message_default' },
+      { name: 'unbekannte E-Mail', status: 404, body: { code: 'USER_NOT_FOUND', message: 'User with email Neu@Example.com not found' }, key: 'message_no_exists' },
+      { name: 'Eigentümer als Mitglied', status: 403, body: { code: 'MEMBER_EQUALS_OWNER', message: 'New member equals group owner' }, key: 'message_admin_is_member' },
+      { name: 'bereits Mitglied', status: 403, body: { code: 'MEMBER_ALREADY_EXISTS', message: 'Member already exists' }, key: 'message_already_member' },
+      { name: 'bereits Mitglied, geänderter Text (nur der Code zählt)', status: 403, body: { code: 'MEMBER_ALREADY_EXISTS', message: 'anderer Text' }, key: 'message_already_member' },
+      { name: 'anderer Fehler', status: 403, body: { code: 'NOT_GROUP_OWNER', message: notOwnerOfGroup }, key: 'message_default' },
+      { name: 'alter Text ohne Code', status: 403, body: 'Member already exists', key: 'message_default' },
     ].forEach(c => {
       it(`lässt den Zustand bei einem Fehler (${c.name}) unverändert und liefert den passenden Fehler-Key ohne Fehler-Toast`, async () => {
         const { overview } = givenGroups();

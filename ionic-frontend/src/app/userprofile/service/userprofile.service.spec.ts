@@ -1,4 +1,4 @@
-import { HttpTestingController } from '@angular/common/http/testing';
+import { HttpTestingController, TestRequest } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
@@ -23,6 +23,14 @@ describe('UserprofileService', () => {
   const api = `${environment.apiBaseUrl}/api/userprofile`;
   const badRequest = { status: 400, statusText: 'Bad Request' };
   const serverError = { status: 500, statusText: 'Server Error' };
+  /** Fehlerbody im JSON-Format mit Code (DIV-108, Vertrag in CartControllerApiSpec). */
+  const coded = (code: string, message: string) => ({ code, message });
+  /** Antworten ohne Code: alter Text, Netzwerkfehler, leerer Body – nie ein Hinweis, nie ein TypeError (DIV-47). */
+  const withoutCode = [
+    { name: 'alter Text ohne Code', fail: (req: TestRequest, text: string) => req.flush(text, badRequest) },
+    { name: 'Netzwerkfehler', fail: (req: TestRequest) => req.error(new ProgressEvent('error')) },
+    { name: 'leerer Body', fail: (req: TestRequest) => req.flush(null, serverError) },
+  ];
 
   beforeEach(() => {
     // User.token prüft gegen die aktuelle Uhrzeit – fest auf REFERENCE_DATE, der Testnutzer ist eine Stunde gültig.
@@ -109,8 +117,8 @@ describe('UserprofileService', () => {
     });
 
     [
-      { name: 'Name vergeben', userName: 'Annika', body: 'User with name Annika already exists', key: 'exists' },
-      { name: 'Name nicht erlaubt', userName: 'DELETED', body: 'User name is not allowed', key: 'not_allowed' },
+      { name: 'Name vergeben', userName: 'Annika', body: coded('USER_NAME_ALREADY_EXISTS', 'User with name Annika already exists'), key: 'exists' },
+      { name: 'Name nicht erlaubt', userName: 'DELETED', body: coded('USER_NAME_NOT_ALLOWED', 'User name is not allowed'), key: 'not_allowed' },
     ].forEach(c => {
       it(`zeigt bei einem Fehler (${c.name}) den passenden Hinweis und ändert die Anmeldedaten nicht`, () => {
         service.changeUserName({ id: 5, userName: c.userName });
@@ -129,6 +137,16 @@ describe('UserprofileService', () => {
 
       expect(alerts.showErrorAlert).not.toHaveBeenCalled();
       expect(auth.setUserData).not.toHaveBeenCalled();
+    });
+
+    withoutCode.forEach(c => {
+      it(`zeigt bei ${c.name} keinen Hinweis und ändert die Anmeldedaten nicht`, () => {
+        service.changeUserName({ id: 5, userName: 'Annika' });
+        c.fail(http.expectOne(`${api}/update-username`), 'User with name Annika already exists');
+
+        expect(alerts.showErrorAlert).not.toHaveBeenCalled();
+        expect(auth.setUserData).not.toHaveBeenCalled();
+      });
     });
 
     it('lädt bei einem Fehler nichts neu', () => {
@@ -156,11 +174,11 @@ describe('UserprofileService', () => {
 
     [
       {
-        name: 'E-Mail vergeben', body: 'User with email neu@example.com already exists',
+        name: 'E-Mail vergeben', body: coded('EMAIL_ALREADY_EXISTS', 'User with email neu@example.com already exists'),
         prefix: 'alerts.user_profile.change_email.error_message_service',
       },
       {
-        name: 'ungültige E-Mail', body: 'Invalid Email',
+        name: 'ungültige E-Mail', body: coded('INVALID_EMAIL', 'Invalid Email'),
         prefix: 'alerts.user_profile.change_email.error_message_service.invalid_email',
       },
     ].forEach(c => {
@@ -169,6 +187,16 @@ describe('UserprofileService', () => {
         http.expectOne(`${api}/update-usermail`).flush(c.body, badRequest);
 
         expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(`${c.prefix}.header`, `${c.prefix}.message`);
+        expectStillLoggedIn();
+      });
+    });
+
+    withoutCode.forEach(c => {
+      it(`zeigt bei ${c.name} keinen Hinweis und lässt den Nutzer angemeldet`, () => {
+        service.changeUserEmail(dto);
+        c.fail(http.expectOne(`${api}/update-usermail`), 'Invalid Email');
+
+        expect(alerts.showErrorAlert).not.toHaveBeenCalled();
         expectStillLoggedIn();
       });
     });
@@ -197,12 +225,31 @@ describe('UserprofileService', () => {
 
     it('zeigt bei falschem altem Passwort einen Hinweis und lässt den Nutzer angemeldet', () => {
       service.changePassword(dto);
-      http.expectOne(`${api}/update-password`).flush('Incorrect password', badRequest);
+      http.expectOne(`${api}/update-password`).flush(coded('INCORRECT_PASSWORD', 'Incorrect password'), badRequest);
 
       expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(
         'alerts.user_profile.change_password.error_message_service.header',
         'alerts.user_profile.change_password.error_message_service.message');
       expectStillLoggedIn();
+    });
+
+    it('wertet nur den Code aus: INCORRECT_PASSWORD mit geändertem Text zeigt den Hinweis', () => {
+      service.changePassword(dto);
+      http.expectOne(`${api}/update-password`).flush(coded('INCORRECT_PASSWORD', 'anderer Text'), badRequest);
+
+      expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(
+        'alerts.user_profile.change_password.error_message_service.header',
+        'alerts.user_profile.change_password.error_message_service.message');
+    });
+
+    withoutCode.forEach(c => {
+      it(`zeigt bei ${c.name} keinen Hinweis und lässt den Nutzer angemeldet`, () => {
+        service.changePassword(dto);
+        c.fail(http.expectOne(`${api}/update-password`), 'Incorrect password');
+
+        expect(alerts.showErrorAlert).not.toHaveBeenCalled();
+        expectStillLoggedIn();
+      });
     });
 
     it('zeigt bei einem anderen Fehler keinen Hinweis und lässt den Nutzer angemeldet', () => {
@@ -231,10 +278,10 @@ describe('UserprofileService', () => {
 
     [
       {
-        name: 'unbekannte E-Mail', status: 404, body: 'User with email anna@example.com not found', key: 'error_email_not_exists',
+        name: 'unbekannte E-Mail', status: 404, body: coded('USER_NOT_FOUND', 'User with email anna@example.com not found'), key: 'error_email_not_exists',
         params: { email: 'anna@example.com' },
       },
-      { name: 'ungültige E-Mail', status: 400, body: 'Invalid Email', key: 'error_invalid_email', params: undefined },
+      { name: 'ungültige E-Mail', status: 400, body: coded('INVALID_EMAIL', 'Invalid Email'), key: 'error_invalid_email', params: undefined },
     ].forEach(c => {
       it(`zeigt bei einem Fehler (${c.name}) den passenden Hinweis`, () => {
         service.resetPassword(dto);
@@ -245,6 +292,15 @@ describe('UserprofileService', () => {
         if (c.params) {
           expect(instant).toHaveBeenCalledWith(`alerts.reset_password.${c.key}.message`, c.params);
         }
+      });
+    });
+
+    withoutCode.forEach(c => {
+      it(`zeigt bei ${c.name} keinen Hinweis`, () => {
+        service.resetPassword(dto);
+        c.fail(http.expectOne(`${api}/password-reset`), 'User with email anna@example.com not found');
+
+        expect(alerts.showErrorAlert).not.toHaveBeenCalled();
       });
     });
 

@@ -22,33 +22,40 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 /**
  * Referenz-API-Spec (MockMvc): HTTP-Status, Exception-Mapping von {@link RestResponseEntityExceptionHandler},
- * JSON-Form der DTOs, Security-Regeln und Fehlermeldungs-Vertrag zum Frontend.
+ * JSON-Form der DTOs, Security-Regeln und Fehlercode-Vertrag zum Frontend (mit Legacy-Text-Pins).
  *
  * - Requests über ApiRequests.send (Anmeldung per user: → .with(user(entity))); ohne Anmeldung antwortet Spring Security mit 403, nicht 401.
  * - JSON über den Jackson-ObjectMapper und Groovy-Vergleiche statt jsonPath.
  *
- * Fehlermeldungs-Vertrag (Übergangslösung bis zur Entscheidung über Fehlercodes, Konzept Q4):
- * Das Frontend erkennt Fehlerfälle am Text der Backend-Meldung. Jede ausgewertete Meldung hat einen API-Test.
+ * Fehlercode-Vertrag (DIV-108): Mit dem Request-Header X-Error-Format: json (sendet die App seit DIV-108) ist der
+ * Fehlerbody {code, message, details?}; das Frontend wertet nur code (und details) aus (service/api-error.ts).
+ * Ohne den Header bleibt der Body der bisherige Text mit unverändertem Content-Type – ältere App-Versionen werten
+ * diesen Text aus (Legacy-Text-Pins, bis eine Mindest-App-Version durchgesetzt ist). Jeder Fall hat einen API-Test
+ * mit Header (Code) und einen ohne Header (exakter Legacy-Text); Codes und Texte nur gemeinsam mit dem Frontend ändern.
  * <pre>
- * #   Frontend-Stelle                                Erwartet (Status, Text)                      Test
- * M1  cart.service.ts (add/update/settlement add+update) 400 'not within membership period'        CartControllerApiSpec (alle vier)
- * M2  group.service.ts addMemberToGroup              404 enthält gesendete E-Mail                 GroupControllerApiSpec
- * M3  group.service.ts addMemberToGroup              403 'New member equals group owner'          GroupControllerApiSpec
- * M4  group.service.ts addMemberToGroup              403 'Member already exists'                  GroupControllerApiSpec
- * M5  auth-error-message.ts Registrierung (!= 403)   400 enthält gesendete E-Mail                 AuthenticationControllerApiSpec
- * M6  auth-error-message.ts Registrierung (!= 403)   400 enthält gesendeten Namen                 AuthenticationControllerApiSpec
- * M7  userprofile.service.ts changeUserName          400 enthält gesendeten Namen                 UserProfileControllerApiSpec
- * M8  userprofile.service.ts changeUserName          400 'User name is not allowed'               UserProfileControllerApiSpec
- * M9  userprofile.service.ts changeUserEmail         400 enthält gesendete E-Mail                 UserProfileControllerApiSpec
- * M10 userprofile.service.ts resetPassword           404 enthält gesendete E-Mail                 UserProfileControllerApiSpec
- * X1  userprofile.service.ts (=== exakt)             400 'Invalid Email'                          UserProfileControllerApiSpec
- * X2  userprofile.service.ts changePassword (===)    400 'Incorrect password'                     UserProfileControllerApiSpec
- * X3  auth-error-message.ts Login/Registr. (===)     400 'DeviceId is required'                   AuthenticationControllerApiSpec
- * S1  group.service.ts updateGroup (Status, kein Text) 409 PUT /api/groups/update: Währungswechsel  GroupControllerApiSpec
- *     (DIV-77)                                          ohne Bestätigung bei vorhandenen Buchungen
+ * #   Frontend-Stelle                                Status Code                                  Legacy-Text (ohne Header)                  Test
+ * M1  cart.service.ts (add/update/settlement add+update) 400 DATE_NOT_WITHIN_MEMBERSHIP (+userId)  'Date purchased is not within membership period'  CartControllerApiSpec
+ * M2  group.service.ts addMemberErrorKey            404  USER_NOT_FOUND                        'User with email <E-Mail> not found'       GroupControllerApiSpec
+ * M3  group.service.ts addMemberErrorKey            403  MEMBER_EQUALS_OWNER                   'New member equals group owner'            GroupControllerApiSpec
+ * M4  group.service.ts addMemberErrorKey            403  MEMBER_ALREADY_EXISTS                 'Member already exists'                    GroupControllerApiSpec
+ * M5  auth-error-message.ts (nur Registrierung)     400  EMAIL_ALREADY_EXISTS                  'User with email <E-Mail> already exists'  AuthenticationControllerApiSpec
+ * M6  auth-error-message.ts (nur Registrierung)     400  USER_NAME_ALREADY_EXISTS              'User with name <Name> already exists'     AuthenticationControllerApiSpec
+ * M7  userprofile.service.ts changeUserName         400  USER_NAME_ALREADY_EXISTS              'User with name <Name> already exists'     UserProfileControllerApiSpec
+ * M8  userprofile.service.ts changeUserName         400  USER_NAME_NOT_ALLOWED                 'User name is not allowed'                 UserProfileControllerApiSpec
+ * M9  userprofile.service.ts changeUserEmail        400  EMAIL_ALREADY_EXISTS                  'User with email <E-Mail> already exists'  UserProfileControllerApiSpec
+ * M10 userprofile.service.ts resetPassword          404  USER_NOT_FOUND                        'User with email <E-Mail> not found'       UserProfileControllerApiSpec
+ * X1  userprofile.service.ts changeUserEmail/reset  400  INVALID_EMAIL                         'Invalid Email'                            UserProfile-/AuthenticationControllerApiSpec
+ * X2  userprofile.service.ts changePassword         400  INCORRECT_PASSWORD                    'Incorrect password'                       UserProfileControllerApiSpec
+ * X3  auth-error-message.ts Login/Registrierung     400  DEVICE_ID_REQUIRED                    'DeviceId is required'                     AuthenticationControllerApiSpec
+ * S1  group.service.ts updateGroup (DIV-77)         409  CURRENCY_CHANGE_CONFIRMATION_REQUIRED 'Changing the currency of a group with bookings requires confirmation'  GroupControllerApiSpec
  * </pre>
- * Nicht abgedeckt: Bei parallelen Registrierungen/E-Mail-Änderungen liefert der Unique-Constraint-Handler
- * 'User with email already exists' ohne Adresse; das Frontend erkennt diesen Fall nicht (bekannt seit DIV-22).
+ * M1 details.userId: die Partei, deren Mitgliedschaft das Datum nicht abdeckt (bei Ausgleichszahlungen Zahler vor
+ * Empfänger). Fehlendes Datum: DATE_PURCHASED_REQUIRED (kein Mitgliedschaftshinweis).
+ * Alle übrigen gemappten Exceptions haben ebenfalls einen Code (ApiErrorCode, RestResponseEntityExceptionHandlerSpec),
+ * das Frontend wertet sie aber nicht aus. Der Unique-Constraint-Handler (parallele Registrierungen/E-Mail-Änderungen)
+ * liefert EMAIL_ALREADY_EXISTS mit dem Text 'User with email already exists' ohne Adresse – über den Code erkennt das
+ * Frontend jetzt auch diesen Fall; ältere App-Versionen weiterhin nicht (bekannt seit DIV-22).
+ * Content-Type der Legacy-Antwort: GroupControllerApiSpec (application/json mit reinem Text, Angular liefert ihn als String).
  */
 class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
 
@@ -124,7 +131,7 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
 
         then:
         response.status == 400
-        response.contentAsString.contains('not within membership period')
+        response.contentAsString == 'Date purchased is not within membership period'
     }
 
     // ----- DIV-81: Kaufdatum als Kalendertag -----
@@ -503,7 +510,7 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
 
         then:
         response.status == 400
-        response.contentAsString.contains('not within membership period')
+        response.contentAsString == 'Date purchased is not within membership period'
 
         where:
         endpoint << ['PUT /api/carts/update', 'POST /api/carts/settlement-payment/add']
@@ -692,7 +699,96 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
         'Betrag 0: 400'                             | 'owner'    | 'ben'      | [amount: 0]                   || 400    | 'greater than 0'
         'Betrag mit 3 Nachkommastellen: 400'        | 'owner'    | 'ben'      | [amount: 12.345]              || 400    | 'at most 2 decimal'
         'fehlende Id: 400'                          | 'owner'    | 'ben'      | [id: null]                    || 400    | "'id'"
-        'Datum vor der Mitgliedschaft: 400 (M1)'    | 'owner'    | 'ben'      | [datePurchased: '2020-01-01'] || 400    | 'not within membership period'
+    }
+
+    def "Mit X-Error-Format json: Einkauf #endpoint #fall -> Code #code, details #details"() {
+        given: 'Mitgliedschaft des Owners beginnt 2024-06-15'
+        def wg = fixtures.group()
+        def cart = fixtures.cart(wg, title: 'Pizza', amount: 20d)
+        def ownerId = wg.owner.id
+        def body = [title: 'Pizza', amount: 20, groupId: wg.group.id, categoryDto: [id: wg.category.id]] +
+                (datum == null ? [:] : [datePurchased: datum]) + (endpoint == 'PUT /api/carts/update' ? [id: cart.id] : [:])
+        def request = endpoint == 'PUT /api/carts/update' ? put('/api/carts/update') : post('/api/carts/add')
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet, Mitglied seit 2024-06-15), Einkauf {}; {} mit Datum {}',
+                wg.group.id, ownerId, cart.id, endpoint, datum)
+
+        when:
+        def response = send(request.header('X-Error-Format', 'json'), user: wg.owner, body: body)
+        def antwort = json(response)
+        LOG.info('Antwort: {} {}', response.status, antwort)
+
+        then:
+        response.status == 400
+        response.contentType == 'application/json'
+        antwort.code == code
+        antwort.message == text
+        (antwort.details ?: [:]) == (details == 'userId Owner' ? [userId: ownerId] : [:])
+        details == 'userId Owner' || !antwort.containsKey('details')
+
+        where:
+        endpoint                | fall                       | datum        || code                         | text                                             | details
+        'POST /api/carts/add'   | 'vor der Mitgliedschaft'   | '2020-01-01' || 'DATE_NOT_WITHIN_MEMBERSHIP' | 'Date purchased is not within membership period' | 'userId Owner'
+        'PUT /api/carts/update' | 'vor der Mitgliedschaft'   | '2020-01-01' || 'DATE_NOT_WITHIN_MEMBERSHIP' | 'Date purchased is not within membership period' | 'userId Owner'
+        'POST /api/carts/add'   | 'ohne Datum'               | null         || 'DATE_PURCHASED_REQUIRED'    | 'Date purchased is required'                     | 'keine'
+    }
+
+    def "Mit X-Error-Format json: Ausgleichszahlung #aktion, #fall -> details.userId nennt #betroffen"() {
+        given: 'alle Mitgliedschaften beginnen 2025-06-01; eine Zusatz-Mitgliedschaft 2025-01-01–2025-05-31 deckt den 2025-03-01 ab'
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben], memberSince: LocalDate.of(2025, 6, 1))
+        def (ownerId, benId) = [wg.owner.id, ben.id]
+        def zusatz = fall == 'nur der Empfänger außerhalb' ? wg.owner : fall == 'nur der Zahler außerhalb' ? ben : null
+        if (zusatz != null) {
+            fixtures.membership(wg, zusatz, membershipStart: DateUtils.toDate(LocalDate.of(2025, 1, 1)),
+                    membershipEnd: DateUtils.toDate(LocalDate.of(2025, 5, 31)))
+        }
+        def settlementId = aktion == 'bearbeiten'
+                ? json(addSettlement(wg.owner, [amount: 30, groupId: wg.group.id, member: [id: benId], datePurchased: '2025-06-15']))[0].settlementId as Long
+                : null
+        def request = aktion == 'bearbeiten' ? put('/api/carts/settlement-payment/update') : post('/api/carts/settlement-payment/add')
+        def body = [amount: 30, groupId: wg.group.id, member: [id: benId], datePurchased: '2025-03-01'] +
+                (settlementId != null ? [id: settlementId] : [:])
+        flushAndClear()
+        LOG.info('Szenario: Gruppe {}, Owner {} zahlt an Ben {} am 2025-03-01; Zusatz-Mitgliedschaft für {}; Settlement {}',
+                wg.group.id, ownerId, benId, zusatz?.id, settlementId)
+
+        when:
+        def response = send(request.header('X-Error-Format', 'json'), user: wg.owner, body: body)
+        def antwort = json(response)
+        LOG.info('Antwort: {} {}', response.status, antwort)
+
+        then:
+        response.status == 400
+        antwort.code == 'DATE_NOT_WITHIN_MEMBERSHIP'
+        antwort.message == 'Date purchased is not within membership period'
+        antwort.details == [userId: betroffen == 'Empfänger' ? benId : ownerId]
+
+        where:
+        aktion       | fall                          || betroffen
+        'anlegen'    | 'nur der Empfänger außerhalb' || 'Empfänger'
+        'anlegen'    | 'nur der Zahler außerhalb'    || 'Zahler'
+        'anlegen'    | 'beide außerhalb'             || 'Zahler'
+        'bearbeiten' | 'nur der Empfänger außerhalb' || 'Empfänger'
+        'bearbeiten' | 'nur der Zahler außerhalb'    || 'Zahler'
+        'bearbeiten' | 'beide außerhalb'             || 'Zahler'
+    }
+
+    def "Ausgleichszahlung bearbeiten mit Datum vor der Mitgliedschaft: 400 mit exaktem Legacy-Text (M1)"() {
+        given: 'Mitgliedschaften beginnen 2024-06-15'
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def paar = json(addSettlement(wg.owner, [amount: 30, groupId: wg.group.id, member: [id: ben.id], datePurchased: '2025-06-15']))
+        def settlementId = paar[0].settlementId as Long
+        LOG.info('Szenario: Gruppe {}, Owner {} zahlte an Ben {}; Settlement {} wird auf 2020-01-01 datiert', wg.group.id,
+                wg.owner.id, ben.id, settlementId)
+
+        when:
+        def response = updateSettlement(wg.owner, [id: settlementId, amount: 30, member: [id: ben.id], datePurchased: '2020-01-01'])
+        LOG.info('Antwort: {} {}', response.status, response.contentAsString)
+
+        then:
+        response.status == 400
+        response.contentAsString == 'Date purchased is not within membership period'
     }
 
     def "Kategorien als JSON enthalten das Settlement-Kennzeichen"() {

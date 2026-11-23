@@ -264,7 +264,7 @@ describe('SettlementSheetComponent (DIV-70)', () => {
 
       await component.save();
 
-      expect(addSettlementPayment).toHaveBeenCalledOnceWith(jasmine.objectContaining({ amount: 65.35 }));
+      expect(addSettlementPayment).toHaveBeenCalledOnceWith(jasmine.objectContaining({ amount: 65.35 }), { id: me.id, userName: 'Ich' });
     });
 
     it('auf 0 gerundet (0.004): Hinweis „größer als 0“, kein Request', async () => {
@@ -321,7 +321,7 @@ describe('SettlementSheetComponent (DIV-70)', () => {
 
       await component.save();
 
-      expect(addSettlementPayment).toHaveBeenCalledOnceWith(jasmine.objectContaining({ amount: 12.35 }));
+      expect(addSettlementPayment).toHaveBeenCalledOnceWith(jasmine.objectContaining({ amount: 12.35 }), { id: me.id, userName: 'Ich' });
     });
 
     it('„0,004“: auf 0 gerundet, Hinweis „größer als 0“; Vorzeichen: Formatfehler', () => {
@@ -356,7 +356,7 @@ describe('SettlementSheetComponent (DIV-70)', () => {
 
       expect(addSettlementPayment).toHaveBeenCalledOnceWith({
         amount: 25.5, groupId: 7, member: { id: anna.id, userName: 'Anna' }, datePurchased: '2025-06-10',
-      });
+      }, { id: me.id, userName: 'Ich' });
       expect(modalCtrl.dismiss).toHaveBeenCalledOnceWith(undefined, 'saved', MODAL_ID);
       expect(saving()).toBeFalse();
     });
@@ -431,7 +431,7 @@ describe('SettlementSheetComponent (DIV-70)', () => {
 
       expect(addSettlementPayment).toHaveBeenCalledOnceWith(jasmine.objectContaining({
         member: { id: anna.id, userName: '' },
-      }));
+      }), { id: me.id, userName: 'Ich' });
       expect(component.form.controls.memberId.value).toBe(anna.id);
     });
   });
@@ -806,7 +806,7 @@ describe('SettlementSheetComponent – Richtungsumschalter (DIV-74, Phase 5)', (
     expect(addSettlementPayment).toHaveBeenCalledOnceWith({
       payer: { id: ben.id, userName: 'Ben' }, amount: 25, groupId: 7, member: { id: me.id, userName: 'Ich' },
       datePurchased: '2025-06-10',
-    });
+    }, { id: me.id, userName: 'Ich' });
   });
 
   it('„Ich habe gezahlt an“ sendet wie bisher keinen Zahler', async () => {

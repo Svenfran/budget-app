@@ -146,10 +146,14 @@ public class VerificationService {
         }
     }
 
-    public void verifyDatePurchasedWithinMembershipPeriod (List<GroupMembershipHistory> gmh, LocalDate datePurchased) throws DatePurchasedNotWithinMembershipPeriodException {
+    /**
+     * @param userId die Partei, deren Mitgliedschaftshistorie {@code gmh} ist; wird bei einem Datum außerhalb der
+     *               Mitgliedschaft als {@code details.userId} gemeldet (DIV-108)
+     */
+    public void verifyDatePurchasedWithinMembershipPeriod(List<GroupMembershipHistory> gmh, LocalDate datePurchased, Long userId) throws DatePurchasedNotWithinMembershipPeriodException {
         // DIV-81: fehlendes Kaufdatum → 400 statt NPE/500. Eigene Meldung ohne 'not within membership period' (M1).
         if (datePurchased == null) {
-            throw new DatePurchasedNotWithinMembershipPeriodException("Date purchased is required");
+            throw DatePurchasedNotWithinMembershipPeriodException.required();
         }
         for (var timePeriod : gmh) {
             var startDate = toLocalDate(timePeriod.getMembershipStart());
@@ -161,7 +165,8 @@ public class VerificationService {
             if (isAfterStart && isBeforeEnd) {
                 return;
             }
-        } throw new DatePurchasedNotWithinMembershipPeriodException("Date purchased is not within membership period");
+        }
+        throw DatePurchasedNotWithinMembershipPeriodException.notWithinMembership(userId);
     }
 
     /**

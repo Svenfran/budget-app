@@ -53,6 +53,7 @@ describe('AuthHttpInterceptorService', () => {
     expect(req.request.headers.get('Authorization')).toBe(anna.token);
     expect(req.request.headers.get('DeviceId')).toBe('device-1');
     expect(req.request.headers.get('Accept-Language')).toBe('de');
+    expect(req.request.headers.get('X-Error-Format')).toBe('json');
     req.flush([]);
   }));
 
@@ -66,6 +67,8 @@ describe('AuthHttpInterceptorService', () => {
     expect(req.request.headers.has('Authorization')).toBeFalse();
     expect(req.request.headers.has('DeviceId')).toBeFalse();
     expect(req.request.headers.get('Accept-Language')).toBe('de');
+    // Fehlercodes auch für Login/Registrierung/Passwort-Reset (DIV-108)
+    expect(req.request.headers.get('X-Error-Format')).toBe('json');
     req.flush([]);
   });
 });

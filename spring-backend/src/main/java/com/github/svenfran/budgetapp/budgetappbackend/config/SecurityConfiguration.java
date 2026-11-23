@@ -1,5 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.config;
 
+import com.github.svenfran.budgetapp.budgetappbackend.controller.RestResponseEntityExceptionHandler;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -80,7 +81,9 @@ public class SecurityConfiguration {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(allowedOrigins);
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(Arrays.asList("Origin", "Content-Type", "Accept", "Authorization", "DeviceId"));
+        // X-Error-Format: Opt-in der App ins JSON-Fehlerformat (DIV-108); fehlt er hier, scheitert der Preflight neuer Apps
+        configuration.setAllowedHeaders(Arrays.asList("Origin", "Content-Type", "Accept", "Authorization", "DeviceId",
+                RestResponseEntityExceptionHandler.ERROR_FORMAT_HEADER));
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

@@ -18,6 +18,7 @@ import org.springframework.security.core.userdetails.User as SpringUser
 import java.time.LocalDate
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 
 /**
@@ -25,7 +26,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * DIV-18: JWT-Filter Ende-zu-Ende – widerrufene/abgelaufene Tokens (DB-Flags und JWT-exp), falsche DeviceId,
  * Logout, nicht verwertbare JWTs (403 statt Serverfehler) und öffentliche Endpunkte mit ungültigem Bearer-Header.
  * DIV-46: DeviceId ist Pflichtfeld bei Login und Registrierung (400, es wird kein Token gespeichert).
- * Enthält auch Fälle des Fehlermeldungs-Vertrags (Liste der Meldungen: {@link CartControllerApiSpec}).
+ * Enthält auch Fälle des Fehlercode-Vertrags mit Legacy-Text-Pins (Liste: {@link CartControllerApiSpec}).
  */
 class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequests {
 
@@ -270,7 +271,7 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
 
         then:
         response.status == 400
-        // Frontend erkennt den Fall am exakten Text (Fehlermeldungs-Vertrag X3)
+        // Legacy-Text: ältere App-Versionen erkennen den Fall am exakten Text (Vertrag X3; neue per Code DEVICE_ID_REQUIRED)
         meldung == 'DeviceId is required'
         !nutzerAngelegt
 
@@ -326,6 +327,50 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
         then:
         response.status == 400
         response.contentAsString == 'Invalid Email'
+    }
+
+    def "Mit X-Error-Format json: #fall -> 400 mit Code #code und bisherigem Text"() {
+        given: 'max ist mit max@example.de registriert'
+        register('max', 'max@example.de')
+        def body = (name == null ? [:] : [name: name]) + [email: email, password: 'geheim123'] + (deviceId.is(FEHLT) ? [:] : [deviceId: deviceId])
+        LOG.info('Szenario: max@example.de (max) existiert; {} {} {}', endpoint, fall, body.findAll { it.key != 'password' })
+
+        when:
+        def response = send(post(endpoint).header('X-Error-Format', 'json'), body: body)
+        def antwort = json(response)
+        LOG.info('Antwort: {} {} ({})', response.status, antwort, response.contentType)
+
+        then:
+        response.status == 400
+        response.contentType == 'application/json'
+        antwort.code == code
+        antwort.message == text
+        !antwort.containsKey('details')
+
+        where:
+        fall                               | endpoint                 | name     | email               | deviceId || code                       | text
+        'vergebene E-Mail (M5)'            | '/api/auth/register'     | 'moritz' | 'max@example.de'    | DEVICE   || 'EMAIL_ALREADY_EXISTS'     | 'User with email max@example.de already exists'
+        'vergebener Name (M6)'             | '/api/auth/register'     | 'max'    | 'moritz@example.de' | DEVICE   || 'USER_NAME_ALREADY_EXISTS' | 'User with name max already exists'
+        'Registrierung ohne DeviceId (X3)' | '/api/auth/register'     | 'moritz' | 'moritz@example.de' | FEHLT    || 'DEVICE_ID_REQUIRED'       | 'DeviceId is required'
+        'Login ohne DeviceId (X3)'         | '/api/auth/authenticate' | null     | 'max@example.de'    | FEHLT    || 'DEVICE_ID_REQUIRED'       | 'DeviceId is required'
+        'ungültige E-Mail (X1)'            | '/api/auth/register'     | 'moritz' | 'keine-email'       | DEVICE   || 'INVALID_EMAIL'            | 'Invalid Email'
+    }
+
+    def "CORS-Preflight der App erlaubt den Header X-Error-Format"() {
+        given: 'WebView-Origin der Prod-App (androidScheme https); http://localhost wäre für MockMvc (localhost:80) same-origin'
+        LOG.info('Szenario: Preflight von https://localhost für POST /api/auth/authenticate mit x-error-format')
+
+        when:
+        def response = send(options('/api/auth/authenticate')
+                .header('Origin', 'https://localhost')
+                .header('Access-Control-Request-Method', 'POST')
+                .header('Access-Control-Request-Headers', 'content-type,x-error-format'))
+        def erlaubt = response.getHeader('Access-Control-Allow-Headers')
+        LOG.info('Antwort: {}, Access-Control-Allow-Headers {}', response.status, erlaubt)
+
+        then:
+        response.status == 200
+        erlaubt?.toLowerCase(Locale.ROOT)?.contains('x-error-format')
     }
 
     /** deviceId FEHLT: Body ohne deviceId (wie ein Client, der keine sendet); null: explizites JSON-null. */
