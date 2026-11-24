@@ -50,5 +50,9 @@ public enum ApiErrorCode {
 
     // 409
     SETTLEMENT_CART_NOT_EDITABLE,
-    CURRENCY_CHANGE_CONFIRMATION_REQUIRED
+    CURRENCY_CHANGE_CONFIRMATION_REQUIRED,
+
+    // 429
+    /** Login-Rate-Limit (DIV-64); die Restzeit steht im Header {@code Retry-After}. */
+    TOO_MANY_LOGIN_ATTEMPTS
 }

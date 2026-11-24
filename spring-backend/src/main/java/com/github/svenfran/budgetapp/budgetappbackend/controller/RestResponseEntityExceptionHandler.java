@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -134,6 +135,20 @@ public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionH
     })
     protected ResponseEntity<Object> handleForbidden(Exception ex, WebRequest request) {
         return buildResponse(ex, HttpStatus.FORBIDDEN, request);
+    }
+
+    /**
+     * Login-Rate-Limit (DIV-64): 429 mit Retry-After (Sekunden); Body wie alle Fehler je nach X-Error-Format
+     * ({@code TOO_MANY_LOGIN_ATTEMPTS} über {@link ApiErrorInfo}) bzw. der feste Text. Nennt nicht, welches Limit
+     * gegriffen hat. Das Frontend erkennt den Fall am Status.
+     */
+    @ExceptionHandler(TooManyLoginAttemptsException.class)
+    protected ResponseEntity<Object> handleTooManyLoginAttempts(TooManyLoginAttemptsException ex, WebRequest request) {
+        var response = buildResponse(ex, HttpStatus.TOO_MANY_REQUESTS, request);
+        return ResponseEntity.status(response.getStatusCode())
+                .headers(response.getHeaders())
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getRetryAfterSeconds()))
+                .body(response.getBody());
     }
 
     /** Gültige Anfrage, die dem Zustand der Ressource widerspricht (DIV-74: Settlement-Cart über normalen Endpoint). */
