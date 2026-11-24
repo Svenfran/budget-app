@@ -1,7 +1,12 @@
 package com.github.svenfran.budgetapp.budgetappbackend.exceptions;
 
-/** Login abgewiesen, weil ein Rate-Limit überschritten ist (DIV-64); wird auf HTTP 429 mit {@code Retry-After} abgebildet. */
-public class TooManyLoginAttemptsException extends Exception {
+import com.github.svenfran.budgetapp.budgetappbackend.constants.ApiErrorCode;
+
+/**
+ * Login abgewiesen, weil ein Rate-Limit überschritten ist (DIV-64); wird auf HTTP 429 mit {@code Retry-After} abgebildet.
+ * Eigener Statushandler, daher liefert die Exception ihren Fehlercode selbst ({@link ApiErrorInfo}, DIV-108).
+ */
+public class TooManyLoginAttemptsException extends Exception implements ApiErrorInfo {
 
     private final long retryAfterSeconds;
 
@@ -12,5 +17,10 @@ public class TooManyLoginAttemptsException extends Exception {
 
     public long getRetryAfterSeconds() {
         return retryAfterSeconds;
+    }
+
+    @Override
+    public ApiErrorCode getErrorCode() {
+        return ApiErrorCode.TOO_MANY_LOGIN_ATTEMPTS;
     }
 }

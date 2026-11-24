@@ -138,14 +138,17 @@ public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionH
     }
 
     /**
-     * Login-Rate-Limit (DIV-64): 429 mit Retry-After (Sekunden) und festem Text; nennt nicht, welches Limit gegriffen
-     * hat. Das Frontend erkennt den Fall am Status, nicht am Text.
+     * Login-Rate-Limit (DIV-64): 429 mit Retry-After (Sekunden); Body wie alle Fehler je nach X-Error-Format
+     * ({@code TOO_MANY_LOGIN_ATTEMPTS} über {@link ApiErrorInfo}) bzw. der feste Text. Nennt nicht, welches Limit
+     * gegriffen hat. Das Frontend erkennt den Fall am Status.
      */
     @ExceptionHandler(TooManyLoginAttemptsException.class)
     protected ResponseEntity<Object> handleTooManyLoginAttempts(TooManyLoginAttemptsException ex, WebRequest request) {
-        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+        var response = buildResponse(ex, HttpStatus.TOO_MANY_REQUESTS, request);
+        return ResponseEntity.status(response.getStatusCode())
+                .headers(response.getHeaders())
                 .header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getRetryAfterSeconds()))
-                .body(ex.getMessage());
+                .body(response.getBody());
     }
 
     /** Gültige Anfrage, die dem Zustand der Ressource widerspricht (DIV-74: Settlement-Cart über normalen Endpoint). */

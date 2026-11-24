@@ -123,6 +123,22 @@ class RestResponseEntityExceptionHandlerSpec extends Specification {
         response.body == new ApiErrorDto(DATE_NOT_WITHIN_MEMBERSHIP, 'Date purchased is not within membership period', [userId: 42L])
     }
 
+    def "Login-Rate-Limit (DIV-64) mit X-Error-Format '#header': 429, Retry-After und Body #format"() {
+        when:
+        def response = handler.handleTooManyLoginAttempts(new TooManyLoginAttemptsException(540), request(header))
+
+        then:
+        response.statusCode == HttpStatus.TOO_MANY_REQUESTS
+        response.headers.getFirst('Retry-After') == '540'
+        response.headers.getContentType() == contentType
+        response.body == body
+
+        where:
+        format          | header || contentType                | body
+        'Text (Legacy)' | null   || null                       | 'Too many login attempts'
+        'JSON mit Code' | 'json' || MediaType.APPLICATION_JSON | new ApiErrorDto(TOO_MANY_LOGIN_ATTEMPTS, 'Too many login attempts', [:])
+    }
+
     def "Verletzung des E-Mail-Unique-Constraints (parallele Requests) wird zu 400 'already exists'"() {
         given:
         def ex = violation('uk_user_details_email')

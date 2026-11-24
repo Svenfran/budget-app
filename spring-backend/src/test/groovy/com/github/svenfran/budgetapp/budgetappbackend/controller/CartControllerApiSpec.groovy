@@ -48,10 +48,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * X2  userprofile.service.ts changePassword         400  INCORRECT_PASSWORD                    'Incorrect password'                       UserProfileControllerApiSpec
  * X3  auth-error-message.ts Login/Registrierung     400  DEVICE_ID_REQUIRED                    'DeviceId is required'                     AuthenticationControllerApiSpec
  * S1  group.service.ts updateGroup (DIV-77)         409  CURRENCY_CHANGE_CONFIRMATION_REQUIRED 'Changing the currency of a group with bookings requires confirmation'  GroupControllerApiSpec
+ * R1  auth-error-message.ts Login (DIV-64)         429  TOO_MANY_LOGIN_ATTEMPTS               'Too many login attempts'                  AuthenticationControllerApiSpec
  * </pre>
  * M1 details.userId: die Partei, deren Mitgliedschaft das Datum nicht abdeckt (bei Ausgleichszahlungen Zahler vor
  * Empfänger). Seit DIV-109 kann das auch eine ehemalige Gegenpartei sein (Datum vor dem Beginn ihrer ersten
  * Mitgliedschaft). Fehlendes Datum: DATE_PURCHASED_REQUIRED (kein Mitgliedschaftshinweis).
+ * R1: Das Frontend erkennt 429 am Status (alle App-Versionen), nicht am Code; die Restzeit steht im Header Retry-After
+ * (per CORS freigegeben). Code und Text sind trotzdem gepinnt.
  * Alle übrigen gemappten Exceptions haben ebenfalls einen Code (ApiErrorCode, RestResponseEntityExceptionHandlerSpec),
  * das Frontend wertet sie aber nicht aus. Der Unique-Constraint-Handler (parallele Registrierungen/E-Mail-Änderungen)
  * liefert EMAIL_ALREADY_EXISTS mit dem Text 'User with email already exists' ohne Adresse – über den Code erkennt das

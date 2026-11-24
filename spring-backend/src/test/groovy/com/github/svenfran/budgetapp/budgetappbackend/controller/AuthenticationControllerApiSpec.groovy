@@ -515,6 +515,26 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
         lesbar.split(',')*.trim().contains('Retry-After')
     }
 
+    def "429 mit X-Error-Format json: Code TOO_MANY_LOGIN_ATTEMPTS, bisheriger Text und Retry-After (R1)"() {
+        given:
+        register('max', 'max@example.de')
+        5.times { authenticate('max@example.de', password: FALSCH) }
+        LOG.info('Szenario: registriert max, 5 Fehlversuche, 6. Versuch mit X-Error-Format json')
+
+        when:
+        def response = authenticate('max@example.de', headers: ['X-Error-Format': 'json'])
+        def antwort = json(response)
+        LOG.info('Antwort: {} {} ({}), Retry-After {}', response.status, antwort, response.contentType, response.getHeader('Retry-After'))
+
+        then:
+        response.status == 429
+        response.contentType == 'application/json'
+        antwort.code == 'TOO_MANY_LOGIN_ATTEMPTS'
+        antwort.message == 'Too many login attempts'
+        !antwort.containsKey('details')
+        response.getHeader('Retry-After') == '900'
+    }
+
     def "Kein Log (aller Logger, Security auf DEBUG) enthält Passwort, JWT, E-Mail oder IP im Klartext (AC7)"() {
         given:
         register('max', 'max@example.de')
