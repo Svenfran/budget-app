@@ -5,6 +5,7 @@ import { Init } from 'src/app/constants/default-values';
 import { RECURRENCE_TYPE } from 'src/app/constants/recurrence-type';
 import { AlertService } from 'src/app/service/alert.service';
 import { SettlementPaymentDto } from '../model/settlement-payment-dto';
+import { SettlementEditData } from '../settlement-sheet/settlement-form';
 import { environment } from 'src/environments/environment';
 import { aCart, aGroup, aUser } from 'src/testing/test-data';
 import { alertServiceSpy, provideServiceTesting } from 'src/testing/test-providers';
@@ -18,7 +19,12 @@ describe('CartService', () => {
   let alerts: jasmine.SpyObj<AlertService>;
   let fileExport: jasmine.SpyObj<FileExportService>;
   const api = `${environment.apiBaseUrl}/api/carts`;
-  const notWithinMembership = 'Date purchased is not within membership period';
+  const membershipText = 'Date purchased is not within membership period';
+  /** Mitgliedschaftsfehler im JSON-Format (Vertrag M1, DIV-108); `userId` = betroffene Partei (details.userId). */
+  const notWithinMembership = (userId?: number) => ({
+    code: 'DATE_NOT_WITHIN_MEMBERSHIP', message: membershipText, ...(userId !== undefined ? { details: { userId } } : {}),
+  });
+  const badRequest = { status: 400, statusText: 'Bad Request' };
   const ids = (carts: Cart[]) => carts.map(c => c.id);
 
   beforeEach(() => {
@@ -53,6 +59,21 @@ describe('CartService', () => {
       expect(service.sum()).toBe(42.5);
       expect(onComplete).toHaveBeenCalledTimes(1);
       expect(service.cartUpdated()).toBe(updatesBefore);
+    });
+
+    // DIV-77: Summe in Cent wie im Backend (toCents), ohne Gleitkommafehler
+    [
+      { amounts: [0.1, 0.2], sum: 0.3 },
+      { amounts: [1.005, -1.005], sum: 0 },
+      { amounts: [65.349875, 10], sum: 75.35 },
+    ].forEach(({ amounts, sum }) => {
+      it(`summiert ${JSON.stringify(amounts)} centgenau zu ${sum}`, () => {
+        service.getCartListByGroupId(aGroup({ id: 7 }), false);
+        http.expectOne(`${api}/carts-by-groupid/7`).flush(amounts.map(amount => aCart({ amount })));
+
+        expect(service.sum()).toBe(sum);
+        expect(Object.is(service.sum(), -0)).toBeFalse();
+      });
     });
 
     it('meldet beim Neuladen mit refresh eine Änderung', () => {
@@ -122,12 +143,12 @@ describe('CartService', () => {
 
   describe('addCart', () => {
     it('fügt einen neuen Einkauf nach dem Speichern sortiert in beide Listen ein und meldet die Änderung', () => {
-      const older = aCart({ id: 1, datePurchased: new Date('2025-01-01') });
-      const filteredOut = aCart({ id: 3, datePurchased: new Date('2025-03-01') });
+      const older = aCart({ id: 1, datePurchased: '2025-01-01' });
+      const filteredOut = aCart({ id: 3, datePurchased: '2025-03-01' });
       service.cartList.set([older]);
       service.initCartList.set([older, filteredOut]);
       const updatesBefore = service.cartUpdated();
-      const newCart = aCart({ id: null, title: 'Pizza', datePurchased: new Date('2025-02-01') });
+      const newCart = aCart({ id: null, title: 'Pizza', datePurchased: '2025-02-01' });
 
       service.addCart(newCart);
       const req = http.expectOne(`${api}/add`);
@@ -148,7 +169,7 @@ describe('CartService', () => {
       const updatesBefore = service.cartUpdated();
 
       service.addCart(aCart({ id: null }));
-      http.expectOne(`${api}/add`).flush(notWithinMembership, { status: 400, statusText: 'Bad Request' });
+      http.expectOne(`${api}/add`).flush(notWithinMembership(1), badRequest);
 
       expect(service.cartList()).toEqual(cartList);
       expect(service.initCartList()).toEqual(initCartList);
@@ -176,13 +197,13 @@ describe('CartService', () => {
 
   describe('updateCart', () => {
     it('ersetzt den Einkauf nach dem Speichern in beiden Listen, sortiert neu und meldet die Änderung', () => {
-      const newest = aCart({ id: 1, datePurchased: new Date('2025-03-01') });
-      const edited = aCart({ id: 2, title: 'Alt', datePurchased: new Date('2025-02-01') });
-      const filteredOut = aCart({ id: 3, datePurchased: new Date('2025-01-01') });
+      const newest = aCart({ id: 1, datePurchased: '2025-03-01' });
+      const edited = aCart({ id: 2, title: 'Alt', datePurchased: '2025-02-01' });
+      const filteredOut = aCart({ id: 3, datePurchased: '2025-01-01' });
       service.cartList.set([newest, edited]);
       service.initCartList.set([newest, edited, filteredOut]);
       const updatesBefore = service.cartUpdated();
-      const changed = { ...edited, title: 'Neu', datePurchased: new Date('2025-04-01') };
+      const changed = { ...edited, title: 'Neu', datePurchased: '2025-04-01' };
 
       service.updateCart(changed);
       const req = http.expectOne(`${api}/update`);
@@ -224,11 +245,11 @@ describe('CartService', () => {
       it(c.name, () => {
         const edited = aCart({
           id: 1, recurrenceType: RECURRENCE_TYPE.MONTHLY, hasActiveTemplate: true, templateId: 50,
-          datePurchased: new Date('2025-02-01'),
+          datePurchased: '2025-02-01',
         });
         const sibling = aCart({
           id: 2, recurrenceType: RECURRENCE_TYPE.MONTHLY, hasActiveTemplate: true, templateId: c.siblingTemplateId,
-          datePurchased: new Date('2025-01-01'),
+          datePurchased: '2025-01-01',
         });
         service.cartList.set([edited, sibling]);
         service.initCartList.set([edited, sibling]);
@@ -255,7 +276,7 @@ describe('CartService', () => {
       const updatesBefore = service.cartUpdated();
 
       service.updateCart({ ...cartList[0], title: 'Neu' });
-      http.expectOne(`${api}/update`).flush(notWithinMembership, { status: 400, statusText: 'Bad Request' });
+      http.expectOne(`${api}/update`).flush(notWithinMembership(1), badRequest);
 
       expect(service.cartList()).toEqual(cartList);
       expect(service.initCartList()).toEqual(initCartList);
@@ -302,27 +323,29 @@ describe('CartService', () => {
   describe('updateSettlementPayment (DIV-74)', () => {
     const group = aGroup({ id: 7 });
     const payment = (): SettlementPaymentDto => ({
-      id: 70, amount: 45, groupId: 7, member: aUser({ userName: 'Ben' }), datePurchased: new Date('2025-06-10'),
+      id: 70, amount: 45, groupId: 7, member: aUser({ userName: 'Ben' }), datePurchased: '2025-06-10',
     });
+    /** Rolle und Zahler aus Sicht des angemeldeten Nutzers (DIV-110). */
+    const alsZahler: Pick<SettlementEditData, 'role' | 'payer'> = { role: 'payer', payer: aUser({ userName: 'Ich' }) };
     const paar = () => [
-      aCart({ id: 1, amount: 30, settlementId: 70, datePurchased: new Date('2025-06-15') }),
-      aCart({ id: 2, amount: -30, settlementId: 70, datePurchased: new Date('2025-06-15') }),
+      aCart({ id: 1, amount: 30, settlementId: 70, datePurchased: '2025-06-15' }),
+      aCart({ id: 2, amount: -30, settlementId: 70, datePurchased: '2025-06-15' }),
     ];
 
     it('sendet PUT, ersetzt beide Einkäufe per Id in beiden Listen, sortiert neu, meldet die Änderung und liefert true', async () => {
-      const neuer = aCart({ id: 3, datePurchased: new Date('2025-06-12') });
+      const neuer = aCart({ id: 3, datePurchased: '2025-06-12' });
       service.cartList.set([...paar(), neuer]);
-      service.initCartList.set([...paar(), neuer, aCart({ id: 4, datePurchased: new Date('2025-01-01') })]);
+      service.initCartList.set([...paar(), neuer, aCart({ id: 4, datePurchased: '2025-01-01' })]);
       const updatesBefore = service.cartUpdated();
       const dto = payment();
 
-      const result = service.updateSettlementPayment(dto, group, () => true);
+      const result = service.updateSettlementPayment(dto, group, () => true, alsZahler);
       const req = http.expectOne(`${api}/settlement-payment/update`);
       expect(req.request.method).toBe('PUT');
       expect(req.request.body).toEqual(dto);
       req.flush([
-        aCart({ id: 1, amount: 45, settlementId: 70, datePurchased: new Date('2025-06-10') }),
-        aCart({ id: 2, amount: -45, settlementId: 70, datePurchased: new Date('2025-06-10') }),
+        aCart({ id: 1, amount: 45, settlementId: 70, datePurchased: '2025-06-10' }),
+        aCart({ id: 2, amount: -45, settlementId: 70, datePurchased: '2025-06-10' }),
       ]);
 
       expect(await result).toBeTrue();
@@ -332,21 +355,95 @@ describe('CartService', () => {
       expect(service.cartUpdated()).toBe(updatesBefore + 1);
     });
 
-    it('Mitgliedschaftsfehler: State unverändert, Hinweis mit dem Empfänger (exakte Backend-Meldung, M1), liefert false', async () => {
+    it('Mitgliedschaftsfehler, Empfänger geändert, userId = neuer Empfänger: State unverändert, Hinweis nennt den neuen Empfänger, liefert false', async () => {
       const translate = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
       const cartList = paar();
       service.cartList.set(cartList);
       service.initCartList.set(cartList);
+      // Der Zahler hat den bisherigen Empfänger (Ben) gegen Cleo getauscht: das Backend prüft und nennt den gewählten
+      const cleo = aUser({ userName: 'Cleo' });
+      const dto = { ...payment(), member: cleo };
 
-      const result = service.updateSettlementPayment(payment(), group, () => true);
-      http.expectOne(`${api}/settlement-payment/update`).flush(notWithinMembership, { status: 400, statusText: 'Bad Request' });
+      const result = service.updateSettlementPayment(dto, group, () => true, alsZahler);
+      http.expectOne(`${api}/settlement-payment/update`).flush(notWithinMembership(cleo.id), badRequest);
 
       expect(await result).toBeFalse();
       expect(service.cartList()).toEqual(cartList);
       expect(service.initCartList()).toEqual(cartList);
       expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(
         'alerts.cart.invalid_membership.header', 'alerts.cart.invalid_membership.message_settlementpayment');
-      expect(translate).toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Ben' });
+      expect(translate).toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Cleo' });
+    });
+
+    it('Mitgliedschaftsfehler, angemeldeter Nutzer ist Empfänger: Hinweis nennt den Zahler, nicht sich selbst (DIV-110)', async () => {
+      const translate = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
+      const cartList = paar();
+      service.cartList.set(cartList);
+      service.initCartList.set(cartList);
+      // Im Edit-Modus ist `member` immer der Empfänger, hier also der angemeldete Nutzer selbst
+      const dto = { ...payment(), member: aUser({ userName: 'Sven' }) };
+      const basti = aUser({ userName: 'Basti' });
+      const alsEmpfaenger: Pick<SettlementEditData, 'role' | 'payer'> = { role: 'receiver', payer: basti };
+
+      const result = service.updateSettlementPayment(dto, group, () => true, alsEmpfaenger);
+      http.expectOne(`${api}/settlement-payment/update`).flush(notWithinMembership(basti.id), badRequest);
+
+      expect(await result).toBeFalse();
+      expect(service.cartList()).toEqual(cartList);
+      expect(service.initCartList()).toEqual(cartList);
+      expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(
+        'alerts.cart.invalid_membership.header', 'alerts.cart.invalid_membership.message_settlementpayment');
+      expect(translate).toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Basti' });
+      expect(translate).not.toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Sven' });
+    });
+
+    it('Mitgliedschaftsfehler, Zahler ist ein gelöschter Nutzer: Hinweis nennt ihn mit Label statt „DELETED“ (DIV-109)', async () => {
+      const translate = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
+      const dto = { ...payment(), member: aUser({ userName: 'Ich' }) };
+      const geloescht = aUser({ userName: 'DELETED' });
+      const alsEmpfaenger: Pick<SettlementEditData, 'role' | 'payer'> = { role: 'receiver', payer: geloescht };
+
+      const result = service.updateSettlementPayment(dto, group, () => true, alsEmpfaenger);
+      http.expectOne(`${api}/settlement-payment/update`).flush(notWithinMembership(geloescht.id), badRequest);
+
+      expect(await result).toBeFalse();
+      expect(translate).toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment',
+        { userName: 'global.user.deleted' });
+      expect(translate).not.toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'DELETED' });
+    });
+
+    it('Mitgliedschaftsfehler, userId = angemeldeter Zahler: Hinweis nennt den Zahler (DIV-108)', async () => {
+      const translate = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
+
+      const result = service.updateSettlementPayment(payment(), group, () => true, alsZahler);
+      http.expectOne(`${api}/settlement-payment/update`).flush(notWithinMembership(alsZahler.payer.id), badRequest);
+
+      expect(await result).toBeFalse();
+      expect(translate).toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Ich' });
+    });
+
+    [
+      { name: 'ohne details.userId', body: notWithinMembership() },
+      { name: 'mit unbekannter userId', body: notWithinMembership(-1) },
+    ].forEach(c => {
+      it(`Mitgliedschaftsfehler ${c.name}: Fallback auf die Gegenpartei (DIV-110)`, async () => {
+        const translate = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
+
+        const result = service.updateSettlementPayment(payment(), group, () => true, alsZahler);
+        http.expectOne(`${api}/settlement-payment/update`).flush(c.body, badRequest);
+
+        expect(await result).toBeFalse();
+        expect(translate).toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Ben' });
+      });
+    });
+
+    it('alter Mitgliedschafts-Text ohne Code: allgemeiner Alert statt Mitgliedschafts-Hinweis', async () => {
+      const result = service.updateSettlementPayment(payment(), group, () => true, alsZahler);
+      http.expectOne(`${api}/settlement-payment/update`).flush(membershipText, badRequest);
+
+      expect(await result).toBeFalse();
+      expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(
+        'alerts.cart.settlement_update_failed.header', 'alerts.cart.settlement_update_failed.message');
     });
 
     it('anderer Fehler: State unverändert, allgemeiner Alert, liefert false', async () => {
@@ -354,7 +451,7 @@ describe('CartService', () => {
       service.cartList.set(cartList);
       service.initCartList.set(cartList);
 
-      const result = service.updateSettlementPayment(payment(), group, () => true);
+      const result = service.updateSettlementPayment(payment(), group, () => true, alsZahler);
       http.expectOne(`${api}/settlement-payment/update`).flush('Only the payer may change the receiver', { status: 403, statusText: 'Forbidden' });
 
       expect(await result).toBeFalse();
@@ -367,7 +464,7 @@ describe('CartService', () => {
       service.cartList.set(paar());
       service.initCartList.set(paar());
 
-      const result = service.updateSettlementPayment(payment(), group, () => true);
+      const result = service.updateSettlementPayment(payment(), group, () => true, alsZahler);
       http.expectOne(`${api}/settlement-payment/update`).flush('Settlement with Id 70 not found', { status: 404, statusText: 'Not Found' });
 
       expect(await result).toBeTrue();
@@ -381,7 +478,7 @@ describe('CartService', () => {
       service.cartList.set(paar());
       service.initCartList.set(paar());
 
-      const result = service.updateSettlementPayment(payment(), group, () => true);
+      const result = service.updateSettlementPayment(payment(), group, () => true, alsZahler);
       http.expectOne(`${api}/settlement-payment/update`).flush('not found', { status: 404, statusText: 'Not Found' });
       http.expectOne(`${api}/carts-by-groupid/7`).flush('Server error', { status: 500, statusText: 'Server Error' });
 
@@ -395,9 +492,9 @@ describe('CartService', () => {
       service.initCartList.set(cartList);
       const updatesBefore = service.cartUpdated();
 
-      const erfolg = service.updateSettlementPayment(payment(), group, () => false);
+      const erfolg = service.updateSettlementPayment(payment(), group, () => false, alsZahler);
       http.expectOne(`${api}/settlement-payment/update`).flush([aCart({ id: 1, amount: 45, settlementId: 70 })]);
-      const fehler = service.updateSettlementPayment(payment(), group, () => false);
+      const fehler = service.updateSettlementPayment(payment(), group, () => false, alsZahler);
       http.expectOne(`${api}/settlement-payment/update`).flush('not found', { status: 404, statusText: 'Not Found' });
 
       expect(await erfolg).toBeTrue();
@@ -504,25 +601,28 @@ describe('CartService', () => {
   });
 
   describe('addSettlementPayment', () => {
+    const anna = aUser({ userName: 'Anna' });
     const payment = (): SettlementPaymentDto => ({
-      amount: 25, groupId: 1, member: aUser({ userName: 'Anna' }), datePurchased: new Date('2025-02-01'),
+      amount: 25, groupId: 1, member: anna, datePurchased: '2025-02-01',
     });
+    /** Angemeldeter Nutzer: bei einer gesendeten Zahlung der implizite Zahler (DIV-108). */
+    const ich = aUser({ userName: 'Ich' });
 
     it('fügt die erzeugten Ausgleichsbuchungen sortiert in beide Listen ein, meldet die Änderung und liefert true', async () => {
-      const older = aCart({ id: 1, datePurchased: new Date('2025-01-01') });
-      const newest = aCart({ id: 4, datePurchased: new Date('2025-03-01') });
+      const older = aCart({ id: 1, datePurchased: '2025-01-01' });
+      const newest = aCart({ id: 4, datePurchased: '2025-03-01' });
       service.cartList.set([older]);
       service.initCartList.set([newest, older]);
       const updatesBefore = service.cartUpdated();
       const dto = payment();
 
-      const result = service.addSettlementPayment(dto);
+      const result = service.addSettlementPayment(dto, ich);
       const req = http.expectOne(`${api}/settlement-payment/add`);
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual(dto);
       req.flush([
-        aCart({ id: 2, datePurchased: new Date('2025-02-01') }),
-        aCart({ id: 3, datePurchased: new Date('2025-02-02') }),
+        aCart({ id: 2, datePurchased: '2025-02-01' }),
+        aCart({ id: 3, datePurchased: '2025-02-02' }),
       ]);
 
       expect(ids(service.cartList())).toEqual([3, 2, 1]);
@@ -531,7 +631,7 @@ describe('CartService', () => {
       expect(await result).toBeTrue();
     });
 
-    it('lässt beide Listen bei einem Fehler unverändert, zeigt den Mitgliedschafts-Hinweis mit dem Mitglied und liefert false', async () => {
+    it('lässt beide Listen bei einem Fehler unverändert, zeigt den Mitgliedschafts-Hinweis mit dem Empfänger (userId) und liefert false', async () => {
       const cartList = [aCart({ id: 1 })];
       const initCartList = [aCart({ id: 1 }), aCart({ id: 3 })];
       service.cartList.set(cartList);
@@ -539,9 +639,8 @@ describe('CartService', () => {
       const updatesBefore = service.cartUpdated();
       const instant = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
 
-      const result = service.addSettlementPayment(payment());
-      http.expectOne(`${api}/settlement-payment/add`).flush(notWithinMembership,
-        { status: 400, statusText: 'Bad Request' });
+      const result = service.addSettlementPayment(payment(), ich);
+      http.expectOne(`${api}/settlement-payment/add`).flush(notWithinMembership(anna.id), badRequest);
 
       expect(service.cartList()).toEqual(cartList);
       expect(service.initCartList()).toEqual(initCartList);
@@ -555,24 +654,74 @@ describe('CartService', () => {
       expect(await result).toBeFalse();
     });
 
-    it('erhaltene Zahlung (DIV-74): sendet payer und nennt im Mitgliedschafts-Hinweis die Gegenpartei (Zahler)', async () => {
+    it('erhaltene Zahlung (DIV-74): sendet payer und nennt im Mitgliedschafts-Hinweis den Zahler (userId)', async () => {
       const instant = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
-      const dto: SettlementPaymentDto = {
-        ...payment(), payer: aUser({ userName: 'Ben' }), member: aUser({ userName: 'Ich' }),
-      };
+      const ben = aUser({ userName: 'Ben' });
+      const dto: SettlementPaymentDto = { ...payment(), payer: ben, member: ich };
 
-      const result = service.addSettlementPayment(dto);
+      const result = service.addSettlementPayment(dto, ich);
       const req = http.expectOne(`${api}/settlement-payment/add`);
       expect(req.request.body.payer.userName).toBe('Ben');
-      req.flush(notWithinMembership, { status: 400, statusText: 'Bad Request' });
+      req.flush(notWithinMembership(ben.id), badRequest);
 
       expect(await result).toBeFalse();
       expect(instant).toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Ben' });
     });
 
-    // DIV-70: Jeder andere Fehler zeigt einen allgemeinen Hinweis und liefert false. Der Fehlerbody ist nicht immer Text
-    // (Netzwerkfehler, JSON, null) – die Prüfung auf den Mitgliedschafts-Text darf daran nicht scheitern.
+    it('erhaltene Zahlung, userId = angemeldeter Empfänger: Hinweis nennt den eigenen Namen statt der Gegenpartei (DIV-108)', async () => {
+      const instant = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
+      const ben = aUser({ userName: 'Ben' });
+      const dto: SettlementPaymentDto = { ...payment(), payer: ben, member: ich };
+
+      const result = service.addSettlementPayment(dto, ich);
+      http.expectOne(`${api}/settlement-payment/add`).flush(notWithinMembership(ich.id), badRequest);
+
+      expect(await result).toBeFalse();
+      expect(instant).toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Ich' });
+      expect(instant).not.toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Ben' });
+    });
+
+    it('gesendete Zahlung ohne payer, userId = angemeldeter Nutzer: Hinweis nennt den eigenen Namen (DIV-108)', async () => {
+      const instant = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
+
+      const result = service.addSettlementPayment(payment(), ich);
+      const req = http.expectOne(`${api}/settlement-payment/add`);
+      expect(req.request.body.payer).toBeUndefined();
+      req.flush(notWithinMembership(ich.id), badRequest);
+
+      expect(await result).toBeFalse();
+      expect(instant).toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Ich' });
+    });
+
     [
+      { name: 'ohne details.userId', body: notWithinMembership() },
+      { name: 'mit unbekannter userId', body: notWithinMembership(-1) },
+    ].forEach(c => {
+      it(`Mitgliedschaftsfehler ${c.name}: Fallback auf die Gegenpartei (DIV-110)`, async () => {
+        const instant = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
+
+        const result = service.addSettlementPayment(payment(), ich);
+        http.expectOne(`${api}/settlement-payment/add`).flush(c.body, badRequest);
+
+        expect(await result).toBeFalse();
+        expect(instant).toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Anna' });
+      });
+    });
+
+    it('nur der Code zählt: Mitgliedschaftsfehler mit geändertem Text zeigt den Mitgliedschafts-Hinweis', async () => {
+      const result = service.addSettlementPayment(payment(), ich);
+      http.expectOne(`${api}/settlement-payment/add`).flush(
+        { code: 'DATE_NOT_WITHIN_MEMBERSHIP', message: 'anderer Text', details: { userId: anna.id } }, badRequest);
+
+      expect(await result).toBeFalse();
+      expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(
+        'alerts.cart.invalid_membership.header', 'alerts.cart.invalid_membership.message_settlementpayment');
+    });
+
+    // DIV-70: Jeder andere Fehler zeigt einen allgemeinen Hinweis und liefert false. Ohne Code (DIV-108) zählt auch der
+    // alte Mitgliedschafts-Text als anderer Fehler; der Body ist nicht immer Text (Netzwerkfehler, JSON, null).
+    [
+      { name: 'alter Mitgliedschafts-Text ohne Code (400)', fail: (req: TestRequest) => req.flush(membershipText, badRequest) },
       {
         name: 'Text-Body (403)',
         fail: (req: TestRequest) => req.flush('User with ID 5 is either a member nor the owner of the group',
@@ -592,7 +741,7 @@ describe('CartService', () => {
         service.initCartList.set(initCartList);
         const updatesBefore = service.cartUpdated();
 
-        const result = service.addSettlementPayment(payment());
+        const result = service.addSettlementPayment(payment(), ich);
         c.fail(http.expectOne(`${api}/settlement-payment/add`));
 
         expect(await result).toBeFalse();
@@ -617,6 +766,21 @@ describe('CartService', () => {
         { status: 403, statusText: 'Forbidden' });
 
       expect(alerts.showErrorAlert).not.toHaveBeenCalled();
+    });
+
+    it(`${c.name}: alter Mitgliedschafts-Text ohne Code zeigt keinen Hinweis (nur der Code zählt, DIV-108)`, () => {
+      c.call(service);
+      http.expectOne(c.url).flush(membershipText, badRequest);
+
+      expect(alerts.showErrorAlert).not.toHaveBeenCalled();
+    });
+
+    it(`${c.name}: Mitgliedschafts-Code mit geändertem Text zeigt den Mitgliedschafts-Hinweis`, () => {
+      c.call(service);
+      http.expectOne(c.url).flush({ code: 'DATE_NOT_WITHIN_MEMBERSHIP', message: 'anderer Text' }, badRequest);
+
+      expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(
+        'alerts.cart.invalid_membership.header', 'alerts.cart.invalid_membership.message_new_edit');
     });
 
     // DIV-70 Phase 4 (A): Der Fehlerbody ist nicht immer Text. `err.error.includes` warf bisher im error-Callback;

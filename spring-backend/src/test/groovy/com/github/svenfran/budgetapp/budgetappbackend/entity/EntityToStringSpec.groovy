@@ -41,7 +41,7 @@ class EntityToStringSpec extends Specification {
         def text = group.toString()
 
         then:
-        text == "Group{id=10, name='WG', dateCreated=null, lastUpdate=null, lastUpdateShoppingList=null, listOrderRevision=0, ownerId=1}"
+        text == "Group{id=10, name='WG', dateCreated=null, lastUpdate=null, lastUpdateShoppingList=null, listOrderRevision=0, currencyCode=EUR, ownerId=1}"
     }
 
     def "toString eines Einkaufs, der in den Einkäufen seiner Gruppe steht, wirft keinen Fehler"() {

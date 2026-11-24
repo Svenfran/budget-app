@@ -169,8 +169,7 @@ export class AuthPage implements OnInit {
           // kein zweiter Alert: Passwort/E-Mail waren nicht das Problem
           return;
         } else {
-          const error = authErrorMessage(errRes.error, errRes.status, errRes.headers?.get('Retry-After'),
-            !this.isLogin, USER_EMAIL, USER_NAME);
+          const error = authErrorMessage(errRes, errRes.headers?.get('Retry-After'), !this.isLogin);
           message = this.translate.instant(error.key, error.params);
         }
         loadingEl.dismiss();

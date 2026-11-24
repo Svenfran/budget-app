@@ -114,7 +114,7 @@
                     "placeholder_member_from": "De miembro",
                     "direction_paid": "He pagado a",
                     "direction_received": "He recibido de",
-                    "amount": "Importe en €*",
+                    "amount": "Importe en {{currency}}*",
                     "amount_positive": "El importe debe ser mayor que 0",
                     "title_edit": "Editar repago",
                     "subtitle_edit": "Los cambios se aplican a ambas partes.",
@@ -122,6 +122,7 @@
                     "date": "Fecha*",
                     "btn_cancel": "Cancelar",
                     "no_members": "No hay miembros disponibles",
+                    "former_member": "antiguo miembro",
                     "discard": {
                         "header": "¿Descartar los datos?",
                         "message": "Se perderán los datos del repago.",
@@ -160,13 +161,6 @@
     },
     "alerts": {
         "group": {
-            "new": {
-                "header": "Nuevo grupo:",
-                "cancel": "Cancelar",
-                "ok": "OK",
-                "loading": "Creando grupo...",
-                "placeholder": "Nombre del grupo"
-            },
             "delete": {
                 "header": "¿Eliminar grupo?",
                 "message": "¿Deseas eliminar el grupo \"{{groupName}}\"? Se eliminarán de forma definitiva todos los gastos, pagos de compensación, listas de la compra, categorías y demás datos del grupo.",
@@ -185,6 +179,18 @@
             "remove_member": {
                 "header": "Eliminar miembro:",
                 "message": "¿Deseas eliminar al miembro \"{{memberName}}\" del grupo \"{{group}}\" incluyendo todos los gastos guardados?",
+                "cancel": "No",
+                "ok": "Sí"
+            },
+            "leave_open_balance": {
+                "header": "Salir del grupo:",
+                "message": "Todavía tienes un saldo pendiente de {{balance}} en el grupo \"{{group}}\". Después de salir, solo podrá saldarse con un repago. ¿Deseas salir del grupo de todos modos?",
+                "cancel": "No",
+                "ok": "Sí"
+            },
+            "remove_member_open_balance": {
+                "header": "Eliminar miembro:",
+                "message": "\"{{memberName}}\" todavía tiene un saldo pendiente de {{balance}} en el grupo \"{{group}}\". Después de eliminarlo, solo podrá saldarse con un repago. ¿Deseas eliminar al miembro de todos modos, incluyendo todos los gastos guardados?",
                 "cancel": "No",
                 "ok": "Sí"
             },
@@ -482,14 +488,15 @@
         "header": "MIS GRUPOS",
         "empty": "No hay grupos.",
         "group": {
-            "members": "Miembros:"
+            "members": "Miembros:",
+            "currency": "Moneda:"
         },
         "menu": {
             "more_actions": "Más acciones",
             "members": "Gestionar miembros",
             "members_hint": "Ver miembros, definir el administrador y añadir miembros",
             "edit": "Editar grupo",
-            "edit_hint": "Cambiar el nombre",
+            "edit_hint": "Cambiar el nombre y la moneda",
             "delete": "Eliminar grupo",
             "delete_hint": "Eliminar el grupo y todos sus datos de forma definitiva"
         },
@@ -501,7 +508,15 @@
             "name_too_long": "El nombre del grupo es demasiado largo.",
             "btn_cancel": "Cancelar",
             "btn_create": "Crear",
-            "btn_save": "Guardar"
+            "btn_save": "Guardar",
+            "currency_label": "Moneda",
+            "currency_hint": "Al cambiarla no se convierte ningún importe.",
+            "currency_confirm": {
+                "header": "¿Cambiar la moneda?",
+                "message": "Todos los importes existentes de este grupo pasarán a estar en {{currency}}. No se convierte nada: {{before}} pasa a ser {{after}}.",
+                "cancel": "Cancelar",
+                "ok": "Cambiar moneda"
+            }
         },
         "members_sheet": {
             "title": "Gestionar miembros",
@@ -529,7 +544,7 @@
         "duplicate_hint": "Datos copiados de un gasto existente",
         "form": {
             "title": "Título*",
-            "amount": "Importe en €*",
+            "amount": "Importe en {{currency}}*",
             "description": "Descripción",
             "date_purchased": "Fecha*",
             "category": "Categoría*",
@@ -556,6 +571,7 @@
         "filter": {
             "group": "Grupo",
             "all_groups": "Todos los grupos",
+            "currency": "Moneda",
             "period_month": "Mes",
             "period_year": "Año",
             "period_all": "Todo",
@@ -609,6 +625,22 @@
             "footer": {
                 "exit_app": "Salida"
             }
+        }
+    },
+    "currency": {
+        "name": {
+            "EUR": "Euro",
+            "USD": "Dólar estadounidense",
+            "GBP": "Libra esterlina",
+            "CHF": "Franco suizo",
+            "CAD": "Dólar canadiense",
+            "AUD": "Dólar australiano",
+            "MXN": "Peso mexicano",
+            "BRL": "Real brasileño",
+            "PLN": "Esloti polaco",
+            "CZK": "Corona checa",
+            "NOK": "Corona noruega",
+            "SEK": "Corona sueca"
         }
     }
 }

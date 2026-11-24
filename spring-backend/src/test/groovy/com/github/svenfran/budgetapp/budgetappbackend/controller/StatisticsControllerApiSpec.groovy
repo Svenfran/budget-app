@@ -1,6 +1,7 @@
 package com.github.svenfran.budgetapp.budgetappbackend.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.github.svenfran.budgetapp.budgetappbackend.constants.SupportedCurrency
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.ApiRequests
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
@@ -13,7 +14,8 @@ import static java.time.LocalDate.of
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 
 /**
- * API-Spec der Statistikseite (DIV-63): GET /api/statistics?period=…[&groupId][&year][&month].
+ * API-Spec der Statistikseite (DIV-63): GET /api/statistics?period=…[&groupId][&currency][&year][&month].
+ * DIV-77: currency (nur ohne groupId wirksam, Default EUR), Antwort mit currencyCode und availableCurrencies.
  *
  * - JSON-Form des StatisticsDto (Frontend-Modell statistics/model/statistics-dto.ts): Felder, Typen, settlement als
  *   Boolean, from/to als ISO-Datum (yyyy-MM-dd); groupView (DIV-72) mit cartCount, averagePerCart, memberCount,
@@ -52,9 +54,12 @@ class StatisticsControllerApiSpec extends IntegrationSpec implements ApiRequests
 
         then:
         response.status == 200
-        body.keySet() == ['groupId', 'period', 'year', 'month', 'totalSpent', 'paidByUser', 'paidCartCount',
-                          'currentBalance', 'availableYears', 'timeline', 'categories', 'groupView'] as Set
+        body.keySet() == ['groupId', 'currencyCode', 'availableCurrencies', 'period', 'year', 'month', 'totalSpent',
+                          'paidByUser', 'paidCartCount', 'currentBalance', 'availableYears', 'timeline', 'categories',
+                          'groupView'] as Set
         body.groupId == groupId
+        body.currencyCode == 'EUR'
+        body.availableCurrencies == ['EUR']
         body.period == 'MONTH'
         body.year == 2025
         body.month == 3
@@ -161,6 +166,38 @@ class StatisticsControllerApiSpec extends IntegrationSpec implements ApiRequests
         'year nicht darstellbar MONTH'| [period: 'MONTH', year: Integer.MAX_VALUE, month: 1]
         'year am LocalDate-Rand MONTH'| [period: 'MONTH', year: 999_999_999, month: 12]
         'year am LocalDate-Rand YEAR' | [period: 'YEAR', year: -999_999_999]
+        'currency nicht unterstützt'  | [period: 'ALL', currency: 'JPY']
+    }
+
+    def "currency=#currency: Antwort mit currencyCode #erwartet, availableCurrencies und nur den Beträgen dieser Währung"() {
+        given:
+        def wg = fixtures.group(memberSince: of(2024, 1, 1))
+        def reise = fixtures.group(owner: wg.owner, memberSince: of(2024, 1, 1))
+        fixtures.cart(wg, amount: 40d, datePurchased: DateUtils.toDate(of(2025, 2, 10)))
+        fixtures.cart(reise, amount: 70d, datePurchased: DateUtils.toDate(of(2025, 2, 11)))
+        flushAndClear()
+        entityManager.createQuery('update Group g set g.currencyCode = :c where g.id = :id')
+                .setParameter('c', SupportedCurrency.USD).setParameter('id', reise.group.id).executeUpdate()
+        def owner = wg.owner
+        LOG.info('Szenario: Owner {}; Gruppe {} (EUR, 40), Gruppe {} (USD, 70); currency {}', owner.id, wg.group.id,
+                reise.group.id, currency)
+
+        when:
+        def response = send(statistics([period: 'ALL'] + (currency ? [currency: currency] : [:])), user: owner)
+        def body = json(response)
+        LOG.info('Antwort: currencyCode {}, availableCurrencies {}, totalSpent {}', body.currencyCode,
+                body.availableCurrencies, body.totalSpent)
+
+        then:
+        response.status == 200
+        body.currencyCode == erwartet
+        body.availableCurrencies == ['EUR', 'USD']
+        body.totalSpent == betrag
+
+        where:
+        currency || erwartet | betrag
+        null     || 'EUR'    | 40.0
+        'USD'    || 'USD'    | 70.0
     }
 
     private static MockHttpServletRequestBuilder statistics(Map parameter) {

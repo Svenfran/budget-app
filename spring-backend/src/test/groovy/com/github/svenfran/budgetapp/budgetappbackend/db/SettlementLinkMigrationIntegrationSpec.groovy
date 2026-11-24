@@ -190,7 +190,7 @@ class SettlementLinkMigrationIntegrationSpec extends IntegrationSpec {
 
     private def cart(GroupScenario wg, Category kategorie, User user, Double betrag, LocalDate tag) {
         fixtures.cart(wg, user: user, category: kategorie, title: 'Ausgleichszahlung', description: '', amount: betrag,
-                averagePerMember: betrag / 2, datePurchased: DateUtils.toDate(tag))
+                datePurchased: DateUtils.toDate(tag))
     }
 
     private void migriere() {

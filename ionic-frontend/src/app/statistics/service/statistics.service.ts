@@ -1,6 +1,7 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { effect, Injectable, signal, untracked } from '@angular/core';
 import { GroupService } from 'src/app/service/group.service';
+import { DEFAULT_CURRENCY } from 'src/app/constants/currency';
 import { environment } from 'src/environments/environment';
 import { StatisticsDto } from '../model/statistics-dto';
 import { defaultStatisticsFilter, StatisticsFilter } from '../model/statistics-filter';
@@ -25,8 +26,8 @@ export class StatisticsService {
 
   private generation = 0;
   private session: number;
-  /** zuletzt gemeldete Gruppen-IDs; null = noch kein Stand in dieser Sitzung */
-  private knownGroupIds: Set<number> | null = null;
+  /** zuletzt gemeldete Gruppen als `id:currencyCode` (DIV-77); null = noch kein Stand in dieser Sitzung */
+  private knownGroups: Set<string> | null = null;
 
   constructor(
     private http: HttpClient,
@@ -88,21 +89,27 @@ export class StatisticsService {
   }
 
   /**
-   * Gruppen des Nutzers haben sich geändert (z. B. Gruppe gelöscht oder Nutzer entfernt, Codex F-003). Der erste Aufruf
-   * merkt sich nur den Stand. Bei geänderter ID-Menge: laufende Antworten verwerfen, auf „Alle Gruppen“ zurückfallen,
-   * falls die gewählte Gruppe fehlt, und neu laden. Reihenfolge und Namen spielen keine Rolle.
+   * Gruppen des Nutzers haben sich geändert (z. B. Gruppe gelöscht oder Nutzer entfernt, Codex F-003; DIV-77: Währung
+   * einer Gruppe gewechselt). Der erste Aufruf merkt sich nur den Stand. Bei geänderter Menge aus ID und Währung:
+   * laufende Antworten verwerfen, auf „Alle Gruppen“ zurückfallen, falls die gewählte Gruppe fehlt, die Währungsauswahl
+   * zurücksetzen (aktive Gruppe), falls keine Gruppe sie mehr hat, und neu laden. Reihenfolge und Namen spielen keine Rolle.
    */
-  groupsChanged(groupIds: number[]): void {
+  groupsChanged(groups: { id: number; currencyCode?: string }[]): void {
     this.syncSession();
-    const next = new Set(groupIds);
-    const known = this.knownGroupIds;
-    this.knownGroupIds = next;
-    if (known === null || (known.size === next.size && [...next].every(id => known.has(id)))) return;
+    const currencyOf = (group: { currencyCode?: string }) => group.currencyCode ?? DEFAULT_CURRENCY;
+    const next = new Set(groups.map(group => `${group.id}:${currencyOf(group)}`));
+    const known = this.knownGroups;
+    this.knownGroups = next;
+    if (known === null || (known.size === next.size && [...next].every(key => known.has(key)))) return;
 
-    const filter = this.filter();
-    if (filter.groupId !== null && !next.has(filter.groupId)) {
-      this.filter.set({ ...filter, groupId: null });
+    let filter = this.filter();
+    if (filter.groupId !== null && !groups.some(group => group.id === filter.groupId)) {
+      filter = { ...filter, groupId: null };
     }
+    if (filter.currency !== null && !groups.some(group => currencyOf(group) === filter.currency)) {
+      filter = { ...filter, currency: null };
+    }
+    if (filter !== this.filter()) this.filter.set(filter);
     this.load();
   }
 
@@ -112,7 +119,7 @@ export class StatisticsService {
     if (session === this.session) return;
     this.session = session;
     this.generation++;
-    this.knownGroupIds = null;
+    this.knownGroups = null;
     this.filter.set(defaultStatisticsFilter(new Date()));
     this.statistics.set(null);
     this.isLoading.set(false);
@@ -122,6 +129,8 @@ export class StatisticsService {
   private toParams(filter: StatisticsFilter): HttpParams {
     let params = new HttpParams().set('period', filter.period);
     if (filter.groupId !== null) params = params.set('groupId', filter.groupId);
+    // Währung nur bei „Alle Gruppen“; sonst gilt die Gruppenwährung (DIV-77)
+    else params = params.set('currency', filter.currency ?? this.groupService.activeCurrency());
     if (filter.period !== 'ALL') params = params.set('year', filter.year);
     if (filter.period === 'MONTH') params = params.set('month', filter.month);
     return params;

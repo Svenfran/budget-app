@@ -32,7 +32,7 @@
             <ion-label color="medium">{{ 'groups.header' | translate }}</ion-label>
           </ion-list-header>
           <!-- Gruppenaktionen über das ⋮-Menü statt Sliding (DIV-80); Tipp auf den Eintrag wählt die Gruppe (DIV-72) -->
-          <ion-item *ngFor="let group of groupOverviewList(), let i = index"
+          <ion-item *ngFor="let group of groupOverviewList(); let i = index; trackBy: trackByGroupId"
                     button detail="false" class="group-item"
                     (click)="onSelectGroup(group)"
                     [class.active-group]="group.id === activeGroupId()"
@@ -50,6 +50,10 @@
                 </div>
                 <div class="group-members">
                   <ion-text color="medium">{{ 'groups.group.members' | translate }} {{ group.memberCount }}</ion-text>
+                </div>
+                <!-- Währung der Gruppe (DIV-77) als eigene Zeile, damit bei großer Schrift nichts überläuft -->
+                <div class="group-currency">
+                  <ion-text color="medium">{{ 'groups.group.currency' | translate }} <span class="currency-value">{{ currencyLabel(group) }}</span></ion-text>
                 </div>
               </div>
             </ion-label>

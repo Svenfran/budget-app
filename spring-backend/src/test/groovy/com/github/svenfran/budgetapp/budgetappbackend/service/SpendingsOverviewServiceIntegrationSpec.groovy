@@ -1,5 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service
 
+import com.github.svenfran.budgetapp.budgetappbackend.dto.RemoveGroupMemberDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.SpendingsOverviewUserDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto
@@ -25,8 +26,7 @@ import static java.time.LocalDate.of
  * Jahres- und Monatswerte der Ausgabenübersicht mit Ein- und Austritten.
  *
  * - Anteile werden exakt aus Betrag und Mitgliedschaftshistorie am Kaufdatum berechnet, gerundet wird erst der Saldo
- *   je Periode, sodass die Salden zusammen 0 ergeben (DIV-38, D6). averagePerMember wird dafür nicht gelesen; wo gesetzt,
- *   dann wie von der App geschrieben.
+ *   je Periode, sodass die Salden zusammen 0 ergeben (DIV-38, D6).
  * - Nutzerwerte werden als [userId: [sum, diff]] verglichen; die Reihenfolge der Nutzer ist nicht garantiert.
  * - Anteil eines Nutzers = sum - diff.
  * - Summen von Salden werden in Cent verglichen (diffSummeInCent), nicht als Double-Addition.
@@ -43,6 +43,7 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
     @Autowired CartRepository cartRepository
     @Autowired UserRepository userRepository
     @Autowired SettlementService settlementService
+    @Autowired GroupService groupService
 
     def "Austritt und Eintritt über den Jahreswechsel: Jahre 2024 und 2025 sowie Gesamtübersicht"() {
         given: "Anna (Owner) seit 01.01.2024, Ben 01.01.–31.12.2024, Cleo ab 01.01.2025 10 Uhr (Beitritt mit Uhrzeit)"
@@ -55,9 +56,9 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         fixtures.membership(wg, cleo, membershipStart: at(of(2025, 1, 1), 10))
 
         and: "c1 31.12.2024 (Anna, Ben), c2 01.01.2025 (Anna, Cleo – zählt nur, weil die Uhrzeit des Beitritts abgeschnitten wird), c3 10.03.2025 (Anna, Cleo)"
-        fixtures.cart(wg, user: anna, amount: 30d, averagePerMember: 15d, datePurchased: DateUtils.toDate(of(2024, 12, 31)))
-        fixtures.cart(wg, user: cleo, amount: 20d, averagePerMember: 10d, datePurchased: DateUtils.toDate(of(2025, 1, 1)))
-        fixtures.cart(wg, user: anna, amount: 10d, averagePerMember: 5d, datePurchased: DateUtils.toDate(of(2025, 3, 10)))
+        fixtures.cart(wg, user: anna, amount: 30d, datePurchased: DateUtils.toDate(of(2024, 12, 31)))
+        fixtures.cart(wg, user: cleo, amount: 20d, datePurchased: DateUtils.toDate(of(2025, 1, 1)))
+        fixtures.cart(wg, user: anna, amount: 10d, datePurchased: DateUtils.toDate(of(2025, 3, 10)))
         flushAndClear()
         loginAs(anna)
         LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {} (2024), Cleo {} (ab 2025-01-01 10 Uhr); Einkäufe ' +
@@ -145,10 +146,10 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         fixtures.membership(wg, ben, membershipStart: DateUtils.toDate(of(2025, 5, 1)))
 
         and: "der Cart vom 28.02. liegt in beiden ersten Mitgliedschaften, der vom 15.04. in der Lücke"
-        fixtures.cart(wg, user: anna, amount: 20d, averagePerMember: 10d, datePurchased: DateUtils.toDate(of(2025, 2, 10)))
-        fixtures.cart(wg, user: anna, amount: 8d, averagePerMember: 4d, datePurchased: DateUtils.toDate(of(2025, 2, 28)))
-        fixtures.cart(wg, user: anna, amount: 10d, averagePerMember: 10d, datePurchased: DateUtils.toDate(of(2025, 4, 15)))
-        fixtures.cart(wg, user: ben, amount: 30d, averagePerMember: 15d, datePurchased: DateUtils.toDate(of(2025, 5, 1)))
+        fixtures.cart(wg, user: anna, amount: 20d, datePurchased: DateUtils.toDate(of(2025, 2, 10)))
+        fixtures.cart(wg, user: anna, amount: 8d, datePurchased: DateUtils.toDate(of(2025, 2, 28)))
+        fixtures.cart(wg, user: anna, amount: 10d, datePurchased: DateUtils.toDate(of(2025, 4, 15)))
+        fixtures.cart(wg, user: ben, amount: 30d, datePurchased: DateUtils.toDate(of(2025, 5, 1)))
         flushAndClear()
         loginAs(anna)
         LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {} mit drei Mitgliedschaften; Einkäufe 2025-02-10, ' +
@@ -206,10 +207,10 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         fixtures.membership(wg, ben, membershipStart: DateUtils.toDate(of(2025, 3, 10)), membershipEnd: DateUtils.toDate(of(2025, 3, 20)))
 
         and: "Anna bezahlt alles; Carts am Tag vor dem Eintritt, am Eintritts-, am Austrittstag und am Tag danach"
-        fixtures.cart(wg, user: anna, amount: 10d, averagePerMember: 10d, datePurchased: DateUtils.toDate(of(2025, 3, 9)))   // nur Anna
-        fixtures.cart(wg, user: anna, amount: 20d, averagePerMember: 10d, datePurchased: DateUtils.toDate(of(2025, 3, 10)))  // Anna, Ben
-        fixtures.cart(wg, user: anna, amount: 8d, averagePerMember: 4d, datePurchased: DateUtils.toDate(of(2025, 3, 20)))    // Anna, Ben
-        fixtures.cart(wg, user: anna, amount: 6d, averagePerMember: 6d, datePurchased: DateUtils.toDate(of(2025, 3, 21)))    // nur Anna
+        fixtures.cart(wg, user: anna, amount: 10d, datePurchased: DateUtils.toDate(of(2025, 3, 9)))   // nur Anna
+        fixtures.cart(wg, user: anna, amount: 20d, datePurchased: DateUtils.toDate(of(2025, 3, 10)))  // Anna, Ben
+        fixtures.cart(wg, user: anna, amount: 8d, datePurchased: DateUtils.toDate(of(2025, 3, 20)))   // Anna, Ben
+        fixtures.cart(wg, user: anna, amount: 6d, datePurchased: DateUtils.toDate(of(2025, 3, 21)))   // nur Anna
         flushAndClear()
         loginAs(anna)
         LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {} 2025-03-10 bis 2025-03-20; Anna zahlt am 09., 10., 20., ' +
@@ -240,8 +241,7 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         def ids = nutzer*.id
         assert ids == ids.sort(false)
         def wg = fixtures.group(owner: nutzer[0], members: nutzer.drop(1))
-        // averagePerMember wie von der App geschrieben (ungerundet); für die Salden ohne Bedeutung
-        fixtures.cart(wg, user: nutzer[zahler], amount: betrag, averagePerMember: betrag / mitglieder,
+        fixtures.cart(wg, user: nutzer[zahler], amount: betrag,
                 datePurchased: DateUtils.toDate(TestData.REFERENCE_DATE))
         flushAndClear()
         loginAs(nutzer[0])
@@ -345,8 +345,8 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         fixtures.membership(wg, cleo, membershipStart: DateUtils.toDate(of(2025, 4, 1)))
 
         and: "Anna bezahlt je 10 € am 01.03. (Anna, Ben: 5,00/5,00) und am 01.05. (alle drei: 3,34/3,33/3,33)"
-        fixtures.cart(wg, user: anna, amount: 10d, averagePerMember: 5d, datePurchased: DateUtils.toDate(of(2025, 3, 1)))
-        fixtures.cart(wg, user: anna, amount: 10d, averagePerMember: 10d / 3, datePurchased: DateUtils.toDate(of(2025, 5, 1)))
+        fixtures.cart(wg, user: anna, amount: 10d, datePurchased: DateUtils.toDate(of(2025, 3, 1)))
+        fixtures.cart(wg, user: anna, amount: 10d, datePurchased: DateUtils.toDate(of(2025, 5, 1)))
         flushAndClear()
         loginAs(anna)
         LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {}, Cleo {} ab 2025-04-01; Anna zahlt 10 am 2025-03-01 ' +
@@ -379,7 +379,7 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         fixtures.membership(wg, cleo, membershipStart: at(of(2025, 3, 10), 18))
 
         and: "Anna bezahlt am 10.03. 10 € – erfasst, als Cleo noch nicht Mitglied war"
-        fixtures.cart(wg, user: anna, amount: 10d, averagePerMember: 5d, datePurchased: DateUtils.toDate(of(2025, 3, 10)))
+        fixtures.cart(wg, user: anna, amount: 10d, datePurchased: DateUtils.toDate(of(2025, 3, 10)))
         flushAndClear()
         loginAs(anna)
         LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {}, Cleo {} ab 2025-03-10 18 Uhr; Anna zahlt 10 am 2025-03-10',
@@ -395,38 +395,6 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         diffSummeInCent(jahr.spendingsTotalYear.spendingsTotalUser) == 0
     }
 
-    def "Altdaten: averagePerMember wird ignoriert, Salden centgenau aus Betrag und Historie (AC8)"() {
-        given:
-        def anna = fixtures.user(name: 'Anna')
-        def ben = fixtures.user(name: 'Ben')
-        def cleo = fixtures.user(name: 'Cleo')
-        def (annaId, benId, cleoId) = [anna, ben, cleo]*.id
-        assert annaId < benId && benId < cleoId
-        def wg = fixtures.group(owner: anna, members: [ben, cleo])
-
-        and: "ein ungerundeter Altwert (so wie ihn die NUMERIC-Spalte für 10/3 speichert) und ein bewusst falscher Wert"
-        def c1 = fixtures.cart(wg, user: anna, amount: 10d, averagePerMember: 3.33333333333333d, datePurchased: DateUtils.toDate(TestData.REFERENCE_DATE))
-        def c2 = fixtures.cart(wg, user: ben, amount: 5d, averagePerMember: 99d, datePurchased: DateUtils.toDate(TestData.REFERENCE_DATE))
-        def (c1Id, c2Id) = [c1, c2]*.id
-        flushAndClear()
-        loginAs(anna)
-        LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {}, Cleo {}; Einkauf {} Anna 10 (averagePerMember 3.333…), ' +
-                'Einkauf {} Ben 5 (averagePerMember 99)', wg.group.id, annaId, benId, cleoId, c1Id, c2Id)
-
-        when:
-        def gesamt = spendingsOverviewService.getSpendingsForGroupAndAllYears(wg.group.id)
-        logUebersicht('spendingsOverviewService.getSpendingsForGroupAndAllYears', gesamt)
-
-        then: "exakter Anteil je Person (10 + 5) / 3 = 5,00: Anna +5, Ben 0, Cleo −5"
-        werte(gesamt.spendingsTotalYear.spendingsTotalUser) ==
-                [(annaId): [10d, 5d], (benId): [5d, 0d], (cleoId): [0d, -5d]]
-        diffSummeInCent(gesamt.spendingsTotalYear.spendingsTotalUser) == 0
-
-        and: "Beträge und Altwerte bleiben unverändert gespeichert"
-        [c1Id, c2Id].collect { cartRepository.findById(it).get() }.collect { [it.amount, it.averagePerMember] } ==
-                [[10d, 3.33333333333333d], [5d, 99d]]
-    }
-
     def "Ausgleichszahlungen in Höhe der Salden gleichen centgenau aus, Unbeteiligte bleiben unverändert (AC10, D4)"() {
         given: "Anna (Owner), Ben, Cleo; Anna bezahlt 10 € → Anna +6,66, Ben −3,33, Cleo −3,33"
         def anna = fixtures.user(name: 'Anna')
@@ -436,7 +404,7 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         assert annaId < benId && benId < cleoId
         def wg = fixtures.group(owner: anna, members: [ben, cleo])
         def tag = DateUtils.toDate(TestData.REFERENCE_DATE)
-        fixtures.cart(wg, user: anna, amount: 10d, averagePerMember: 10d / 3, datePurchased: tag)
+        fixtures.cart(wg, user: anna, amount: 10d, datePurchased: tag)
         flushAndClear()
         LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {}, Cleo {}; Anna zahlt 10 am {}', wg.group.id, annaId, benId,
                 cleoId, TestData.REFERENCE_DATE)
@@ -464,7 +432,7 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         def (anna, ben, cleo, dora) = (1..4).collect { fixtures.user() }
         def (annaId, benId, cleoId, doraId) = [anna, ben, cleo, dora]*.id
         def wg = fixtures.group(owner: anna, members: [ben, cleo, dora])
-        fixtures.cart(wg, user: anna, amount: 40d, averagePerMember: 10d, datePurchased: DateUtils.toDate(TestData.REFERENCE_DATE))
+        fixtures.cart(wg, user: anna, amount: 40d, datePurchased: DateUtils.toDate(TestData.REFERENCE_DATE))
         flushAndClear()
         def start = diffs(annaId, wg)
         LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {}, Cleo {}, Dora {}; Anna zahlt 40 am {}; Salden {}', wg.group.id,
@@ -473,7 +441,7 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         when: "Ben zahlt Anna 8,00 €"
         loginAs(userRepository.findById(benId).get())
         def settlementId = settlementService.addSettlementPayment(new SettlementPaymentDto(8d, wg.group.id, new UserDto(id: annaId),
-                DateUtils.toDate(TestData.REFERENCE_DATE)))[0].settlementId
+                TestData.REFERENCE_DATE))[0].settlementId
         flushAndClear()
         def nachAnlage = diffs(annaId, wg)
         LOG.info('settlementService.addSettlementPayment(Ben -> Anna 8.00) -> Salden {}', nachAnlage)
@@ -528,7 +496,7 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         def (annaId, benId, cleoId) = [anna, ben, cleo]*.id
         assert annaId < benId && benId < cleoId
         def wg = fixtures.group(owner: anna, members: [ben, cleo])
-        fixtures.cart(wg, user: anna, amount: 0.02d, averagePerMember: 0.02d / 3, datePurchased: DateUtils.toDate(TestData.REFERENCE_DATE))
+        fixtures.cart(wg, user: anna, amount: 0.02d, datePurchased: DateUtils.toDate(TestData.REFERENCE_DATE))
         flushAndClear()
         def vorher = diffs(annaId, wg)
         LOG.info('Szenario: Gruppe {}, Anna {}, Ben {}, Cleo {}; Anna zahlt 0.02; Salden vorher {}', wg.group.id, annaId, benId,
@@ -537,7 +505,7 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         when: "Cleo zahlt Anna 1,00 €"
         loginAs(userRepository.findById(cleoId).get())
         settlementService.addSettlementPayment(new SettlementPaymentDto(1d, wg.group.id, new UserDto(id: annaId),
-                DateUtils.toDate(TestData.REFERENCE_DATE)))
+                TestData.REFERENCE_DATE))
         flushAndClear()
         def nachher = diffs(annaId, wg)
         LOG.info('settlementService.addSettlementPayment(Cleo -> Anna 1.00) -> Salden {}', nachher)
@@ -549,7 +517,7 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
     }
 
     private static SettlementPaymentDto aenderung(Long settlementId, Double betrag, Long empfaengerId, LocalDate datum) {
-        def dto = new SettlementPaymentDto(betrag, null, new UserDto(id: empfaengerId), DateUtils.toDate(datum))
+        def dto = new SettlementPaymentDto(betrag, null, new UserDto(id: empfaengerId), datum)
         dto.id = settlementId
         dto
     }
@@ -645,7 +613,7 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
     def "Ein Jahr ohne Carts liefert keine Nutzer und keine Monate"() {
         given:
         def wg = fixtures.group(memberSince: of(2024, 1, 1))
-        fixtures.cart(wg, amount: 12.5d, averagePerMember: 12.5d, datePurchased: DateUtils.toDate(of(2024, 3, 1)))
+        fixtures.cart(wg, amount: 12.5d, datePurchased: DateUtils.toDate(of(2024, 3, 1)))
         flushAndClear()
         loginAs(wg.owner)
         LOG.info('Szenario: Gruppe {}, Owner {}, Einkauf 12.50 am 2024-03-01', wg.group.id, wg.owner.id)
@@ -659,6 +627,102 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         jahr.spendingsTotalYear.spendingsTotalUser == []
         jahr.spendingsPerMonth == []
         jahr.availableYears == [2024]
+    }
+
+    def "DIV-109 R10: Zahlung eines Ex-Mitglieds nach dem Austritt (#fall) erscheint in Jahr und Monat, Salden je Zeitraum 0"() {
+        given: "Anna (Owner) und Ben seit 01.01.2024; Anna kauft am 01.03.2024 für 200 ein → Anna +100, Ben −100"
+        def anna = fixtures.user(name: 'Anna')
+        def ben = fixtures.user(name: 'Ben')
+        def (annaId, benId) = [anna, ben]*.id
+        def wg = fixtures.group(owner: anna, members: [ben], memberSince: of(2024, 1, 1))
+        fixtures.cart(wg, user: anna, amount: 200d, datePurchased: DateUtils.toDate(of(2024, 3, 1)))
+
+        and: "Ben wird am #austritt entfernt; danach kauft Anna am 01.04.2025 allein für 30 ein (Monat ohne Bens Carts)"
+        entferne(wg, benId, austritt)
+        fixtures.cart(wg, user: anna, amount: 30d, datePurchased: DateUtils.toDate(of(2025, 4, 1)))
+
+        and: "Anna (angemeldet, aktuelles Mitglied) erfasst am #zahlungstag 100 erhalten von Ben"
+        testClock.today = zahlungstag
+        loginAs(userRepository.findById(annaId).get())
+        def dto = new SettlementPaymentDto(100d, wg.group.id, new UserDto(id: annaId), zahlungstag)
+        dto.payer = new UserDto(id: benId)
+        settlementService.addSettlementPayment(dto)
+        flushAndClear()
+        loginAs(userRepository.findById(annaId).get())
+        LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {} entfernt am {}; Zahlung Ben -> Anna 100 am {}; Anna allein 30 am 2025-04-01',
+                wg.group.id, annaId, benId, austritt, zahlungstag)
+
+        when:
+        def jahr = spendingsOverviewService.getSpendingsForGroupAndYear(2025, wg.group.id)
+        def alle = spendingsOverviewService.getSpendingsForGroupAndAllYears(wg.group.id)
+        def jahrAusAlle = alle.spendingsPerYear.find { it.year == 2025 }.spendingsYearlyUser
+        def zahlungsmonat = jahr.spendingsPerMonth.find { it.month == zahlungstag.monthValue }.spendingsMonthlyUser
+        def april = jahr.spendingsPerMonth.find { it.month == 4 }.spendingsMonthlyUser
+        logUebersicht('spendingsOverviewService.getSpendingsForGroupAndYear(2025)', jahr)
+        LOG.info('Monat {} [sum, diff] {}, April {}, spendingsPerYear 2025 {}, gesamt {}', zahlungstag.monthValue,
+                werte(zahlungsmonat), werte(april), werte(jahrAusAlle), werte(alle.spendingsTotalYear.spendingsTotalUser))
+
+        then: "spendingsTotalYear des Jahres 2025: Ben ist enthalten (als entfernt markiert), Summe der Salden 0"
+        jahr.spendingsTotalYear.spendingsTotalUser*.userId.contains(benId)
+        jahr.spendingsTotalYear.spendingsTotalUser.find { it.userId == benId }.userName == 'Ben REMOVED'
+        diffSummeInCent(jahr.spendingsTotalYear.spendingsTotalUser) == 0L
+
+        and: "spendingsPerMonth des Zahlungsmonats: Ben +100, Anna −100"
+        werte(zahlungsmonat) == [(annaId): [-100d, -100d], (benId): [100d, 100d]]
+
+        and: "spendingsPerYear 2025 der Gesamtübersicht enthält Ben, Summe 0"
+        jahrAusAlle*.userId.contains(benId)
+        diffSummeInCent(jahrAusAlle) == 0L
+
+        and: "Gegenprobe: im April (ohne Mitgliedschaft und ohne eigene Carts) fehlt Ben weiterhin"
+        april*.userId == [annaId]
+
+        and: "Gesamt: beide Salden 0 (AK1)"
+        alle.spendingsTotalYear.spendingsTotalUser.collectEntries { [it.userId, it.diff] } == [(annaId): 0d, (benId): 0d]
+
+        where:
+        fall                                  | austritt         | zahlungstag
+        'Austritt im Vorjahr'                 | of(2024, 12, 15) | of(2025, 2, 10)
+        'Austritt im selben Jahr, Monat vorher' | of(2025, 3, 15) | of(2025, 5, 10)
+    }
+
+    def "DIV-109 R10: Gegenläufige eigene Carts eines Ex-Mitglieds (Summe 0) zeigen seine Zeile trotzdem"() {
+        given: "Anna (Owner) und Ben seit 01.01.2024; Ben wird am 15.12.2024 entfernt"
+        def anna = fixtures.user(name: 'Anna')
+        def ben = fixtures.user(name: 'Ben')
+        def (annaId, benId) = [anna, ben]*.id
+        def wg = fixtures.group(owner: anna, members: [ben], memberSince: of(2024, 1, 1))
+        entferne(wg, benId, of(2024, 12, 15))
+
+        and: "im Februar 2025: Ben zahlt Anna 50, Anna zahlt Ben 50 (Bens Carts +50 und −50)"
+        def tag = of(2025, 2, 10)
+        testClock.today = tag
+        loginAs(userRepository.findById(annaId).get())
+        def erhalten = new SettlementPaymentDto(50d, wg.group.id, new UserDto(id: annaId), tag)
+        erhalten.payer = new UserDto(id: benId)
+        settlementService.addSettlementPayment(erhalten)
+        settlementService.addSettlementPayment(new SettlementPaymentDto(50d, wg.group.id, new UserDto(id: benId), tag))
+        flushAndClear()
+        loginAs(userRepository.findById(annaId).get())
+        LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {} entfernt am 2024-12-15; Ben -> Anna 50 und Anna -> Ben 50 am {}',
+                wg.group.id, annaId, benId, tag)
+
+        when:
+        def februar = spendingsOverviewService.getSpendingsForGroupAndYear(2025, wg.group.id)
+                .spendingsPerMonth.find { it.month == 2 }.spendingsMonthlyUser
+        LOG.info('spendingsOverviewService.getSpendingsForGroupAndYear(2025) -> Februar [sum, diff] {}', werte(februar))
+
+        then:
+        werte(februar) == [(annaId): [0d, 0d], (benId): [0d, 0d]]
+    }
+
+    /** Entfernt ein Mitglied über GroupService wie die App; das Austrittsdatum kommt aus testClock. */
+    private void entferne(GroupScenario wg, Long memberId, LocalDate austritt) {
+        testClock.today = austritt
+        loginAs(userRepository.findById(wg.owner.id).get())
+        groupService.removeMemberFromGroup(new RemoveGroupMemberDto(id: wg.group.id, member: new UserDto(id: memberId)))
+        flushAndClear()
+        LOG.info('groupService.removeMemberFromGroup(Gruppe {}, User {}) am {} aufgerufen', wg.group.id, memberId, austritt)
     }
 
     /** Ergebnis eines Übersichts-Aufrufs (INFO): Summe und [sum, diff] je Nutzer. */
@@ -689,7 +753,7 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
     private void zahlung(Long vonId, Long anId, Double betrag, GroupScenario wg, Date tag) {
         loginAs(userRepository.findById(vonId).get())
         def an = userRepository.findById(anId).get()
-        settlementService.addSettlementPayment(new SettlementPaymentDto(betrag, wg.group.id, new UserDto(an), tag))
+        settlementService.addSettlementPayment(new SettlementPaymentDto(betrag, wg.group.id, new UserDto(an), DateUtils.toLocalDate(tag)))
         flushAndClear()
         LOG.info('settlementService.addSettlementPayment(User {} an User {}, {})', vonId, anId, betrag)
     }

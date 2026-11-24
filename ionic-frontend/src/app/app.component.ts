@@ -1,4 +1,4 @@
-import { Component, effect, NgZone, Renderer2 } from '@angular/core';
+import { Component, effect, NgZone, Renderer2, signal } from '@angular/core';
 import {Subscription } from 'rxjs';
 import { AuthService } from './auth/auth.service';
 import { Router } from '@angular/router';
@@ -6,7 +6,7 @@ import { User } from './auth/user';
 import { WebSocketService } from './service/websocket.service';
 import { GroupService } from './service/group.service';
 import { Group } from './model/group';
-import { AlertController, isPlatform, LoadingController, NavController, Platform } from '@ionic/angular';
+import { AlertController, isPlatform, LoadingController, ModalController, NavController, Platform } from '@ionic/angular';
 import { App } from '@capacitor/app';
 import { Keyboard } from '@capacitor/keyboard';
 import { PluginListenerHandle } from '@capacitor/core';
@@ -16,7 +16,7 @@ import { StorageService } from './service/storage.service';
 import { ChangeGroupOwnerDto } from './groupmembers/model/change-group-owner-dto';
 import {
   applyMemberAddedToOverview, applyMemberRemovedFromOverview, applyMembersChange, applyOwnerChange,
-  applyOwnerChangeToOverview, GroupMembersEvent, renameGroup,
+  applyOwnerChangeToOverview, GroupMembersEvent, applyGroupUpdate, GroupUpdateEvent,
 } from './service/group-events';
 import { CategoryDto } from './model/category-dto';
 import { CategoryService } from './service/category.service';
@@ -27,6 +27,7 @@ import { LanguageService } from './service/language.service';
 import { ShoppinglistService } from './domains/shoppinglist/service/shoppinglist.service';
 import { isLongBackground, ResyncThrottle } from './service/resync-throttle';
 import { KeyboardOffset, offsetMinusViewportShift } from './service/keyboard-offset';
+import { openGroupFormSheet } from './groupoverview/group-form-sheet/group-form-sheet-options';
 
 @Component({
   selector: 'app-root',
@@ -66,6 +67,7 @@ export class AppComponent {
     private groupService: GroupService,
     private loadingCtrl: LoadingController,
     private alertCtrl: AlertController,
+    private modalCtrl: ModalController,
     private platform: Platform,
     private navCtrl: NavController,
     private renderer: Renderer2,
@@ -96,43 +98,9 @@ export class AppComponent {
     return foundGroup?.memberCount! > 0;
   }
 
+  /** Seitenmenü „Gruppe hinzufügen“: dasselbe Bottom Sheet wie in der Gruppenübersicht, mit Währungsauswahl (DIV-77). */
   onCreateGroup() {
-    this.alertCtrl.create({
-      header: this.translate.instant('alerts.group.new.header'),
-      buttons: [{
-        text: this.translate.instant('alerts.group.new.cancel'),
-        role: "cancel"
-      }, {
-        text: this.translate.instant('alerts.group.new.ok'),
-        handler: (data) => {
-          this.loadingCtrl.create({
-            message: this.translate.instant('alerts.group.new.loading')
-          }).then(loadingEl => {
-            if (!data) return;
-            const trimmedGroupName = data.groupName.trim();
-            if (trimmedGroupName === "") return;
-
-            const newGroup: Group = { id: new Date().getTime(), name: trimmedGroupName, dateCreated: new Date() };
-            this.groupService.addGroup(newGroup);
-            loadingEl.dismiss();
-          })
-        }
-      }],
-      inputs: [
-        {
-          name: "groupName",
-          placeholder: this.translate.instant('alerts.group.new.placeholder'),
-          attributes: {
-            maxlength: INIT_NUMBERS.MAX_LENGTH
-          }
-        }
-      ]
-    }).then(alertEl => alertEl.present().then(() => {
-      const inputField = document.querySelector("ion-alert input") as HTMLElement;
-      if (inputField) {
-        inputField.focus();
-      }
-    }));
+    return openGroupFormSheet(this.modalCtrl, { mode: 'create', saving: signal(false) });
   }
 
   onCreateCategory() {
@@ -396,14 +364,15 @@ export class AppComponent {
   }
 
   subscribeToTopics() {
-    this.webSocketService.subscribe<Group>(
+    this.webSocketService.subscribe<GroupUpdateEvent>(
       `/user/notification/update-group`,
       data => {
-        this.sideNavGroups.update(groups => renameGroup(groups, data));
-        this.groupOverviewList.update(groups => renameGroup(groups, data));
+        // Name und Währung (DIV-77) in Seitenleiste, Übersicht und aktiver Gruppe
+        this.sideNavGroups.update(groups => applyGroupUpdate(groups, data));
+        this.groupOverviewList.update(groups => applyGroupUpdate(groups, data));
 
         if (this.activeGroup.id === data.id) {
-          this.groupService.setActiveGroup({ ...this.activeGroup, name: data.name });
+          this.groupService.setActiveGroup(applyGroupUpdate([this.activeGroup], data)[0]);
         }
       },
       { owner: 'app' }
@@ -460,7 +429,9 @@ export class AppComponent {
       `/user/notification/add-group-member`,
       parsedData => {
         console.log(parsedData);
-        const group: Group = { id: parsedData.id, name: parsedData.name, dateCreated: parsedData.dateCreated };
+        const group: Group = {
+          id: parsedData.id, name: parsedData.name, dateCreated: parsedData.dateCreated, currencyCode: parsedData.currencyCode,
+        };
         // Übersicht (inkl. ownerId) und offene Mitgliederliste (DIV-80) über pure Funktionen (group-events.ts)
         this.groupOverviewList.update(groups => applyMemberAddedToOverview(groups, parsedData, this.user?.id));
         this.groupMembers.update(groupMembers => applyMembersChange(groupMembers, parsedData));
@@ -474,6 +445,8 @@ export class AppComponent {
           this.groupService.setActiveGroup(group);
           this.router.navigateByUrl("/domains/tabs/overview", { replaceUrl: true });
         }
+        // Eigene Aufnahme: still neu laden, falls die Währung inzwischen gewechselt wurde (DIV-77, D8)
+        this.groupService.refreshAfterMembershipEvent(parsedData, this.user);
       
       },
       { owner: 'app' }

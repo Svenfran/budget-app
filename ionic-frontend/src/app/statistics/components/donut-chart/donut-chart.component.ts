@@ -19,6 +19,8 @@ export class DonutChartComponent implements AfterViewInit, OnDestroy {
   segments = input.required<DonutSegment[]>();
   /** Beschriftung je Segment (Name bzw. übersetztes „Sonstige“) */
   labels = input.required<string[]>();
+  /** Währung der Beträge (DIV-77, Tooltip) */
+  currency = input.required<string>();
 
   private canvas = viewChild.required<ElementRef<HTMLCanvasElement>>('canvas');
   private chart?: Chart<'doughnut'>;
@@ -46,7 +48,7 @@ export class DonutChartComponent implements AfterViewInit, OnDestroy {
             callbacks: {
               label: context => {
                 const segment = this.segments()[context.dataIndex];
-                return `${formatAmount(segment.amount)} (${segment.percent.toLocaleString('de')} %)`;
+                return `${formatAmount(segment.amount, this.currency())} (${segment.percent.toLocaleString('de')} %)`;
               },
             },
           },

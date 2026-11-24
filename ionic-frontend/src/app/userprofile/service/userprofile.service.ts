@@ -5,6 +5,7 @@ import { AuthService } from 'src/app/auth/auth.service';
 import { User } from 'src/app/auth/user';
 import { UserDto } from 'src/app/model/user-dto';
 import { AlertService } from 'src/app/service/alert.service';
+import { API_ERROR_CODES, apiErrorCode } from 'src/app/service/api-error';
 import { GroupService } from 'src/app/service/group.service';
 import { environment } from 'src/environments/environment';
 import { PasswordChangeDto } from '../model/password-change-dto';
@@ -71,11 +72,12 @@ export class UserprofileService {
         },
         error: (err) => {
           console.error("Error changing user name:", err);
-          if (err.error.includes(userDto.userName.trim())) {
+          const code = apiErrorCode(err);
+          if (code === API_ERROR_CODES.USER_NAME_ALREADY_EXISTS) {
             let header = this.translate.instant("alerts.user_profile.change_username.error_message_service.exists.header");
             let message = this.translate.instant("alerts.user_profile.change_username.error_message_service.exists.message", {userName: userDto.userName.trim()});
             this.alertService.showErrorAlert(header, message);
-          } else if (err.error.includes('User name is not allowed')) {
+          } else if (code === API_ERROR_CODES.USER_NAME_NOT_ALLOWED) {
             let header = this.translate.instant("alerts.user_profile.change_username.error_message_service.not_allowed.header");
             let message = this.translate.instant("alerts.user_profile.change_username.error_message_service.not_allowed.message", {userName: userDto.userName.trim()});
             this.alertService.showErrorAlert(header, message);
@@ -95,12 +97,13 @@ export class UserprofileService {
         },
         error: (err) => {
           console.error("Error changing user email:", err);
-          if (err.error.includes(userDto.userEmail)) {
+          const code = apiErrorCode(err);
+          if (code === API_ERROR_CODES.EMAIL_ALREADY_EXISTS) {
             let header = this.translate.instant("alerts.user_profile.change_email.error_message_service.header");
             let message = this.translate.instant("alerts.user_profile.change_email.error_message_service.message");
             this.alertService.showErrorAlert(header, message);
           }
-          if (err.error === "Invalid Email") {
+          if (code === API_ERROR_CODES.INVALID_EMAIL) {
             let header = this.translate.instant("alerts.user_profile.change_email.error_message_service.invalid_email.header");
             let message = this.translate.instant("alerts.user_profile.change_email.error_message_service.invalid_email.message");
             this.alertService.showErrorAlert(header, message);
@@ -120,7 +123,7 @@ export class UserprofileService {
         },
         error: (err) => {
           console.log("Error changing password:", err);
-          if (err.error === "Incorrect password") {
+          if (apiErrorCode(err) === API_ERROR_CODES.INCORRECT_PASSWORD) {
             let header = this.translate.instant("alerts.user_profile.change_password.error_message_service.header");
             let message = this.translate.instant("alerts.user_profile.change_password.error_message_service.message");
             this.alertService.showErrorAlert(header, message);
@@ -142,12 +145,13 @@ export class UserprofileService {
         },
         error: (err) => {
           console.error("Error resetting password:", err);
-          if (err.error.includes(resetPasswordDto.email)) {
+          const code = apiErrorCode(err);
+          if (code === API_ERROR_CODES.USER_NOT_FOUND) {
             let header = this.translate.instant('alerts.reset_password.error_email_not_exists.header');
             let message = this.translate.instant('alerts.reset_password.error_email_not_exists.message', {email: resetPasswordDto.email});
             this.alertService.showErrorAlert(header, message);
           }
-          if (err.error === "Invalid Email") {
+          if (code === API_ERROR_CODES.INVALID_EMAIL) {
             let header = this.translate.instant('alerts.reset_password.error_invalid_email.header');
             let message = this.translate.instant('alerts.reset_password.error_invalid_email.message');
             this.alertService.showErrorAlert(header, message);

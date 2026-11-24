@@ -60,7 +60,7 @@ class UserProfileServiceIntegrationSpec extends IntegrationSpec {
         flushAndClear()
         loginAs(wg.owner)
         def carts = settlementService.addSettlementPayment(
-                new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE)))
+                new SettlementPaymentDto(30d, groupId, new UserDto(id: ben.id), TestData.REFERENCE_DATE))
         def settlementId = carts[0].settlementId
         flushAndClear()
         LOG.info('Szenario: Nutzer {} (angemeldet) ist Owner von Gruppe {} mit Mitglied {} und Settlement {} (Carts {})',
@@ -136,5 +136,29 @@ class UserProfileServiceIntegrationSpec extends IntegrationSpec {
         then:
         !gespeichert.active
         gespeichert.endDate == LocalDate.of(2025, 7, 1)
+    }
+
+    def "Konto löschen als Mitglied lässt die Einkäufe der übrigen Gruppenmitglieder unverändert (DIV-39)"() {
+        given: "Einkauf des Owners"
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def ownerCart = fixtures.cart(wg, amount: 60d)
+        def (groupId, benId, ownerCartId) = [wg.group.id, ben.id, ownerCart.id]
+        flushAndClear()
+        loginAs(ben)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Mitglied {} (angemeldet) löscht sein Konto; Einkauf {} des Owners 60.00',
+                groupId, wg.owner.id, benId, ownerCartId)
+
+        when:
+        LOG.info('Start: userProfileService.deleteUserProfile(Nutzer {})', benId)
+        userProfileService.deleteUserProfile(benId)
+        flushAndClear()
+        LOG.info('Ende: userProfileService.deleteUserProfile(Nutzer {}) inkl. Flush', benId)
+        def gespeichert = cartRepository.findById(ownerCartId).get()
+        LOG.info('userProfileService.deleteUserProfile(Nutzer {}) -> Einkauf {}: deleted {}', benId, ownerCartId,
+                gespeichert.deleted)
+
+        then: "kein Löschkennzeichen für den Einkauf des Owners"
+        !gespeichert.deleted
     }
 }

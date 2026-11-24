@@ -1,5 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service
 
+import com.github.svenfran.budgetapp.budgetappbackend.constants.ApiErrorCode
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AddEditShoppingItemDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AuthenticationRequest
 import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto
@@ -14,7 +15,12 @@ import org.springframework.validation.BeanPropertyBindingResult
 import org.springframework.validation.BindingResult
 import spock.lang.Specification
 
+import java.time.LocalDate
+
 class VerificationServiceSpec extends Specification {
+
+    static final LocalDate BEGINN = LocalDate.of(2025, 6, 5)
+    static final LocalDate ENDE = LocalDate.of(2025, 6, 10)
 
     def userRepository = Mock(UserRepository)
     def passwordEncoder = Mock(PasswordEncoder)
@@ -341,39 +347,147 @@ class VerificationServiceSpec extends Specification {
         thrown(IllegalArgumentException)
     }
 
-    def "Kaufdatum außerhalb der Mitgliedschaft wird abgelehnt"() {
-        given:
-        def start = DateUtils.toDate(TestData.REFERENCE_DATE.minusDays(10))
-        def end = DateUtils.toDate(TestData.REFERENCE_DATE.minusDays(5))
-        def gmh = [TestData.membership(membershipStart: start, membershipEnd: end)]
-        def date = DateUtils.toDate(TestData.REFERENCE_DATE)
+    def "Kaufdatum #fall wird #ergebnis"() {
+        given: 'Mitgliedschaft vom 05.06. bis 10.06.2025, bei mehreren Zeiträumen zusätzlich ab 20.06.2025 offen'
+        def zeitraum = { LocalDate von, LocalDate bis ->
+            TestData.membership(membershipStart: DateUtils.toDate(von), membershipEnd: bis ? DateUtils.toDate(bis) : null)
+        }
+        def gmh = offenesEnde
+                ? [zeitraum(BEGINN, null)]
+                : [zeitraum(BEGINN, ENDE)] + (zweiterZeitraum ? [zeitraum(LocalDate.of(2025, 6, 20), null)] : [])
 
         when:
-        service.verifyDatePurchasedWithinMembershipPeriod(gmh, date)
+        Exception fehler = null
+        try {
+            service.verifyDatePurchasedWithinMembershipPeriod(gmh, kaufdatum, 7L)
+        } catch (DatePurchasedNotWithinMembershipPeriodException e) {
+            fehler = e
+        }
 
         then:
-        thrown(DatePurchasedNotWithinMembershipPeriodException)
+        (fehler == null) == erlaubt
+        fehler == null || fehler.message == 'Date purchased is not within membership period'
+        fehler == null || fehler.errorCode == ApiErrorCode.DATE_NOT_WITHIN_MEMBERSHIP
+        fehler == null || fehler.errorDetails == [userId: 7L]
+
+        where:
+        fall                                    | kaufdatum                 | offenesEnde | zweiterZeitraum || erlaubt
+        'am Beginntag'                          | BEGINN                    | false       | false           || true
+        'am Endtag'                             | ENDE                      | false       | false           || true
+        'innerhalb der Mitgliedschaft'          | LocalDate.of(2025, 6, 7)  | false       | false           || true
+        'am Tag vor dem Beginn'                 | BEGINN.minusDays(1)       | false       | false           || false
+        'am Tag nach dem Ende'                  | ENDE.plusDays(1)          | false       | false           || false
+        'lange nach Beginn bei offenem Ende'    | LocalDate.of(2030, 1, 1)  | true        | false           || true
+        'in der Lücke zwischen zwei Zeiträumen' | LocalDate.of(2025, 6, 15) | false       | true            || false
+        'im zweiten Zeitraum'                   | LocalDate.of(2025, 6, 20) | false       | true            || true
+
+        ergebnis = erlaubt ? 'akzeptiert' : 'abgelehnt'
     }
 
-    def "Kaufdatum innerhalb der Mitgliedschaft wird akzeptiert"() {
+    def "Fehlendes Kaufdatum wird mit eigener Meldung abgelehnt"() {
         given:
-        def start = DateUtils.toDate(TestData.REFERENCE_DATE.minusDays(10))
-        def end = DateUtils.toDate(TestData.REFERENCE_DATE.plusDays(5))
-        def gmh = [TestData.membership(membershipStart: start, membershipEnd: end)]
-        def date = DateUtils.toDate(TestData.REFERENCE_DATE)
+        def gmh = [TestData.membership(membershipStart: DateUtils.toDate(BEGINN), membershipEnd: null)]
 
         when:
-        service.verifyDatePurchasedWithinMembershipPeriod(gmh, date)
+        service.verifyDatePurchasedWithinMembershipPeriod(gmh, null, 7L)
 
         then:
-        noExceptionThrown()
+        def fehler = thrown(DatePurchasedNotWithinMembershipPeriodException)
+        fehler.message == 'Date purchased is required'
+        fehler.errorCode == ApiErrorCode.DATE_PURCHASED_REQUIRED
+        fehler.errorDetails == [:]
     }
 
     // ----- Ausgleichszahlung (DIV-74) -----
 
+    def "Ehemalige Partei (DIV-109): Kaufdatum #fall wird #ergebnis"() {
+        given: 'Mitgliedschaften 05.06.–10.06.2025 und 20.06.–25.06.2025, in der Historie #reihenfolge'
+        def zeitraum = { LocalDate von, LocalDate bis ->
+            TestData.membership(membershipStart: DateUtils.toDate(von), membershipEnd: DateUtils.toDate(bis))
+        }
+        def gmh = [zeitraum(BEGINN, ENDE), zeitraum(LocalDate.of(2025, 6, 20), LocalDate.of(2025, 6, 25))]
+        if (reihenfolge == 'umgekehrt') gmh = gmh.reverse()
+
+        when:
+        Exception fehler = null
+        try {
+            service.verifyDateOnOrAfterFirstMembershipStart(gmh, kaufdatum, 7L)
+        } catch (DatePurchasedNotWithinMembershipPeriodException e) {
+            fehler = e
+        }
+
+        then:
+        (fehler == null) == erlaubt
+        fehler == null || fehler.message == 'Date purchased is not within membership period'
+        fehler == null || fehler.errorCode == ApiErrorCode.DATE_NOT_WITHIN_MEMBERSHIP
+        fehler == null || fehler.errorDetails == [userId: 7L]
+
+        where:
+        fall                                     | kaufdatum                 | reihenfolge  || erlaubt
+        'am Beginntag der ersten Mitgliedschaft' | BEGINN                    | 'sortiert'   || true
+        'am Tag vor dem ersten Beginn'           | BEGINN.minusDays(1)       | 'sortiert'   || false
+        'am Tag vor dem ersten Beginn'           | BEGINN.minusDays(1)       | 'umgekehrt'  || false
+        'in der Lücke zwischen zwei Zeiträumen'  | LocalDate.of(2025, 6, 15) | 'sortiert'   || true
+        'in der Lücke zwischen zwei Zeiträumen'  | LocalDate.of(2025, 6, 15) | 'umgekehrt'  || true
+        'nach dem letzten Ende'                  | LocalDate.of(2026, 1, 1)  | 'sortiert'   || true
+
+        ergebnis = erlaubt ? 'akzeptiert' : 'abgelehnt'
+    }
+
+    def "Ehemalige Partei (DIV-109): fehlendes Kaufdatum wird mit eigener Meldung abgelehnt"() {
+        given:
+        def gmh = [TestData.membership(membershipStart: DateUtils.toDate(BEGINN), membershipEnd: DateUtils.toDate(ENDE))]
+
+        when:
+        service.verifyDateOnOrAfterFirstMembershipStart(gmh, null, 7L)
+
+        then:
+        def fehler = thrown(DatePurchasedNotWithinMembershipPeriodException)
+        fehler.errorCode == ApiErrorCode.DATE_PURCHASED_REQUIRED
+        fehler.errorDetails == [:]
+    }
+
+    def "Ehemalige Partei (DIV-109): ohne Mitgliedschaftshistorie wie ein Nicht-Mitglied abgelehnt, mit Historie akzeptiert"() {
+        given:
+        def user = TestData.user()
+        def historie = [TestData.membership(userId: user.id, membershipStart: DateUtils.toDate(BEGINN),
+                membershipEnd: DateUtils.toDate(ENDE))]
+
+        when:
+        service.verifyHasMembershipHistory(user, historie)
+
+        then:
+        noExceptionThrown()
+
+        when:
+        service.verifyHasMembershipHistory(user, [])
+
+        then:
+        thrown(NotOwnerOrMemberOfGroupException)
+    }
+
+    def "isPartOfGroup: #rolle #ergebnis zur Gruppe"() {
+        given:
+        def owner = TestData.user()
+        def mitglied = TestData.user()
+        def group = TestData.group(owner: owner, members: [mitglied] as Set)
+        def user = [Owner: owner, Mitglied: mitglied, Ehemaliger: TestData.user()][rolle]
+
+        expect:
+        service.isPartOfGroup(user, group) == erwartet
+
+        where:
+        rolle        || erwartet
+        'Owner'      || true
+        'Mitglied'   || true
+        'Ehemaliger' || false
+
+        ergebnis = erwartet ? 'gehört' : 'gehört nicht'
+    }
+
     def "Gültige Ausgleichszahlung (Betrag #betrag) wird akzeptiert"() {
         given:
-        def dto = new SettlementPaymentDto(betrag, 1L, new UserDto(id: 2L), DateUtils.toDate(TestData.REFERENCE_DATE))
+        def dto = new SettlementPaymentDto(betrag, 1L, new UserDto(id: 2L), TestData.REFERENCE_DATE)
 
         when:
         service.verifyValidSettlementPaymentForCreate(dto)
@@ -406,7 +520,7 @@ class VerificationServiceSpec extends Specification {
 
     def "Fehlendes Pflichtfeld #feld einer Ausgleichszahlung wird vor jedem Laden abgelehnt"() {
         given:
-        def dto = new SettlementPaymentDto(30d, 1L, new UserDto(id: 2L), DateUtils.toDate(TestData.REFERENCE_DATE))
+        def dto = new SettlementPaymentDto(30d, 1L, new UserDto(id: 2L), TestData.REFERENCE_DATE)
         aendern(dto)
 
         when:
@@ -427,7 +541,7 @@ class VerificationServiceSpec extends Specification {
 
     def "Anlegen mit Zahler ohne Id wird vor jedem Laden abgelehnt, ohne Zahler und mit Zahler-Id akzeptiert (Phase 5)"() {
         given:
-        def dto = new SettlementPaymentDto(30d, 1L, new UserDto(id: 2L), DateUtils.toDate(TestData.REFERENCE_DATE))
+        def dto = new SettlementPaymentDto(30d, 1L, new UserDto(id: 2L), TestData.REFERENCE_DATE)
         dto.payer = payer
 
         when:
@@ -500,7 +614,7 @@ class VerificationServiceSpec extends Specification {
 
     def "Bearbeiten: fehlendes Pflichtfeld #feld wird vor jedem Laden abgelehnt, groupId ist nicht nötig"() {
         given:
-        def dto = new SettlementPaymentDto(30d, null, new UserDto(id: 2L), DateUtils.toDate(TestData.REFERENCE_DATE))
+        def dto = new SettlementPaymentDto(30d, null, new UserDto(id: 2L), TestData.REFERENCE_DATE)
         dto.id = 70L
         aendern(dto)
 
@@ -601,6 +715,51 @@ class VerificationServiceSpec extends Specification {
         'Empfänger'  | 2L     || false
         'Dritter'    | 3L     || true
         ergebnis = erwartetAbgelehnt ? 'darf keine' : 'darf die'
+    }
+
+    def "Währungswechsel: Buchungen #hasBookings, Bestätigung #confirmed -> abgelehnt #erwartetAbgelehnt"() {
+        when: "nur bei tatsächlichem Wechsel aufgerufen (DIV-77)"
+        def abgelehnt = false
+        try {
+            service.verifyCurrencyChangeConfirmed(hasBookings, confirmed)
+        } catch (CurrencyChangeConfirmationRequiredException ignored) {
+            abgelehnt = true
+        }
+
+        then:
+        abgelehnt == erwartetAbgelehnt
+
+        where:
+        hasBookings | confirmed || erwartetAbgelehnt
+        false       | null      || false
+        false       | false     || false
+        false       | true      || false
+        true        | null      || true
+        true        | false     || true
+        true        | true      || false
+    }
+
+    def "Cart-Betrag #betrag: abgelehnt #erwartetAbgelehnt (DIV-77)"() {
+        when:
+        def abgelehnt = false
+        try {
+            service.verifyCartAmountHasAtMostTwoDecimals(betrag)
+        } catch (InvalidAmountException ignored) {
+            abgelehnt = true
+        }
+
+        then:
+        abgelehnt == erwartetAbgelehnt
+
+        where:
+        betrag               || erwartetAbgelehnt
+        12d                  || false
+        12.5d                || false
+        12.50d               || false
+        -3.99d               || false
+        null                 || false
+        12.345d              || true
+        0.30000000000000004d || true
     }
 
     /** BindingResult wie nach @Valid, mit genau einem Feldfehler (Fehlercode beliebig). */

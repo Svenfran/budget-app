@@ -117,7 +117,7 @@ class EntityToStringIntegrationSpec extends IntegrationSpec {
         flushAndClear()
         loginAs(wg.owner)
         def carts = settlementService.addSettlementPayment(
-                new SettlementPaymentDto(30d, wg.group.id, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE)))
+                new SettlementPaymentDto(30d, wg.group.id, new UserDto(id: ben.id), TestData.REFERENCE_DATE))
         def (cartId, settlementId) = [carts[0].id, carts[0].settlementId]
         flushAndClear()
         def loadedCart = cartRepository.findById(cartId).get()

@@ -6,9 +6,14 @@ Chart.register(BarController, BarElement, CategoryScale, LinearScale, DoughnutCo
 
 const currency = new ScientificCurrencyPipe();
 
-/** Betrag wie in der übrigen App (`scientificCurrency`). */
-export function formatAmount(value: number): string {
-  return currency.transform(value);
+/** Betrag wie in der übrigen App (`scientificCurrency`), in der Währung der Antwort (DIV-77). */
+export function formatAmount(value: number, currencyCode: string): string {
+  return currency.transform(value, currencyCode);
+}
+
+/** Achsenbeschriftung ohne Nachkommastellen in der Währung der Antwort (DIV-77; Zahlenformat fest `de`). */
+export function formatAxisAmount(value: number, currencyCode: string): string {
+  return new Intl.NumberFormat('de', { style: 'currency', currency: currencyCode, maximumFractionDigits: 0 }).format(value);
 }
 
 export { Chart };

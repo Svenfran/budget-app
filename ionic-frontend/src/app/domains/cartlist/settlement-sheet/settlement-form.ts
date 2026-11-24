@@ -1,29 +1,45 @@
-import { ValidatorFn, Validators } from '@angular/forms';
+import { AbstractControl, ValidationErrors, ValidatorFn, Validators } from '@angular/forms';
+import { amountFromInput, parseAmountText } from 'src/app/service/amount';
 import { GroupMembers } from 'src/app/groupmembers/model/groupmembers-dto';
 import { UserDto } from 'src/app/model/user-dto';
 import { Zeitraum } from '../new-edit-cart/model/gmh-zeitraum';
 import { SettlementPaymentDto } from '../model/settlement-payment-dto';
 import { Cart } from '../model/cart';
 import { purchaseDayOf } from '../filter-sheet/cart-filter-form';
+import { SpendingsOverviewUserDto } from 'src/app/domains/overview/model/spendings-overview-user-dto';
+import { isDeletedMarker, userDisplayName } from 'src/app/domains/overview/overview-display';
 
 /**
  * Formularlogik der Ausgleichszahlung (DIV-70), verhaltensgleich aus der früheren SettlementPaymentPage übernommen.
  */
 
 /**
- * Betrag: Pflichtfeld, größer als 0 und höchstens zwei Nachkommastellen, Dezimaltrennung nur mit Punkt (DIV-74; vorher
- * waren 0 und negative Werte erlaubt). Die Richtung ergibt sich aus Zahler und Empfänger, nicht aus dem Vorzeichen.
- * Das Backend prüft dieselben Regeln.
+ * Betrag: Pflichtfeld, größer als 0, ohne Vorzeichen (DIV-74; vorher waren 0 und negative Werte erlaubt); Punkt oder
+ * Komma als Dezimaltrenner (DIV-77 Phase 9: Textfeld statt Zahlenfeld, damit „45.“ und „45,5“ ankommen). Die Richtung ergibt sich aus Zahler und Empfänger, nicht aus dem Vorzeichen. Mehr als zwei
+ * Nachkommastellen lehnt das Formular nicht mehr ab, sondern das Sheet rundet sie beim Verlassen des Feldes und vor dem
+ * Speichern auf Cent und schreibt den Betrag mit zwei Nachkommastellen ins Feld (DIV-77, D9: `formattedAmountInput`,
+ * wie im Cart-Formular); wird dabei auf 0 gerundet, greift `min`. Das Backend lehnt weiterhin ab, was mit mehr als
+ * zwei Nachkommastellen ankommt.
  */
 export const AMOUNT_VALIDATORS: ValidatorFn[] = [
   Validators.required,
-  Validators.pattern('[0-9]*([.][0-9]{1,2})?'),
-  Validators.min(0.01),
+  // Textfeld (Nutzerentscheidung Phase 9): Punkt oder Komma, Trennzeichen am Ende erlaubt; ohne Vorzeichen
+  Validators.pattern('(?:[0-9]+(?:[.,][0-9]*)?|[.,][0-9]+)'),
+  positiveAmount,
 ];
+
+/** Größer als 0 (Fehler `min` wie bisher `Validators.min(0.01)`), auch mit Komma: `Validators.min` liest „0,5“ als 0. */
+export function positiveAmount(control: AbstractControl<number | string | null>): ValidationErrors | null {
+  const value = control.value;
+  if (value === null || value === '') return null;
+  const amount = typeof value === 'number' ? value : parseAmountText(value);
+  return amount !== null && amount < 0.01 ? { min: { min: 0.01, actual: amount } } : null;
+}
 
 /** Formularwerte, wenn das Formular gültig ist; `datePurchased` als ISO-Tag `YYYY-MM-DD`. */
 export interface SettlementFormValue {
-  amount: number;
+  /** Zahl (Eingabe) oder Text mit zwei Nachkommastellen (nach dem Formatieren, Vorbelegung im Edit-Modus) */
+  amount: number | string;
   memberId: number;
   datePurchased: string;
 }
@@ -67,7 +83,7 @@ export interface SettlementDtoOptions {
 }
 
 /**
- * Request der Ausgleichszahlung. `datePurchased` ist wie bisher Mitternacht UTC des gewählten Tages. Ist die gewählte
+ * Request der Ausgleichszahlung. `datePurchased` ist der gewählte Tag als ISO-Tag `YYYY-MM-DD` (DIV-81). Ist die gewählte
  * Gegenpartei nicht mehr in `recipients` (Liste inzwischen neu geladen), bleibt ihr Name leer; das Backend prüft die
  * Mitgliedschaft. Ohne Optionen wie bisher: Zahler ist der angemeldete Nutzer (kein `payer`), `member` der Empfänger.
  */
@@ -79,10 +95,10 @@ export function toSettlementPaymentDto(value: SettlementFormValue, groupId: numb
   return {
     ...(options.settlementId !== undefined ? { id: options.settlementId } : {}),
     ...(received ? { payer: counterpart } : {}),
-    amount: value.amount,
+    amount: amountFromInput(value.amount)!,
     groupId,
     member: received ? { id: options.receivedBy!.id, userName: options.receivedBy!.userName } : counterpart,
-    datePurchased: new Date(value.datePurchased),
+    datePurchased: value.datePurchased,
   };
 }
 
@@ -122,12 +138,61 @@ export function settlementEditData(cart: Cart, carts: Cart[]): SettlementEditDat
 }
 
 /**
- * Wählbare Empfänger im Edit-Modus des Zahlers (DIV-74): die aktuellen Empfänger plus der bisherige Empfänger, falls er
- * die Gruppe inzwischen verlassen hat. So bleibt die Ausgleichszahlung bearbeitbar; nur ein neu gewählter Empfänger
- * muss aktuell Mitglied sein (prüft das Backend).
+ * Wählbare Empfänger im Edit-Modus des Zahlers (DIV-74): die übergebene Auswahl plus der bisherige Empfänger, falls er
+ * dort fehlt (Gruppe verlassen und Saldo 0, oder Salden nicht geladen). So bleibt die Ausgleichszahlung bearbeitbar.
+ * Der ergänzte Empfänger kommt roh aus dem Cart und wird für die Anzeige aufgelöst (DIV-109: gelöscht → Label).
  */
-export function editRecipients(recipients: UserDto[], currentReceiver: UserDto): UserDto[] {
-  return recipients.some(r => r.id === currentReceiver.id) ? recipients : [...recipients, currentReceiver];
+export function editRecipients(recipients: SettlementParty[], currentReceiver: UserDto, deletedLabel: string): SettlementParty[] {
+  return recipients.some(r => r.id === currentReceiver.id)
+    ? recipients
+    : [...recipients, displayParty(currentReceiver, deletedLabel)];
+}
+
+/**
+ * Gegenpartei in der Auswahl (DIV-109). Aktuelle Mitglieder nur mit Id und Name; ehemalige Mitglieder und gelöschte
+ * Nutzer mit `former` und ihrem offenen Saldo (`balance`, Gesamtsaldo der Übersicht), gelöschte zusätzlich `deleted`.
+ * `userName` ist immer der Anzeigename (ohne Marker, gelöscht → Label).
+ */
+export interface SettlementParty extends UserDto {
+  former?: boolean;
+  deleted?: boolean;
+  balance?: number;
+}
+
+/**
+ * Anzeige einer Partei aus einem Cart (`userDto`): ein gelöschter Nutzer heißt dort `DELETED` und wird zum übersetzten
+ * Label mit `deleted`, ein Marker `REMOVED` am Ende wird entfernt, sonst bleibt der Name (DIV-109).
+ */
+export function displayParty(user: UserDto, deletedLabel: string): SettlementParty {
+  const deleted = isDeletedMarker(user.userName ?? '');
+  return {
+    id: user.id,
+    userName: userDisplayName(user.userName ?? '', deletedLabel),
+    ...(deleted ? { former: true, deleted: true } : {}),
+  };
+}
+
+/**
+ * Ehemalige Mitglieder und gelöschte Nutzer, mit denen eine Ausgleichszahlung erfasst werden kann (DIV-109): alle
+ * Nutzer der Gesamtsalden (`balances`, Gruppe `groupId`), die weder ich noch Owner noch aktuelles Mitglied sind und deren
+ * Saldo auf Cent gerundet ≠ 0 ist. „Aktuell“ entscheidet die Mitgliederliste, nicht der Marker im Namen; sie muss zu
+ * `groupId` gehören, sonst (noch nicht geladen, andere Gruppe) gibt es keine ehemaligen Parteien, weil sonst jeder als
+ * ehemalig gälte. Reihenfolge wie in `balances` (Historie).
+ */
+export function formerSettlementParties(balances: SpendingsOverviewUserDto[] | null, groupMembers: GroupMembers,
+                                        groupId: number, userId: number | undefined,
+                                        deletedLabel: string): SettlementParty[] {
+  if (!balances || groupMembers.id !== groupId) return [];
+  const current = new Set([groupMembers.ownerId, ...groupMembers.members.map(member => member.id)]);
+  return balances
+    .filter(user => user.userId !== userId && !current.has(user.userId) && Math.round(user.diff * 100) !== 0)
+    .map(user => ({
+      id: user.userId,
+      userName: userDisplayName(user.userName, deletedLabel),
+      former: true,
+      deleted: isDeletedMarker(user.userName),
+      balance: user.diff,
+    }));
 }
 
 function utcDay(value: Date | string): string {

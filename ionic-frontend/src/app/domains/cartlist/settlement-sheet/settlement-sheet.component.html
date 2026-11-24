@@ -31,10 +31,11 @@
 
       <ion-item lines="none" class="settlement-field">
         <ion-icon name="cash-outline" slot="start" aria-hidden="true"></ion-icon>
-        <ion-input formControlName="amount" class="input-amount" type="number" inputmode="decimal"
+        <!-- Textfeld statt type="number" (DIV-77): das Zahlenfeld meldet „45.“ als leer; Komma und Punkt erlaubt -->
+        <ion-input formControlName="amount" class="input-amount" type="text" inputmode="decimal"
                    enterkeyhint="done" labelPlacement="floating"
-                   [label]="'domains.spendings.overlay.settlementpayment.amount' | translate"
-                   (keyup.enter)="blurInput($event)"></ion-input>
+                   [label]="'domains.spendings.overlay.settlementpayment.amount' | translate: { currency: currencySymbol() }"
+                   (ionBlur)="roundAmount()" (keyup.enter)="blurInput($event)"></ion-input>
       </ion-item>
       <p class="field-error error-amount" *ngIf="showError(amount)" role="alert">
         <ng-container *ngIf="amount.errors?.['required']">{{ 'global.errors.required' | translate }}</ng-container>
@@ -48,7 +49,7 @@
         <ion-icon name="person-outline" slot="start" aria-hidden="true"></ion-icon>
         <ion-label class="ion-text-wrap">
           <span class="date-caption">{{ 'domains.spendings.overlay.settlementpayment.paid_by' | translate }}</span>
-          <span class="date-value payer-name">{{ settlement?.payer?.userName }}</span>
+          <span class="date-value payer-name">{{ payerDisplayName() }}</span>
         </ion-label>
       </ion-item>
       <ion-item *ngIf="canSelectReceiver()" lines="none" class="settlement-field">
@@ -60,7 +61,8 @@
                     [cancelText]="'global.selections.btn_cancel' | translate"
                     [interfaceOptions]="{ header: (memberPlaceholderKey() | translate) }"
                     (ionDismiss)="memberSelectClosed.set(true)">
-          <ion-select-option *ngFor="let member of selectableRecipients()" [value]="member.id">{{ member.userName }}</ion-select-option>
+          <!-- Ehemalige Mitglieder und gelöschte Nutzer mit Marker und offenem Saldo (DIV-109) -->
+          <ion-select-option *ngFor="let member of selectableRecipients()" [value]="member.id">{{ partyLabel(member) }}</ion-select-option>
         </ion-select>
       </ion-item>
       <p class="field-error error-member" *ngIf="showMemberError()" role="alert">

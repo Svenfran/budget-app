@@ -48,7 +48,7 @@ public class GroupController {
     }
 
     @PostMapping("/groups/add")
-    public ResponseEntity<GroupDto> addGroup(@RequestBody GroupDto groupDto) throws UserNotFoundException {
+    public ResponseEntity<GroupDto> addGroup(@RequestBody GroupDto groupDto) throws UserNotFoundException, UnsupportedCurrencyException {
         GroupDto newGroup = groupService.addGroup(groupDto);
         return new ResponseEntity<>(newGroup, HttpStatus.CREATED);
     }
@@ -66,7 +66,8 @@ public class GroupController {
     }
 
     @PutMapping("/groups/update")
-    public ResponseEntity<GroupDto> updateGroup(@RequestBody GroupDto groupDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOfGroupException {
+    public ResponseEntity<GroupDto> updateGroup(@RequestBody GroupDto groupDto) throws UserNotFoundException, GroupNotFoundException,
+            NotOwnerOfGroupException, UnsupportedCurrencyException, CurrencyChangeConfirmationRequiredException {
         GroupDto updatedGroup = groupService.updateGroup(groupDto);
         return new ResponseEntity<>(updatedGroup, HttpStatus.OK);
     }

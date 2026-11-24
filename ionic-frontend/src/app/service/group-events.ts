@@ -1,4 +1,5 @@
 import { ChangeGroupOwnerDto } from '../groupmembers/model/change-group-owner-dto';
+import { User } from '../auth/user';
 import { GroupMembers } from '../groupmembers/model/groupmembers-dto';
 import { GroupOverview } from '../groupoverview/model/group-overview';
 import { UserDto } from '../model/user-dto';
@@ -8,9 +9,22 @@ import { UserDto } from '../model/user-dto';
  * Unbekannte Gruppen ändern nichts und werfen nicht.
  */
 
-/** Übernimmt den neuen Namen für die Gruppe mit `data.id` (Seitenleiste oder Übersicht). */
-export function renameGroup<T extends { id: number; name: string }>(groups: T[], data: { id: number; name: string }): T[] {
-  return groups.map(group => group.id === data.id ? { ...group, name: data.name } : group);
+/** Payload von `update-group` (Backend `GroupDto`); `currencyCode` fehlt nur bei einem Backend vor DIV-77. */
+export interface GroupUpdateEvent {
+  id: number;
+  name: string;
+  currencyCode?: string;
+}
+
+/**
+ * Übernimmt Name und Währung für die Gruppe mit `data.id` (Seitenleiste oder Übersicht; DIV-77). Fehlt `currencyCode`
+ * im Payload, bleibt die bisherige Währung. Eine noch unbekannte Gruppe ändert nichts – deshalb lädt der Nutzer nach
+ * der eigenen Aufnahme still neu (`isOwnMembershipEvent`, D8).
+ */
+export function applyGroupUpdate<T extends { id: number; name: string; currencyCode?: string }>(groups: T[], data: GroupUpdateEvent): T[] {
+  return groups.map(group => group.id === data.id
+    ? { ...group, name: data.name, ...(data.currencyCode ? { currencyCode: data.currencyCode } : {}) }
+    : group);
 }
 
 /**
@@ -26,7 +40,18 @@ export function applyMembersChange(groupMembers: GroupMembers, data: GroupMember
 /** Payload von `add-group-member`/`remove-group-member` (Backend `GroupMembersDto` mit `updatedMember`). */
 export interface GroupMembersEvent extends GroupMembers {
   dateCreated: Date;
+  /** Gruppenwährung (DIV-77, aus `GroupSideNavDto`). */
+  currencyCode: string;
   updatedMember: UserDto;
+}
+
+/**
+ * Betrifft ein `add-group-member`-Event den angemeldeten Nutzer selbst (DIV-77, D8)? Dann lädt die App Seitenleiste und
+ * Übersicht still neu: Das Payload kann eine veraltete Währung tragen, und ein `update-group` kann vor der Aufnahme
+ * eingetroffen und mangels bekannter Gruppe ignoriert worden sein.
+ */
+export function isOwnMembershipEvent(data: Pick<GroupMembersEvent, 'updatedMember'>, user: Pick<User, 'id'> | undefined): boolean {
+  return !!user && data.updatedMember?.id === user.id;
 }
 
 /**
@@ -42,6 +67,8 @@ export function applyMemberAddedToOverview(groups: GroupOverview[], data: GroupM
       ownerName: data.ownerName,
       ownerId: data.ownerId,
       memberCount: data.members.length,
+      currencyCode: data.currencyCode,
+      // hasBookings bleibt unbekannt (undefined): das Sheet fragt beim Währungswechsel vorsorglich nach
     }];
   }
   return withMemberCount(groups, data);

@@ -12,6 +12,7 @@ const STEPS: Partial<Record<RECURRENCE_TYPE, [number, moment.unitOfTime.Duration
  * Erster Termin eines wiederkehrenden Einkaufs nach heute (Vorschau, DIV-25). Jeder Schritt wird vom Ausgangsdatum
  * aus gerechnet: moment kappt auf das Monatsende, der Tag bleibt danach aber nicht auf dem gekappten Wert
  * (31.01. → 28.02. → 31.03.). Entspricht RecurrenceCalculator im Backend mit dem Tag des Ausgangsdatums als Anker.
+ * `lastExecutionDate` ist die lokale Mitternacht des Ausgangstags (nicht Mitternacht UTC, DIV-81).
  */
 export function calculateNextExecutionDate(lastExecutionDate: Date, recurrenceType: RECURRENCE_TYPE, today: Date): Date {
   const step = STEPS[recurrenceType];

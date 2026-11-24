@@ -14,6 +14,7 @@ import { CommonModule } from '@angular/common';
 import { ScientificCurrencyPipe } from './pipe/scientific.pipe';
 import { TranslateLoader, TranslateModule } from '@ngx-translate/core';
 import { CustomTranslateLoader } from './custom-translate-loader';
+import { GroupFormSheetModule } from './groupoverview/group-form-sheet/group-form-sheet.module';
 
 export function createTranslateLoader(http: HttpClient) {
   return new CustomTranslateLoader(http);
@@ -28,6 +29,7 @@ export function createTranslateLoader(http: HttpClient) {
     AppRoutingModule,
     ReactiveFormsModule,
     ScrollingModule,
+    GroupFormSheetModule,
     TranslateModule.forRoot({
       loader: {
         provide: TranslateLoader,

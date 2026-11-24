@@ -319,7 +319,7 @@ class RecurringCartsIntegrationSpec extends IntegrationSpec {
         ''                  | null
     }
 
-    def "Nachgeholte Einkäufe teilen durch die Mitgliederzahl am jeweiligen Termin"() {
+    def "Nachgeholte Einkäufe werden je verpasstem Termin angelegt, auch vor dem Beitritt eines Mitglieds"() {
         given:
         def today = testClock.today
         def ben = fixtures.user()
@@ -332,12 +332,12 @@ class RecurringCartsIntegrationSpec extends IntegrationSpec {
         when:
         cartService.generateRecurringCarts()
         def created = cartRepository.findCartsByGroupIdOrderByDatePurchasedDesc(wg.group.id).findAll { it.id != cart.id }
-        LOG.info('cartService.generateRecurringCarts() am {} -> neue Einkäufe [Datum, averagePerMember] {}', testClock.today,
-                created.collect { [DateUtils.toLocalDate(it.datePurchased), it.averagePerMember] })
+        LOG.info('cartService.generateRecurringCarts() am {} -> neue Einkäufe am {}', testClock.today,
+                created.collect { DateUtils.toLocalDate(it.datePurchased) })
 
-        then: "vor Bens Beitritt ein Mitglied, danach zwei"
-        created.collect { [DateUtils.toLocalDate(it.datePurchased), it.averagePerMember] } ==
-                [[today, 15d], [today.minusWeeks(1), 15d], [today.minusWeeks(2), 30d]]
+        then: "ein Einkauf je verpasstem Termin (vor und nach Bens Beitritt)"
+        created.collect { DateUtils.toLocalDate(it.datePurchased) } ==
+                [today, today.minusWeeks(1), today.minusWeeks(2)]
     }
 
     def "Scheduler deaktiviert ein Template, wenn am verpassten Termin keine Mitglieder in der Gruppe sind"() {

@@ -54,7 +54,7 @@
         <span class="spendings-summary__label">{{ filterTerm() || ('domains.spendings.total' | translate) }}</span>
         <span class="spendings-summary__count">{{ (count() === 1 ? 'domains.spendings.count_one' : 'domains.spendings.count_other') | translate: { count: count() } }}</span>
       </div>
-      <span class="spendings-summary__sum">{{ sum() | scientificCurrency }}</span>
+      <span class="spendings-summary__sum">{{ sum() | scientificCurrency: currency() }}</span>
     </div>
     <div class="spendings-filter">
       <button type="button" class="spendings-filter__button" [class.spendings-filter__button--active]="filterMode()"
@@ -115,7 +115,7 @@
                 <ion-label>
                   <div class="cart-details">
                     <h2 (click)="toggleDescriptionVisibility(i)" class="titlestyle ion-text-wrap">{{ cart.title }}</h2>
-                    <h2>{{ cart.amount | scientificCurrency }}</h2>
+                    <h2>{{ cart.amount | scientificCurrency: currency() }}</h2>
                   </div>
                   <p *ngIf="isDescriptionVisible(i)" class="ion-text-wrap description">{{cart.description}}</p>
                   <div class="cart-details">

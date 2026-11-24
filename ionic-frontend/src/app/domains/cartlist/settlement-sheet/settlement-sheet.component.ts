@@ -6,11 +6,18 @@ import { take } from 'rxjs';
 import { AuthService } from 'src/app/auth/auth.service';
 import { GroupService } from 'src/app/service/group.service';
 import { LanguageService } from 'src/app/service/language.service';
+import { amountInputText, formattedAmountInput } from 'src/app/service/amount';
+import { currencySymbol } from 'src/app/pipe/scientific.pipe';
+import { DEFAULT_CURRENCY } from 'src/app/constants/currency';
 import { formatDisplayDate, isoDayOf, toIsoDay } from '../iso-day';
 import { CartService } from '../service/cart.service';
+import { TranslateService } from '@ngx-translate/core';
+import { OverviewService } from 'src/app/domains/overview/service/overview.service';
+import { SpendingsOverviewUserDto } from 'src/app/domains/overview/model/spendings-overview-user-dto';
+import { ScientificCurrencyPipe } from 'src/app/pipe/scientific.pipe';
 import {
-  AMOUNT_VALIDATORS, editRecipients, isDaySelectable, SettlementDirection, SettlementEditData, SettlementFormValue,
-  settlementRecipients, toSettlementPaymentDto,
+  AMOUNT_VALIDATORS, displayParty, editRecipients, formerSettlementParties, isDaySelectable, SettlementDirection,
+  SettlementEditData, SettlementFormValue, SettlementParty, settlementRecipients, toSettlementPaymentDto,
 } from './settlement-form';
 
 /** Rolle, mit der das Sheet nach erfolgreichem Speichern schließt. */
@@ -50,6 +57,16 @@ export class SettlementSheetComponent implements OnInit {
   @Input() settlement?: SettlementEditData;
 
   readonly group = this.groupService.activeGroup();
+  /**
+   * Währungssymbol im Betrags-Label (DIV-77): die Gruppe bleibt die beim Öffnen festgehaltene, ihre Währung aber die
+   * aktuelle aus der Gruppenliste (der Live-Handler aktualisiert sie für alle Gruppen) – ändert der Admin sie bei
+   * offenem Sheet, gilt die Zahlung in der neuen Währung (Codex F-001).
+   */
+  readonly currencyCode = computed(() => {
+    const current = this.groupService.groupsSideNav().find(group => group.id === this.group.id);
+    return current?.currencyCode ?? this.group.currencyCode ?? DEFAULT_CURRENCY;
+  });
+  readonly currencySymbol = computed(() => currencySymbol(this.currencyCode()));
   readonly currentLang = this.langService.currentLang;
   readonly userId = signal<number | undefined>(undefined);
   readonly userName = signal('');
@@ -59,11 +76,29 @@ export class SettlementSheetComponent implements OnInit {
    * aus der Rolle (der Zahler ist nicht änderbar).
    */
   readonly direction = signal<SettlementDirection>('paid');
-  readonly recipients = computed(() => settlementRecipients(this.groupService.groupMembers(), this.userId()));
-  /** Auswahlliste im Edit-Modus des Zahlers: aktuelle Empfänger plus der bisherige (ggf. ausgetretene) Empfänger. */
+  /**
+   * Gesamtsalden der Gruppe (DIV-109), beim Öffnen einmal geladen; `null` solange nicht geladen, bei Fehler oder wenn
+   * die Antwort zu spät kam (Sheet geschlossen, Gruppe oder Anmelde-Sitzung gewechselt). Ohne Salden gibt es nur die
+   * aktuellen Mitglieder zur Auswahl (wie bisher).
+   */
+  readonly balances = signal<SpendingsOverviewUserDto[] | null>(null);
+  /** Ehemalige Mitglieder und gelöschte Nutzer mit offenem Saldo (DIV-109). */
+  readonly formerParties = computed(() => formerSettlementParties(this.balances(), this.groupService.groupMembers(),
+    this.group.id, this.userId(), this.deletedLabel()));
+  /** Wählbare Gegenparteien: Owner und Mitglieder ohne mich, danach ehemalige mit offenem Saldo (DIV-109). */
+  readonly recipients = computed<SettlementParty[]>(() => [
+    ...settlementRecipients(this.groupService.groupMembers(), this.userId()),
+    ...this.formerParties(),
+  ]);
+  /** Auswahlliste im Edit-Modus des Zahlers: wählbare Gegenparteien plus der bisherige (ggf. ausgetretene) Empfänger. */
   readonly selectableRecipients = computed(() => this.settlement
-    ? editRecipients(this.recipients(), this.settlement.receiver)
+    ? editRecipients(this.recipients(), this.settlement.receiver, this.deletedLabel())
     : this.recipients());
+  /** Fester Zahlertext im Edit-Modus des Empfängers: gelöschter Zahler als Label, nicht `DELETED` (DIV-109). */
+  readonly payerDisplayName = computed(() =>
+    this.settlement ? displayParty(this.settlement.payer, this.deletedLabel()).userName : '');
+  private destroyed = false;
+  private readonly currencyPipe = new ScientificCurrencyPipe();
   /** Antwort noch gültig? Im Edit-Modus beim Öffnen festgehalten (aktive Gruppe und Anmelde-Sitzung). */
   private isCurrent: () => boolean = () => true;
   readonly openPicker = signal(false);
@@ -75,7 +110,7 @@ export class SettlementSheetComponent implements OnInit {
   readonly maxDate = toIsoDay(new Date());
 
   form = new FormGroup({
-    amount: new FormControl<number | null>(null, AMOUNT_VALIDATORS),
+    amount: new FormControl<number | string | null>(null, AMOUNT_VALIDATORS),
     memberId: new FormControl<number | null>(null, Validators.required),
     datePurchased: new FormControl<string | null>(this.maxDate, Validators.required),
   });
@@ -86,7 +121,9 @@ export class SettlementSheetComponent implements OnInit {
     private cartService: CartService,
     private authService: AuthService,
     private langService: LanguageService,
-    private destroyRef: DestroyRef
+    private destroyRef: DestroyRef,
+    private overviewService: OverviewService,
+    private translate: TranslateService
   ) {}
 
   ngOnInit() {
@@ -96,11 +133,12 @@ export class SettlementSheetComponent implements OnInit {
     });
     this.groupService.getGroupMembers(this.group.id);
     this.groupService.getGroupMembershipHistoryForGroupAndUser(this.group);
+    this.loadBalances();
 
     if (this.settlement) {
       // Vorbelegung vor dem Abonnieren der Formular-Events: macht das Formular nicht dirty
       this.form.setValue({
-        amount: this.settlement.amount,
+        amount: amountInputText(this.settlement.amount),
         memberId: this.settlement.receiver.id,
         datePurchased: this.settlement.datePurchased,
       });
@@ -118,6 +156,38 @@ export class SettlementSheetComponent implements OnInit {
     this.form.events
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.dirty.set(this.form.dirty));
+  }
+
+  /**
+   * Salden der festgehaltenen Gruppe laden (DIV-109). Die Antwort gilt nur, solange das Sheet offen ist und Gruppe und
+   * Anmelde-Sitzung dieselben sind; der Service weist nie zurück (`null` bei Fehler).
+   */
+  private loadBalances() {
+    const groupId = this.group.id;
+    const sameSession = this.groupService.sessionGuard();
+    this.destroyRef.onDestroy(() => this.destroyed = true);
+    this.overviewService.loadUserBalances(groupId).then(balances => {
+      if (!this.destroyed && this.groupService.activeGroupId() === groupId && sameSession()) {
+        this.balances.set(balances);
+      }
+    });
+  }
+
+  private deletedLabel(): string {
+    return this.translate.instant('global.user.deleted');
+  }
+
+  /**
+   * Text einer Option: aktuelle Mitglieder nur mit Namen; ehemalige mit „(ehemalig)“ (gelöschte heißen schon so) und
+   * offenem Saldo in der Gruppenwährung (DIV-109).
+   */
+  partyLabel(party: SettlementParty): string {
+    if (!party.former) return party.userName;
+    const marker = party.deleted ? '' : ` (${this.translate.instant('domains.spendings.overlay.settlementpayment.former_member')})`;
+    const balance = party.balance === undefined
+      ? ''
+      : ` · ${this.currencyPipe.transform(party.balance, this.currencyCode())}`;
+    return `${party.userName}${marker}${balance}`;
   }
 
   get amount() { return this.form.controls.amount; }
@@ -160,7 +230,19 @@ export class SettlementSheetComponent implements OnInit {
       : 'domains.spendings.overlay.settlementpayment.placeholder_member';
   }
 
+  /**
+   * Betrag auf Cent runden und mit zwei Nachkommastellen sichtbar ins Feld schreiben (DIV-77, D9; einheitlich mit dem
+   * Cart-Formular): beim Verlassen des Feldes und vor dem Speichern. Ungültige Eingaben bleiben unverändert
+   * (Validatoren melden sie). Programmatisch gesetzt, macht das Sheet also nicht „geändert“.
+   */
+  roundAmount() {
+    if (this.saving()) return;
+    const formatted = formattedAmountInput(this.amount.value);
+    if (formatted !== null && formatted !== this.amount.value) this.amount.setValue(formatted);
+  }
+
   async save() {
+    this.roundAmount();
     if (this.form.invalid || this.saving()) return;
     const recipients = this.settlement ? [...this.selectableRecipients(), this.settlement.receiver] : this.recipients();
     const receivedBy = this.direction() === 'received' ? { id: this.userId()!, userName: this.userName() } : undefined;
@@ -172,8 +254,8 @@ export class SettlementSheetComponent implements OnInit {
     let ok = false;
     try {
       ok = this.settlement
-        ? await this.cartService.updateSettlementPayment(dto, this.group, this.isCurrent)
-        : await this.cartService.addSettlementPayment(dto);
+        ? await this.cartService.updateSettlementPayment(dto, this.group, this.isCurrent, this.settlement)
+        : await this.cartService.addSettlementPayment(dto, { id: this.userId()!, userName: this.userName() });
     } catch (err) {
       // Der Service weist laut Vertrag nie zurück; falls doch, bleibt das Sheet wie bei einem Fehler offen.
       console.error('Error saving settlement payment:', err);

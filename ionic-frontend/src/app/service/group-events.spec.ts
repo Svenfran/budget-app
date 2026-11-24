@@ -2,25 +2,45 @@ import { aGroup, aGroupOverview, aUser, REFERENCE_DATE } from 'src/testing/test-
 import { GroupMembers } from '../groupmembers/model/groupmembers-dto';
 import {
   applyMemberAddedToOverview, applyMemberRemovedFromOverview, applyMembersChange, applyOwnerChange,
-  applyOwnerChangeToOverview, GroupMembersEvent, renameGroup,
+  applyOwnerChangeToOverview, applyGroupUpdate, GroupMembersEvent, isOwnMembershipEvent,
 } from './group-events';
 
 describe('group-events', () => {
-  describe('renameGroup', () => {
-    it('übernimmt den neuen Namen nur für die betroffene Gruppe', () => {
-      const wg = aGroup({ name: 'WG' });
-      const urlaub = aGroup({ name: 'Urlaub' });
+  // DIV-77: update-group trägt Name und Währung (vorher renameGroup, nur Name)
+  describe('applyGroupUpdate', () => {
+    it('übernimmt Name und Währung nur für die betroffene Gruppe', () => {
+      const wg = aGroup({ name: 'WG', currencyCode: 'EUR' });
+      const urlaub = aGroup({ name: 'Urlaub', currencyCode: 'EUR' });
 
-      const result = renameGroup([wg, urlaub], { id: wg.id, name: 'Neue WG' });
+      const result = applyGroupUpdate([wg, urlaub], { id: wg.id, name: 'Neue WG', currencyCode: 'USD' });
 
-      expect(result).toEqual([{ ...wg, name: 'Neue WG' }, urlaub]);
+      expect(result).toEqual([{ ...wg, name: 'Neue WG', currencyCode: 'USD' }, urlaub]);
+      expect(result[1]).toBe(urlaub);
     });
 
-    it('ändert bei einer lokal unbekannten Gruppe nichts und wirft nicht', () => {
-      const wg = aGroup();
+    it('behält die Währung (z. B. hasBookings der Übersicht), wenn das Payload keine trägt', () => {
+      const wg = aGroupOverview({ name: 'WG', currencyCode: 'CHF', hasBookings: true });
 
-      expect(renameGroup([wg], { id: 999, name: 'Unbekannt' })).toEqual([wg]);
-      expect(renameGroup([], { id: 999, name: 'Unbekannt' })).toEqual([]);
+      expect(applyGroupUpdate([wg], { id: wg.id, name: 'Neu' })).toEqual([{ ...wg, name: 'Neu' }]);
+    });
+
+    it('ändert bei einer lokal unbekannten Gruppe nichts und wirft nicht (deshalb Refetch nach eigener Aufnahme, D8)', () => {
+      const wg = aGroup({ currencyCode: 'EUR' });
+
+      expect(applyGroupUpdate([wg], { id: 999, name: 'Unbekannt', currencyCode: 'USD' })).toEqual([wg]);
+      expect(applyGroupUpdate([], { id: 999, name: 'Unbekannt', currencyCode: 'USD' })).toEqual([]);
+    });
+  });
+
+  // DIV-77 (D8): stiller Refetch nur nach der eigenen Aufnahme
+  describe('isOwnMembershipEvent', () => {
+    it('erkennt die eigene Aufnahme', () => {
+      expect(isOwnMembershipEvent({ updatedMember: aUser({ id: 50 }) }, { id: 50 })).toBeTrue();
+    });
+
+    it('nicht bei fremdem Mitglied oder ohne angemeldeten Nutzer', () => {
+      expect(isOwnMembershipEvent({ updatedMember: aUser({ id: 60 }) }, { id: 50 })).toBeFalse();
+      expect(isOwnMembershipEvent({ updatedMember: aUser({ id: 50 }) }, undefined)).toBeFalse();
     });
   });
 
@@ -57,7 +77,7 @@ describe('group-events', () => {
   describe('Übersicht bei Mitglieder-Events', () => {
     const ME = 50;
     const event = (overrides: Partial<GroupMembersEvent> = {}): GroupMembersEvent => ({
-      id: 10, name: 'WG', dateCreated: REFERENCE_DATE, ownerName: 'Anna', ownerId: 20,
+      id: 10, name: 'WG', dateCreated: REFERENCE_DATE, ownerName: 'Anna', ownerId: 20, currencyCode: 'EUR',
       members: [aUser(), aUser()], updatedMember: aUser({ id: 60 }), ...overrides,
     });
     const wg = () => aGroupOverview({ id: 10, name: 'WG', ownerId: 20, memberCount: 1 });
@@ -70,8 +90,17 @@ describe('group-events', () => {
         const result = applyMemberAddedToOverview([other], event({ updatedMember: aUser({ id: ME }) }), ME);
 
         expect(result).toEqual([other, {
-          id: 10, name: 'WG', dateCreated: REFERENCE_DATE, ownerName: 'Anna', ownerId: 20, memberCount: 2,
+          id: 10, name: 'WG', dateCreated: REFERENCE_DATE, ownerName: 'Anna', ownerId: 20, memberCount: 2, currencyCode: 'EUR',
         }]);
+      });
+
+      // Regression Codex-Review 1 F-003: live in eine USD-Gruppe aufgenommen → Übersicht mit USD, hasBookings unbekannt
+      it('übernimmt die Währung der Gruppe, hasBookings bleibt unbekannt', () => {
+        const result = applyMemberAddedToOverview([], event({ updatedMember: aUser({ id: ME }), currencyCode: 'USD' }), ME);
+
+        expect(result[0].currencyCode).toBe('USD');
+        expect(result[0].hasBookings).toBeUndefined();
+        expect('hasBookings' in result[0]).toBeFalse();
       });
 
       it('nimmt die eigene Gruppe nicht doppelt auf (z. B. Resync vor dem Event)', () => {

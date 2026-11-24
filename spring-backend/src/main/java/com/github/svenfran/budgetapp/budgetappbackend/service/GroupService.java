@@ -1,17 +1,18 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
+import com.github.svenfran.budgetapp.budgetappbackend.constants.SupportedCurrency;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.*;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.*;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.*;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.Translator;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.*;
 import com.github.svenfran.budgetapp.budgetappbackend.service.mapper.GroupDtoMapper;
-import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDate;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.TreeMap;
@@ -49,6 +50,8 @@ public class GroupService {
 
     private final CartTemplateRepository cartTemplateRepository;
 
+    private final GroupCurrencyChangeRepository groupCurrencyChangeRepository;
+
     private final Translator translator;
 
     private final Clock clock;
@@ -61,7 +64,8 @@ public class GroupService {
                         GroupMembershipHistoryService groupMembershipHistoryService,
                         GroupMembershipHistoryRepository gmhRepository, DataLoaderService dataLoaderService,
                         VerificationService verificationService, NotificationService notificationService,
-                        CartTemplateRepository cartTemplateRepository, Translator translator, Clock clock) {
+                        CartTemplateRepository cartTemplateRepository,
+                        GroupCurrencyChangeRepository groupCurrencyChangeRepository, Translator translator, Clock clock) {
         this.groupRepository = groupRepository;
         this.groupDtoMapper = groupDtoMapper;
         this.cartRepository = cartRepository;
@@ -76,6 +80,7 @@ public class GroupService {
         this.verificationService = verificationService;
         this.notificationService = notificationService;
         this.cartTemplateRepository = cartTemplateRepository;
+        this.groupCurrencyChangeRepository = groupCurrencyChangeRepository;
         this.translator = translator;
         this.clock = clock;
     }
@@ -102,7 +107,13 @@ public class GroupService {
     }
 
     public List<GroupOverviewDto> getGroupsForGroupOverview() throws UserNotFoundException {
-        return getGroupsByMemberOrOwner().map(GroupOverviewDto::new).toList();
+        var groups = getGroupsByMemberOrOwner().toList();
+        if (groups.isEmpty()) return List.of();
+        // eine Abfrage für alle Gruppen statt einer je Gruppe (DIV-77)
+        var groupIdsWithBookings = cartRepository.findGroupIdsWithCarts(groups.stream().map(Group::getId).toList());
+        return groups.stream()
+                .map(group -> new GroupOverviewDto(group, groupIdsWithBookings.contains(group.getId())))
+                .toList();
     }
 
     public GroupMembersDto getGroupMembers(Long groupId) throws UserNotFoundException, GroupNotFoundException, NotOwnerOrMemberOfGroupException {
@@ -112,21 +123,49 @@ public class GroupService {
         return new GroupMembersDto(group);
     }
 
-    @Transactional
-    public GroupDto addGroup(GroupDto groupDto) throws UserNotFoundException {
+    @Transactional(rollbackFor = Exception.class)
+    public GroupDto addGroup(GroupDto groupDto) throws UserNotFoundException, UnsupportedCurrencyException {
         var user = dataLoaderService.getAuthenticatedUser();
-        var group = groupRepository.save(groupDtoMapper.GroupDtoToEntity(groupDto, user));
+        var currency = SupportedCurrency.fromCode(groupDto.getCurrencyCode());
+        var group = groupRepository.save(groupDtoMapper.GroupDtoToEntity(groupDto, user, currency));
         createDefaultCategories(group);
         groupMembershipHistoryService.startGroupMembershipForOwner(user, group);
         return new GroupDto(group);
     }
 
-    public GroupDto updateGroup(GroupDto groupDto) throws UserNotFoundException, GroupNotFoundException, NotOwnerOfGroupException {
+    /**
+     * Name und Währung einer Gruppe ändern (nur Owner). Erst alle Prüfungen, dann die Änderungen: Ein abgelehnter Request
+     * ändert nichts, auch nicht den Namen (rollbackFor, weil die fachlichen Exceptions checked sind).
+     * <p>
+     * Währungswechsel (DIV-77): keine Umrechnung, alle Beträge gelten danach in der neuen Währung. Hat die Gruppe Buchungen,
+     * ist {@code confirmCurrencyChange == true} Pflicht (sonst 409). Fehlt {@code currencyCode}, bleibt die Währung (alte
+     * Clients). Die Zeilensperre serialisiert gleichzeitige Änderungen, das Protokoll bleibt eine lückenlose Kette. Eine
+     * Buchung, die ein Mitglied währenddessen anlegt, wird bewusst nicht gesperrt: Sie gilt wie alle bestehenden Beträge
+     * in der neuen Währung (D3, akzeptiert).
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public GroupDto updateGroup(GroupDto groupDto) throws UserNotFoundException, GroupNotFoundException,
+            NotOwnerOfGroupException, UnsupportedCurrencyException, CurrencyChangeConfirmationRequiredException {
         var user = dataLoaderService.getAuthenticatedUser();
-        var group = dataLoaderService.loadGroup(groupDto.getId());
+        var group = dataLoaderService.loadGroupForUpdate(groupDto.getId());
         verificationService.verifyIsGroupOwner(user, group);
-        var groupOwner = dataLoaderService.loadUser(group.getOwner().getId());
-        var updatedGroup = new GroupDto(groupRepository.save(groupDtoMapper.GroupDtoToEntity(groupDto, groupOwner)));
+        var requestedCurrency = SupportedCurrency.fromCode(groupDto.getCurrencyCode());
+        var oldCurrency = group.getCurrencyCode();
+        var currencyChanged = requestedCurrency != null && requestedCurrency != oldCurrency;
+        if (currencyChanged) {
+            verificationService.verifyCurrencyChangeConfirmed(
+                    cartRepository.existsByGroupId(group.getId()), groupDto.getConfirmCurrencyChange());
+        }
+
+        group.setName(groupDto.getName());
+        if (currencyChanged) {
+            // currency_code ist updatable = false: nur per Update-Query schreiben, Feld für die Antwort nachziehen
+            groupRepository.updateCurrencyCode(group.getId(), requestedCurrency);
+            group.setCurrencyCode(requestedCurrency);
+            groupCurrencyChangeRepository.save(new GroupCurrencyChange(
+                    group.getId(), oldCurrency, requestedCurrency, user.getId(), Date.from(clock.instant())));
+        }
+        var updatedGroup = new GroupDto(groupRepository.save(group));
         notificationService.sendGroupUpdateNotification(group.getId(), updatedGroup);
         return updatedGroup;
     }
@@ -145,7 +184,6 @@ public class GroupService {
         groupMembershipHistoryService.startGroupMembershipForMember(newMember, group);
         setIsDeletedForCart(group, newMember, false);
 
-        calculateAveragePerMember(group);
         var groupMemberDto = new GroupMembersDto(groupRepository.save(group), new UserDto(newMember));
         notificationService.sendGroupMemberAddedNotification(
                 group.getId(),
@@ -168,7 +206,6 @@ public class GroupService {
 
         deactivateCartTemplatesForUserAndGroup(removeGroupMemberDto.getMember().getId(), group.getId());
 
-        calculateAveragePerMember(group);
         var groupMemberDto = new GroupMembersDto(groupRepository.save(group), new UserDto(removedMember));
         notificationService.sendGroupMemberRemovedNotification(
                 history,
@@ -241,51 +278,21 @@ public class GroupService {
     public void createDefaultGroup(User user) {
         var groupDto = new GroupDto();
         groupDto.setName(translator.translate("group.default.name"));
-        var group = groupRepository.save(groupDtoMapper.GroupDtoToEntity(groupDto, user));
+        var group = groupRepository.save(groupDtoMapper.GroupDtoToEntity(groupDto, user, SupportedCurrency.DEFAULT));
         createDefaultCategories(group);
         groupMembershipHistoryService.startGroupMembershipForOwner(user, group);
     }
 
     public void setIsDeletedForCart(Group group, User member, boolean delete) {
-        // DIV-74 (A11): Dieser Weg und calculateAveragePerMember schreiben Carts komplett zurück. Erst alle Settlements der
-        // Gruppe sperren, dann Carts laden – sonst könnte ein gleichzeitig geändertes Settlement-Paar mit Altwerten
-        // überschrieben werden. Alle Aufrufer rufen diese Methode vor calculateAveragePerMember auf.
+        // DIV-74 (A11): Dieser Weg schreibt die Carts des Mitglieds komplett zurück. Erst alle Settlements der Gruppe
+        // sperren, dann Carts laden – sonst könnte ein gleichzeitig geändertes Settlement-Paar mit Altwerten
+        // überschrieben werden.
         settlementRepository.lockAllByGroupId(group.getId());
         var cartsOfMember = cartRepository.findCartsByGroupAndUser(group, member);
         if (!cartsOfMember.isEmpty()) {
             cartsOfMember.forEach(cart -> cart.setDeleted(delete));
             cartRepository.saveAll(cartsOfMember);
         }
-    }
-
-    public void calculateAveragePerMember(@NonNull Group group) {
-        var cartsOfGroup = group.getCarts();
-
-        if (!cartsOfGroup.isEmpty()) {
-            calculateCarts(cartsOfGroup);
-        }
-    }
-
-    public void calculateAveragePerMemberForAllCarts() {
-        var carts = cartRepository.findAll();
-        calculateCarts(carts);
-    }
-
-    private void calculateCarts(Iterable<Cart> carts) {
-        carts.forEach(cart -> {
-            int memberCount = dataLoaderService.getMemberCountForCartByDatePurchasedAndGroup(
-                    cart.getDatePurchased(),
-                    cart.getGroup().getId()
-            );
-
-            if (memberCount > 0) {
-                cart.setAveragePerMember(cart.getAmount() / memberCount);
-            } else {
-                cart.setAveragePerMember(0.0);
-            }
-        });
-
-        cartRepository.saveAll(carts);
     }
 
     private void deactivateCartTemplatesForUserAndGroup(Long userId, Long groupId) {

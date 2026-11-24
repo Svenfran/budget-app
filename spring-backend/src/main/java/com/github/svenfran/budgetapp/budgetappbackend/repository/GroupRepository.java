@@ -1,12 +1,15 @@
 package com.github.svenfran.budgetapp.budgetappbackend.repository;
 
+import com.github.svenfran.budgetapp.budgetappbackend.constants.SupportedCurrency;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.Group;
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
 
+import javax.persistence.LockModeType;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
@@ -36,6 +39,19 @@ public interface GroupRepository extends CrudRepository<Group, Long> {
             where g.id = :groupId
             """)
     void lockForListReorder(@Param("groupId") Long groupId, @Param("now") Date now);
+
+    /**
+     * Lädt die Gruppe mit Zeilensperre (SELECT … FOR UPDATE, Muster SettlementRepository): Änderungen derselben Gruppe
+     * über updateGroup laufen nacheinander, ein zweiter Währungswechsel liest die bereits geänderte Währung (DIV-77).
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select g from Group g where g.id = :id")
+    Optional<Group> findByIdForUpdate(@Param("id") Long id);
+
+    // Einziger Schreibweg der Gruppenwährung (currency_code ist updatable = false, DIV-77)
+    @Modifying
+    @Query("update Group g set g.currencyCode = :currencyCode where g.id = :groupId")
+    void updateCurrencyCode(@Param("groupId") Long groupId, @Param("currencyCode") SupportedCurrency currencyCode);
 
     @Query("select g.listOrderRevision from Group g where g.id = :groupId")
     long findListOrderRevision(@Param("groupId") Long groupId);

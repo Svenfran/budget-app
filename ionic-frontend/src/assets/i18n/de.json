@@ -114,7 +114,7 @@
                     "placeholder_member_from": "Von Mitglied",
                     "direction_paid": "Ich habe gezahlt an",
                     "direction_received": "Ich habe erhalten von",
-                    "amount": "Betrag in €*",
+                    "amount": "Betrag in {{currency}}*",
                     "amount_positive": "Betrag muss größer als 0 sein",
                     "title_edit": "Ausgleichszahlung bearbeiten",
                     "subtitle_edit": "Änderungen gelten für beide Beteiligten.",
@@ -122,6 +122,7 @@
                     "date": "Datum*",
                     "btn_cancel": "Abbrechen",
                     "no_members": "Keine Mitglieder vorhanden",
+                    "former_member": "ehemalig",
                     "discard": {
                         "header": "Eingaben verwerfen?",
                         "message": "Deine Eingaben zur Ausgleichszahlung gehen verloren.",
@@ -160,13 +161,6 @@
     },
     "alerts": {
         "group": {
-            "new": {
-                "header": "Neue Gruppe:",
-                "cancel": "Abbrechen",
-                "ok": "OK",
-                "loading": "Erstelle Gruppe...",
-                "placeholder": "Gruppenname"
-            },
             "delete": {
                 "header": "Gruppe löschen?",
                 "message": "Möchtest du die Gruppe „{{groupName}}“ wirklich löschen? Dabei werden alle Ausgaben, Ausgleichszahlungen, Einkaufslisten, Kategorien und weiteren Gruppendaten endgültig entfernt.",
@@ -185,6 +179,18 @@
             "remove_member": {
                 "header": "Mitglied entfernen:",
                 "message": "Möchtest du das Mitglied \"{{memberName}}\" wirklich aus der Gruppe \"{{group}}\" entfernen inkl. aller gespeicherten Ausgaben?",
+                "cancel": "Nein",
+                "ok": "Ja"
+            },
+            "leave_open_balance": {
+                "header": "Gruppe verlassen:",
+                "message": "Du hast in der Gruppe \"{{group}}\" noch einen offenen Saldo von {{balance}}. Nach dem Austritt lässt er sich nur noch per Ausgleichszahlung begleichen. Möchtest du die Gruppe trotzdem verlassen?",
+                "cancel": "Nein",
+                "ok": "Ja"
+            },
+            "remove_member_open_balance": {
+                "header": "Mitglied entfernen:",
+                "message": "\"{{memberName}}\" hat in der Gruppe \"{{group}}\" noch einen offenen Saldo von {{balance}}. Nach dem Entfernen lässt er sich nur noch per Ausgleichszahlung begleichen. Möchtest du das Mitglied trotzdem entfernen inkl. aller gespeicherten Ausgaben?",
                 "cancel": "Nein",
                 "ok": "Ja"
             },
@@ -482,14 +488,15 @@
         "header": "MEINE GRUPPEN",
         "empty": "Keine Gruppen vorhanden.",
         "group": {
-            "members": "Mitglieder:"
+            "members": "Mitglieder:",
+            "currency": "Währung:"
         },
         "menu": {
             "more_actions": "Weitere Aktionen",
             "members": "Mitglieder verwalten",
             "members_hint": "Mitglieder anzeigen, Admin festlegen und Mitglieder hinzufügen",
             "edit": "Gruppe bearbeiten",
-            "edit_hint": "Namen ändern",
+            "edit_hint": "Name und Währung ändern",
             "delete": "Gruppe löschen",
             "delete_hint": "Gruppe und alle Daten endgültig entfernen"
         },
@@ -501,7 +508,15 @@
             "name_too_long": "Der Gruppenname ist zu lang.",
             "btn_cancel": "Abbrechen",
             "btn_create": "Erstellen",
-            "btn_save": "Speichern"
+            "btn_save": "Speichern",
+            "currency_label": "Währung",
+            "currency_hint": "Beim Ändern werden keine Beträge umgerechnet.",
+            "currency_confirm": {
+                "header": "Währung ändern?",
+                "message": "Alle bisherigen Beträge dieser Gruppe gelten danach in {{currency}}. Es wird nichts umgerechnet: Aus {{before}} wird {{after}}.",
+                "cancel": "Abbrechen",
+                "ok": "Währung ändern"
+            }
         },
         "members_sheet": {
             "title": "Mitglieder verwalten",
@@ -529,7 +544,7 @@
         "duplicate_hint": "Daten aus bestehender Ausgabe übernommen",
         "form": {
             "title": "Titel*",
-            "amount": "Betrag in €*",
+            "amount": "Betrag in {{currency}}*",
             "description": "Beschreibung",
             "date_purchased": "Datum*",
             "category": "Kategorie*",
@@ -556,6 +571,7 @@
         "filter": {
             "group": "Gruppe",
             "all_groups": "Alle Gruppen",
+            "currency": "Währung",
             "period_month": "Monat",
             "period_year": "Jahr",
             "period_all": "Alle",
@@ -609,6 +625,22 @@
             "footer": {
                 "exit_app": "Exit"
             }
+        }
+    },
+    "currency": {
+        "name": {
+            "EUR": "Euro",
+            "USD": "US-Dollar",
+            "GBP": "Britisches Pfund",
+            "CHF": "Schweizer Franken",
+            "CAD": "Kanadischer Dollar",
+            "AUD": "Australischer Dollar",
+            "MXN": "Mexikanischer Peso",
+            "BRL": "Brasilianischer Real",
+            "PLN": "Polnischer Złoty",
+            "CZK": "Tschechische Krone",
+            "NOK": "Norwegische Krone",
+            "SEK": "Schwedische Krone"
         }
     }
 }

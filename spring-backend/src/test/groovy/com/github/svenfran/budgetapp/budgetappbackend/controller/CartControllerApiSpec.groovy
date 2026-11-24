@@ -1,7 +1,10 @@
 package com.github.svenfran.budgetapp.budgetappbackend.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.github.svenfran.budgetapp.budgetappbackend.entity.Cart
+import com.github.svenfran.budgetapp.budgetappbackend.entity.Settlement
 import com.github.svenfran.budgetapp.budgetappbackend.entity.User
+import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.ApiRequests
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
@@ -10,6 +13,8 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.mock.web.MockHttpServletResponse
 
+import java.time.LocalDate
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
@@ -17,31 +22,41 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 /**
  * Referenz-API-Spec (MockMvc): HTTP-Status, Exception-Mapping von {@link RestResponseEntityExceptionHandler},
- * JSON-Form der DTOs, Security-Regeln und Fehlermeldungs-Vertrag zum Frontend.
+ * JSON-Form der DTOs, Security-Regeln und Fehlercode-Vertrag zum Frontend (mit Legacy-Text-Pins).
  *
  * - Requests über ApiRequests.send (Anmeldung per user: → .with(user(entity))); ohne Anmeldung antwortet Spring Security mit 403, nicht 401.
  * - JSON über den Jackson-ObjectMapper und Groovy-Vergleiche statt jsonPath.
  *
- * Fehlermeldungs-Vertrag (Übergangslösung bis zur Entscheidung über Fehlercodes, Konzept Q4):
- * Das Frontend erkennt Fehlerfälle am Text der Backend-Meldung. Jede ausgewertete Meldung hat einen API-Test.
+ * Fehlercode-Vertrag (DIV-108): Mit dem Request-Header X-Error-Format: json (sendet die App seit DIV-108) ist der
+ * Fehlerbody {code, message, details?}; das Frontend wertet nur code (und details) aus (service/api-error.ts).
+ * Ohne den Header bleibt der Body der bisherige Text mit unverändertem Content-Type – ältere App-Versionen werten
+ * diesen Text aus (Legacy-Text-Pins, bis eine Mindest-App-Version durchgesetzt ist). Jeder Fall hat einen API-Test
+ * mit Header (Code) und einen ohne Header (exakter Legacy-Text); Codes und Texte nur gemeinsam mit dem Frontend ändern.
  * <pre>
- * #   Frontend-Stelle                                Erwartet (Status, Text)                      Test
- * M1  cart.service.ts (add/update/settlement add+update) 400 'not within membership period'        CartControllerApiSpec (alle vier)
- * M2  group.service.ts addMemberToGroup              404 enthält gesendete E-Mail                 GroupControllerApiSpec
- * M3  group.service.ts addMemberToGroup              403 'New member equals group owner'          GroupControllerApiSpec
- * M4  group.service.ts addMemberToGroup              403 'Member already exists'                  GroupControllerApiSpec
- * M5  auth-error-message.ts Registrierung (!= 403)   400 enthält gesendete E-Mail                 AuthenticationControllerApiSpec
- * M6  auth-error-message.ts Registrierung (!= 403)   400 enthält gesendeten Namen                 AuthenticationControllerApiSpec
- * M7  userprofile.service.ts changeUserName          400 enthält gesendeten Namen                 UserProfileControllerApiSpec
- * M8  userprofile.service.ts changeUserName          400 'User name is not allowed'               UserProfileControllerApiSpec
- * M9  userprofile.service.ts changeUserEmail         400 enthält gesendete E-Mail                 UserProfileControllerApiSpec
- * M10 userprofile.service.ts resetPassword           404 enthält gesendete E-Mail                 UserProfileControllerApiSpec
- * X1  userprofile.service.ts (=== exakt)             400 'Invalid Email'                          UserProfileControllerApiSpec
- * X2  userprofile.service.ts changePassword (===)    400 'Incorrect password'                     UserProfileControllerApiSpec
- * X3  auth-error-message.ts Login/Registr. (===)     400 'DeviceId is required'                   AuthenticationControllerApiSpec
+ * #   Frontend-Stelle                                Status Code                                  Legacy-Text (ohne Header)                  Test
+ * M1  cart.service.ts (add/update/settlement add+update) 400 DATE_NOT_WITHIN_MEMBERSHIP (+userId)  'Date purchased is not within membership period'  CartControllerApiSpec
+ * M2  group.service.ts addMemberErrorKey            404  USER_NOT_FOUND                        'User with email <E-Mail> not found'       GroupControllerApiSpec
+ * M3  group.service.ts addMemberErrorKey            403  MEMBER_EQUALS_OWNER                   'New member equals group owner'            GroupControllerApiSpec
+ * M4  group.service.ts addMemberErrorKey            403  MEMBER_ALREADY_EXISTS                 'Member already exists'                    GroupControllerApiSpec
+ * M5  auth-error-message.ts (nur Registrierung)     400  EMAIL_ALREADY_EXISTS                  'User with email <E-Mail> already exists'  AuthenticationControllerApiSpec
+ * M6  auth-error-message.ts (nur Registrierung)     400  USER_NAME_ALREADY_EXISTS              'User with name <Name> already exists'     AuthenticationControllerApiSpec
+ * M7  userprofile.service.ts changeUserName         400  USER_NAME_ALREADY_EXISTS              'User with name <Name> already exists'     UserProfileControllerApiSpec
+ * M8  userprofile.service.ts changeUserName         400  USER_NAME_NOT_ALLOWED                 'User name is not allowed'                 UserProfileControllerApiSpec
+ * M9  userprofile.service.ts changeUserEmail        400  EMAIL_ALREADY_EXISTS                  'User with email <E-Mail> already exists'  UserProfileControllerApiSpec
+ * M10 userprofile.service.ts resetPassword          404  USER_NOT_FOUND                        'User with email <E-Mail> not found'       UserProfileControllerApiSpec
+ * X1  userprofile.service.ts changeUserEmail/reset  400  INVALID_EMAIL                         'Invalid Email'                            UserProfile-/AuthenticationControllerApiSpec
+ * X2  userprofile.service.ts changePassword         400  INCORRECT_PASSWORD                    'Incorrect password'                       UserProfileControllerApiSpec
+ * X3  auth-error-message.ts Login/Registrierung     400  DEVICE_ID_REQUIRED                    'DeviceId is required'                     AuthenticationControllerApiSpec
+ * S1  group.service.ts updateGroup (DIV-77)         409  CURRENCY_CHANGE_CONFIRMATION_REQUIRED 'Changing the currency of a group with bookings requires confirmation'  GroupControllerApiSpec
  * </pre>
- * Nicht abgedeckt: Bei parallelen Registrierungen/E-Mail-Änderungen liefert der Unique-Constraint-Handler
- * 'User with email already exists' ohne Adresse; das Frontend erkennt diesen Fall nicht (bekannt seit DIV-22).
+ * M1 details.userId: die Partei, deren Mitgliedschaft das Datum nicht abdeckt (bei Ausgleichszahlungen Zahler vor
+ * Empfänger). Seit DIV-109 kann das auch eine ehemalige Gegenpartei sein (Datum vor dem Beginn ihrer ersten
+ * Mitgliedschaft). Fehlendes Datum: DATE_PURCHASED_REQUIRED (kein Mitgliedschaftshinweis).
+ * Alle übrigen gemappten Exceptions haben ebenfalls einen Code (ApiErrorCode, RestResponseEntityExceptionHandlerSpec),
+ * das Frontend wertet sie aber nicht aus. Der Unique-Constraint-Handler (parallele Registrierungen/E-Mail-Änderungen)
+ * liefert EMAIL_ALREADY_EXISTS mit dem Text 'User with email already exists' ohne Adresse – über den Code erkennt das
+ * Frontend jetzt auch diesen Fall; ältere App-Versionen weiterhin nicht (bekannt seit DIV-22).
+ * Content-Type der Legacy-Antwort: GroupControllerApiSpec (application/json mit reinem Text, Angular liefert ihn als String).
  */
 class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
 
@@ -117,7 +132,197 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
 
         then:
         response.status == 400
-        response.contentAsString.contains('not within membership period')
+        response.contentAsString == 'Date purchased is not within membership period'
+    }
+
+    // ----- DIV-81: Kaufdatum als Kalendertag -----
+
+    def "Kaufdatum wird in allen Antworten als Kalendertag YYYY-MM-DD übertragen"() {
+        given: 'Einkauf vom 15.06.2025, Ben ist Mitglied'
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def cart = fixtures.cart(wg, title: 'Pizza', amount: 20d)
+        def (groupId, cartId, benId) = [wg.group.id, cart.id, ben.id]
+        def cartBody = [title: 'Pizza', amount: 20, datePurchased: '2025-06-15', groupId: groupId,
+                        categoryDto: [id: wg.category.id]]
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), Ben {}, Einkauf {} vom 2025-06-15', groupId, wg.owner.id,
+                benId, cartId)
+
+        when:
+        def einzeln = json(send(get('/api/carts/{id}', cartId), user: wg.owner))
+        def liste = json(send(get('/api/carts/carts-by-groupid/{id}', groupId), user: wg.owner))
+        def angelegt = json(send(post('/api/carts/add'), user: wg.owner, body: cartBody))
+        def geaendert = json(send(put('/api/carts/update'), user: wg.owner, body: cartBody + [id: cartId, amount: 25]))
+        def zahlung = json(addSettlement(wg.owner, [amount: 30, groupId: groupId, member: [id: benId], datePurchased: '2025-06-15']))
+        def zahlungGeaendert = json(updateSettlement(wg.owner, [id: zahlung[0].settlementId, amount: 35, member: [id: benId],
+                                                                datePurchased: '2025-06-15']))
+        LOG.info('Antwort datePurchased: GET {}, Liste {}, add {}, update {}, Ausgleich add {}, Ausgleich update {}',
+                einzeln.datePurchased, liste*.datePurchased, angelegt.datePurchased, geaendert.datePurchased,
+                zahlung*.datePurchased, zahlungGeaendert*.datePurchased)
+
+        then: 'Regression F-01: bisher "2025-06-15T00:00:00.000+00:00"'
+        einzeln.datePurchased == '2025-06-15'
+        liste*.datePurchased == ['2025-06-15']
+        angelegt.datePurchased == '2025-06-15'
+        geaendert.datePurchased == '2025-06-15'
+        zahlung*.datePurchased == ['2025-06-15', '2025-06-15']
+        zahlungGeaendert*.datePurchased == ['2025-06-15', '2025-06-15']
+    }
+
+    def "#endpoint nimmt das Kaufdatum im Format #datum an und speichert den 15.06.2025"() {
+        given: 'alte App-Versionen senden einen UTC-Zeitstempel, neue den Kalendertag'
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def cart = fixtures.cart(wg, title: 'Pizza', amount: 20d, datePurchased: DateUtils.toDate(LocalDate.of(2025, 6, 1)))
+        def settlementId = endpoint == 'PUT /api/carts/settlement-payment/update'
+                ? json(addSettlement(wg.owner, [amount: 30, groupId: wg.group.id, member: [id: ben.id],
+                                                datePurchased: '2025-06-01']))[0].settlementId as Long
+                : null
+        def (groupId, cartId, benId, categoryId) = [wg.group.id, cart.id, ben.id, wg.category.id]
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), Ben {}, Einkauf {} vom 2025-06-01, Settlement {}; {} mit {}',
+                groupId, wg.owner.id, benId, cartId, settlementId, endpoint, datum)
+
+        when:
+        def cartBody = [title: 'Pizza', amount: 20, datePurchased: datum, groupId: groupId, categoryDto: [id: categoryId]]
+        def response
+        switch (endpoint) {
+            case 'POST /api/carts/add':
+                response = send(post('/api/carts/add'), user: wg.owner, body: cartBody)
+                break
+            case 'PUT /api/carts/update':
+                response = send(put('/api/carts/update'), user: wg.owner, body: cartBody + [id: cartId])
+                break
+            case 'POST /api/carts/settlement-payment/add':
+                response = addSettlement(wg.owner, [amount: 30, groupId: groupId, member: [id: benId], datePurchased: datum])
+                break
+            default:
+                response = updateSettlement(wg.owner, [id: settlementId, amount: 30, member: [id: benId], datePurchased: datum])
+        }
+        def antwort = json(response)
+        def antwortTage = antwort instanceof List ? antwort*.datePurchased : [antwort.datePurchased]
+        flushAndClear()
+        def gespeicherteTage = (antwort instanceof List ? antwort*.id : [antwort.id]).collect {
+            DateUtils.toLocalDate(entityManager.find(Cart, it as Long).datePurchased)
+        }
+        def settlementTag = antwort instanceof List
+                ? DateUtils.toLocalDate(entityManager.find(Settlement, antwort[0].settlementId as Long).datePurchased)
+                : null
+        LOG.info('Antwort {}: datePurchased {}; gespeichert Carts {}, Settlement {}', response.status, antwortTage,
+                gespeicherteTage, settlementTag)
+
+        then: 'Cart-Endpunkte antworten mit 201, Ausgleichszahlungen mit 200 (Ist-Verhalten)'
+        response.status == (endpoint.contains('settlement-payment') ? 200 : 201)
+        antwortTage.every { it == '2025-06-15' }
+        gespeicherteTage.every { it == LocalDate.of(2025, 6, 15) }
+        settlementTag == null || settlementTag == LocalDate.of(2025, 6, 15)
+
+        where:
+        [endpoint, datum] << [['POST /api/carts/add', 'PUT /api/carts/update', 'POST /api/carts/settlement-payment/add',
+                               'PUT /api/carts/settlement-payment/update'],
+                              ['2025-06-15', '2025-06-15T00:00:00.000Z']].combinations()
+    }
+
+    def "Bearbeiten eines Einkaufs mit unverändertem Kaufdatum lässt den Kalendertag unverändert"() {
+        given:
+        def wg = fixtures.group()
+        def cart = fixtures.cart(wg, title: 'Pizza', amount: 20d, datePurchased: DateUtils.toDate(LocalDate.of(2026, 11, 15)))
+        def cartId = cart.id
+        def gelesen = json(send(get('/api/carts/{id}', cartId), user: wg.owner))
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), Einkauf {}; gelesen datePurchased {}', wg.group.id,
+                wg.owner.id, cartId, gelesen.datePurchased)
+
+        when: 'die App schickt das gelesene Datum unverändert zurück und ändert nur den Betrag'
+        def response = send(put('/api/carts/update'), user: wg.owner, body: gelesen + [amount: 25])
+        LOG.info('Antwort {}: datePurchased {}', response.status, json(response).datePurchased)
+        flushAndClear()
+        def gespeichert = entityManager.find(Cart, cartId)
+
+        then:
+        response.status == 201
+        DateUtils.toLocalDate(gespeichert.datePurchased) == LocalDate.of(2026, 11, 15)
+        gespeichert.amount == 25d
+    }
+
+    def "Bearbeiten einer Ausgleichszahlung mit unverändertem Kaufdatum lässt den Kalendertag unverändert"() {
+        given:
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def benId = ben.id
+        def paar = json(addSettlement(wg.owner, [amount: 30, groupId: wg.group.id, member: [id: benId], datePurchased: '2026-11-15']))
+        def settlementId = paar[0].settlementId as Long
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet) zahlte an Ben {}; Settlement {}, gelesen datePurchased {}',
+                wg.group.id, wg.owner.id, benId, settlementId, paar*.datePurchased)
+
+        when: 'die App schickt das gelesene Datum unverändert zurück und ändert nur den Betrag'
+        def response = updateSettlement(wg.owner, [id: settlementId, amount: 42.5, member: [id: benId],
+                                                   datePurchased: paar[0].datePurchased])
+        LOG.info('Antwort {}: datePurchased {}', response.status, json(response)*.datePurchased)
+        flushAndClear()
+
+        then:
+        response.status == 200
+        DateUtils.toLocalDate(entityManager.find(Settlement, settlementId).datePurchased) == LocalDate.of(2026, 11, 15)
+        paar*.id.collect { DateUtils.toLocalDate(entityManager.find(Cart, it as Long).datePurchased) } ==
+                [LocalDate.of(2026, 11, 15), LocalDate.of(2026, 11, 15)]
+    }
+
+    def "#endpoint ohne Kaufdatum: 400 statt 500, nichts gespeichert"() {
+        given: 'Einkauf vom 15.06.2025 über 20.00'
+        def wg = fixtures.group()
+        def cart = fixtures.cart(wg, title: 'Pizza', amount: 20d)
+        def (groupId, cartId) = [wg.group.id, cart.id]
+        def body = [title: 'Pizza', amount: 25, groupId: groupId, categoryDto: [id: wg.category.id]] +
+                (endpoint == 'PUT /api/carts/update' ? [id: cartId] : [:])
+        def request = endpoint == 'PUT /api/carts/update' ? put('/api/carts/update') : post('/api/carts/add')
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), Einkauf {} (20.00, 2025-06-15); {} ohne datePurchased',
+                groupId, wg.owner.id, cartId, endpoint)
+
+        when:
+        def response = send(request, user: wg.owner, body: body)
+        LOG.info('Antwort: {}', response.contentAsString)
+        def carts = json(send(get('/api/carts/carts-by-groupid/{id}', groupId), user: wg.owner))
+        LOG.info('Einkäufe der Gruppe danach: Ids {}, Beträge {}, Daten {}', carts*.id, carts*.amount, carts*.datePurchased)
+
+        then: 'Regression: bisher NullPointerException → 500'
+        response.status == 400
+        response.contentAsString == 'Date purchased is required'
+        carts*.id == [cartId]
+        carts*.amount == [20]
+        carts*.datePurchased == ['2025-06-15']
+
+        where:
+        endpoint << ['POST /api/carts/add', 'PUT /api/carts/update']
+    }
+
+    // ----- DIV-77: Cart-Betrag höchstens zwei Nachkommastellen -----
+
+    def "#endpoint mit Betrag #betrag: #status"() {
+        given:
+        def wg = fixtures.group()
+        def cart = fixtures.cart(wg, title: 'Pizza', amount: 20d)
+        def body = [title: 'Pizza', amount: betrag, datePurchased: '2025-06-15', groupId: wg.group.id,
+                    categoryDto: [id: wg.category.id]] + (endpoint == 'PUT /api/carts/update' ? [id: cart.id] : [:])
+        def request = endpoint == 'PUT /api/carts/update' ? put('/api/carts/update') : post('/api/carts/add')
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), Einkauf {} (20.00); {} mit Betrag {}', wg.group.id,
+                wg.owner.id, cart.id, endpoint, betrag)
+
+        when:
+        def response = send(request, user: wg.owner, body: body)
+        def antwort = response.status == 400 ? response.contentAsString : json(response).amount
+        LOG.info('Antwort: {}', antwort)
+        def gespeichert = json(send(get('/api/carts/carts-by-groupid/{id}', wg.group.id), user: wg.owner))*.amount.sort()
+
+        then:
+        response.status == status
+        gespeichert == erwartetGespeichert
+
+        where:
+        endpoint                | betrag || status | erwartetGespeichert
+        'POST /api/carts/add'   | 12.345 || 400    | [20d]
+        'POST /api/carts/add'   | 12.34  || 201    | [12.34d, 20d]
+        'POST /api/carts/add'   | -3.99  || 201    | [-3.99d, 20d]
+        'PUT /api/carts/update' | 12.345 || 400    | [20d]
+        'PUT /api/carts/update' | 12.34  || 201    | [12.34d]
     }
 
     // ----- DIV-73: Neuanlage ignoriert eine mitgeschickte ID -----
@@ -306,7 +511,7 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
 
         then:
         response.status == 400
-        response.contentAsString.contains('not within membership period')
+        response.contentAsString == 'Date purchased is not within membership period'
 
         where:
         endpoint << ['PUT /api/carts/update', 'POST /api/carts/settlement-payment/add']
@@ -493,8 +698,137 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
         'Dritter Mitglied: 403'                     | 'cleo'     | 'ben'      | [:]                           || 403    | 'neither payer nor receiver'
         'unbekannte Id: 404'                        | 'owner'    | 'ben'      | [id: -1]                      || 404    | 'Settlement with Id -1 not found'
         'Betrag 0: 400'                             | 'owner'    | 'ben'      | [amount: 0]                   || 400    | 'greater than 0'
+        'Betrag mit 3 Nachkommastellen: 400'        | 'owner'    | 'ben'      | [amount: 12.345]              || 400    | 'at most 2 decimal'
         'fehlende Id: 400'                          | 'owner'    | 'ben'      | [id: null]                    || 400    | "'id'"
-        'Datum vor der Mitgliedschaft: 400 (M1)'    | 'owner'    | 'ben'      | [datePurchased: '2020-01-01'] || 400    | 'not within membership period'
+    }
+
+    def "Mit X-Error-Format json: Einkauf #endpoint #fall -> Code #code, details #details"() {
+        given: 'Mitgliedschaft des Owners beginnt 2024-06-15'
+        def wg = fixtures.group()
+        def cart = fixtures.cart(wg, title: 'Pizza', amount: 20d)
+        def ownerId = wg.owner.id
+        def body = [title: 'Pizza', amount: 20, groupId: wg.group.id, categoryDto: [id: wg.category.id]] +
+                (datum == null ? [:] : [datePurchased: datum]) + (endpoint == 'PUT /api/carts/update' ? [id: cart.id] : [:])
+        def request = endpoint == 'PUT /api/carts/update' ? put('/api/carts/update') : post('/api/carts/add')
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet, Mitglied seit 2024-06-15), Einkauf {}; {} mit Datum {}',
+                wg.group.id, ownerId, cart.id, endpoint, datum)
+
+        when:
+        def response = send(request.header('X-Error-Format', 'json'), user: wg.owner, body: body)
+        def antwort = json(response)
+        LOG.info('Antwort: {} {}', response.status, antwort)
+
+        then:
+        response.status == 400
+        response.contentType == 'application/json'
+        antwort.code == code
+        antwort.message == text
+        (antwort.details ?: [:]) == (details == 'userId Owner' ? [userId: ownerId] : [:])
+        details == 'userId Owner' || !antwort.containsKey('details')
+
+        where:
+        endpoint                | fall                       | datum        || code                         | text                                             | details
+        'POST /api/carts/add'   | 'vor der Mitgliedschaft'   | '2020-01-01' || 'DATE_NOT_WITHIN_MEMBERSHIP' | 'Date purchased is not within membership period' | 'userId Owner'
+        'PUT /api/carts/update' | 'vor der Mitgliedschaft'   | '2020-01-01' || 'DATE_NOT_WITHIN_MEMBERSHIP' | 'Date purchased is not within membership period' | 'userId Owner'
+        'POST /api/carts/add'   | 'ohne Datum'               | null         || 'DATE_PURCHASED_REQUIRED'    | 'Date purchased is required'                     | 'keine'
+    }
+
+    def "Mit X-Error-Format json: Ausgleichszahlung #aktion, #fall -> details.userId nennt #betroffen"() {
+        given: 'alle Mitgliedschaften beginnen 2025-06-01; eine Zusatz-Mitgliedschaft 2025-01-01–2025-05-31 deckt den 2025-03-01 ab'
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben], memberSince: LocalDate.of(2025, 6, 1))
+        def (ownerId, benId) = [wg.owner.id, ben.id]
+        def zusatz = fall == 'nur der Empfänger außerhalb' ? wg.owner : fall == 'nur der Zahler außerhalb' ? ben : null
+        if (zusatz != null) {
+            fixtures.membership(wg, zusatz, membershipStart: DateUtils.toDate(LocalDate.of(2025, 1, 1)),
+                    membershipEnd: DateUtils.toDate(LocalDate.of(2025, 5, 31)))
+        }
+        def settlementId = aktion == 'bearbeiten'
+                ? json(addSettlement(wg.owner, [amount: 30, groupId: wg.group.id, member: [id: benId], datePurchased: '2025-06-15']))[0].settlementId as Long
+                : null
+        def request = aktion == 'bearbeiten' ? put('/api/carts/settlement-payment/update') : post('/api/carts/settlement-payment/add')
+        def body = [amount: 30, groupId: wg.group.id, member: [id: benId], datePurchased: '2025-03-01'] +
+                (settlementId != null ? [id: settlementId] : [:])
+        flushAndClear()
+        LOG.info('Szenario: Gruppe {}, Owner {} zahlt an Ben {} am 2025-03-01; Zusatz-Mitgliedschaft für {}; Settlement {}',
+                wg.group.id, ownerId, benId, zusatz?.id, settlementId)
+
+        when:
+        def response = send(request.header('X-Error-Format', 'json'), user: wg.owner, body: body)
+        def antwort = json(response)
+        LOG.info('Antwort: {} {}', response.status, antwort)
+
+        then:
+        response.status == 400
+        antwort.code == 'DATE_NOT_WITHIN_MEMBERSHIP'
+        antwort.message == 'Date purchased is not within membership period'
+        antwort.details == [userId: betroffen == 'Empfänger' ? benId : ownerId]
+
+        where:
+        aktion       | fall                          || betroffen
+        'anlegen'    | 'nur der Empfänger außerhalb' || 'Empfänger'
+        'anlegen'    | 'nur der Zahler außerhalb'    || 'Zahler'
+        'anlegen'    | 'beide außerhalb'             || 'Zahler'
+        'bearbeiten' | 'nur der Empfänger außerhalb' || 'Empfänger'
+        'bearbeiten' | 'nur der Zahler außerhalb'    || 'Zahler'
+        'bearbeiten' | 'beide außerhalb'             || 'Zahler'
+    }
+
+    def "Ausgleichszahlung bearbeiten mit Datum vor der Mitgliedschaft: 400 mit exaktem Legacy-Text (M1)"() {
+        given: 'Mitgliedschaften beginnen 2024-06-15'
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def paar = json(addSettlement(wg.owner, [amount: 30, groupId: wg.group.id, member: [id: ben.id], datePurchased: '2025-06-15']))
+        def settlementId = paar[0].settlementId as Long
+        LOG.info('Szenario: Gruppe {}, Owner {} zahlte an Ben {}; Settlement {} wird auf 2020-01-01 datiert', wg.group.id,
+                wg.owner.id, ben.id, settlementId)
+
+        when:
+        def response = updateSettlement(wg.owner, [id: settlementId, amount: 30, member: [id: ben.id], datePurchased: '2020-01-01'])
+        LOG.info('Antwort: {} {}', response.status, response.contentAsString)
+
+        then:
+        response.status == 400
+        response.contentAsString == 'Date purchased is not within membership period'
+    }
+
+    def "Mit X-Error-Format json: Ausgleichszahlung mit ehemaliger Gegenpartei, #fall (DIV-109)"() {
+        given: 'Owner seit 2024-06-15; Ben war nur 2025-01-01 bis 2025-06-15 Mitglied (ehemalig); Fremder ohne Historie'
+        def ben = fixtures.user()
+        def fremder = fixtures.user()
+        def wg = fixtures.group()
+        fixtures.membership(wg, ben, membershipStart: DateUtils.toDate(LocalDate.of(2025, 1, 1)),
+                membershipEnd: DateUtils.toDate(TestData.REFERENCE_DATE))
+        def (ownerId, benId, fremderId) = [wg.owner.id, ben.id, fremder.id]
+        def ids = [owner: ownerId, ben: benId, fremder: fremderId]
+        def body = [amount: 30, groupId: wg.group.id, member: [id: ids[empfaenger]], payer: [id: ids[zahler]], datePurchased: datum]
+        flushAndClear()
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), Ben {} (ehemalig), Fremder {}; {} -> {} am {}', wg.group.id,
+                ownerId, benId, fremderId, zahler, empfaenger, datum)
+
+        when:
+        def response = send(post('/api/carts/settlement-payment/add').header('X-Error-Format', 'json').header('Accept-Language', 'de'),
+                user: wg.owner, body: body)
+        def antwort = json(response)
+        LOG.info('Antwort: {} {}', response.status, antwort)
+
+        then:
+        response.status == status
+        if (status == 200) {
+            assert antwort*.userDto*.id == [ids[zahler], ids[empfaenger]]
+            assert antwort*.amount == [30, -30]
+            assert antwort*.deleted == [zahler == 'ben', empfaenger == 'ben']
+        } else {
+            assert antwort.code == code
+            assert (antwort.details ?: [:]) == (betroffen ? [userId: ids[betroffen]] : [:])
+        }
+
+        where:
+        fall                                         | zahler    | empfaenger | datum        || status | code                          | betroffen
+        'erhalten von Ben nach seinem Austritt: 200' | 'ben'     | 'owner'    | '2025-06-20' || 200    | null                          | null
+        'gezahlt an Ben nach seinem Austritt: 200'   | 'owner'   | 'ben'      | '2025-06-20' || 200    | null                          | null
+        'Zahler ohne Historie: 403'                  | 'fremder' | 'owner'    | '2025-06-20' || 403    | 'NOT_GROUP_OWNER_OR_MEMBER'   | null
+        'Datum vor Bens erstem Beginn: 400'          | 'owner'   | 'ben'      | '2024-12-01' || 400    | 'DATE_NOT_WITHIN_MEMBERSHIP'  | 'ben'
     }
 
     def "Kategorien als JSON enthalten das Settlement-Kennzeichen"() {
@@ -567,14 +901,15 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
         def xlsx = TestData.workbook(exportieren(anna, [format: 'XLSX', groupId: gid]).contentAsByteArray)
         def csvZeile = TestData.unzip(exportieren(anna, [format: 'CSV', groupId: gid]).contentAsByteArray)['ausgaben.csv'].readLines()[1]
         def zeile = xlsx.getSheet('Ausgaben').getRow(1)
-        def (titel, betrag) = [zeile.getCell(1).stringCellValue, zeile.getCell(4).numericCellValue]
-        LOG.info('Antwort: XLSX Titel {} Betrag {}, CSV-Zeile {}', titel, betrag, csvZeile)
+        def (titel, betrag, waehrung) = [zeile.getCell(1).stringCellValue, zeile.getCell(4).numericCellValue, zeile.getCell(5).stringCellValue]
+        LOG.info('Antwort: XLSX Titel {} Betrag {} Währung {}, CSV-Zeile {}', titel, betrag, waehrung, csvZeile)
 
         then:
         titel == 'Pizza'
         betrag == 12.5d
+        waehrung == 'EUR'
         csvZeile.startsWith('Anna;Pizza;')
-        csvZeile.contains(';12.50;')
+        csvZeile.contains(';12.50;EUR;')
     }
 
     def "Export mit manipulierter groupId einer fremden Gruppe (#format): 403"() {

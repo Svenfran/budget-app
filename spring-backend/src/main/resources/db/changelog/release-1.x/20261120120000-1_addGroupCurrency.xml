@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!-- DIV-77: Währung je Gruppe (ISO 4217). Bestehende Gruppen erhalten über den Default EUR (Postgres füllt beim
+         ADD COLUMN ... DEFAULT ... NOT NULL alle Zeilen). Rein additiv, kein Betrag wird verändert. Kein CHECK-Constraint:
+         die erlaubten Codes prüft die Anwendung (SupportedCurrency). -->
+    <changeSet author="sven" id="20261120120000-1">
+        <addColumn tableName="group_details">
+            <column name="currency_code" type="VARCHAR(3)" defaultValue="EUR">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="group_details" columnName="currency_code"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

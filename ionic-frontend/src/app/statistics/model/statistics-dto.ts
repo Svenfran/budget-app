@@ -3,7 +3,7 @@ export type StatisticsPeriod = 'MONTH' | 'YEAR' | 'ALL';
 /** Ansicht der Statistikseite (DIV-72): nur Frontend-Zustand, kein Request-Parameter. */
 export type StatisticsPerspective = 'PERSONAL' | 'GROUP';
 
-/** Backend `StatisticsTimelineEntryDto`; Beträge in Euro. */
+/** Backend `StatisticsTimelineEntryDto`; Beträge in der Währung der Antwort (`StatisticsDto.currencyCode`). */
 export interface StatisticsTimelineEntryDto {
   /** MONTH: wochenbasiertes ISO-Jahr, sonst Kalenderjahr */
   year: number;
@@ -43,6 +43,10 @@ export interface StatisticsGroupViewDto {
 export interface StatisticsDto {
   /** null = alle Gruppen */
   groupId: number | null;
+  /** Währung aller Beträge dieser Antwort (DIV-77): Gruppenwährung bzw. die gefilterte Währung bei „Alle Gruppen“ */
+  currencyCode: string;
+  /** alle Währungen der Gruppen des Nutzers, unabhängig vom Filter (DIV-77) */
+  availableCurrencies: string[];
   period: StatisticsPeriod;
   year: number | null;
   month: number | null;

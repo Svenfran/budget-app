@@ -17,7 +17,9 @@ import { Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
 import { LoadOptions } from '../model/load-options';
 import { AddMemberResult } from '../groupoverview/model/add-member-result';
-import { applyMembersChange, applyOwnerChange, applyOwnerChangeToOverview } from './group-events';
+import { applyMembersChange, applyOwnerChange, applyOwnerChangeToOverview, GroupMembersEvent, isOwnMembershipEvent } from './group-events';
+import { DEFAULT_CURRENCY } from '../constants/currency';
+import { API_ERROR_CODES, apiErrorCode } from './api-error';
 
 @Injectable({
   providedIn: 'root'
@@ -40,6 +42,11 @@ export class GroupService {
   public activeGroup: WritableSignal<Group> = signal<Group>(Init.DEFAULT_GROUP)
   /** Meldet nur einen echten Gruppenwechsel, keine Umbenennung (setActiveGroup setzt immer ein neues Objekt). */
   public activeGroupId = computed(() => this.activeGroup().id);
+  /**
+   * Währung der aktiven Gruppe für alle Betragsanzeigen (DIV-77). Rückfall EUR für eine vor DIV-77 gespeicherte aktive
+   * Gruppe ohne Währung; der nächste Abgleich mit der Seitenleiste ersetzt sie.
+   */
+  public activeCurrency = computed(() => this.activeGroup().currencyCode ?? DEFAULT_CURRENCY);
   public groupMembershipHistory: WritableSignal<Zeitraum[]> = signal<Zeitraum[]>([]);
   public groupMembers: WritableSignal<GroupMembers> = signal<GroupMembers>(Init.DEFAULT_GROUP_MEMBERS);
   public groupMembersWithOwner = computed(() => [{id: this.groupMembers().ownerId, userName: this.groupMembers().ownerName }, ...this.groupMembers().members]);
@@ -108,7 +115,8 @@ export class GroupService {
       id: group.id,
       name: group.name,
       dateCreated: group.dateCreated,
-      flag: group.flag
+      flag: group.flag,
+      currencyCode: group.currencyCode
     }
     this.storageService.setItem("ACTIVE_GROUP", activeGroup);
     this.activeGroup.set(activeGroup);
@@ -124,8 +132,8 @@ export class GroupService {
     }
   
     if (foundGroup) {
-      // Falls sich der Gruppenname geändert hat, setze den aktualisierten Namen
-      if (activeGroup.name !== foundGroup.name) {
+      // Falls sich Name oder Währung geändert haben (oder die gespeicherte Gruppe noch keine Währung kennt), übernehmen
+      if (activeGroup.name !== foundGroup.name || activeGroup.currencyCode !== foundGroup.currencyCode) {
         this.setActiveGroup(foundGroup);
       } else {
         this.setActiveGroup(activeGroup);
@@ -149,7 +157,7 @@ export class GroupService {
           if (!isCurrent()) return;
           this.groupsSideNav.set(result || []);
 
-          const activeGroup: Group = await this.storageService.getItem('ACTIVE_GROUP') as {id: number, name: string, dateCreated: Date, flag?: string};
+          const activeGroup: Group = await this.storageService.getItem('ACTIVE_GROUP') as Group;
           // erneut prüfen: Logout während des Storage-Lesens darf aktive Gruppe, Storage und Navigation nicht mehr ändern
           if (!isCurrent()) return;
           const groups = this.groupsSideNav();
@@ -174,8 +182,8 @@ export class GroupService {
   }
 
   /**
-   * Stiller Resync der Seitenleiste: die aktive Gruppe wird nur neu gesetzt, wenn sich ihr Name geändert hat oder sie
-   * nicht mehr existiert; gibt es nach einer Zeit ohne Gruppen wieder welche, wird `/no-group` verlassen.
+   * Stiller Resync der Seitenleiste: die aktive Gruppe wird nur neu gesetzt, wenn sich ihr Name oder ihre Währung
+   * (DIV-77) geändert hat oder sie nicht mehr existiert; gibt es nach einer Zeit ohne Gruppen wieder welche, wird `/no-group` verlassen.
    */
   private applyGroupsSilently(groups: Group[]): void {
     this.groupsSideNav.set(groups);
@@ -193,7 +201,9 @@ export class GroupService {
 
     const foundGroup = wasPlaceholder ? undefined : groups.find(group => group.id === activeGroup.id);
     if (foundGroup) {
-      if (foundGroup.name !== activeGroup.name) this.setActiveGroup({ ...activeGroup, name: foundGroup.name });
+      if (foundGroup.name !== activeGroup.name || foundGroup.currencyCode !== activeGroup.currencyCode) {
+        this.setActiveGroup({ ...activeGroup, name: foundGroup.name, currencyCode: foundGroup.currencyCode });
+      }
     } else {
       this.updateActiveGroup(groups, activeGroup);
     }
@@ -240,7 +250,8 @@ export class GroupService {
           const newGroupSidenav: Group = {
             id: result.id,
             name: result.name,
-            dateCreated: result.dateCreated
+            dateCreated: result.dateCreated,
+            currencyCode: result.currencyCode ?? DEFAULT_CURRENCY
           }
           this.groupsSideNav.update(groups => [...groups, newGroupSidenav]);
           this.activeGroup.set(newGroupSidenav);
@@ -252,7 +263,9 @@ export class GroupService {
             dateCreated: result.dateCreated,
             ownerName: this.user?.name!,
             ownerId: this.user?.id!,
-            memberCount: 0
+            memberCount: 0,
+            currencyCode: newGroupSidenav.currencyCode!,
+            hasBookings: false
           }
           this.groupOverviewList.update(groups => [...groups, newGroupOverview]);
 
@@ -271,27 +284,40 @@ export class GroupService {
       }));
   }
 
-  /** Benennt die Gruppe um; State erst nach Erfolg, Promise wie `addGroup` (DIV-80). */
-  updateGroup(group: Group): Promise<boolean> {
+  /**
+   * Ändert Name und Währung der Gruppe; State erst nach Erfolg, weist nie zurück (DIV-80). Ergebnis (DIV-77):
+   * `'ok'`; `'confirmation-required'`, wenn der Server einen Währungswechsel ohne Bestätigung ablehnt (Code
+   * `CURRENCY_CHANGE_CONFIRMATION_REQUIRED`, 409; DIV-108): kein Hinweis, die Gruppe gilt in der Übersicht danach als „mit Buchungen“, das Sheet fragt
+   * nach und sendet erneut; sonst `'error'` mit Hinweis.
+   */
+  updateGroup(group: Group): Promise<UpdateGroupResult> {
     return new Promise(resolve => this.http
       .put<Group>(this.updateGroupUrl, group)
       .subscribe({
         next: (result) => {
+          // Name und Währung übernehmen; hasBookings der Übersicht bleibt erhalten (DIV-77)
+          const changes = { name: result.name, ...(result.currencyCode ? { currencyCode: result.currencyCode } : {}) };
           this.groupsSideNav.update(groups => groups.map(gr =>
-            gr.id === result.id ? {...gr, name: result.name} : gr
+            gr.id === result.id ? {...gr, ...changes} : gr
           ));
           this.groupOverviewList.update(groups => groups.map(gr =>
-            gr.id === result.id ? {...gr, name: result.name} : gr
+            gr.id === result.id ? {...gr, ...changes} : gr
           ));
           
           // aktive Gruppe muss nochmal gesetzt werden, damit Überschriften der einzelnen Views aktualisiert wird.
           if (this.activeGroup().id === result.id)  this.setActiveGroup(result);
-          resolve(true);
+          resolve('ok');
         },
         error: (err) => {
+          if (apiErrorCode(err) === API_ERROR_CODES.CURRENCY_CHANGE_CONFIRMATION_REQUIRED) {
+            // Inzwischen gibt es Buchungen: hasBookings nachziehen, damit der nächste Wechsel gleich nachfragt
+            this.groupOverviewList.update(groups => groups.map(gr => gr.id === group.id ? {...gr, hasBookings: true} : gr));
+            resolve('confirmation-required');
+            return;
+          }
           console.error("Error updating group:", err);
           this.showErrorToast("alerts.group.error.update_group");
-          resolve(false);
+          resolve('error');
         }
       }));
   }
@@ -323,6 +349,18 @@ export class GroupService {
           resolve(false);
         }
       }));
+  }
+
+  /**
+   * Nach dem `add-group-member`-Event (DIV-77, D8): Wurde der angemeldete Nutzer selbst aufgenommen, Seitenleiste und
+   * Übersicht still neu laden (bestehende `LoadOptions`; Fehler behalten den Stand, kein Toast). Holt eine Währung nach,
+   * die das Event veraltet trug oder deren `update-group` vor der Aufnahme kam. Läuft bewusst nicht über den
+   * Resync-Throttle (einmaliges, ereignisgebundenes Laden).
+   */
+  refreshAfterMembershipEvent(data: Pick<GroupMembersEvent, 'updatedMember'>, user: Pick<User, 'id'> | undefined): void {
+    if (!isOwnMembershipEvent(data, user)) return;
+    this.getGroupsForSideNav({ silent: true });
+    this.getGroupsForOverview({ silent: true });
   }
 
   /**
@@ -368,7 +406,7 @@ export class GroupService {
         },
         error: (err) => {
           console.error("Error adding member to group:", err);
-          resolve({ ok: false, errorKey: addMemberErrorKey(err?.error, newMemberDto.newMemberEmail) });
+          resolve({ ok: false, errorKey: addMemberErrorKey(err) });
         }
       }));
   }
@@ -466,16 +504,19 @@ export class GroupService {
   }
 }
 
+/** Ergebnis von `GroupService.updateGroup` (DIV-77). */
+export type UpdateGroupResult = 'ok' | 'confirmation-required' | 'error';
+
 /**
- * Fehlermeldung beim Hinzufügen eines Mitglieds als i18n-Key. Die Texte vergleicht das Frontend mit der Backend-Meldung
- * (Fehlertext-Vertrag M2–M4, Groovydoc `CartControllerApiSpec`); jeder Body ohne Text (z. B. `ProgressEvent` bei
- * Netzwerkfehler) ergibt die Standardmeldung, damit die Zuordnung nie wirft (DIV-80).
+ * Fehlermeldung beim Hinzufügen eines Mitglieds als i18n-Key, nur nach dem Fehlercode des Backends (Vertrag M2–M4,
+ * DIV-108). Jede Antwort ohne bekannten Code (z. B. `ProgressEvent` bei Netzwerkfehler) ergibt die Standardmeldung.
  */
-export function addMemberErrorKey(body: unknown, email: string): string {
+export function addMemberErrorKey(err: unknown): string {
   const prefix = "alerts.group.add_member.error_message_service.";
-  if (typeof body !== "string") return prefix + "message_default";
-  if (body.includes(email)) return prefix + "message_no_exists";
-  if (body.includes("New member equals group owner")) return prefix + "message_admin_is_member";
-  if (body.includes("Member already exists")) return prefix + "message_already_member";
-  return prefix + "message_default";
+  switch (apiErrorCode(err)) {
+    case API_ERROR_CODES.USER_NOT_FOUND: return prefix + "message_no_exists";
+    case API_ERROR_CODES.MEMBER_EQUALS_OWNER: return prefix + "message_admin_is_member";
+    case API_ERROR_CODES.MEMBER_ALREADY_EXISTS: return prefix + "message_already_member";
+    default: return prefix + "message_default";
+  }
 }

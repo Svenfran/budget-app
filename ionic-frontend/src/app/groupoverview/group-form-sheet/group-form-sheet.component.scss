@@ -68,6 +68,18 @@
   color: var(--ion-color-danger);
 }
 
+// Hinweis unter der Währungsauswahl (DIV-77): gedämpft, umbrechend
+.field-hint {
+  margin: -4px 0 8px 12px;
+  font-size: 0.9em;
+  color: var(--ion-color-medium);
+}
+
+// Gewählte Währung („USD – US-Dollar ($)“) bricht bei großer Schrift um, statt abgeschnitten zu werden
+.currency-select::part(text) {
+  white-space: normal;
+}
+
 // Footer außerhalb des scrollenden Mittelteils, daher immer erreichbar. Wie der Ausgabenfilter
 // (filter-sheet.component.scss): Text-Button links, Hauptaktion doppelt so breit; bei großer Schrift umbrechend, die
 // Hauptaktion landet dann oben (wrap-reverse).

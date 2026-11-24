@@ -1,20 +1,25 @@
 import { signal, WritableSignal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { ReactiveFormsModule } from '@angular/forms';
 import { IonicModule, ModalController } from '@ionic/angular';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AuthService } from 'src/app/auth/auth.service';
 import { GroupMembers } from 'src/app/groupmembers/model/groupmembers-dto';
 import { GroupService } from 'src/app/service/group.service';
-import { aGroup, aLoggedInUser, aUser, REFERENCE_DATE } from 'src/testing/test-data';
+import { Group } from 'src/app/model/group';
+import { aGroup, aLoggedInUser, aUser, REFERENCE_DAY, REFERENCE_NOON } from 'src/testing/test-data';
 import { authServiceStub, provideServiceTesting } from 'src/testing/test-providers';
 import { removeOverlays } from 'src/testing/overlay-cleanup';
-import { toIsoDay } from '../iso-day';
+import { ionicReady } from 'src/testing/ionic-ready';
 import { Zeitraum } from '../new-edit-cart/model/gmh-zeitraum';
 import { CartService } from '../service/cart.service';
 import { settlementSheetModalOptions } from './settlement-sheet-options';
 import { SettlementEditData } from './settlement-form';
 import { SettlementDatePickerRef, SettlementSheetComponent } from './settlement-sheet.component';
+import { OverviewService } from 'src/app/domains/overview/service/overview.service';
+import { SpendingsOverviewUserDto } from 'src/app/domains/overview/model/spendings-overview-user-dto';
+import { ScientificCurrencyPipe } from 'src/app/pipe/scientific.pipe';
 
 describe('SettlementSheetComponent (DIV-70)', () => {
   let fixture: ComponentFixture<SettlementSheetComponent>;
@@ -27,9 +32,13 @@ describe('SettlementSheetComponent (DIV-70)', () => {
   let history: WritableSignal<Zeitraum[]>;
   let saving: WritableSignal<boolean>;
   let dirty: WritableSignal<boolean>;
+  let loadUserBalances: jasmine.Spy;
+  let resolveBalances: (balances: SpendingsOverviewUserDto[] | null) => void;
+  let session: WritableSignal<number>;
+  let activeGroupId: WritableSignal<number>;
 
   const MODAL_ID = 'settlement-sheet-42';
-  const today = toIsoDay(REFERENCE_DATE);
+  const today = REFERENCE_DAY;
   const me = aLoggedInUser({ id: 50, name: 'Ich' });
   const owner = aUser({ userName: 'Olga' });
   const anna = aUser({ userName: 'Anna' });
@@ -65,7 +74,7 @@ describe('SettlementSheetComponent (DIV-70)', () => {
 
   beforeEach(() => {
     jasmine.clock().install();
-    jasmine.clock().mockDate(REFERENCE_DATE);
+    jasmine.clock().mockDate(REFERENCE_NOON);
     modalCtrl = jasmine.createSpyObj<ModalController>('ModalController', ['dismiss']);
     modalCtrl.dismiss.and.resolveTo(true);
     addSettlementPayment = jasmine.createSpy('addSettlementPayment').and.resolveTo(true);
@@ -75,6 +84,11 @@ describe('SettlementSheetComponent (DIV-70)', () => {
     history = signal<Zeitraum[]>([]);
     saving = signal(false);
     dirty = signal(false);
+    session = signal(1);
+    activeGroupId = signal(group.id);
+    // Salden bleiben offen, bis ein Test sie auflöst (DIV-109): die übrigen Tests sehen nur aktuelle Mitglieder
+    loadUserBalances = jasmine.createSpy('loadUserBalances').and.callFake(
+      () => new Promise<SpendingsOverviewUserDto[] | null>(resolve => resolveBalances = resolve));
     TestBed.configureTestingModule({
       declarations: [SettlementSheetComponent],
       imports: [IonicModule.forRoot(), TranslateModule, ReactiveFormsModule],
@@ -83,13 +97,17 @@ describe('SettlementSheetComponent (DIV-70)', () => {
         { provide: ModalController, useValue: modalCtrl },
         { provide: CartService, useValue: { addSettlementPayment } },
         { provide: AuthService, useValue: authServiceStub(me) },
+        { provide: OverviewService, useValue: { loadUserBalances } },
         {
           provide: GroupService, useValue: {
             activeGroup: signal(group),
+            groupsSideNav: signal([group]),
+            activeGroupId,
             groupMembers,
             groupMembershipHistory: history,
             getGroupMembers,
             getGroupMembershipHistoryForGroupAndUser: getHistory,
+            sessionGuard: () => { const start = session(); return () => session() === start; },
           },
         },
       ],
@@ -103,6 +121,32 @@ describe('SettlementSheetComponent (DIV-70)', () => {
   });
 
   afterEach(() => jasmine.clock().uninstall());
+
+  // Codex F-001: Währungswechsel bei offenem Sheet (Live-Event) aktualisiert das Betrags-Label
+  it('Betrags-Label folgt der aktuellen Währung der beim Öffnen festgehaltenen Gruppe', () => {
+    const groupService = TestBed.inject(GroupService);
+    const sideNav = groupService.groupsSideNav as WritableSignal<Group[]>;
+    const activeGroup = groupService.activeGroup as WritableSignal<Group>;
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('de', { domains: { spendings: { overlay: { settlementpayment: { amount: 'Betrag in {{currency}}' } } } } }, true);
+    translate.use('de');
+    // gebundenes Property (Template-Bindung); das Ionic-Element selbst übernimmt Änderungen im Test nicht synchron
+    const label = () => fixture.debugElement.query(By.css('ion-input.input-amount')).properties['label'];
+    sideNav.set([{ ...group, currencyCode: 'EUR' }]);
+    detect();
+    expect(label()).toBe('Betrag in €');
+
+    // Live-Event: Gruppenliste (und aktive Gruppe) mit neuer Währung
+    sideNav.set([{ ...group, currencyCode: 'USD' }, aGroup({ id: 99, currencyCode: 'GBP' })]);
+    activeGroup.set({ ...group, currencyCode: 'USD' });
+    detect();
+    expect(label()).toBe('Betrag in $');
+
+    // andere aktive Gruppe (Wechsel bei offenem Sheet): Request und Label bleiben bei der festgehaltenen Gruppe
+    activeGroup.set(aGroup({ id: 99, currencyCode: 'GBP' }));
+    detect();
+    expect(label()).toBe('Betrag in $');
+  });
 
   it('lädt beim Öffnen Mitglieder und Mitgliedschaftshistorie der aktiven Gruppe genau einmal', () => {
     expect(getGroupMembers).toHaveBeenCalledOnceWith(7);
@@ -134,6 +178,89 @@ describe('SettlementSheetComponent (DIV-70)', () => {
     expect(el().querySelector('.settlement-form')).toBeNull();
     expect(button('btn-save')).toBeNull();
     expect(button('btn-close')).not.toBeNull();
+  });
+
+  describe('ehemalige Mitglieder und gelöschte Nutzer (DIV-109)', () => {
+    const ben = aUser({ userName: 'Ben' });
+    const saldo = (userId: number, userName: string, diff: number): SpendingsOverviewUserDto =>
+      ({ userId, userName, sum: 0, diff });
+    const salden = () => [
+      saldo(owner.id, 'Olga', 130), saldo(anna.id, 'Anna', 0), saldo(ben.id, 'Ben REMOVED', -100),
+      saldo(90, 'DELETED', -30), saldo(91, 'Cleo REMOVED', 0),
+    ];
+    const optionTexts = () => Array.from(el().querySelectorAll('ion-select-option')).map(o => o.textContent?.trim());
+    const geldbetrag = (betrag: number) => new ScientificCurrencyPipe().transform(betrag, component.currencyCode());
+    const settle = async (balances: SpendingsOverviewUserDto[] | null) => {
+      resolveBalances(balances);
+      await fixture.whenStable();
+      detect();
+    };
+
+    it('lädt beim Öffnen die Salden der festgehaltenen Gruppe genau einmal', () => {
+      expect(loadUserBalances).toHaveBeenCalledOnceWith(7);
+    });
+
+    it('bietet nach den aktuellen Mitgliedern Ex-Mitglieder und gelöschte Nutzer mit Saldo ≠ 0 an, mit Marker und Saldo (AK2, AK3)', async () => {
+      await settle(salden());
+
+      expect(optionTexts()).toEqual([
+        'Olga',
+        'Anna',
+        `Ben (${key('former_member')}) · ${geldbetrag(-100)}`,
+        `global.user.deleted · ${geldbetrag(-30)}`,
+      ]);
+    });
+
+    it('nur Ex-Mitglieder wählbar (Owner allein): Formular statt Hinweis „keine Mitglieder“', async () => {
+      groupMembers.set(members([]));
+      await settle(salden());
+
+      expect(el().querySelector('.no-members')).toBeNull();
+      expect(el().querySelector('.settlement-form')).not.toBeNull();
+      expect(button('btn-save')).not.toBeNull();
+    });
+
+    it('„erhalten von“ einem Ex-Mitglied: es wird Zahler mit Anzeigenamen, ich Empfänger (AK1)', async () => {
+      await settle(salden());
+      component.changeDirection('received');
+      component.form.setValue({ amount: 100, memberId: ben.id, datePurchased: '2025-06-10' });
+
+      await component.save();
+
+      expect(addSettlementPayment).toHaveBeenCalledOnceWith({
+        payer: { id: ben.id, userName: 'Ben' }, amount: 100, groupId: 7, member: { id: me.id, userName: 'Ich' },
+        datePurchased: '2025-06-10',
+      }, { id: me.id, userName: 'Ich' });
+    });
+
+    it('Salden nicht ladbar (null): nur aktuelle Mitglieder wie bisher', async () => {
+      await settle(null);
+
+      expect(optionTexts()).toEqual(['Olga', 'Anna']);
+    });
+
+    it('Antwort nach einem Sitzungswechsel wird verworfen', async () => {
+      session.set(2);
+      await settle(salden());
+
+      expect(component.balances()).toBeNull();
+      expect(optionTexts()).toEqual(['Olga', 'Anna']);
+    });
+
+    it('Antwort nach einem Gruppenwechsel wird verworfen', async () => {
+      activeGroupId.set(8);
+      await settle(salden());
+
+      expect(component.balances()).toBeNull();
+    });
+
+    it('Antwort nach dem Schließen des Sheets wird verworfen', async () => {
+      fixture.destroy();
+      resolveBalances(salden());
+      await Promise.resolve();
+
+      expect(component.balances()).toBeNull();
+    });
   });
 
   // Nutzerwunsch (Feedback Phase 2): „Abbrechen“ doppelte das X; nur noch „Speichern“ in voller Breite
@@ -200,7 +327,9 @@ describe('SettlementSheetComponent (DIV-70)', () => {
       expect(el().querySelector('.error-member')).toBeNull();
     });
 
-    it('Betragsfeld ohne Autofokus (Feedback Phase 2)', () => {
+    it('Betragsfeld ohne Autofokus (Feedback Phase 2)', async () => {
+      // erst nach dem Hydrieren: vorher ist die Ionic-Eigenschaft undefined (je nach Testreihenfolge)
+      await ionicReady(el());
       expect(el().querySelector('ion-input.input-amount')!.hasAttribute('autofocus')).toBeFalse();
       expect((el().querySelector('ion-input.input-amount') as HTMLIonInputElement).autofocus).toBeFalse();
     });
@@ -211,6 +340,112 @@ describe('SettlementSheetComponent (DIV-70)', () => {
     });
   });
 
+  // DIV-77 (D9): mehr als zwei Nachkommastellen werden gerundet statt abgelehnt
+  describe('Betrag runden', () => {
+    const blurAmount = () => {
+      el().querySelector('ion-input.input-amount')!.dispatchEvent(new CustomEvent('ionBlur'));
+      detect();
+    };
+
+    it('rundet beim Verlassen des Feldes sichtbar auf Cent, der Betrag ist gültig', () => {
+      component.form.patchValue({ amount: 65.349875, memberId: anna.id });
+      blurAmount();
+
+      expect(component.form.controls.amount.value).toBe('65,35');
+      expect(component.form.controls.amount.valid).toBeTrue();
+      expect(button('btn-save')!.disabled).toBeFalse();
+    });
+
+    it('Speichern ohne vorheriges Verlassen des Feldes sendet den gerundeten Betrag', async () => {
+      component.form.setValue({ amount: 65.349875, memberId: anna.id, datePurchased: '2025-06-10' });
+      detect();
+
+      await component.save();
+
+      expect(addSettlementPayment).toHaveBeenCalledOnceWith(jasmine.objectContaining({ amount: 65.35 }), { id: me.id, userName: 'Ich' });
+    });
+
+    it('auf 0 gerundet (0.004): Hinweis „größer als 0“, kein Request', async () => {
+      component.form.patchValue({ amount: 0.004, memberId: anna.id });
+      component.form.controls.amount.markAsTouched();
+      blurAmount();
+
+      expect(component.form.controls.amount.value).toBe('0,00');
+      expect(component.form.controls.amount.errors?.['min']).toBeDefined();
+      expect(el().querySelector('.error-amount')?.textContent).toContain(key('amount_positive'));
+
+      await component.save();
+      expect(addSettlementPayment).not.toHaveBeenCalled();
+    });
+
+    it('sehr kleine Zahl (Textform „1e-7“) wird ebenfalls gerundet: 0, Hinweis „größer als 0“ (Codex F-002)', () => {
+      component.form.patchValue({ amount: 0.0000001, memberId: anna.id });
+      component.form.controls.amount.markAsTouched();
+      blurAmount();
+
+      expect(component.form.controls.amount.value).toBe('0,00');
+      expect(el().querySelector('.error-amount')?.textContent).toContain(key('amount_positive'));
+    });
+
+    // Phase 9: Textfeld statt Zahlenfeld – „45.“ meldete im Zahlenfeld „Pflichtfeld“
+    it('ist ein Textfeld mit Dezimaltastatur', () => {
+      const input = el().querySelector('ion-input.input-amount')!;
+      expect(input.getAttribute('type')).toBe('text');
+      expect(input.getAttribute('inputmode')).toBe('decimal');
+    });
+
+    ([
+      ['45.', '45,00'],
+      ['45,', '45,00'],
+      ['45,5', '45,50'],
+      ['0,5', '0,50'],
+    ] as [string, string][]).forEach(([eingabe, anzeige]) => {
+      it(`„${eingabe}“ ist gültig und wird beim Verlassen zu „${anzeige}“`, () => {
+        component.form.patchValue({ amount: eingabe, memberId: anna.id });
+        component.form.controls.amount.markAsTouched();
+        detect();
+        expect(component.form.controls.amount.valid).toBeTrue();
+
+        blurAmount();
+
+        expect(component.form.controls.amount.value).toBe(anzeige);
+        expect(el().querySelector('.error-amount')).toBeNull();
+      });
+    });
+
+    it('mit Komma gespeichert: Request mit dem gerundeten Betrag als Zahl', async () => {
+      component.form.setValue({ amount: '12,345', memberId: anna.id, datePurchased: '2025-06-10' });
+      detect();
+
+      await component.save();
+
+      expect(addSettlementPayment).toHaveBeenCalledOnceWith(jasmine.objectContaining({ amount: 12.35 }), { id: me.id, userName: 'Ich' });
+    });
+
+    it('„0,004“: auf 0 gerundet, Hinweis „größer als 0“; Vorzeichen: Formatfehler', () => {
+      component.form.patchValue({ amount: '0,004', memberId: anna.id });
+      component.form.controls.amount.markAsTouched();
+      blurAmount();
+      expect(component.form.controls.amount.value).toBe('0,00');
+      expect(el().querySelector('.error-amount')?.textContent).toContain(key('amount_positive'));
+
+      component.form.patchValue({ amount: '-5' });
+      blurAmount();
+      expect(component.form.controls.amount.errors?.['pattern']).toBeDefined();
+      expect(el().querySelector('.error-amount')?.textContent).toContain('global.errors.invalid_amount');
+    });
+
+    it('ungültiges Format bleibt stehen und meldet wie bisher den Formatfehler', () => {
+      component.form.patchValue({ amount: 'abc' as unknown as number, memberId: anna.id });
+      component.form.controls.amount.markAsTouched();
+      blurAmount();
+
+      expect(component.form.controls.amount.value as unknown).toBe('abc');
+      expect(component.form.controls.amount.errors?.['pattern']).toBeDefined();
+      expect(el().querySelector('.error-amount')?.textContent).toContain('global.errors.invalid_amount');
+    });
+  });
+
   describe('Speichern (FA3)', () => {
     it('übergibt den Request wie bisher und schließt nach Erfolg das eigene Modal mit Rolle saved (AC 6)', async () => {
       fillValid();
@@ -218,8 +453,8 @@ describe('SettlementSheetComponent (DIV-70)', () => {
       await component.save();
 
       expect(addSettlementPayment).toHaveBeenCalledOnceWith({
-        amount: 25.5, groupId: 7, member: { id: anna.id, userName: 'Anna' }, datePurchased: new Date('2025-06-10'),
-      });
+        amount: 25.5, groupId: 7, member: { id: anna.id, userName: 'Anna' }, datePurchased: '2025-06-10',
+      }, { id: me.id, userName: 'Ich' });
       expect(modalCtrl.dismiss).toHaveBeenCalledOnceWith(undefined, 'saved', MODAL_ID);
       expect(saving()).toBeFalse();
     });
@@ -262,7 +497,8 @@ describe('SettlementSheetComponent (DIV-70)', () => {
       detect();
 
       expect(modalCtrl.dismiss).not.toHaveBeenCalled();
-      expect(component.form.getRawValue()).toEqual({ amount: 25.5, memberId: anna.id, datePurchased: '2025-06-10' });
+      // vor dem Speichern auf zwei Nachkommastellen formatiert (D9, einheitlich mit dem Cart-Formular)
+      expect(component.form.getRawValue()).toEqual({ amount: '25,50', memberId: anna.id, datePurchased: '2025-06-10' });
       expect(component.form.enabled).toBeTrue();
       expect(saving()).toBeFalse();
       expect(button('btn-save')!.disabled).toBeFalse();
@@ -279,7 +515,8 @@ describe('SettlementSheetComponent (DIV-70)', () => {
 
       expect(saving()).toBeFalse();
       expect(modalCtrl.dismiss).not.toHaveBeenCalled();
-      expect(component.form.getRawValue()).toEqual({ amount: 25.5, memberId: anna.id, datePurchased: '2025-06-10' });
+      // vor dem Speichern auf zwei Nachkommastellen formatiert (D9, einheitlich mit dem Cart-Formular)
+      expect(component.form.getRawValue()).toEqual({ amount: '25,50', memberId: anna.id, datePurchased: '2025-06-10' });
     });
 
     // Codex-Review 2, F-001: simuliert eine neu geladene Liste (direktes Setzen des Signals), keine WebSocket-Sync.
@@ -292,7 +529,7 @@ describe('SettlementSheetComponent (DIV-70)', () => {
 
       expect(addSettlementPayment).toHaveBeenCalledOnceWith(jasmine.objectContaining({
         member: { id: anna.id, userName: '' },
-      }));
+      }), { id: me.id, userName: 'Ich' });
       expect(component.form.controls.memberId.value).toBe(anna.id);
     });
   });
@@ -390,7 +627,8 @@ describe('SettlementSheetComponent (DIV-70)', () => {
     it('Eingabe eines Betrags macht das Sheet geändert', () => {
       typeAmount('12');
 
-      expect(component.form.controls.amount.value).toBe(12);
+      // Textfeld (Phase 9): der Wert ist der eingegebene Text
+      expect(component.form.controls.amount.value).toBe('12');
       expect(dirty()).toBeTrue();
     });
 
@@ -457,7 +695,8 @@ describe('SettlementSheetComponent – Edit-Modus (DIV-74)', () => {
   const detect = () => fixture.detectChanges();
   const optionTexts = () => Array.from(el().querySelectorAll('ion-select-option')).map(o => o.textContent?.trim());
 
-  function create(settlement: SettlementEditData, mitglieder = [{ id: me.id, userName: 'Ich' }, ben, cleo]) {
+  function create(settlement: SettlementEditData, mitglieder = [{ id: me.id, userName: 'Ich' }, ben, cleo],
+                  balances: SpendingsOverviewUserDto[] | null = null) {
     modalCtrl = jasmine.createSpyObj<ModalController>('ModalController', ['dismiss']);
     modalCtrl.dismiss.and.resolveTo(true);
     addSettlementPayment = jasmine.createSpy('addSettlementPayment').and.resolveTo(true);
@@ -474,9 +713,11 @@ describe('SettlementSheetComponent – Edit-Modus (DIV-74)', () => {
         { provide: ModalController, useValue: modalCtrl },
         { provide: CartService, useValue: { addSettlementPayment, updateSettlementPayment } },
         { provide: AuthService, useValue: authServiceStub(me) },
+        { provide: OverviewService, useValue: { loadUserBalances: jasmine.createSpy('loadUserBalances').and.resolveTo(balances) } },
         {
           provide: GroupService, useValue: {
             activeGroup: signal(group),
+            groupsSideNav: signal([group]),
             activeGroupId,
             groupMembers,
             groupMembershipHistory: signal<Zeitraum[]>([]),
@@ -498,7 +739,7 @@ describe('SettlementSheetComponent – Edit-Modus (DIV-74)', () => {
 
   beforeEach(() => {
     jasmine.clock().install();
-    jasmine.clock().mockDate(REFERENCE_DATE);
+    jasmine.clock().mockDate(REFERENCE_NOON);
   });
 
   afterEach(() => jasmine.clock().uninstall());
@@ -508,7 +749,7 @@ describe('SettlementSheetComponent – Edit-Modus (DIV-74)', () => {
 
     expect(el().querySelector('h2')?.textContent).toContain(key('title_edit'));
     expect(el().querySelector('.sheet-subtitle')?.textContent).toContain(key('subtitle_edit'));
-    expect(component.form.getRawValue()).toEqual({ amount: 30, memberId: ben.id, datePurchased: '2025-06-10' });
+    expect(component.form.getRawValue()).toEqual({ amount: '30,00', memberId: ben.id, datePurchased: '2025-06-10' });
     expect(component.memberId.enabled).toBeTrue();
     expect(dirty()).toBeFalse();
   });
@@ -522,9 +763,11 @@ describe('SettlementSheetComponent – Edit-Modus (DIV-74)', () => {
 
     expect(addSettlementPayment).not.toHaveBeenCalled();
     expect(updateSettlementPayment).toHaveBeenCalledTimes(1);
-    const [dto, gruppe] = updateSettlementPayment.calls.mostRecent().args;
-    expect(dto).toEqual({ id: 70, amount: 45, groupId: 7, member: { id: cleo.id, userName: 'Cleo' }, datePurchased: new Date('2025-06-10') });
+    const [dto, gruppe, , settlement] = updateSettlementPayment.calls.mostRecent().args;
+    expect(dto).toEqual({ id: 70, amount: 45, groupId: 7, member: { id: cleo.id, userName: 'Cleo' }, datePurchased: '2025-06-10' });
     expect(gruppe).toEqual(group);
+    // Rolle und Zahler für den Mitgliedschafts-Hinweis (DIV-110)
+    expect(settlement).toEqual(jasmine.objectContaining({ role: 'payer', payer: { id: me.id, userName: 'Ich' } }));
     expect(modalCtrl.dismiss).toHaveBeenCalledOnceWith(undefined, 'saved', MODAL_ID);
   });
 
@@ -539,6 +782,7 @@ describe('SettlementSheetComponent – Edit-Modus (DIV-74)', () => {
     await component.save();
 
     expect(updateSettlementPayment.calls.mostRecent().args[0].member.id).toBe(me.id);
+    expect(updateSettlementPayment.calls.mostRecent().args[3]).toEqual(jasmine.objectContaining({ role: 'receiver', payer: ben }));
     expect(component.memberId.disabled).toBeTrue();
   });
 
@@ -556,6 +800,40 @@ describe('SettlementSheetComponent – Edit-Modus (DIV-74)', () => {
 
     expect(optionTexts()).toEqual(['Ben', 'Dora']);
     expect(component.form.getRawValue().memberId).toBe(ausgetreten.id);
+  });
+
+  // DIV-109: Saldo 0 bzw. Salden nicht geladen – der gelöschte Empfänger kommt nur aus dem Cart (Name „DELETED“)
+  [
+    { fall: 'Saldo 0', balances: [{ userId: 99, userName: 'DELETED', sum: 0, diff: 0 }] },
+    { fall: 'Salden nicht ladbar', balances: null },
+  ].forEach(({ fall, balances }) => {
+    it(`Zahler: gelöschter bisheriger Empfänger (${fall}) steht als Label in der Auswahl, nicht als „DELETED“`, async () => {
+      create(alsZahler({ id: 99, userName: 'DELETED' }), [{ id: me.id, userName: 'Ich' }, ben], balances);
+      await fixture.whenStable();
+      detect();
+
+      expect(optionTexts()).toEqual(['Ben', 'global.user.deleted']);
+      expect(component.form.getRawValue().memberId).toBe(99);
+    });
+  });
+
+  it('Empfänger: gelöschter Zahler als fester Text mit Label, nicht „DELETED“ (DIV-109)', () => {
+    create({ ...alsEmpfaenger(), payer: { id: 99, userName: 'DELETED' } });
+
+    expect(el().querySelector('.payer-name')?.textContent?.trim()).toBe('global.user.deleted');
+  });
+
+  it('Zahler: Empfänger auf ein Ex-Mitglied mit Saldo wechseln (R7, DIV-109)', async () => {
+    const dora = aUser({ userName: 'Dora' });
+    create(alsZahler(), [{ id: me.id, userName: 'Ich' }, ben],
+      [{ userId: dora.id, userName: 'Dora REMOVED', sum: 0, diff: 40 }]);
+    await fixture.whenStable();
+    detect();
+    component.form.patchValue({ memberId: dora.id });
+
+    await component.save();
+
+    expect(updateSettlementPayment.calls.mostRecent().args[0].member).toEqual({ id: dora.id, userName: 'Dora' });
   });
 
   it('isCurrent des Updates wird nach Gruppenwechsel false', async () => {
@@ -576,7 +854,7 @@ describe('SettlementSheetComponent – Edit-Modus (DIV-74)', () => {
     await component.save();
 
     expect(modalCtrl.dismiss).not.toHaveBeenCalled();
-    expect(component.form.getRawValue().amount).toBe(99);
+    expect(component.form.getRawValue().amount).toBe('99,00');
   });
 });
 
@@ -606,9 +884,11 @@ describe('SettlementSheetComponent – Richtungsumschalter (DIV-74, Phase 5)', (
         { provide: ModalController, useValue: modalCtrl },
         { provide: CartService, useValue: { addSettlementPayment, updateSettlementPayment: jasmine.createSpy().and.resolveTo(true) } },
         { provide: AuthService, useValue: authServiceStub(me) },
+        { provide: OverviewService, useValue: { loadUserBalances: jasmine.createSpy('loadUserBalances').and.resolveTo(null) } },
         {
           provide: GroupService, useValue: {
             activeGroup: signal(group),
+            groupsSideNav: signal([group]),
             activeGroupId: signal(group.id),
             groupMembers: signal<GroupMembers>({ id: group.id, name: group.name, ownerId: me.id, ownerName: 'Ich',
               members: [{ id: me.id, userName: 'Ich' }, ben] }),
@@ -631,7 +911,7 @@ describe('SettlementSheetComponent – Richtungsumschalter (DIV-74, Phase 5)', (
 
   beforeEach(() => {
     jasmine.clock().install();
-    jasmine.clock().mockDate(REFERENCE_DATE);
+    jasmine.clock().mockDate(REFERENCE_NOON);
   });
 
   afterEach(() => jasmine.clock().uninstall());
@@ -660,8 +940,8 @@ describe('SettlementSheetComponent – Richtungsumschalter (DIV-74, Phase 5)', (
 
     expect(addSettlementPayment).toHaveBeenCalledOnceWith({
       payer: { id: ben.id, userName: 'Ben' }, amount: 25, groupId: 7, member: { id: me.id, userName: 'Ich' },
-      datePurchased: new Date('2025-06-10'),
-    });
+      datePurchased: '2025-06-10',
+    }, { id: me.id, userName: 'Ich' });
   });
 
   it('„Ich habe gezahlt an“ sendet wie bisher keinen Zahler', async () => {

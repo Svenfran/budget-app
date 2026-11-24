@@ -8,6 +8,7 @@ import { NoGroupPageRoutingModule } from './no-group-routing.module';
 
 import { NoGroupPage } from './no-group.page';
 import { TranslateModule } from '@ngx-translate/core';
+import { GroupFormSheetModule } from 'src/app/groupoverview/group-form-sheet/group-form-sheet.module';
 
 @NgModule({
   imports: [
@@ -15,7 +16,8 @@ import { TranslateModule } from '@ngx-translate/core';
     FormsModule,
     IonicModule,
     NoGroupPageRoutingModule,
-    TranslateModule
+    TranslateModule,
+    GroupFormSheetModule
   ],
   declarations: [NoGroupPage]
 })

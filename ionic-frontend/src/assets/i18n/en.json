@@ -114,7 +114,7 @@
                     "placeholder_member_from": "From member",
                     "direction_paid": "I paid to",
                     "direction_received": "I received from",
-                    "amount": "Amount in €*",
+                    "amount": "Amount in {{currency}}*",
                     "amount_positive": "Amount must be greater than 0",
                     "title_edit": "Edit repayment",
                     "subtitle_edit": "Changes apply to both parties.",
@@ -122,6 +122,7 @@
                     "date": "Date*",
                     "btn_cancel": "Cancel",
                     "no_members": "No members available",
+                    "former_member": "former",
                     "discard": {
                         "header": "Discard entries?",
                         "message": "Your repayment entries will be lost.",
@@ -160,13 +161,6 @@
     },
     "alerts": {
         "group": {
-            "new": {
-                "header": "New group:",
-                "cancel": "Cancel",
-                "ok": "OK",
-                "loading": "Create Group...",
-                "placeholder": "Group name"
-            },
             "delete": {
                 "header": "Delete group?",
                 "message": "Do you really want to delete the group \"{{groupName}}\"? All expenses, settlement payments, shopping lists, categories and other group data will be permanently removed.",
@@ -185,6 +179,18 @@
             "remove_member": {
                 "header": "Remove member:",
                 "message": "Do you really want to remove the member \"{{memberName}}\" from the group \"{{group}}\" including all saved expenses?",
+                "cancel": "No",
+                "ok": "Yes"
+            },
+            "leave_open_balance": {
+                "header": "Leave group:",
+                "message": "You still have an open balance of {{balance}} in the group \"{{group}}\". After leaving, it can only be settled with a repayment. Do you still want to leave the group?",
+                "cancel": "No",
+                "ok": "Yes"
+            },
+            "remove_member_open_balance": {
+                "header": "Remove member:",
+                "message": "\"{{memberName}}\" still has an open balance of {{balance}} in the group \"{{group}}\". After removal, it can only be settled with a repayment. Do you still want to remove the member including all saved expenses?",
                 "cancel": "No",
                 "ok": "Yes"
             },
@@ -482,14 +488,15 @@
         "header": "MY GROUPS",
         "empty": "No groups available!",
         "group": {
-            "members": "Members:"
+            "members": "Members:",
+            "currency": "Currency:"
         },
         "menu": {
             "more_actions": "More actions",
             "members": "Manage members",
             "members_hint": "Show members, set the admin and add members",
             "edit": "Edit group",
-            "edit_hint": "Change name",
+            "edit_hint": "Change name and currency",
             "delete": "Delete group",
             "delete_hint": "Permanently remove the group and all its data"
         },
@@ -501,7 +508,15 @@
             "name_too_long": "The group name is too long.",
             "btn_cancel": "Cancel",
             "btn_create": "Create",
-            "btn_save": "Save"
+            "btn_save": "Save",
+            "currency_label": "Currency",
+            "currency_hint": "Changing it does not convert any amounts.",
+            "currency_confirm": {
+                "header": "Change currency?",
+                "message": "All existing amounts of this group will then be in {{currency}}. Nothing is converted: {{before}} becomes {{after}}.",
+                "cancel": "Cancel",
+                "ok": "Change currency"
+            }
         },
         "members_sheet": {
             "title": "Manage members",
@@ -529,7 +544,7 @@
         "duplicate_hint": "Data copied from an existing expense",
         "form": {
             "title": "Title*",
-            "amount": "Amount in €*",
+            "amount": "Amount in {{currency}}*",
             "description": "Description",
             "date_purchased": "Date*",
             "category": "Category*",
@@ -556,6 +571,7 @@
         "filter": {
             "group": "Group",
             "all_groups": "All groups",
+            "currency": "Currency",
             "period_month": "Month",
             "period_year": "Year",
             "period_all": "All",
@@ -609,6 +625,22 @@
             "footer": {
                 "exit_app": "Exit"
             }
+        }
+    },
+    "currency": {
+        "name": {
+            "EUR": "Euro",
+            "USD": "US Dollar",
+            "GBP": "British Pound",
+            "CHF": "Swiss Franc",
+            "CAD": "Canadian Dollar",
+            "AUD": "Australian Dollar",
+            "MXN": "Mexican Peso",
+            "BRL": "Brazilian Real",
+            "PLN": "Polish Złoty",
+            "CZK": "Czech Koruna",
+            "NOK": "Norwegian Krone",
+            "SEK": "Swedish Krona"
         }
     }
 }

@@ -69,7 +69,8 @@ public class CsvZipWriter {
         var csv = new StringBuilder(header("download.cart.header"));
         for (CartExportRow row : rows) {
             csv.append(line(List.of(text(row.userName()), text(row.title()), text(row.description()),
-                    date(row.datePurchased()), amount(row.amount()), text(row.category()), text(row.groupName()))));
+                    date(row.datePurchased()), amount(row.amount()), text(row.currencyCode()), text(row.category()),
+                    text(row.groupName()))));
         }
         return csv.toString();
     }

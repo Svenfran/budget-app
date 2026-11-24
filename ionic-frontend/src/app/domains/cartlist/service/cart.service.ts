@@ -1,4 +1,5 @@
 import { HttpClient } from '@angular/common/http';
+import { toCents } from 'src/app/service/amount';
 import { computed, Injectable, signal, WritableSignal } from '@angular/core';
 import { environment } from 'src/environments/environment';
 import { Cart } from '../model/cart';
@@ -13,6 +14,10 @@ import { FileExportService } from 'src/app/service/file-export.service';
 import { ExportOptions } from '../model/export-options';
 import { exportFileName, exportMimeType } from './export-file';
 import { LoadOptions } from 'src/app/model/load-options';
+import { SettlementEditData } from '../settlement-sheet/settlement-form';
+import { UserDto } from 'src/app/model/user-dto';
+import { API_ERROR_CODES, apiErrorCode, apiErrorUserId } from 'src/app/service/api-error';
+import { userDisplayName } from 'src/app/domains/overview/overview-display';
 
 @Injectable({
   providedIn: 'root'
@@ -31,7 +36,11 @@ export class CartService {
   
   public cartList: WritableSignal<Cart[]> = signal<Cart[]>([]);
   public initCartList: WritableSignal<Cart[]> = signal<Cart[]>([]);
-  public sum = computed(() => this.cartList().reduce((s, c) => s + (+c.amount), 0));
+  /**
+   * Summe in Cent wie im Backend (DIV-77, `toCents`: HALF_UP auf der kürzesten Dezimaldarstellung je Betrag), damit
+   * weder Gleitkommafehler (0.1 + 0.2) noch Altbeträge mit mehr als zwei Nachkommastellen die Anzeige verfälschen.
+   */
+  public sum = computed(() => this.cartList().reduce((cents, c) => cents + toCents(+c.amount), 0) / 100 || 0);
   public count = computed(() => this.cartList().length);
 
   public cartUpdated = signal(0);
@@ -240,14 +249,17 @@ export class CartService {
   /**
    * Ausgleichszahlung bearbeiten (DIV-74): Betrag, Datum und (nur Zahler) Empfänger. Nach Erfolg ersetzt die Antwort beide
    * Einkäufe per Id in beiden Listen. Bei Fehler bleibt der State unverändert: Mitgliedschaftsfehler zeigen den bisherigen
-   * Hinweis (M1), 404 einen Hinweis „existiert nicht mehr“ plus stilles Neuladen, sonst einen allgemeinen Alert.
+   * Hinweis (M1) mit der betroffenen Partei aus `details.userId` (DIV-108; Fallback: Gegenpartei, DIV-110), 404 einen Hinweis „existiert nicht mehr“ plus
+   * stilles Neuladen, sonst einen allgemeinen Alert.
    *
    * @param group Gruppe, zu der die Ausgleichszahlung gehört (für das Neuladen)
    * @param isCurrent false, sobald Gruppe oder Anmelde-Sitzung gewechselt haben: die Antwort wird dann verworfen
+   * @param settlement Rolle des angemeldeten Nutzers und Zahler der bearbeiteten Ausgleichszahlung
    * @returns true, wenn das Sheet schließen soll (gespeichert, nicht mehr vorhanden oder überholt), false sonst; das
    * Promise wird nie zurückgewiesen
    */
-  updateSettlementPayment(payment: SettlementPaymentDto, group: Group, isCurrent: () => boolean): Promise<boolean> {
+  updateSettlementPayment(payment: SettlementPaymentDto, group: Group, isCurrent: () => boolean,
+                          settlement: Pick<SettlementEditData, 'role' | 'payer'>): Promise<boolean> {
     return new Promise(resolve => {
       this.http
         .put<Cart[]>(this.updateSettlementPaymentUrl, payment)
@@ -281,9 +293,16 @@ export class CartService {
               return;
             }
             if (isNotWithinMembership(err)) {
+              // Betroffene Partei per details.userId (DIV-108): zuerst der aktuelle Empfänger `payment.member` (der Zahler kann
+              // ihn geändert haben), dann der Zahler. Ohne bekannte Id die Gegenpartei des angemeldeten Nutzers (DIV-110).
+              // Der Zahler kommt roh aus dem Cart: ein gelöschter heißt dort `DELETED` und wird zum Label (DIV-109)
+              const payer = { ...settlement.payer,
+                userName: userDisplayName(settlement.payer.userName, this.translate.instant('global.user.deleted')) };
+              const counterpart = settlement.role === 'payer' ? payment.member : payer;
+              const userName = affectedPartyName(err, [payment.member, payer], counterpart);
               this.alertService.showErrorAlert(
                 this.translate.instant('alerts.cart.invalid_membership.header'),
-                this.translate.instant('alerts.cart.invalid_membership.message_settlementpayment', { userName: payment.member.userName })
+                this.translate.instant('alerts.cart.invalid_membership.message_settlementpayment', { userName })
               );
             } else {
               this.alertService.showErrorAlert(
@@ -334,10 +353,12 @@ export class CartService {
   /**
    * Ausgleichszahlung speichern (DIV-70). Der State ändert sich wie bisher nur nach Erfolg, synchron im `next`.
    *
+   * @param self angemeldeter Nutzer: bei einer gesendeten Zahlung der implizite Zahler (`payment.payer` fehlt), damit ein
+   * Mitgliedschaftsfehler mit `details.userId` des Zahlers dessen Namen findet (DIV-108)
    * @returns true nach Erfolg, false bei jedem Fehler (das Promise wird nie zurückgewiesen); das Sheet bleibt dann mit
-   * den Eingaben offen. Der Fehlerbody ist nicht immer Text (Netzwerkfehler, JSON, null), daher die Typprüfung.
+   * den Eingaben offen.
    */
-  addSettlementPayment(payment: SettlementPaymentDto): Promise<boolean> {
+  addSettlementPayment(payment: SettlementPaymentDto, self: UserDto): Promise<boolean> {
     return new Promise(resolve => {
       this.http
         .post<Cart[]>(this.settlementPaymentUrl, payment)
@@ -362,7 +383,9 @@ export class CartService {
             if (isNotWithinMembership(err)) {
               this.alertService.showErrorAlert(
                 this.translate.instant("alerts.cart.invalid_membership.header"),
-                this.translate.instant("alerts.cart.invalid_membership.message_settlementpayment", { userName: (payment.payer ?? payment.member).userName })
+                this.translate.instant("alerts.cart.invalid_membership.message_settlementpayment", {
+                  userName: affectedPartyName(err, [payment.payer, payment.member, self], payment.payer ?? payment.member)
+                })
               )
             } else {
               this.alertService.showErrorAlert(
@@ -412,10 +435,17 @@ export class CartService {
   }
 }
 
+/** Mitgliedschafts-Fehler des Backends, nur am Fehlercode erkannt (Vertrag M1, DIV-108). */
+function isNotWithinMembership(err: unknown): boolean {
+  return apiErrorCode(err) === API_ERROR_CODES.DATE_NOT_WITHIN_MEMBERSHIP;
+}
+
 /**
- * Mitgliedschafts-Fehler des Backends (Error-Message-Contract, siehe CartControllerApiSpec). Der Fehlerbody ist nicht
- * immer Text (Netzwerkfehler, JSON, null), daher die Typprüfung vor `includes` (DIV-70).
+ * Name der Partei, die `details.userId` des Mitgliedschaftsfehlers nennt (DIV-108), gesucht in `parties` (erste passende
+ * gewinnt); ohne bzw. mit unbekannter Id der Name von `fallback`.
  */
-function isNotWithinMembership(err: { error?: unknown } | null | undefined): boolean {
-  return typeof err?.error === 'string' && err.error.includes('not within membership period');
+function affectedPartyName(err: unknown, parties: (UserDto | undefined)[], fallback: UserDto): string {
+  const userId = apiErrorUserId(err);
+  const affected = userId === null ? undefined : parties.find(party => party?.id === userId);
+  return (affected ?? fallback).userName;
 }

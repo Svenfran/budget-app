@@ -1,5 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service
 
+import com.github.svenfran.budgetapp.budgetappbackend.constants.SupportedCurrency
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CategoryDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.StatisticsDto
@@ -226,7 +227,7 @@ class StatisticsServiceIntegrationSpec extends IntegrationSpec {
 
         when:
         LOG.info('statisticsService.getStatistics(Gruppe {}, YEAR 2025), erwartet NotOwnerOrMemberOfGroupException', wg.group.id)
-        statisticsService.getStatistics(wg.group.id, YEAR, 2025, null)
+        statisticsService.getStatistics(wg.group.id, null, YEAR, 2025, null)
 
         then:
         thrown(NotOwnerOrMemberOfGroupException)
@@ -427,14 +428,192 @@ class StatisticsServiceIntegrationSpec extends IntegrationSpec {
     }
 
     private StatisticsDto statistik(Long groupId, period, Integer year, Integer month = null) {
-        def dto = statisticsService.getStatistics(groupId, period, year, month)
-        LOG.info('statisticsService.getStatistics(Gruppe {}, {} {}/{}) -> totalSpent {}, paidByUser {}, paidCartCount {}, ' +
+        statistikIn(null, groupId, period, year, month)
+    }
+
+    /** Wie statistik(), mit Währungsparameter (DIV-77; null = nicht gesendet). */
+    private StatisticsDto statistikIn(String currency, Long groupId, period, Integer year, Integer month = null) {
+        def dto = statisticsService.getStatistics(groupId, currency, period, year, month)
+        LOG.info('statisticsService.getStatistics(Gruppe {}, currency {}, {} {}/{}) -> currencyCode {}, availableCurrencies {}, ' +
+                'availableYears {}, totalSpent {}, paidByUser {}, paidCartCount {}, ' +
                 'currentBalance {}, timeline {}, categories {}; groupView: cartCount {}, averagePerCart {}, memberCount {}, ' +
-                'timeline {}, categories {}', groupId ?: 'alle', period, year, month, dto.totalSpent,
+                'timeline {}, categories {}', groupId ?: 'alle', currency, period, year, month, dto.currencyCode,
+                dto.availableCurrencies, dto.availableYears, dto.totalSpent,
                 dto.paidByUser, dto.paidCartCount, dto.currentBalance, dto.timeline*.amount, dto.categories.collect { "${it.name}=${it.amount}" },
                 dto.groupView.cartCount, dto.groupView.averagePerCart, dto.groupView.memberCount, dto.groupView.timeline*.amount,
                 dto.groupView.categories.collect { "${it.name}=${it.amount}" })
         dto
+    }
+
+    // ----- DIV-77: Währungen werden nie addiert -----
+
+    def "Nur EUR-Gruppen: Zahlen wie bisher, currencyCode EUR, availableCurrencies [EUR]"() {
+        given:
+        def anna = fixtures.user(name: 'Anna')
+        def haushalt = fixtures.group(owner: anna, members: [fixtures.user(name: 'Ben')], memberSince: SEIT)
+        einkauf(haushalt, anna, 60d, of(2025, 3, 1))
+        flushAndClear()
+        loginAs(anna)
+        LOG.info('Szenario: Anna {}; Haushalt {} (EUR, Anna 60 in 2025)', anna.id, haushalt.group.id)
+
+        when:
+        def ohne = statistikIn(null, null, YEAR, 2025)
+        def mitEur = statistikIn('EUR', null, YEAR, 2025)
+
+        then:
+        [ohne, mitEur].every { it.currencyCode == 'EUR' && it.availableCurrencies == ['EUR'] && it.totalSpent == 60d }
+        ohne.currentBalance == 30d
+    }
+
+    def "Alle Gruppen mit EUR und USD: currency=USD zählt nur USD-Gruppen, gleichnamige Kategorien werden nicht zusammengeführt"() {
+        given:
+        def anna = fixtures.user(name: 'Anna')
+        def ben = fixtures.user(name: 'Ben')
+        def cleo = fixtures.user(name: 'Cleo')
+        def haushalt = fixtures.group(owner: anna, members: [ben], memberSince: SEIT)
+        def urlaub = fixtures.group(owner: anna, members: [cleo, ben], memberSince: SEIT)
+        def eurKategorie = fixtures.category(haushalt, name: 'Essen')
+        def usdKategorie = fixtures.category(urlaub, name: 'Essen')
+        fixtures.cart(haushalt, user: anna, amount: 100d, category: eurKategorie, datePurchased: DateUtils.toDate(of(2025, 3, 1)))
+        fixtures.cart(urlaub, user: anna, amount: 90d, category: usdKategorie, datePurchased: DateUtils.toDate(of(2025, 8, 1)))
+        fixtures.cart(urlaub, user: cleo, amount: 30d, category: usdKategorie, datePurchased: DateUtils.toDate(of(2025, 8, 2)))
+        flushAndClear()
+        waehrung(urlaub, SupportedCurrency.USD)
+        loginAs(anna)
+        LOG.info('Szenario: Anna {}; Haushalt {} (EUR, Ben {}; Anna 100 Essen), Urlaub {} (USD, Cleo {}, Ben; Anna 90 und Cleo 30 Essen)',
+                anna.id, haushalt.group.id, ben.id, urlaub.group.id, cleo.id)
+
+        when:
+        def usd = statistikIn('USD', null, YEAR, 2025)
+        def eur = statistikIn('EUR', null, YEAR, 2025)
+
+        then: "USD: nur die Urlaubsgruppe"
+        usd.currencyCode == 'USD'
+        usd.availableCurrencies == ['EUR', 'USD']
+        usd.totalSpent == 120d
+        usd.paidByUser == 90d
+        usd.paidCartCount == 1L
+        usd.currentBalance == 50d   // bezahlt 90, Anteil 40
+        usd.categories.collect { [it.name, it.amount] } == [['Essen', 90d]]
+        usd.groupView.cartCount == 2L
+        usd.groupView.averagePerCart == 60d
+        usd.groupView.memberCount == 3
+        usd.groupView.categories.collect { [it.name, it.amount] } == [['Essen', 120d]]
+
+        and: "EUR: nur der Haushalt"
+        eur.currencyCode == 'EUR'
+        eur.availableCurrencies == ['EUR', 'USD']
+        eur.totalSpent == 100d
+        eur.currentBalance == 50d
+        eur.groupView.memberCount == 2
+        eur.groupView.categories.collect { [it.name, it.amount] } == [['Essen', 100d]]
+    }
+
+    def "Ohne currency gilt EUR, auch wenn der Nutzer mehr USD- als EUR-Gruppen hat"() {
+        given:
+        def anna = fixtures.user(name: 'Anna')
+        def haushalt = fixtures.group(owner: anna, memberSince: SEIT)
+        def reise1 = fixtures.group(owner: anna, memberSince: SEIT)
+        def reise2 = fixtures.group(owner: anna, memberSince: SEIT)
+        einkauf(haushalt, anna, 10d, of(2025, 3, 1))
+        einkauf(reise1, anna, 200d, of(2025, 3, 1))
+        einkauf(reise2, anna, 300d, of(2025, 3, 1))
+        flushAndClear()
+        waehrung(reise1, SupportedCurrency.USD)
+        waehrung(reise2, SupportedCurrency.USD)
+        loginAs(anna)
+        LOG.info('Szenario: Anna {}; Haushalt {} (EUR, 10), Reise {} und {} (USD, 200 und 300); Abfrage ohne currency',
+                anna.id, haushalt.group.id, reise1.group.id, reise2.group.id)
+
+        when:
+        def dto = statistikIn(null, null, ALL, null)
+
+        then:
+        dto.currencyCode == 'EUR'
+        dto.totalSpent == 10d
+        dto.availableCurrencies == ['EUR', 'USD']
+    }
+
+    def "Nur USD-Gruppen, Abfrage #fall: leere Zahlen ohne Fehler, availableCurrencies [USD]"() {
+        given:
+        def anna = fixtures.user(name: 'Anna')
+        def reise = fixtures.group(owner: anna, members: [fixtures.user(name: 'Ben')], memberSince: SEIT)
+        einkauf(reise, anna, 200d, of(2025, 3, 1))
+        flushAndClear()
+        waehrung(reise, SupportedCurrency.USD)
+        loginAs(anna)
+        LOG.info('Szenario: Anna {}; nur Reise {} (USD, 200 in 2025); currency {}', anna.id, reise.group.id, currency)
+
+        when:
+        def dto = statistikIn(currency, null, YEAR, 2025)
+
+        then:
+        dto.currencyCode == erwartet
+        dto.availableCurrencies == ['USD']
+        dto.totalSpent == 0d
+        dto.paidByUser == 0d
+        dto.paidCartCount == 0L
+        dto.currentBalance == 0d
+        dto.categories.isEmpty()
+        dto.availableYears.isEmpty()
+        dto.groupView.cartCount == 0L
+        dto.groupView.memberCount == 0
+
+        where:
+        fall                         | currency || erwartet
+        'ohne currency (EUR)'        | null     || 'EUR'
+        'GBP ohne passende Gruppe'   | 'GBP'    || 'GBP'
+    }
+
+    def "availableYears enthält keine Jahre, die nur in Gruppen anderer Währung vorkommen"() {
+        given:
+        def anna = fixtures.user(name: 'Anna')
+        def haushalt = fixtures.group(owner: anna, memberSince: SEIT)
+        def reise = fixtures.group(owner: anna, memberSince: SEIT)
+        einkauf(haushalt, anna, 10d, of(2025, 3, 1))
+        einkauf(reise, anna, 20d, of(2024, 6, 1))
+        flushAndClear()
+        waehrung(reise, SupportedCurrency.USD)
+        loginAs(anna)
+        LOG.info('Szenario: Anna {}; Haushalt {} (EUR, 2025), Reise {} (USD, 2024)', anna.id, haushalt.group.id, reise.group.id)
+
+        when:
+        def eur = statistikIn('EUR', null, ALL, null)
+        def usd = statistikIn('USD', null, ALL, null)
+
+        then:
+        eur.availableYears == [2025]
+        usd.availableYears == [2024]
+    }
+
+    def "Mit groupId gilt die Gruppenwährung, ein gesendetes currency wird ignoriert"() {
+        given:
+        def anna = fixtures.user(name: 'Anna')
+        def haushalt = fixtures.group(owner: anna, memberSince: SEIT)
+        def reise = fixtures.group(owner: anna, memberSince: SEIT)
+        einkauf(haushalt, anna, 10d, of(2025, 3, 1))
+        einkauf(reise, anna, 20d, of(2025, 3, 1))
+        flushAndClear()
+        waehrung(reise, SupportedCurrency.CHF)
+        loginAs(anna)
+        LOG.info('Szenario: Anna {}; Haushalt {} (EUR, 10), Reise {} (CHF, 20); Abfrage Reise mit currency=EUR',
+                anna.id, haushalt.group.id, reise.group.id)
+
+        when:
+        def dto = statistikIn('EUR', reise.group.id, ALL, null)
+
+        then:
+        dto.groupId == reise.group.id
+        dto.currencyCode == 'CHF'
+        dto.totalSpent == 20d
+        dto.groupView.cartCount == 1L
+        dto.availableCurrencies == ['EUR', 'CHF']
+    }
+
+    /** Gruppenwährung direkt setzen (Spalte ist updatable = false, Muster GroupService.updateGroup). */
+    private void waehrung(GroupScenario wg, SupportedCurrency currency) {
+        entityManager.createQuery('update Group g set g.currencyCode = :c where g.id = :id')
+                .setParameter('c', currency).setParameter('id', wg.group.id).executeUpdate()
     }
 
     /** diff des Nutzers in der Gesamtübersicht (aktueller offener Saldo). */
@@ -487,7 +666,7 @@ class StatisticsServiceIntegrationSpec extends IntegrationSpec {
     /** Ausgleichszahlung über SettlementService, wie sie die App anlegt (Sender- und Empfänger-Cart). */
     private void zahlung(User von, User an, Double betrag, GroupScenario wg, LocalDate tag) {
         loginAs(userRepository.findById(von.id).get())
-        settlementService.addSettlementPayment(new SettlementPaymentDto(betrag, wg.group.id, new UserDto(an), DateUtils.toDate(tag)))
+        settlementService.addSettlementPayment(new SettlementPaymentDto(betrag, wg.group.id, new UserDto(an), tag))
         flushAndClear()
         LOG.info('settlementService.addSettlementPayment(User {} an User {}, {})', von.id, an.id, betrag)
     }

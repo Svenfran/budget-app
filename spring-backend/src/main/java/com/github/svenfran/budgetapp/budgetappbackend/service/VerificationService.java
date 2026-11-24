@@ -12,7 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.validation.BindingResult;
 
 import java.math.BigDecimal;
-import java.util.Date;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -74,9 +74,28 @@ public class VerificationService {
     }
 
     public void verifyIsPartOfGroup(User user, Group group) throws NotOwnerOrMemberOfGroupException {
-        if (!(group.getOwner().equals(user) || group.getMembers().contains(user))) {
-            throw new NotOwnerOrMemberOfGroupException("User with ID " + user.getId() + " is either a member nor the owner of the group");
+        if (!isPartOfGroup(user, group)) {
+            throw notOwnerOrMember(user);
         }
+    }
+
+    /** Aktuell Owner oder Mitglied der Gruppe (dieselbe Definition wie {@link #verifyIsPartOfGroup}). */
+    public boolean isPartOfGroup(User user, Group group) {
+        return group.getOwner().equals(user) || group.getMembers().contains(user);
+    }
+
+    /**
+     * Ehemalige Partei einer Ausgleichszahlung (DIV-109): Sie muss in der Mitgliedschaftshistorie der Gruppe stehen
+     * ({@code gmh} = ihre Historie in dieser Gruppe), sonst wie ein Nicht-Mitglied 403.
+     */
+    public void verifyHasMembershipHistory(User user, List<GroupMembershipHistory> gmh) throws NotOwnerOrMemberOfGroupException {
+        if (gmh.isEmpty()) {
+            throw notOwnerOrMember(user);
+        }
+    }
+
+    private static NotOwnerOrMemberOfGroupException notOwnerOrMember(User user) {
+        return new NotOwnerOrMemberOfGroupException("User with ID " + user.getId() + " is either a member nor the owner of the group");
     }
 
     public void verifyIsOwnerOfCart(User user, Cart cart) throws NotOwnerOfCartException {
@@ -146,18 +165,45 @@ public class VerificationService {
         }
     }
 
-    public void verifyDatePurchasedWithinMembershipPeriod (List<GroupMembershipHistory> gmh, Date datePurchased) throws DatePurchasedNotWithinMembershipPeriodException {
+    /**
+     * @param userId die Partei, deren Mitgliedschaftshistorie {@code gmh} ist; wird bei einem Datum außerhalb der
+     *               Mitgliedschaft als {@code details.userId} gemeldet (DIV-108)
+     */
+    public void verifyDatePurchasedWithinMembershipPeriod(List<GroupMembershipHistory> gmh, LocalDate datePurchased, Long userId) throws DatePurchasedNotWithinMembershipPeriodException {
+        // DIV-81: fehlendes Kaufdatum → 400 statt NPE/500. Eigene Meldung ohne 'not within membership period' (M1).
+        if (datePurchased == null) {
+            throw DatePurchasedNotWithinMembershipPeriodException.required();
+        }
         for (var timePeriod : gmh) {
             var startDate = toLocalDate(timePeriod.getMembershipStart());
             var endDate = timePeriod.getMembershipEnd() != null ? toLocalDate(timePeriod.getMembershipEnd()) : null;
 
-            var isAfterStart = !toLocalDate(datePurchased).isBefore(startDate);
-            var isBeforeEnd = (endDate == null) || !toLocalDate(datePurchased).isAfter(endDate);
+            var isAfterStart = !datePurchased.isBefore(startDate);
+            var isBeforeEnd = (endDate == null) || !datePurchased.isAfter(endDate);
 
             if (isAfterStart && isBeforeEnd) {
                 return;
             }
-        } throw new DatePurchasedNotWithinMembershipPeriodException("Date purchased is not within membership period");
+        }
+        throw DatePurchasedNotWithinMembershipPeriodException.notWithinMembership(userId);
+    }
+
+    /**
+     * Datum einer Ausgleichszahlung mit einer ehemaligen Partei (DIV-109, R3): frühestens am Beginn ihrer ersten
+     * Mitgliedschaft in der Gruppe, ohne Ende (auch nach dem Austritt und in Lücken zwischen Mitgliedschaften).
+     *
+     * @param userId die ehemalige Partei; bei einem Datum vor dem ersten Beginn als {@code details.userId} gemeldet
+     */
+    public void verifyDateOnOrAfterFirstMembershipStart(List<GroupMembershipHistory> gmh, LocalDate datePurchased, Long userId)
+            throws DatePurchasedNotWithinMembershipPeriodException {
+        if (datePurchased == null) {
+            throw DatePurchasedNotWithinMembershipPeriodException.required();
+        }
+        var onOrAfterAnyStart = gmh.stream()
+                .anyMatch(timePeriod -> !datePurchased.isBefore(toLocalDate(timePeriod.getMembershipStart())));
+        if (!onOrAfterAnyStart) {
+            throw DatePurchasedNotWithinMembershipPeriodException.notWithinMembership(userId);
+        }
     }
 
     /**
@@ -210,6 +256,29 @@ public class VerificationService {
         if (amount.isNaN() || amount.isInfinite() || amount <= 0
                 || BigDecimal.valueOf(amount).stripTrailingZeros().scale() > 2) {
             throw new InvalidSettlementPaymentException("Settlement amount must be greater than 0 with at most 2 decimal places");
+        }
+    }
+
+    /**
+     * Ein Währungswechsel einer Gruppe mit Buchungen braucht die ausdrückliche Bestätigung (DIV-77). Nur aufrufen, wenn
+     * sich die Währung tatsächlich ändert.
+     */
+    public void verifyCurrencyChangeConfirmed(boolean hasBookings, Boolean confirmed) throws CurrencyChangeConfirmationRequiredException {
+        if (hasBookings && !Boolean.TRUE.equals(confirmed)) {
+            throw new CurrencyChangeConfirmationRequiredException(
+                    "Changing the currency of a group with bookings requires confirmation");
+        }
+    }
+
+    /**
+     * Cart-Betrag mit höchstens zwei Nachkommastellen (DIV-77, gleiche Prüfung wie {@link #verifyValidSettlementAmount}).
+     * {@code null} und Vorzeichen verhalten sich wie bisher (keine Pflicht hier, negative Beträge erlaubt). Das Frontend
+     * rundet vor dem Senden; abgelehnt wird, was ungerundet ankommt (alte Clients, direkte API-Aufrufe).
+     */
+    public void verifyCartAmountHasAtMostTwoDecimals(Double amount) throws InvalidAmountException {
+        if (amount == null || amount.isNaN() || amount.isInfinite()) return;
+        if (BigDecimal.valueOf(amount).stripTrailingZeros().scale() > 2) {
+            throw new InvalidAmountException("Amount must have at most 2 decimal places");
         }
     }
 

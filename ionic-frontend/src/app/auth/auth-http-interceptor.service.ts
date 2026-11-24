@@ -3,6 +3,7 @@ import { Injectable } from '@angular/core';
 import { take, switchMap } from 'rxjs/operators';
 import { AuthService } from './auth.service';
 import { TranslateService } from '@ngx-translate/core';
+import { ERROR_FORMAT_HEADER, ERROR_FORMAT_JSON } from '../service/api-error';
 
 @Injectable({
   providedIn: 'root'
@@ -37,7 +38,8 @@ export class AuthHttpInterceptorService {
       setHeaders: {
         Authorization: token,
         DeviceId: deviceId,
-        'Accept-Language': currentLang
+        'Accept-Language': currentLang,
+        [ERROR_FORMAT_HEADER]: ERROR_FORMAT_JSON
       }
     });
   }
@@ -46,7 +48,9 @@ export class AuthHttpInterceptorService {
     const currentLang = this.translate.getCurrentLang() || 'de';
     return request.clone({
       setHeaders: {
-        'Accept-Language': currentLang
+        'Accept-Language': currentLang,
+        // auch ohne Token: Login, Registrierung und Passwort-Reset werten Fehlercodes aus (DIV-108)
+        [ERROR_FORMAT_HEADER]: ERROR_FORMAT_JSON
       }
     });
   }

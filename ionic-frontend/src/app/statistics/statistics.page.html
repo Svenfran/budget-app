@@ -24,6 +24,13 @@
               <ion-select-option *ngFor="let group of groups()" [value]="group.id">{{ group.name }}</ion-select-option>
             </ion-select>
           </ion-item>
+          <!-- Währung nur bei „Alle Gruppen“ mit Gruppen in mehreren Währungen (DIV-77) -->
+          <ion-item *ngIf="showCurrencyFilter()" class="currency-filter">
+            <ion-select [label]="'statistics.filter.currency' | translate" interface="popover"
+                        [value]="selectedCurrency()" (ionChange)="onCurrencyChange($event.detail.value)">
+              <ion-select-option *ngFor="let option of currencyOptions()" [value]="option.code">{{ option.label }}</ion-select-option>
+            </ion-select>
+          </ion-item>
         </ion-list>
 
         <ion-segment [value]="perspective()" (ionChange)="onPerspectiveChange($any($event.detail.value))">
@@ -82,16 +89,16 @@
           <div class="kpis" *ngIf="perspective() === 'PERSONAL'">
             <div class="kpi">
               <ion-text color="medium"><small>{{ 'statistics.kpi.total_spent' | translate }}</small></ion-text>
-              <strong>{{ stats.totalSpent | scientificCurrency }}</strong>
+              <strong>{{ stats.totalSpent | scientificCurrency: stats.currencyCode }}</strong>
             </div>
             <div class="kpi">
               <ion-text color="medium"><small>{{ 'statistics.kpi.paid_by_user' | translate }}</small></ion-text>
-              <strong>{{ stats.paidByUser | scientificCurrency }}</strong>
+              <strong>{{ stats.paidByUser | scientificCurrency: stats.currencyCode }}</strong>
             </div>
             <div class="kpi">
               <ion-text color="medium"><small>{{ 'statistics.kpi.current_balance' | translate }}</small></ion-text>
               <ion-text [color]="stats.currentBalance >= 0 ? 'primary' : 'danger'">
-                <strong>{{ stats.currentBalance | scientificCurrency }}</strong>
+                <strong>{{ stats.currentBalance | scientificCurrency: stats.currencyCode }}</strong>
               </ion-text>
               <ion-text color="medium"><small>{{ 'statistics.kpi.current_balance_hint' | translate }}</small></ion-text>
             </div>
@@ -103,7 +110,7 @@
           <div class="kpis" *ngIf="perspective() === 'GROUP'">
             <div class="kpi">
               <ion-text color="medium"><small>{{ 'statistics.kpi.total_spent' | translate }}</small></ion-text>
-              <strong>{{ stats.totalSpent | scientificCurrency }}</strong>
+              <strong>{{ stats.totalSpent | scientificCurrency: stats.currencyCode }}</strong>
             </div>
             <div class="kpi">
               <ion-text color="medium"><small>{{ 'statistics.kpi.cart_count' | translate }}</small></ion-text>
@@ -111,7 +118,7 @@
             </div>
             <div class="kpi">
               <ion-text color="medium"><small>{{ 'statistics.kpi.average_per_cart' | translate }}</small></ion-text>
-              <strong>{{ stats.groupView.averagePerCart | scientificCurrency }}</strong>
+              <strong>{{ stats.groupView.averagePerCart | scientificCurrency: stats.currencyCode }}</strong>
             </div>
             <div class="kpi">
               <ion-text color="medium"><small>{{ 'statistics.kpi.member_count' | translate }}</small></ion-text>
@@ -129,7 +136,7 @@
               {{ (perspective() === 'GROUP' ? 'statistics.timeline.title_group' : 'statistics.timeline.title') | translate }}
             </ion-label>
           </ion-list-header>
-          <app-bar-chart [labels]="barLabels()" [values]="barValues()"></app-bar-chart>
+          <app-bar-chart [labels]="barLabels()" [values]="barValues()" [currency]="stats.currencyCode"></app-bar-chart>
         </ion-col>
       </ion-row>
 
@@ -146,7 +153,7 @@
               </ion-label>
             </ion-item>
             <ng-container *ngIf="hasSpendings()">
-              <app-donut-chart *ngIf="donutSegments().length > 0" [segments]="donutSegments()" [labels]="donutLabels()"></app-donut-chart>
+              <app-donut-chart *ngIf="donutSegments().length > 0" [segments]="donutSegments()" [labels]="donutLabels()" [currency]="stats.currencyCode"></app-donut-chart>
               <ion-item *ngIf="donutSegments().length === 0" lines="none">
                 <ion-label class="ion-text-wrap" color="medium">{{ 'statistics.categories.no_chart' | translate }}</ion-label>
               </ion-item>
@@ -159,7 +166,7 @@
                 </ion-label>
                 <ion-text slot="end" class="amount">
                   <small *ngIf="row.percent !== null" class="percent">{{ formatPercent(row.percent) }}</small>
-                  {{ row.amount | scientificCurrency }}
+                  {{ row.amount | scientificCurrency: stats.currencyCode }}
                 </ion-text>
               </ion-item>
             </ng-container>

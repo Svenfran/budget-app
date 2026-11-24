@@ -57,7 +57,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
                 originalRecurrenceType)
 
         when:
-        def result = cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category, 1)
+        def result = cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category)
         flushAndClear()
         LOG.info('cartService.updateCartAndTemplateIfValid(Cart {}: title {}, recurrenceType {}, templateUpdate {}) -> ' +
                 'title {}, recurrenceType {}', cart.id, newTitle, updatedRecurrenceType, updateSelected, result.title,
@@ -86,12 +86,12 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         NONE                   | null                  | 'Lunch'         | false          || 'Lunch'         | []
     }
 
-    def "Änderung an #feld speichert den Einkauf mit Durchschnitt #expectedAverage"() {
+    def "Änderung an #feld speichert den Einkauf entsprechend dem DTO"() {
         given:
         def ben = fixtures.user()
         def wg = fixtures.group(members: [ben])
         def other = fixtures.category(wg)
-        def cart = fixtures.cart(wg, amount: 40d, averagePerMember: 40d)
+        def cart = fixtures.cart(wg, amount: 40d)
 
         and:
         def dto = new CartDto(cart)
@@ -100,37 +100,33 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         change(dto, other)
         // wie CartService.updateCart: die Kategorie wird über die ID aus dem DTO bestimmt
         def category = [wg.category, other].find { it.id == dto.categoryDto.id }
-        LOG.info('Szenario: Gruppe {}, Owner {}, Ben {}, Einkauf {} 40.00 (averagePerMember 40.00), Kategorien {} / {}; ' +
-                'geändert: {}', wg.group.id, wg.owner.id, ben.id, cart.id, wg.category.id, other.id, feld)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Ben {}, Einkauf {} 40.00, Kategorien {} / {}; geändert: {}',
+                wg.group.id, wg.owner.id, ben.id, cart.id, wg.category.id, other.id, feld)
 
         when:
-        // groupMemberCount 2 = Owner + Ben (in CartService.updateCart aus der Mitgliedschaftshistorie ermittelt)
-        cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, category, 2)
+        cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, category)
         flushAndClear()
         def saved = cartRepository.findById(cart.id).get()
-        LOG.info('cartService.updateCartAndTemplateIfValid(Cart {}, 2 Mitglieder) -> averagePerMember {}', cart.id,
-                saved.averagePerMember)
+        LOG.info('cartService.updateCartAndTemplateIfValid(Cart {}) -> title {}, amount {}, Kategorie {}', cart.id,
+                saved.title, saved.amount, saved.category.id)
 
-        then:
-        saved.averagePerMember == expectedAverage
-
-        and: "der gespeicherte Einkauf entspricht dem DTO"
+        then: "der gespeicherte Einkauf entspricht dem DTO"
         saved.title == dto.title
         saved.description == dto.description
         saved.amount == dto.amount
-        DateUtils.toLocalDate(saved.datePurchased) == DateUtils.toLocalDate(dto.datePurchased)
+        DateUtils.toLocalDate(saved.datePurchased) == dto.datePurchased
         saved.category.id == dto.categoryDto.id
 
         where:
         // Closure-Parameter: Instanzfelder (fixtures) sind im where:-Block nicht verfügbar, Namen dürfen nicht mit
         // lokalen Variablen des Features kollidieren.
-        feld            | change                                                                                         || expectedAverage
-        'title'         | { CartDto c, otherCategory -> c.title = 'Neu' }                                                || 20d
-        'description'   | { CartDto c, otherCategory -> c.description = 'Andere' }                                       || 20d
-        'amount'        | { CartDto c, otherCategory -> c.amount = 60d }                                                 || 30d
-        'datePurchased' | { CartDto c, otherCategory -> c.datePurchased = DateUtils.toDate(TestData.REFERENCE_DATE.plusDays(1)) } || 20d
-        'category'      | { CartDto c, otherCategory -> c.categoryDto = TestData.categoryDto(otherCategory) }            || 20d
-        'noChange'      | { CartDto c, otherCategory -> }                                                                || 40d
+        feld            | change
+        'title'         | { CartDto c, otherCategory -> c.title = 'Neu' }
+        'description'   | { CartDto c, otherCategory -> c.description = 'Andere' }
+        'amount'        | { CartDto c, otherCategory -> c.amount = 60d }
+        'datePurchased' | { CartDto c, otherCategory -> c.datePurchased = TestData.REFERENCE_DATE.plusDays(1) }
+        'category'      | { CartDto c, otherCategory -> c.categoryDto = TestData.categoryDto(otherCategory) }
+        'noChange'      | { CartDto c, otherCategory -> }
     }
 
     def "Wiederholung #oldType -> #newType: altes Template aktiv = #originalActive, aktive Templates #activeTypes"() {
@@ -147,7 +143,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
                 oldType, newType)
 
         when:
-        cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category, 1)
+        cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category)
         flushAndClear()
         def originalStillActive = templateRepository.findById(original.id).get().active
         LOG.info('cartService.updateCartAndTemplateIfValid(Cart {}: recurrenceType {}) -> Template {} aktiv={}', cart.id,
@@ -209,7 +205,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         LOG.info('Szenario: Gruppe {}, Einkauf {} Groceries 50.00 ohne Template', wg.group.id, cart.id)
 
         when:
-        def result = cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category, 1)
+        def result = cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category)
         flushAndClear()
         LOG.info('cartService.updateCartAndTemplateIfValid(Cart {}: title, description, amount) -> title {}, amount {}, ' +
                 'recurrenceType {}', cart.id, result.title, result.amount, result.recurrenceType)
@@ -241,7 +237,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         LOG.info('Szenario: Gruppe {}, Einkauf {} Books 30.00 ohne Template', wg.group.id, cart.id)
 
         when:
-        def result = cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category, 1)
+        def result = cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category)
         flushAndClear()
         LOG.info('cartService.updateCartAndTemplateIfValid(Cart {}: recurrenceType NONE) -> title {}, recurrenceType {}',
                 cart.id, result.title, result.recurrenceType)
@@ -266,7 +262,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
                 testClock.today, wg.group.id, wg.owner.id, cart.id, purchased, original.id)
 
         when:
-        def result = cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category, 1)
+        def result = cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category)
         flushAndClear()
         LOG.info('cartService.updateCartAndTemplateIfValid(Cart {}: recurrenceType WEEKLY) -> recurrenceType {}', cart.id,
                 result.recurrenceType)
@@ -329,7 +325,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
                 'nextExecutionDate 2025-03-31; neuer Betrag 950.00', testClock.today, wg.group.id, cart.id, original.id)
 
         when:
-        cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category, 1)
+        cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category)
         flushAndClear()
         def replacement = activeTemplate(wg)
         LOG.info('cartService.updateCartAndTemplateIfValid(Cart {}: amount, templateUpdate) -> aktives Template {}: ' +
@@ -350,13 +346,13 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
 
         and:
         def dto = new CartDto(cart)
-        dto.datePurchased = DateUtils.toDate(neuesDatum)
+        dto.datePurchased = neuesDatum
         dto.templateUpdateSelected = true
         LOG.info('Szenario: heute {}, Gruppe {}, Einkauf {} Miete vom 2025-03-31, Template MONTHLY anchorDay 31; ' +
                 'neues Datum {}', testClock.today, wg.group.id, cart.id, neuesDatum)
 
         when:
-        cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category, 1)
+        cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category)
         flushAndClear()
         def replacement = activeTemplate(wg)
         LOG.info('cartService.updateCartAndTemplateIfValid(Cart {}: datePurchased, templateUpdate) -> aktives Template {}: ' +
@@ -387,7 +383,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
                 'nextExecutionDate 2025-03-31; keine Änderung', testClock.today, wg.group.id, cart.id, original.id)
 
         when:
-        def result = cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category, 1)
+        def result = cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category)
         flushAndClear()
         LOG.info('cartService.updateCartAndTemplateIfValid(Cart {}: templateUpdate) -> hasTemplateChanged {}', cart.id,
                 result.hasTemplateChanged)
@@ -408,13 +404,13 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
 
         and: "Datum auf den 31.01., sonst unverändert"
         def dto = new CartDto(cart)
-        dto.datePurchased = DateUtils.toDate(LocalDate.of(2025, 1, 31))
+        dto.datePurchased = LocalDate.of(2025, 1, 31)
         dto.templateUpdateSelected = true
         LOG.info('Szenario: heute {}, Gruppe {}, Einkauf {} Miete vom 2025-01-30, Template {} MONTHLY anchorDay 30, ' +
                 'nextExecutionDate 2025-02-28; neues Datum 2025-01-31', testClock.today, wg.group.id, cart.id, original.id)
 
         when:
-        def result = cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category, 1)
+        def result = cartService.updateCartAndTemplateIfValid(cart, dto, wg.owner, wg.group, wg.category)
         flushAndClear()
         LOG.info('cartService.updateCartAndTemplateIfValid(Cart {}: datePurchased, templateUpdate) -> hasTemplateChanged {}',
                 cart.id, result.hasTemplateChanged)
@@ -433,13 +429,13 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
     // ----- addCart (DIV-14): öffentlicher Ablauf mit Anmeldung, Prüfungen und Mitgliederzahl -----
     // Kategorien stammen immer aus der eigenen Gruppe (fremde Kategorie wird nicht geprüft, DIV-49, bewusst nicht getestet).
 
-    def "Mitglied legt einen Einkauf an: gespeichert mit Durchschnitt pro Mitglied"() {
+    def "Mitglied legt einen Einkauf an: gespeichert mit Gruppe, Nutzer und Betrag, ohne Template"() {
         given:
         def ben = fixtures.user()
         def wg = fixtures.group(members: [ben])
         def (groupId, benId) = [wg.group.id, ben.id]
         def dto = TestData.cartDto(groupId: groupId, categoryDto: TestData.categoryDto(wg.category), title: 'Pizza',
-                amount: 40d, datePurchased: DateUtils.toDate(TestData.REFERENCE_DATE))
+                amount: 40d, datePurchased: TestData.REFERENCE_DATE)
         flushAndClear()
         loginAs(ben)
         LOG.info('Szenario: Gruppe {}, Owner {}, Ben {} (angemeldet); Einkauf Pizza 40.00 am {}', groupId, wg.owner.id,
@@ -449,8 +445,8 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         def result = cartService.addCart(dto)
         flushAndClear()
         def saved = cartRepository.findById(result.id).get()
-        LOG.info('cartService.addCart(Pizza 40.00) -> Cart {}: User {}, averagePerMember {}, recurrenceType {}', result.id,
-                saved.user.id, saved.averagePerMember, result.recurrenceType)
+        LOG.info('cartService.addCart(Pizza 40.00) -> Cart {}: User {}, amount {}, recurrenceType {}', result.id,
+                saved.user.id, saved.amount, result.recurrenceType)
 
         then: "Carts werden nicht live synchronisiert"
         0 * notificationService._
@@ -460,7 +456,6 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         saved.user.id == benId
         saved.title == 'Pizza'
         saved.amount == 40d
-        saved.averagePerMember == 20d
         saved.template == null
         templateRepository.findByGroupId(groupId).isEmpty()
     }
@@ -531,7 +526,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
                 membershipEnd: DateUtils.toDate(austritt))
         def kaufdatum = austritt.minusDays(10)
         def dto = TestData.cartDto(groupId: groupId, categoryDto: TestData.categoryDto(wg.category),
-                datePurchased: DateUtils.toDate(kaufdatum))
+                datePurchased: kaufdatum)
         flushAndClear()
         loginAs(ehemalig)
         LOG.info('Szenario: Gruppe {}, Owner {}, Ehemaliger {} (angemeldet, Mitglied bis {}); Kaufdatum {}', groupId,
@@ -554,7 +549,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         def groupId = wg.group.id
         def kaufdatum = TestData.REFERENCE_DATE.minusYears(1).minusDays(1)
         def dto = TestData.cartDto(groupId: groupId, categoryDto: TestData.categoryDto(wg.category),
-                datePurchased: DateUtils.toDate(kaufdatum), recurrenceType: MONTHLY)
+                datePurchased: kaufdatum, recurrenceType: MONTHLY)
         flushAndClear()
         loginAs(ben)
         LOG.info('Szenario: Gruppe {}, Owner {}, Ben {} (angemeldet, Mitglied seit {}); Kaufdatum {}, MONTHLY', groupId,
@@ -576,7 +571,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         def wg = fixtures.group()
         def (groupId, ownerId, categoryId) = [wg.group.id, wg.owner.id, wg.category.id]
         def dto = TestData.cartDto(groupId: groupId, categoryDto: TestData.categoryDto(wg.category), title: 'Miete',
-                amount: 900d, datePurchased: DateUtils.toDate(testClock.today), recurrenceType: typ)
+                amount: 900d, datePurchased: testClock.today, recurrenceType: typ)
         flushAndClear()
         loginAs(wg.owner)
         LOG.info('Szenario: heute {}, Gruppe {}, Owner {} (angemeldet); Einkauf Miete 900.00 am {}, {}', testClock.today,
@@ -642,44 +637,6 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         typ << [NONE, null]
     }
 
-    def "Mitgliederzahl zum Kaufdatum: #fall ergibt Durchschnitt #erwartet"() {
-        given: """Owner (seit REFERENCE_DATE - 1 Jahr) legt am REFERENCE_DATE an; Bens Zeitraum liegt auf der Grenze.
-                  Prüft die SQL-Zählung (inklusiv). 0 Mitglieder ist über addCart nicht erreichbar, weil der anlegende
-                  Nutzer selbst Mitglied sein muss; Query bei 0: DataLoaderServiceIntegrationSpec 'Ohne Mitgliedschaft
-                  zum Kaufdatum ist die Mitgliederzahl 0', Mapper bei 0: CartDtoMapperSpec 'Durchschnitt pro Mitglied
-                  ist 0 bei 0 Mitgliedern' (DIV-21)."""
-        def ben = fixtures.user()
-        def wg = fixtures.group(members: [ben])
-        def groupId = wg.group.id
-        def benMembership = membershipRepository.findByGroupIdAndUserId(groupId, ben.id).first()
-        if (benStart) benMembership.membershipStart = DateUtils.toDate(benStart)
-        benMembership.membershipEnd = benEnde ? DateUtils.toDate(benEnde) : null
-        membershipRepository.save(benMembership)
-        def dto = TestData.cartDto(groupId: groupId, categoryDto: TestData.categoryDto(wg.category), amount: 40d,
-                datePurchased: DateUtils.toDate(TestData.REFERENCE_DATE))
-        flushAndClear()
-        loginAs(wg.owner)
-        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), Ben {} (Beginn {}, Ende {}); Einkauf 40.00 am {}', groupId,
-                wg.owner.id, ben.id, benStart ?: 'Standard', benEnde ?: 'offen', TestData.REFERENCE_DATE)
-
-        when:
-        def result = cartService.addCart(dto)
-        flushAndClear()
-        def average = cartRepository.findById(result.id).get().averagePerMember
-        LOG.info('cartService.addCart(40.00 am {}) -> Cart {}, averagePerMember {}', TestData.REFERENCE_DATE, result.id,
-                average)
-
-        then:
-        average == erwartet
-
-        where:
-        fall                            | benStart                            | benEnde                              || erwartet
-        'Kauf am Eintrittstag'          | TestData.REFERENCE_DATE             | null                                 || 20d
-        'Kauf am Tag vor dem Eintritt'  | TestData.REFERENCE_DATE.plusDays(1) | null                                 || 40d
-        'Kauf am Austrittstag'          | null                                | TestData.REFERENCE_DATE              || 20d
-        'Kauf am Tag nach dem Austritt' | null                                | TestData.REFERENCE_DATE.minusDays(1) || 40d
-    }
-
     // Grenztage des anlegenden Nutzers (Java-Verifikation, inklusiv): Ben war bis 20.05.2025 Mitglied, ist ab
     // 01.06.2025 wieder Mitglied und steht weiter in group.members. Keine offene Historie überdeckt die Lücke.
 
@@ -694,7 +651,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         fixtures.membership(wg, ben, membershipStart: DateUtils.toDate(LocalDate.of(2024, 6, 15)),
                 membershipEnd: DateUtils.toDate(LocalDate.of(2025, 5, 20)))
         def dto = TestData.cartDto(groupId: groupId, categoryDto: TestData.categoryDto(wg.category), amount: 40d,
-                datePurchased: DateUtils.toDate(kaufdatum))
+                datePurchased: kaufdatum)
         flushAndClear()
         loginAs(ben)
         LOG.info('Szenario: Gruppe {}, Owner {}, Ben {} (angemeldet, Mitglied 2024-06-15..2025-05-20 und ab 2025-06-01); ' +
@@ -703,11 +660,11 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         when:
         def result = cartService.addCart(dto)
         flushAndClear()
-        def average = cartRepository.findById(result.id).get().averagePerMember
-        LOG.info('cartService.addCart(40.00 am {}) als Ben -> Cart {}, averagePerMember {}', kaufdatum, result.id, average)
+        def savedDatum = DateUtils.toLocalDate(cartRepository.findById(result.id).get().datePurchased)
+        LOG.info('cartService.addCart(40.00 am {}) als Ben -> Cart {}, Kaufdatum {}', kaufdatum, result.id, savedDatum)
 
-        then: "Owner und Ben zählen am Grenztag mit"
-        average == 20d
+        then: "der Einkauf ist mit dem Grenztag gespeichert"
+        savedDatum == kaufdatum
 
         where:
         fall                                             | kaufdatum
@@ -726,7 +683,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         fixtures.membership(wg, ben, membershipStart: DateUtils.toDate(LocalDate.of(2024, 6, 15)),
                 membershipEnd: DateUtils.toDate(LocalDate.of(2025, 5, 20)))
         def dto = TestData.cartDto(groupId: groupId, categoryDto: TestData.categoryDto(wg.category),
-                datePurchased: DateUtils.toDate(kaufdatum))
+                datePurchased: kaufdatum)
         flushAndClear()
         loginAs(ben)
         LOG.info('Szenario: Gruppe {}, Owner {}, Ben {} (angemeldet, Mitglied 2024-06-15..2025-05-20 und ab 2025-06-01); ' +
@@ -749,12 +706,12 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
     // ----- updateCart (DIV-14): öffentlicher Ablauf mit Anmeldung und Prüfungen -----
     // Die Requests senden immer die groupId des Einkaufs (Gruppenwechsel per DTO, DIV-48, bewusst nicht getestet).
 
-    def "#rolle bearbeitet seinen Einkauf: Werte und Durchschnitt aus der Mitgliederzahl gespeichert"() {
+    def "#rolle bearbeitet seinen Einkauf: Werte gespeichert"() {
         given:
         def ben = fixtures.user()
         def wg = fixtures.group(members: [ben])
         def eigentuemer = rolle == 'Gruppen-Owner' ? wg.owner : ben
-        def cart = fixtures.cart(wg, user: eigentuemer, title: 'Einkauf', amount: 40d, averagePerMember: 20d)
+        def cart = fixtures.cart(wg, user: eigentuemer, title: 'Einkauf', amount: 40d)
         def dto = new CartDto(cart)
         dto.title = 'Großeinkauf'
         dto.amount = 60d
@@ -767,14 +724,13 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         def result = cartService.updateCart(dto)
         flushAndClear()
         def saved = cartRepository.findById(cart.id).get()
-        LOG.info('cartService.updateCart(Cart {}: Großeinkauf 60.00) -> title {}, amount {}, averagePerMember {}', cart.id,
-                result.title, saved.amount, saved.averagePerMember)
+        LOG.info('cartService.updateCart(Cart {}: Großeinkauf 60.00) -> title {}, amount {}', cart.id,
+                result.title, saved.amount)
 
         then:
         result.title == 'Großeinkauf'
         saved.title == 'Großeinkauf'
         saved.amount == 60d
-        saved.averagePerMember == 30d
 
         where:
         rolle << ['Gruppen-Owner', 'Mitglied']
@@ -836,7 +792,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         def template = fixtures.template(cart, recurrenceType: MONTHLY)
         def neuesDatum = TestData.REFERENCE_DATE.minusYears(1).minusDays(1)
         def dto = new CartDto(cart)
-        dto.datePurchased = DateUtils.toDate(neuesDatum)
+        dto.datePurchased = neuesDatum
         dto.templateUpdateSelected = true
         def (groupId, templateId) = [wg.group.id, template.id]
         flushAndClear()
@@ -1063,7 +1019,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         flushAndClear()
         loginAs(wg.owner)
         def paar = settlementService.addSettlementPayment(
-                new SettlementPaymentDto(30d, wg.group.id, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE)))
+                new SettlementPaymentDto(30d, wg.group.id, new UserDto(id: ben.id), TestData.REFERENCE_DATE))
         flushAndClear()
         def eigener = rolle == 'Zahler' ? paar[0] : paar[1]
         def bearbeiter = rolle == 'Zahler' ? wg.owner : ben
@@ -1097,7 +1053,7 @@ class CartServiceIntegrationSpec extends IntegrationSpec {
         flushAndClear()
         loginAs(wg.owner)
         def paar = settlementService.addSettlementPayment(
-                new SettlementPaymentDto(30d, wg.group.id, new UserDto(id: ben.id), DateUtils.toDate(TestData.REFERENCE_DATE)))
+                new SettlementPaymentDto(30d, wg.group.id, new UserDto(id: ben.id), TestData.REFERENCE_DATE))
         flushAndClear()
         LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet) zahlt an Ben {}; Settlement {} mit Carts {}', wg.group.id,
                 wg.owner.id, ben.id, paar[0].settlementId, paar*.id)

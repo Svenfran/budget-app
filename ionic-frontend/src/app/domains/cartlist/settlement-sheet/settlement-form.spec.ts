@@ -4,7 +4,8 @@ import { GroupMembers } from 'src/app/groupmembers/model/groupmembers-dto';
 import { aCart, aUser } from 'src/testing/test-data';
 import { Zeitraum } from '../new-edit-cart/model/gmh-zeitraum';
 import {
-  AMOUNT_VALIDATORS, editRecipients, isDaySelectable, settlementEditData, settlementRecipients, toSettlementPaymentDto,
+  AMOUNT_VALIDATORS, displayParty, editRecipients, formerSettlementParties, isDaySelectable, settlementEditData,
+  settlementRecipients, toSettlementPaymentDto,
 } from './settlement-form';
 
 describe('settlement-form (DIV-70)', () => {
@@ -74,7 +75,7 @@ describe('settlement-form (DIV-70)', () => {
   describe('toSettlementPaymentDto', () => {
     const longName = aUser({ userName: 'Maximilian Mustermann' });
 
-    it('baut den Request wie bisher: voller Name, Betrag unverändert, Datum als Mitternacht UTC', () => {
+    it('baut den Request: voller Name, Betrag unverändert, Datum als ISO-Tag (DIV-81)', () => {
       const dto = toSettlementPaymentDto(
         { amount: 25.5, memberId: longName.id, datePurchased: '2025-02-01' }, 7, [longName]);
 
@@ -82,9 +83,8 @@ describe('settlement-form (DIV-70)', () => {
         amount: 25.5,
         groupId: 7,
         member: { id: longName.id, userName: 'Maximilian Mustermann' },
-        datePurchased: new Date('2025-02-01'),
+        datePurchased: '2025-02-01',
       });
-      expect(dto.datePurchased.toISOString()).toBe('2025-02-01T00:00:00.000Z');
     });
 
     it('Owner als Empfänger', () => {
@@ -96,16 +96,16 @@ describe('settlement-form (DIV-70)', () => {
     it('Empfänger nicht mehr in der Liste: kein Fehler, leerer Name, übrige Felder unverändert', () => {
       const dto = toSettlementPaymentDto({ amount: 10, memberId: 999, datePurchased: '2025-02-01' }, 1, [anna]);
       expect(dto).toEqual({
-        amount: 10, groupId: 1, member: { id: 999, userName: '' }, datePurchased: new Date('2025-02-01'),
+        amount: 10, groupId: 1, member: { id: 999, userName: '' }, datePurchased: '2025-02-01',
       });
     });
   });
 
   // Nur der Validator, nicht der Ionic-Eingabeweg (ion-input type="number" wandelt die Eingabe vorher per parseFloat um).
-  describe('AMOUNT_VALIDATORS (DIV-74: größer als 0, höchstens zwei Nachkommastellen)', () => {
+  describe('AMOUNT_VALIDATORS (DIV-74: größer als 0; DIV-77: mehr Nachkommastellen rundet das Sheet)', () => {
     const errorsOf = (value: unknown) => new FormControl(value, AMOUNT_VALIDATORS).errors;
 
-    [25, 1.5, 0.5, 0.01, 12.34, '25', '1.5', '.5', '0.01', '12.30'].forEach(value => {
+    [25, 1.5, 0.5, 0.01, 12.34, '25', '1.5', '.5', '0.01', '12.30', 1.234, '65.349875'].forEach(value => {
       it(`akzeptiert ${JSON.stringify(value)}`, () => {
         expect(errorsOf(value)).toBeNull();
       });
@@ -119,8 +119,8 @@ describe('settlement-form (DIV-70)', () => {
       });
     });
 
-    [-5, '-5', '+3', 1.234, '1.234', '-0.5'].forEach(value => {
-      it(`lehnt ${JSON.stringify(value)} ab (Vorzeichen oder mehr als zwei Nachkommastellen)`, () => {
+    [-5, '-5', '+3', '-0.5'].forEach(value => {
+      it(`lehnt ${JSON.stringify(value)} ab (Vorzeichen)`, () => {
         expect(errorsOf(value)?.['pattern']).toBeDefined();
       });
     });
@@ -131,10 +131,22 @@ describe('settlement-form (DIV-70)', () => {
       });
     });
 
-    ['abc', '1,5', '1.', '1.2.3'].forEach(value => {
+    ['abc', '1.2.3', '1,2,3', ',', '.'].forEach(value => {
       it(`lehnt ${JSON.stringify(value)} ab`, () => {
         expect(errorsOf(value)?.['pattern']).toBeDefined();
       });
+    });
+
+    // Phase 9: Textfeld – Komma als Dezimaltrenner und Trennzeichen am Ende sind gültig (formatiert beim Verlassen)
+    ['1,5', '1.', '45,', '0,01'].forEach(value => {
+      it(`akzeptiert ${JSON.stringify(value)}`, () => {
+        expect(errorsOf(value)).toBeNull();
+      });
+    });
+
+    it('„0,5“ ist größer als 0 (Validators.min läse 0), „0,004“ nicht', () => {
+      expect(errorsOf('0,5')).toBeNull();
+      expect(errorsOf('0,004')?.['min']).toBeDefined();
     });
   });
 
@@ -145,7 +157,7 @@ describe('settlement-form (DIV-70)', () => {
       const dto = toSettlementPaymentDto({ amount: 30, memberId: ben.id, datePurchased: '2025-06-10' }, 7, [ben], { settlementId: 70 });
 
       expect(dto).toEqual({
-        id: 70, amount: 30, groupId: 7, member: { id: ben.id, userName: 'Ben' }, datePurchased: new Date('2025-06-10'),
+        id: 70, amount: 30, groupId: 7, member: { id: ben.id, userName: 'Ben' }, datePurchased: '2025-06-10',
       });
     });
 
@@ -157,7 +169,7 @@ describe('settlement-form (DIV-70)', () => {
           { receivedBy: ich });
 
         expect(dto).toEqual({
-          payer: { id: ben.id, userName: 'Ben' }, amount: 25, groupId: 7, member: ich, datePurchased: new Date('2025-06-10'),
+          payer: { id: ben.id, userName: 'Ben' }, amount: 25, groupId: 7, member: ich, datePurchased: '2025-06-10',
         });
       });
 
@@ -179,8 +191,8 @@ describe('settlement-form (DIV-70)', () => {
     });
 
     describe('settlementEditData', () => {
-      const zahlerCart = aCart({ id: 1, amount: 30, userDto: anna, settlementId: 70, datePurchased: '2025-06-10' as unknown as Date });
-      const empfaengerCart = aCart({ id: 2, amount: -30, userDto: ben, settlementId: 70, datePurchased: '2025-06-10' as unknown as Date });
+      const zahlerCart = aCart({ id: 1, amount: 30, userDto: anna, settlementId: 70, datePurchased: '2025-06-10' });
+      const empfaengerCart = aCart({ id: 2, amount: -30, userDto: ben, settlementId: 70, datePurchased: '2025-06-10' });
       const andere = aCart({ id: 3, amount: 12, userDto: anna, settlementId: 71 });
 
       it('aus dem eigenen Zahler-Cart: Rolle Zahler, Parteien aus dem Paar, Betrag positiv, ISO-Tag', () => {
@@ -188,6 +200,13 @@ describe('settlement-form (DIV-70)', () => {
           id: 70, role: 'payer', payer: { id: anna.id, userName: 'Anna' }, receiver: { id: ben.id, userName: 'Ben' },
           amount: 30, datePurchased: '2025-06-10',
         });
+      });
+
+      it('übernimmt das Kaufdatum unverändert, auch am Jahresende (DIV-81, AC 5)', () => {
+        const zahler = { ...zahlerCart, datePurchased: '2026-12-31' };
+        const empfaenger = { ...empfaengerCart, datePurchased: '2026-12-31' };
+
+        expect(settlementEditData(zahler, [zahler, empfaenger])?.datePurchased).toBe('2026-12-31');
       });
 
       it('aus dem eigenen Empfänger-Cart: Rolle Empfänger, Zahler ist der User des positiven Carts', () => {
@@ -212,17 +231,89 @@ describe('settlement-form (DIV-70)', () => {
     });
 
     describe('editRecipients', () => {
+      const LABEL = 'Gelöscht';
+
       it('lässt die Liste unverändert, wenn der bisherige Empfänger noch auswählbar ist', () => {
-        expect(editRecipients([owner, anna], anna)).toEqual([owner, anna]);
+        expect(editRecipients([owner, anna], anna, LABEL)).toEqual([owner, anna]);
       });
 
       it('ergänzt einen ausgetretenen bisherigen Empfänger, damit er gewählt bleibt', () => {
-        expect(editRecipients([owner], anna)).toEqual([owner, anna]);
+        expect(editRecipients([owner], anna, LABEL)).toEqual([owner, { id: anna.id, userName: 'Anna' }]);
       });
 
       it('zeigt den bisherigen Empfänger auch, wenn sonst niemand auswählbar ist', () => {
-        expect(editRecipients([], anna)).toEqual([anna]);
+        expect(editRecipients([], anna, LABEL)).toEqual([{ id: anna.id, userName: 'Anna' }]);
       });
+
+      // DIV-109: Saldo 0 oder Salden nicht geladen – der gelöschte Empfänger steht nicht in der Auswahl
+      it('gelöschter bisheriger Empfänger, der nicht in der Auswahl steht: ergänzt mit Label statt „DELETED“', () => {
+        const geloescht = { id: 99, userName: 'DELETED' };
+
+        expect(editRecipients([owner], geloescht, LABEL))
+          .toEqual([owner, { id: 99, userName: LABEL, former: true, deleted: true }]);
+      });
+    });
+  });
+
+  describe('displayParty (DIV-109)', () => {
+    it('gelöschter Nutzer: Label und Kennzeichen', () => {
+      expect(displayParty({ id: 3, userName: 'DELETED' }, 'Gelöscht'))
+        .toEqual({ id: 3, userName: 'Gelöscht', former: true, deleted: true });
+    });
+
+    it('Marker „REMOVED“ am Ende wird entfernt, sonst bleibt der Name', () => {
+      expect(displayParty({ id: 4, userName: 'Anna Lena REMOVED' }, 'Gelöscht')).toEqual({ id: 4, userName: 'Anna Lena' });
+      expect(displayParty({ id: 5, userName: 'Ben' }, 'Gelöscht')).toEqual({ id: 5, userName: 'Ben' });
+    });
+  });
+
+  describe('formerSettlementParties (DIV-109)', () => {
+    const LABEL = 'Gelöscht';
+    const ben = aUser({ userName: 'Ben' });
+    const saldo = (userId: number, userName: string, diff: number) => ({ userId, userName, sum: 0, diff });
+    const salden = [
+      saldo(owner.id, 'Olga', 50),
+      saldo(me.id, 'Ich', -20),
+      saldo(anna.id, 'Anna', -10),
+      saldo(ben.id, 'Ben REMOVED', -100),
+      saldo(90, 'DELETED', -30),
+      saldo(91, 'DELETED', 60),
+      saldo(92, 'Cleo REMOVED', 0),
+      saldo(93, 'Dora REMOVED', 0.004),
+    ];
+
+    it('nur ehemalige und gelöschte mit Saldo ≠ 0, mit Anzeigename, Kennzeichen und Saldo, in der Reihenfolge der Salden', () => {
+      expect(formerSettlementParties(salden, groupMembers(), 1, me.id, LABEL)).toEqual([
+        { id: ben.id, userName: 'Ben', former: true, deleted: false, balance: -100 },
+        { id: 90, userName: LABEL, former: true, deleted: true, balance: -30 },
+        { id: 91, userName: LABEL, former: true, deleted: true, balance: 60 },
+      ]);
+    });
+
+    // Ausschlussfälle als Matrix (Codex-Review 2): wer nie als ehemalige Partei erscheint
+    [
+      { fall: 'ich selbst (auch mit Saldo)', userId: me.id },
+      { fall: 'der Owner', userId: owner.id },
+      { fall: 'ein aktuelles Mitglied', userId: anna.id },
+      { fall: 'ein Ex-Mitglied mit Saldo 0 (AK3)', userId: 92 },
+      { fall: 'ein Ex-Mitglied mit Saldo, der auf 0 Cent rundet', userId: 93 },
+    ].forEach(({ fall, userId }) => {
+      it(`schließt ${fall} aus`, () => {
+        expect(formerSettlementParties(salden, groupMembers(), 1, me.id, LABEL).map(party => party.id)).not.toContain(userId);
+      });
+    });
+
+    it('Mitgliederliste einer anderen Gruppe (noch nicht geladen): keine ehemaligen Parteien', () => {
+      expect(formerSettlementParties(salden, { ...groupMembers(), id: 2 }, 1, me.id, LABEL)).toEqual([]);
+    });
+
+    it('ohne Salden (nicht geladen oder Fehler): keine ehemaligen Parteien', () => {
+      expect(formerSettlementParties(null, groupMembers(), 1, me.id, LABEL)).toEqual([]);
+    });
+
+    it('Owner allein (keine Mitglieder): Ex-Mitglieder mit Saldo bleiben wählbar', () => {
+      expect(formerSettlementParties(salden, groupMembers([]), 1, owner.id, LABEL).map(party => party.id))
+        .toEqual([me.id, anna.id, ben.id, 90, 91]);
     });
   });
 });

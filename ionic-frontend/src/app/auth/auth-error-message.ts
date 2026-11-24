@@ -1,38 +1,33 @@
+import { API_ERROR_CODES, apiErrorCode } from '../service/api-error';
+
 const ERROR_MESSAGES = 'alerts.authenticate.error_messages';
 
-// Backend-Meldung bei Login/Registrierung ohne DeviceId (DIV-46). Fehlermeldungs-Vertrag X3,
-// Liste in spring-backend CartControllerApiSpec – Text nur gemeinsam mit dem Backend ändern.
-export const DEVICE_ID_REQUIRED = 'DeviceId is required';
-
 /**
- * i18n-Key der Fehlermeldung nach fehlgeschlagenem Login bzw. fehlgeschlagener Registrierung (Status 0 behandelt
- * die Auth-Seite selbst). Die Substring-Prüfungen auf E-Mail und Namen (Vertrag M5/M6) gelten nur für die
- * Registrierung und nur für nicht-leere Werte – beim Login ist der Name leer, und includes('') trifft immer zu.
+ * i18n-Key der Fehlermeldung nach fehlgeschlagenem Login bzw. fehlgeschlagener Registrierung (Status 0 behandelt die
+ * Auth-Seite selbst). Ausgewertet wird nur der Fehlercode des Backends (DIV-108), nie der Text; „E-Mail bzw. Name
+ * vergeben“ gilt nur für die Registrierung. Ohne bekannten Code: allgemeine Meldung.
+ * Login-Rate-Limit (DIV-64): 429 und falsche Zugangsdaten (403 ohne Code) werden am Status erkannt.
  */
-export function authErrorMessageKey(error: unknown, status: number, isRegistration: boolean,
-                                    email: string, userName: string): string {
-  // Login-Rate-Limit (DIV-64): Erkennung am Status, nicht am Text – deshalb vor der typeof-Prüfung
+export function authErrorMessageKey(err: unknown, isRegistration: boolean): string {
+  const status = errorStatus(err);
+  // Rate-Limit am Status, nicht am Code – so auch bei Antworten ohne JSON-Body (älteres Backend, Proxy)
   if (status === 429) {
     return `${ERROR_MESSAGES}.message_too_many_attempts`;
   }
   // Falsche Zugangsdaten beim Login (403, leerer Body) – nur diese Versuche zählen, daher hier der Hinweis auf die
-  // vorübergehende Sperre (DIV-64); ohne Zahl, weil die Zähler serverseitig je Account/IP geführt werden
+  // vorübergehende Sperre; ohne Zahl, weil die Zähler serverseitig je Account/IP geführt werden
   if (!isRegistration && status === 403) {
     return `${ERROR_MESSAGES}.message_invalid_credentials`;
   }
-  if (typeof error !== 'string') {
-    return `${ERROR_MESSAGES}.message`;
-  }
-  if (error === DEVICE_ID_REQUIRED) {
+  const code = apiErrorCode(err);
+  if (code === API_ERROR_CODES.DEVICE_ID_REQUIRED) {
     return `${ERROR_MESSAGES}.message_device_id_missing`;
   }
-  if (isRegistration && status !== 403) {
-    if (email && error.includes(email)) {
-      return `${ERROR_MESSAGES}.message_email_exists`;
-    }
-    if (userName && error.includes(userName)) {
-      return `${ERROR_MESSAGES}.message_username_exists`;
-    }
+  if (isRegistration && code === API_ERROR_CODES.EMAIL_ALREADY_EXISTS) {
+    return `${ERROR_MESSAGES}.message_email_exists`;
+  }
+  if (isRegistration && code === API_ERROR_CODES.USER_NAME_ALREADY_EXISTS) {
+    return `${ERROR_MESSAGES}.message_username_exists`;
   }
   return `${ERROR_MESSAGES}.message`;
 }
@@ -48,13 +43,13 @@ export interface AuthErrorMessage {
  * Retry-After-Header (vom Backend per CORS freigegeben). Ohne lesbare Restzeit bleibt es bei der allgemeinen
  * 429-Meldung.
  */
-export function authErrorMessage(error: unknown, status: number, retryAfter: string | null | undefined,
-                                 isRegistration: boolean, email: string, userName: string): AuthErrorMessage {
-  const minutes = status === 429 ? retryAfterMinutes(retryAfter) : null;
+export function authErrorMessage(err: unknown, retryAfter: string | null | undefined,
+                                 isRegistration: boolean): AuthErrorMessage {
+  const minutes = errorStatus(err) === 429 ? retryAfterMinutes(retryAfter) : null;
   if (minutes !== null) {
     return { key: `${ERROR_MESSAGES}.message_too_many_attempts_wait`, params: { minutes } };
   }
-  return { key: authErrorMessageKey(error, status, isRegistration, email, userName) };
+  return { key: authErrorMessageKey(err, isRegistration) };
 }
 
 /**
@@ -67,4 +62,10 @@ export function retryAfterMinutes(retryAfter: string | null | undefined): number
     return null;
   }
   return Math.max(1, Math.ceil(Number(value) / 60));
+}
+
+/** HTTP-Status einer Fehlerantwort (`HttpErrorResponse` o. ä.), sonst `null`. */
+function errorStatus(err: unknown): number | null {
+  const status = typeof err === 'object' && err !== null ? (err as { status?: unknown }).status : undefined;
+  return typeof status === 'number' ? status : null;
 }

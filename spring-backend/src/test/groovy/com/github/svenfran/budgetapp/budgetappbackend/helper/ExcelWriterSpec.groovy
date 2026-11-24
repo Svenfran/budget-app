@@ -19,7 +19,7 @@ class ExcelWriterSpec extends Specification {
         given:
         def gruppe = TestData.groupExport(groupName: 'Haushalt',
                 carts: [TestData.cartExportRow(userName: 'Anna', title: 'Pizza', description: 'Freitag',
-                        datePurchased: of(2025, 3, 7), amount: 12.345d, category: 'Essen', groupName: 'Haushalt')],
+                        datePurchased: of(2025, 3, 7), amount: 12.345d, currencyCode: 'CHF', category: 'Essen', groupName: 'Haushalt')],
                 memberships: [TestData.membershipExportRow(userName: 'Anna', start: of(2024, 1, 1), type: 'OWNER'),
                               TestData.membershipExportRow(userName: 'Ben', start: of(2024, 2, 1), end: of(2024, 6, 30))])
 
@@ -30,17 +30,18 @@ class ExcelWriterSpec extends Specification {
 
         then:
         blattNamen(workbook) == ['Ausgaben', 'Mitgliedszeitraum']
-        zeile(ausgaben, 0) == ['Benutzername', 'Titel', 'Beschreibung', 'Datum', 'Betrag', 'Kategorie', 'Gruppe']
+        zeile(ausgaben, 0) == ['Benutzername', 'Titel', 'Beschreibung', 'Datum', 'Betrag', 'Währung', 'Kategorie', 'Gruppe']
         zeile(historie, 0) == ['Benutzername', 'Startdatum', 'Enddatum', 'Status']
 
-        and: "Ausgabe: Datum als Datumszelle, Betrag numerisch ungerundet"
+        and: "Ausgabe: Datum als Datumszelle, Betrag numerisch ungerundet, angezeigt mit zwei Nachkommastellen (DIV-77)"
         ausgaben.lastRowNum == 1
         def cart = ausgaben.getRow(1)
-        [0, 1, 2, 5, 6].collect { cart.getCell(it).stringCellValue } == ['Anna', 'Pizza', 'Freitag', 'Essen', 'Haushalt']
+        [0, 1, 2, 5, 6, 7].collect { cart.getCell(it).stringCellValue } == ['Anna', 'Pizza', 'Freitag', 'CHF', 'Essen', 'Haushalt']
         cart.getCell(3).localDateTimeCellValue.toLocalDate() == of(2025, 3, 7)
         cart.getCell(3).cellStyle.dataFormatString == 'dd.MM.yyyy'
         cart.getCell(4).cellType == CellType.NUMERIC
         cart.getCell(4).numericCellValue == 12.345d
+        cart.getCell(4).cellStyle.dataFormatString == '0.00'
 
         and: "Historie: offene Mitgliedschaft mit leerem Enddatum"
         historie.lastRowNum == 2
@@ -73,7 +74,7 @@ class ExcelWriterSpec extends Specification {
         and: "Gruppe ohne Carts und ohne Historie: Blätter nur mit Kopfzeile"
         workbook.getSheet('Urlaub Ausgaben').lastRowNum == 0
         workbook.getSheet('Urlaub Mitglieder').lastRowNum == 0
-        zeile(workbook.getSheet('Urlaub Ausgaben'), 0).size() == 7
+        zeile(workbook.getSheet('Urlaub Ausgaben'), 0).size() == 8
     }
 
     def "Ohne Gruppen (#umfang): gültige Datei mit zwei Kopfzeilen-Blättern"() {
@@ -98,7 +99,7 @@ class ExcelWriterSpec extends Specification {
 
         then:
         blattNamen(einzeln) == ['Expenses', 'Membership period']
-        zeile(einzeln.getSheet('Expenses'), 0) == ['Username', 'Title', 'Description', 'Date', 'Amount', 'Category', 'Group']
+        zeile(einzeln.getSheet('Expenses'), 0) == ['Username', 'Title', 'Description', 'Date', 'Amount', 'Currency', 'Category', 'Group']
         blattNamen(alle) == ['Home Expenses', 'Home Members']
     }
 

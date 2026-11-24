@@ -10,10 +10,11 @@ import { CategoryDto } from 'src/app/model/category-dto';
 import { CategoryService } from 'src/app/service/category.service';
 import { GroupService } from 'src/app/service/group.service';
 import { LanguageService } from 'src/app/service/language.service';
-import { aCart, aCategory, aGroup, aLoggedInUser, aUser, REFERENCE_DATE } from 'src/testing/test-data';
+import { aCart, aCategory, aGroup, aLoggedInUser, aUser, REFERENCE_NOON } from 'src/testing/test-data';
 import { authServiceStub, provideServiceTesting } from 'src/testing/test-providers';
 import { Cart } from '../model/cart';
 import { CartService } from '../service/cart.service';
+import moment from 'moment';
 import { NewEditCartPage } from './new-edit-cart.page';
 
 /**
@@ -28,7 +29,7 @@ describe('NewEditCartPage', () => {
   const vorlage = aCart({
     id: 1, title: 'Pizza', amount: 12.5, description: 'Freitag', groupId: GROUP_ID, userDto: anna,
     categoryDto: lebensmittel, recurrenceType: RECURRENCE_TYPE.MONTHLY, hasActiveTemplate: true, templateId: 7,
-    datePurchased: new Date('2025-05-01T00:00:00Z'),
+    datePurchased: '2025-05-01',
   });
   const fremde = aCart({ id: 2, groupId: GROUP_ID, userDto: aUser({ userName: 'Ben' }), categoryDto: lebensmittel });
 
@@ -69,10 +70,11 @@ describe('NewEditCartPage', () => {
         } },
         { provide: GroupService, useValue: {
           activeGroup: signal(aGroup({ id: GROUP_ID, dateCreated: new Date('2024-01-01T00:00:00Z') })),
+          activeCurrency: signal('EUR'),
           groupMembershipHistory: signal([]),
           getGroupMembershipHistoryForGroupAndUser: jasmine.createSpy('getGroupMembershipHistoryForGroupAndUser'),
         } },
-        { provide: AuthService, useValue: authServiceStub(aLoggedInUser({ id: 9, name: 'Anna' })) },
+        { provide: AuthService, useValue: authServiceStub(aLoggedInUser({ id: 9, name: 'Anna', expirationDate: REFERENCE_NOON.getTime() + 60 * 60 * 1000 })) },
         { provide: LoadingController, useValue: { create: loadingCreate } },
         { provide: MenuController, useValue: { enable: jasmine.createSpy('enable').and.resolveTo(true) } },
         { provide: LanguageService, useValue: { currentLang: signal('de') } },
@@ -107,7 +109,7 @@ describe('NewEditCartPage', () => {
     fixture.nativeElement.querySelectorAll('ion-select[formcontrolname="categoryId"] ion-select-option'))
     .map(el => (el as HTMLElement).textContent!.trim());
 
-  beforeEach(() => jasmine.clock().install().mockDate(REFERENCE_DATE));
+  beforeEach(() => jasmine.clock().install().mockDate(REFERENCE_NOON));
   afterEach(() => jasmine.clock().uninstall());
 
   describe('Duplizieren', () => {
@@ -118,7 +120,7 @@ describe('NewEditCartPage', () => {
       expect(page.isAddMode).toBeTrue();
       expect(page.isDuplicate).toBeTrue();
       expect(page.form.value).toEqual(jasmine.objectContaining({
-        id: '', title: 'Pizza', amount: '12.50', description: 'Freitag', categoryId: 42,
+        id: '', title: 'Pizza', amount: '12,50', description: 'Freitag', categoryId: 42,
         datePurchased: '15.06.2025', recurrenceType: RECURRENCE_TYPE.NONE, templateUpdateSelected: false,
       }));
       expect(fixture.nativeElement.querySelector('ion-title').textContent).toContain('carts.title_add');
@@ -154,7 +156,7 @@ describe('NewEditCartPage', () => {
       await resolveLoadings();
 
       expect(cartService.addCart).toHaveBeenCalledOnceWith(jasmine.objectContaining({
-        id: null, title: 'Pizza groß', amount: '15.00', description: 'Freitag', groupId: GROUP_ID,
+        id: null, title: 'Pizza groß', amount: 15, description: 'Freitag', groupId: GROUP_ID,
         categoryDto: { id: 43, name: 'Drogerie', groupId: GROUP_ID }, recurrenceType: RECURRENCE_TYPE.NONE,
       }));
       const sent: Cart = cartService.addCart.calls.mostRecent().args[0];
@@ -283,6 +285,124 @@ describe('NewEditCartPage', () => {
     });
   });
 
+  // DIV-77 (D9): mehr als zwei Nachkommastellen werden gerundet statt abgelehnt
+  describe('Betrag runden', () => {
+    const amountInput = () => fixture.nativeElement.querySelector('ion-input[formcontrolname="amount"]') as HTMLElement;
+
+    function fillAddForm(amount: unknown) {
+      createPage();
+      answerCategories([lebensmittel, drogerie]);
+      page.form.patchValue({ title: 'Pizza', categoryId: 42, amount });
+      page.form.markAsDirty();
+    }
+
+    it('rundet beim Verlassen des Feldes sichtbar und sendet den gerundeten Betrag', async () => {
+      fillAddForm('65.349875');
+
+      amountInput().dispatchEvent(new CustomEvent('ionBlur'));
+      fixture.detectChanges();
+      expect(page.form.value.amount).toBe('65,35');
+      expect(page.amount?.valid).toBeTrue();
+
+      page.onSubmit();
+      await resolveLoadings();
+      expect(cartService.addCart).toHaveBeenCalledOnceWith(jasmine.objectContaining({ amount: 65.35 }));
+    });
+
+    it('rundet vor dem Absenden auch ohne vorheriges Verlassen des Feldes (negativ: -1.005 → -1.01)', async () => {
+      fillAddForm('-1.005');
+
+      page.onSubmit();
+      await resolveLoadings();
+
+      expect(cartService.addCart).toHaveBeenCalledOnceWith(jasmine.objectContaining({ amount: -1.01 }));
+    });
+
+    it('rundet auch eine Zahl, deren Textform Exponentenschreibweise ist (0.0000001 → 0, Codex F-002)', () => {
+      fillAddForm(0.0000001);
+
+      amountInput().dispatchEvent(new CustomEvent('ionBlur'));
+      fixture.detectChanges();
+
+      expect(page.form.value.amount).toBe('0,00');
+      expect(errorTexts()).not.toContain('global.errors.invalid_amount');
+    });
+
+    // Nutzer-Feedback Phase 9: einheitlich zwei Nachkommastellen wie beim Vorbelegen im Bearbeiten-Modus
+    ([
+      [0, '0,00'],
+      [45.40349, '45,40'],
+      [12, '12,00'],
+    ] as [number, string][]).forEach(([eingabe, anzeige]) => {
+      it(`zeigt nach dem Verlassen des Feldes ${eingabe} als „${anzeige}“`, () => {
+        fillAddForm(eingabe);
+
+        amountInput().dispatchEvent(new CustomEvent('ionBlur'));
+        fixture.detectChanges();
+
+        expect(page.form.value.amount).toBe(anzeige);
+        expect(page.amount?.valid).toBeTrue();
+      });
+    });
+
+    // Phase 9 (Variante 1): Textfeld wie die Ausgleichszahlung – „45.“ meldete im Zahlenfeld „Pflichtfeld“
+    it('ist ein Textfeld mit Dezimaltastatur', () => {
+      createPage();
+      expect(amountInput().getAttribute('type')).toBe('text');
+      expect(amountInput().getAttribute('inputmode')).toBe('decimal');
+    });
+
+    ([
+      ['45.', '45,00'],
+      ['45,', '45,00'],
+      ['45,5', '45,50'],
+      ['45.69', '45,69'],
+      ['-12,5', '-12,50'],
+    ] as [string, string][]).forEach(([eingabe, anzeige]) => {
+      it(`„${eingabe}“ ist gültig und wird beim Verlassen zu „${anzeige}“`, () => {
+        fillAddForm(eingabe);
+        expect(page.amount?.valid).toBeTrue();
+
+        amountInput().dispatchEvent(new CustomEvent('ionBlur'));
+        fixture.detectChanges();
+
+        expect(page.form.value.amount).toBe(anzeige);
+        expect(errorTexts()).toEqual([]);
+      });
+    });
+
+    it('mit Komma gespeichert: Request mit dem gerundeten Betrag', async () => {
+      fillAddForm('12,345');
+
+      page.onSubmit();
+      await resolveLoadings();
+
+      expect(cartService.addCart).toHaveBeenCalledOnceWith(jasmine.objectContaining({ amount: 12.35 }));
+    });
+
+    it('lässt einen Betrag mit höchstens zwei Nachkommastellen unverändert', async () => {
+      fillAddForm('12.34');
+
+      amountInput().dispatchEvent(new CustomEvent('ionBlur'));
+      page.onSubmit();
+      await resolveLoadings();
+
+      expect(cartService.addCart).toHaveBeenCalledOnceWith(jasmine.objectContaining({ amount: 12.34 }));
+    });
+
+    it('ungültiges Format bleibt stehen und wird wie bisher abgelehnt, ohne Request', async () => {
+      fillAddForm('abc');
+
+      amountInput().dispatchEvent(new CustomEvent('ionBlur'));
+      page.onSubmit();
+      await resolveLoadings();
+
+      expect(page.form.value.amount).toBe('abc');
+      expect(errorTexts()).toContain('global.errors.invalid_amount');
+      expect(cartService.addCart).not.toHaveBeenCalled();
+    });
+  });
+
   describe('Bestand (AC 13)', () => {
     it('ohne duplicateOf: leeres Formular wie bisher, ohne Hinweis', () => {
       createPage();
@@ -303,7 +423,7 @@ describe('NewEditCartPage', () => {
       expect(page.isAddMode).toBeFalse();
       expect(page.isDuplicate).toBeFalse();
       expect(page.form.value).toEqual(jasmine.objectContaining({
-        id: 1, title: 'Pizza', amount: '12.50', categoryId: 42, datePurchased: '01.05.2025',
+        id: 1, title: 'Pizza', amount: '12,50', categoryId: 42, datePurchased: '01.05.2025',
         recurrenceType: RECURRENCE_TYPE.MONTHLY,
       }));
 
@@ -324,7 +444,7 @@ describe('NewEditCartPage', () => {
   describe('Ausgleichszahlungs-Kategorie (DIV-73 Phase 4, F3; DIV-74: per Kennzeichen, auch beim Bearbeiten gesperrt)', () => {
     const ausgleich = aCategory({ id: 44, name: 'Ausgleichszahlung', groupId: GROUP_ID, settlement: true });
     const ausgleichszahlung = aCart({ id: 3, title: 'Ausgleich an Ben', amount: 20, groupId: GROUP_ID, userDto: anna,
-      categoryDto: ausgleich, datePurchased: new Date('2025-05-01T00:00:00Z'), settlementId: 70 });
+      categoryDto: ausgleich, datePurchased: '2025-05-01', settlementId: 70 });
     const umbenannt = aCategory({ id: 45, name: 'Rückzahlungen', groupId: GROUP_ID, settlement: true });
     const namensgleich = aCategory({ id: 46, name: 'Ausgleichszahlung', groupId: GROUP_ID });
 
@@ -378,5 +498,61 @@ describe('NewEditCartPage', () => {
       expect(categoryCallbacks.length).toBe(0);
       expect(cartService.updateCart).not.toHaveBeenCalled();
     });
+  });
+
+  // DIV-81: Kaufdatum als ISO-Tag. Erwartungen als ISO-Tag bzw. „DD.MM.YYYY“, Uhr auf lokalen Mittag – damit laufen die
+  // Tests in jeder Gerätezone gleich (CI: Europe/Berlin und America/Mexico_City).
+  describe('Kaufdatum als Kalendertag (DIV-81)', () => {
+    const formatiert = (date: Date | null) => moment(date).format('DD.MM.YYYY');
+
+    for (const [kaufdatum, anzeige] of [['2026-11-15', '15.11.2026'], ['2026-12-31', '31.12.2026']]) {
+      it(`Bearbeiten ohne Datumsänderung: ${kaufdatum} steht als ${anzeige} im Formular und geht unverändert zurück (AC 4)`,
+        async () => {
+          jasmine.clock().mockDate(new Date(2027, 0, 5, 12, 0));
+          const cart = aCart({ id: 11, title: 'Miete', amount: 900, groupId: GROUP_ID, userDto: anna,
+            categoryDto: lebensmittel, datePurchased: kaufdatum });
+          createPage({ id: '11' }, [cart]);
+          answerCategories([lebensmittel]);
+
+          expect(page.form.value.datePurchased).toBe(anzeige);
+
+          page.form.patchValue({ amount: '950,00' });
+          page.onSubmit();
+          await resolveLoadings();
+
+          expect(cartService.updateCart).toHaveBeenCalledOnceWith(jasmine.objectContaining({
+            id: 11, amount: 950, datePurchased: kaufdatum,
+          }));
+        });
+    }
+
+    it('Neuanlage sendet den gewählten Tag als ISO-Tag', async () => {
+      createPage();
+      answerCategories([lebensmittel]);
+      page.form.patchValue({ title: 'Brot', amount: '3,50', categoryId: 42, datePurchased: '01.06.2025' });
+
+      page.onSubmit();
+      await resolveLoadings();
+
+      expect(cartService.addCart).toHaveBeenCalledOnceWith(jasmine.objectContaining({ datePurchased: '2025-06-01' }));
+    });
+
+    const vorschauFaelle: [string, Date, string, string][] = [
+      ['Monatsmitte', new Date(2026, 10, 20, 12, 0), '15.11.2026', '15.12.2026'],
+      ['Monatserster', new Date(2026, 10, 20, 12, 0), '01.11.2026', '01.12.2026'],
+      ['Jahreswechsel', new Date(2027, 0, 5, 12, 0), '15.12.2026', '15.01.2027'],
+    ];
+    for (const [fall, heute, kaufdatum, erwartet] of vorschauFaelle) {
+      it(`Vorschau monatlich (${fall}): Kaufdatum ${kaufdatum} → nächster Termin ${erwartet}, nicht der Vortag (AC 7)`, () => {
+        jasmine.clock().mockDate(heute);
+        createPage();
+        answerCategories([lebensmittel]);
+
+        page.form.patchValue({ datePurchased: kaufdatum, recurrenceType: RECURRENCE_TYPE.MONTHLY });
+        page.recurrenceTypeChanged(RECURRENCE_TYPE.MONTHLY);
+
+        expect(formatiert(page.nextExecutionDate)).toBe(erwartet);
+      });
+    }
   });
 });
