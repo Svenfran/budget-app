@@ -47,6 +47,8 @@ class SettlementServiceIntegrationSpec extends IntegrationSpec {
     @Autowired GroupRepository groupRepository
     @Autowired UserRepository userRepository
     @Autowired GroupService groupService
+    @Autowired SpendingsOverviewService spendingsOverviewService
+    @Autowired UserProfileService userProfileService
 
     def cleanup() {
         LocaleContextHolder.resetLocaleContext()
@@ -353,6 +355,188 @@ class SettlementServiceIntegrationSpec extends IntegrationSpec {
         'Zahler gleich Empfänger' | 30d  | 'selbst' | false     | false          | false            | false     || 'must differ'
     }
 
+    // ----- Ehemalige Gegenpartei (DIV-109) -----
+
+    def "AK1: #richtung nach dessen Austritt wird gespeichert, beide Salden gehen auf 0, Bens Einkauf ist gelöscht (DIV-109)"() {
+        given: "Anna (Owner) und Ben teilen einen Einkauf von 200; Ben wird am REFERENCE_DATE entfernt"
+        LocaleContextHolder.setLocale(Locale.GERMAN)
+        def anna = fixtures.user()
+        def ben = fixtures.user()
+        def wg = fixtures.group(owner: anna, members: [ben])
+        def (groupId, annaId, benId) = [wg.group.id, anna.id, ben.id]
+        def kaeufer = richtung == 'Anna erhält 100 von Ben' ? anna : ben
+        fixtures.cart(wg, user: kaeufer, amount: 200d, datePurchased: DateUtils.toDate(TestData.REFERENCE_DATE.minusDays(10)))
+        entferne(groupId, benId)
+        flushAndClear()
+        def zahlungstag = TestData.REFERENCE_DATE.plusDays(5)
+        testClock.today = zahlungstag
+        def (zahlerId, empfaengerId) = kaeufer.id == annaId ? [benId, annaId] : [annaId, benId]
+        def dto = new SettlementPaymentDto(100d, groupId, new UserDto(id: empfaengerId), zahlungstag)
+        dto.payer = new UserDto(id: zahlerId)
+        loginAs(userRepository.findById(annaId).get())
+        LOG.info('Szenario: Gruppe {}, Anna {} (Owner, angemeldet), Ben {} seit {} entfernt; Einkauf 200 von User {}; ' +
+                'Zahlung 100 User {} -> User {} am {}', groupId, annaId, benId, TestData.REFERENCE_DATE, kaeufer.id,
+                zahlerId, empfaengerId, zahlungstag)
+
+        when:
+        def result = settlementService.addSettlementPayment(dto)
+        flushAndClear()
+        def settlement = settlementsDerGruppe(groupId).first()
+        def carts = result*.id.collect { cartRepository.findById(it).get() }
+        def salden = spendingsOverviewService.getSpendingsForGroupAndAllYears(groupId)
+                .spendingsTotalYear.spendingsTotalUser.collectEntries { [it.userId, it.diff] }
+        LOG.info('settlementService.addSettlementPayment({}) -> Settlement {} Zahler {}, Empfänger {}; Carts User {}, ' +
+                'Beträge {}, gelöscht {}; Salden {}', richtung, settlement.id, settlement.payer.id, settlement.receiver.id,
+                carts*.user*.id, carts*.amount, carts*.deleted, salden)
+
+        then:
+        settlement.payer.id == zahlerId
+        settlement.receiver.id == empfaengerId
+        DateUtils.toLocalDate(settlement.datePurchased) == zahlungstag
+        carts*.user*.id == [zahlerId, empfaengerId]
+        carts*.amount == [100d, -100d]
+        carts*.deleted == [zahlerId == benId, empfaengerId == benId]
+        salden == [(annaId): 0d, (benId): 0d]
+
+        where:
+        richtung << ['Anna erhält 100 von Ben', 'Anna zahlt 100 an Ben']
+    }
+
+    def "Gelöschter Nutzer (Account gelöscht) kann als Zahler erfasst werden, sein Einkauf ist gelöscht (AK2, DIV-109)"() {
+        given: "Ben löscht seinen Account (wird entfernt und anonymisiert)"
+        LocaleContextHolder.setLocale(Locale.GERMAN)
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def (groupId, ownerId, benId) = [wg.group.id, wg.owner.id, ben.id]
+        loginAs(ben)
+        userProfileService.deleteUserProfile(benId)
+        flushAndClear()
+        def dto = new SettlementPaymentDto(40d, groupId, new UserDto(id: ownerId), TestData.REFERENCE_DATE)
+        dto.payer = new UserDto(id: benId)
+        loginAs(userRepository.findById(ownerId).get())
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet) erfasst 40.00 erhalten vom gelöschten Nutzer {} am {}', groupId,
+                ownerId, benId, TestData.REFERENCE_DATE)
+
+        when:
+        def result = settlementService.addSettlementPayment(dto)
+        flushAndClear()
+        def carts = result*.id.collect { cartRepository.findById(it).get() }
+        def benName = userRepository.findById(benId).get().name
+        LOG.info('settlementService.addSettlementPayment(erhalten von {}) -> Carts User {}, Beträge {}, gelöscht {}; Name {}',
+                benId, carts*.user*.id, carts*.amount, carts*.deleted, benName)
+
+        then:
+        benName == 'DELETED'
+        carts*.user*.id == [benId, ownerId]
+        carts*.amount == [40d, -40d]
+        carts*.deleted == [true, false]
+    }
+
+    def "Ausgleichszahlung mit ehemaliger Partei wird abgelehnt (#fall), nichts angelegt (DIV-109)"() {
+        given: "Anna (Owner) seit 2024-06-15; Ben Mitglied ab 2025-01-01, am REFERENCE_DATE entfernt; Cleo Mitglied ab 2025-06-01; Fremder ohne Historie"
+        LocaleContextHolder.setLocale(Locale.GERMAN)
+        def anna = fixtures.user()
+        def ben = fixtures.user()
+        def cleo = fixtures.user()
+        def fremder = fixtures.user()
+        def wg = fixtures.group(owner: anna, members: [ben, cleo])
+        def groupId = wg.group.id
+        beginneMitgliedschaft(groupId, ben.id, LocalDate.of(2025, 1, 1))
+        beginneMitgliedschaft(groupId, cleo.id, LocalDate.of(2025, 6, 1))
+        entferne(groupId, ben.id)
+        flushAndClear()
+        def ids = [anna: anna.id, ben: ben.id, cleo: cleo.id, fremder: fremder.id]
+        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: ids[empfaenger]), datum)
+        dto.payer = new UserDto(id: ids[zahler])
+        loginAs(userRepository.findById(ids[handelnder]).get())
+        LOG.info('Szenario: Gruppe {}, Anna {}, Ben {} (entfernt), Cleo {}, Fremder {}; {} erfasst {} -> {} am {}, erwartet {}',
+                groupId, ids.anna, ids.ben, ids.cleo, ids.fremder, handelnder, zahler, empfaenger, datum, erwartet.simpleName)
+
+        when:
+        LOG.info('settlementService.addSettlementPayment({}), erwartet {}', fall, erwartet.simpleName)
+        settlementService.addSettlementPayment(dto)
+
+        then:
+        def fehler = thrown(erwartet)
+        betroffen == null || fehler.errorDetails == [userId: ids[betroffen]]
+        nichtsAngelegt(groupId)
+
+        where:
+        fall                                             | handelnder | zahler    | empfaenger | datum                     || erwartet                                        | betroffen
+        'Ex-Mitglied erfasst selbst'                     | 'ben'      | 'ben'     | 'anna'     | TestData.REFERENCE_DATE   || NotOwnerOrMemberOfGroupException                | null
+        'erhalten von einem Nutzer ohne Historie (AK4)'  | 'anna'     | 'fremder' | 'anna'     | TestData.REFERENCE_DATE   || NotOwnerOrMemberOfGroupException                | null
+        'gezahlt an Ben vor seinem ersten Beginn'        | 'anna'     | 'anna'    | 'ben'      | LocalDate.of(2024, 12, 1) || DatePurchasedNotWithinMembershipPeriodException | 'ben'
+        'erhalten von Ben vor seinem ersten Beginn'      | 'anna'     | 'ben'     | 'anna'     | LocalDate.of(2024, 12, 1) || DatePurchasedNotWithinMembershipPeriodException | 'ben'
+        'Datum außerhalb der aktuellen Partei Cleo'      | 'cleo'     | 'ben'     | 'cleo'     | LocalDate.of(2025, 3, 1)  || DatePurchasedNotWithinMembershipPeriodException | 'cleo'
+    }
+
+    def "Zahler wechselt den Empfänger auf ein Ex-Mitglied und zurück: Löschkennzeichen folgt dem Empfänger (R7, DIV-109)"() {
+        given: "Owner zahlte 30.00 an Ben; Cleo wird danach entfernt"
+        LocaleContextHolder.setLocale(Locale.GERMAN)
+        def ben = fixtures.user()
+        def cleo = fixtures.user()
+        def wg = fixtures.group(members: [ben, cleo])
+        def paar = anlegen(wg.owner, ben, wg.group.id, 30d)
+        def settlementId = paar[0].settlementId
+        entferne(wg.group.id, cleo.id)
+        flushAndClear()
+        loginAs(userRepository.findById(wg.owner.id).get())
+        LOG.info('Szenario: Gruppe {}, Owner {} zahlte 30.00 an Ben {} (Settlement {}, Carts {}); Cleo {} entfernt', wg.group.id,
+                wg.owner.id, ben.id, settlementId, paar*.id, cleo.id)
+
+        when: "Empfänger -> Cleo (ehemalig)"
+        settlementService.updateSettlementPayment(dto(settlementId, 30d, cleo.id, TestData.REFERENCE_DATE))
+        flushAndClear()
+        def zuCleo = paar*.id.collect { cartRepository.findById(it).get() }
+        LOG.info('settlementService.updateSettlementPayment(Empfänger -> Cleo {}) -> Carts User {}, gelöscht {}', cleo.id,
+                zuCleo*.user*.id, zuCleo*.deleted)
+
+        then:
+        zuCleo*.user*.id == [wg.owner.id, cleo.id]
+        zuCleo*.deleted == [false, true]
+
+        when: "Empfänger zurück -> Ben (aktuell)"
+        loginAs(userRepository.findById(wg.owner.id).get())
+        settlementService.updateSettlementPayment(dto(settlementId, 30d, ben.id, TestData.REFERENCE_DATE))
+        flushAndClear()
+        def zuBen = paar*.id.collect { cartRepository.findById(it).get() }
+        LOG.info('settlementService.updateSettlementPayment(Empfänger -> Ben {}) -> Carts User {}, gelöscht {}', ben.id,
+                zuBen*.user*.id, zuBen*.deleted)
+
+        then:
+        zuBen*.user*.id == [wg.owner.id, ben.id]
+        zuBen*.deleted == [false, false]
+    }
+
+    def "Hat der Zahler die Gruppe verlassen, ändert der Empfänger Betrag und Datum nach dem Austritt (DIV-109)"() {
+        given: "Ben zahlte 30.00 an den Owner und wird am REFERENCE_DATE entfernt"
+        LocaleContextHolder.setLocale(Locale.GERMAN)
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def paar = anlegen(ben, wg.owner, wg.group.id, 30d)
+        def settlementId = paar[0].settlementId
+        entferne(wg.group.id, ben.id)
+        flushAndClear()
+        def neuesDatum = TestData.REFERENCE_DATE.plusDays(5)
+        loginAs(userRepository.findById(wg.owner.id).get())
+        LOG.info('Szenario: Gruppe {}, Ben {} zahlte 30.00 an Owner {} (Settlement {}, Carts {}); Ben seit {} entfernt; ' +
+                'Owner ändert auf 45.00 am {}', wg.group.id, ben.id, wg.owner.id, settlementId, paar*.id,
+                TestData.REFERENCE_DATE, neuesDatum)
+
+        when:
+        settlementService.updateSettlementPayment(dto(settlementId, 45d, wg.owner.id, neuesDatum))
+        flushAndClear()
+        def settlement = settlementRepository.findById(settlementId).get()
+        def carts = paar*.id.collect { cartRepository.findById(it).get() }
+        LOG.info('settlementService.updateSettlementPayment(45.00, {}) -> Datum {}, Beträge {}, gelöscht {}', neuesDatum,
+                settlement.datePurchased, carts*.amount, carts*.deleted)
+
+        then:
+        DateUtils.toLocalDate(settlement.datePurchased) == neuesDatum
+        carts*.amount == [45d, -45d]
+        carts*.deleted == [true, false]
+    }
+
     // ----- Löschen (Phase 2) -----
 
     def "#rolle löscht die Ausgleichszahlung: Settlement und beide Einkäufe sind weg, andere Einkäufe bleiben"() {
@@ -571,7 +755,7 @@ class SettlementServiceIntegrationSpec extends IntegrationSpec {
         'unbekanntes Settlement'              | 'owner'    | 'ben'      | 30d    | 0              | -1L  || SettlementNotFoundException
     }
 
-    def "Hat der Empfänger die Gruppe verlassen: Zahler ändert den Betrag (Löschkennzeichen bleibt), ein Datum nach dem Austritt wird abgelehnt (A8)"() {
+    def "Hat der Empfänger die Gruppe verlassen: Zahler ändert den Betrag (Löschkennzeichen bleibt), ein Datum nach dem Austritt wird gespeichert (A8, DIV-109)"() {
         given: "Ben wird am REFERENCE_DATE (testClock) entfernt"
         LocaleContextHolder.setLocale(Locale.GERMAN)
         def ben = fixtures.user()
@@ -594,13 +778,18 @@ class SettlementServiceIntegrationSpec extends IntegrationSpec {
         carts*.amount == [50d, -50d]
         carts*.deleted == [false, true]
 
-        when: "Datum nach dem Austritt"
-        LOG.info('settlementService.updateSettlementPayment(Datum {}), erwartet DatePurchasedNotWithinMembershipPeriodException',
-                TestData.REFERENCE_DATE.plusDays(5))
+        when: "Datum nach dem Austritt: seit DIV-109 (R3) gilt für den ehemaligen Empfänger nur „ab Beginn seiner ersten Mitgliedschaft“"
         settlementService.updateSettlementPayment(dto(settlementId, 50d, ben.id, TestData.REFERENCE_DATE.plusDays(5)))
+        flushAndClear()
+        def settlement = settlementRepository.findById(settlementId).get()
+        def nachher = paar*.id.collect { cartRepository.findById(it).get() }
+        LOG.info('settlementService.updateSettlementPayment(Datum {}) -> Datum {}, Beträge {}, gelöscht {}',
+                TestData.REFERENCE_DATE.plusDays(5), settlement.datePurchased, nachher*.amount, nachher*.deleted)
 
         then:
-        thrown(DatePurchasedNotWithinMembershipPeriodException)
+        DateUtils.toLocalDate(settlement.datePurchased) == TestData.REFERENCE_DATE.plusDays(5)
+        nachher*.amount == [50d, -50d]
+        nachher*.deleted == [false, true]
     }
 
     def "Fehlt ein Einkauf des Paars, wird das Bearbeiten abgelehnt und das Settlement nicht geändert"() {
@@ -658,6 +847,13 @@ class SettlementServiceIntegrationSpec extends IntegrationSpec {
         loginAs(groupRepository.findById(groupId).get().owner)
         groupService.removeMemberFromGroup(new RemoveGroupMemberDto(id: groupId, member: new UserDto(id: memberId)))
         LOG.info('groupService.removeMemberFromGroup(Gruppe {}, User {}) aufgerufen', groupId, memberId)
+    }
+
+    /** Verschiebt den Beginn der (einzigen) Mitgliedschaft eines Nutzers in der Gruppe. */
+    private void beginneMitgliedschaft(Long groupId, Long userId, LocalDate beginn) {
+        def membership = membershipRepository.findByGroupIdAndUserId(groupId, userId).first()
+        membership.membershipStart = DateUtils.toDate(beginn)
+        membershipRepository.save(membership)
     }
 
     private List<Settlement> settlementsDerGruppe(Long groupId) {

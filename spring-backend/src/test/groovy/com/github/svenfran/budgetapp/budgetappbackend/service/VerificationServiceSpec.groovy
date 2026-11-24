@@ -400,6 +400,91 @@ class VerificationServiceSpec extends Specification {
 
     // ----- Ausgleichszahlung (DIV-74) -----
 
+    def "Ehemalige Partei (DIV-109): Kaufdatum #fall wird #ergebnis"() {
+        given: 'Mitgliedschaften 05.06.–10.06.2025 und 20.06.–25.06.2025, in der Historie #reihenfolge'
+        def zeitraum = { LocalDate von, LocalDate bis ->
+            TestData.membership(membershipStart: DateUtils.toDate(von), membershipEnd: DateUtils.toDate(bis))
+        }
+        def gmh = [zeitraum(BEGINN, ENDE), zeitraum(LocalDate.of(2025, 6, 20), LocalDate.of(2025, 6, 25))]
+        if (reihenfolge == 'umgekehrt') gmh = gmh.reverse()
+
+        when:
+        Exception fehler = null
+        try {
+            service.verifyDateOnOrAfterFirstMembershipStart(gmh, kaufdatum, 7L)
+        } catch (DatePurchasedNotWithinMembershipPeriodException e) {
+            fehler = e
+        }
+
+        then:
+        (fehler == null) == erlaubt
+        fehler == null || fehler.message == 'Date purchased is not within membership period'
+        fehler == null || fehler.errorCode == ApiErrorCode.DATE_NOT_WITHIN_MEMBERSHIP
+        fehler == null || fehler.errorDetails == [userId: 7L]
+
+        where:
+        fall                                     | kaufdatum                 | reihenfolge  || erlaubt
+        'am Beginntag der ersten Mitgliedschaft' | BEGINN                    | 'sortiert'   || true
+        'am Tag vor dem ersten Beginn'           | BEGINN.minusDays(1)       | 'sortiert'   || false
+        'am Tag vor dem ersten Beginn'           | BEGINN.minusDays(1)       | 'umgekehrt'  || false
+        'in der Lücke zwischen zwei Zeiträumen'  | LocalDate.of(2025, 6, 15) | 'sortiert'   || true
+        'in der Lücke zwischen zwei Zeiträumen'  | LocalDate.of(2025, 6, 15) | 'umgekehrt'  || true
+        'nach dem letzten Ende'                  | LocalDate.of(2026, 1, 1)  | 'sortiert'   || true
+
+        ergebnis = erlaubt ? 'akzeptiert' : 'abgelehnt'
+    }
+
+    def "Ehemalige Partei (DIV-109): fehlendes Kaufdatum wird mit eigener Meldung abgelehnt"() {
+        given:
+        def gmh = [TestData.membership(membershipStart: DateUtils.toDate(BEGINN), membershipEnd: DateUtils.toDate(ENDE))]
+
+        when:
+        service.verifyDateOnOrAfterFirstMembershipStart(gmh, null, 7L)
+
+        then:
+        def fehler = thrown(DatePurchasedNotWithinMembershipPeriodException)
+        fehler.errorCode == ApiErrorCode.DATE_PURCHASED_REQUIRED
+        fehler.errorDetails == [:]
+    }
+
+    def "Ehemalige Partei (DIV-109): ohne Mitgliedschaftshistorie wie ein Nicht-Mitglied abgelehnt, mit Historie akzeptiert"() {
+        given:
+        def user = TestData.user()
+        def historie = [TestData.membership(userId: user.id, membershipStart: DateUtils.toDate(BEGINN),
+                membershipEnd: DateUtils.toDate(ENDE))]
+
+        when:
+        service.verifyHasMembershipHistory(user, historie)
+
+        then:
+        noExceptionThrown()
+
+        when:
+        service.verifyHasMembershipHistory(user, [])
+
+        then:
+        thrown(NotOwnerOrMemberOfGroupException)
+    }
+
+    def "isPartOfGroup: #rolle #ergebnis zur Gruppe"() {
+        given:
+        def owner = TestData.user()
+        def mitglied = TestData.user()
+        def group = TestData.group(owner: owner, members: [mitglied] as Set)
+        def user = [Owner: owner, Mitglied: mitglied, Ehemaliger: TestData.user()][rolle]
+
+        expect:
+        service.isPartOfGroup(user, group) == erwartet
+
+        where:
+        rolle        || erwartet
+        'Owner'      || true
+        'Mitglied'   || true
+        'Ehemaliger' || false
+
+        ergebnis = erwartet ? 'gehört' : 'gehört nicht'
+    }
+
     def "Gültige Ausgleichszahlung (Betrag #betrag) wird akzeptiert"() {
         given:
         def dto = new SettlementPaymentDto(betrag, 1L, new UserDto(id: 2L), TestData.REFERENCE_DATE)

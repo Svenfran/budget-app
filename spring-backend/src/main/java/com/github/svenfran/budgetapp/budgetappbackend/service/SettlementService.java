@@ -22,6 +22,12 @@ import java.util.List;
  * <p>
  * Ablauf je Methode: angemeldeten User laden → Request-Struktur prüfen (vor jedem Loader mit Request-Id) → Entities laden
  * → fachliche Prüfungen → Writes. Carts werden nicht live synchronisiert, daher keine Notification.
+ * <p>
+ * Parteien (DIV-109): Der Handelnde ist immer aktuell Teil der Gruppe und selbst Zahler oder Empfänger. Die Gegenpartei
+ * darf ehemalig sein (ausgetreten, entfernt oder Account gelöscht), solange sie in der Mitgliedschaftshistorie der Gruppe
+ * steht; für sie gilt nur „Datum ≥ Beginn ihrer ersten Mitgliedschaft“, für aktuelle Parteien weiterhin „Datum in einer
+ * Mitgliedschaft“. Ein offener Saldo wird nicht geprüft (Überzahlung erlaubt). Der Cart einer ehemaligen Partei wird wie
+ * ihre übrigen Carts als gelöscht markiert ({@code isDeleted}, beim Wiedereintritt setzt GroupService es zurück).
  */
 @Service
 public class SettlementService {
@@ -49,7 +55,8 @@ public class SettlementService {
     /**
      * Legt ein Settlement und seine beiden Carts an. {@code member} ist der Empfänger, {@code payer} der Zahler – ohne
      * Angabe der angemeldete Nutzer. Mit {@code payer} lässt sich eine erhaltene Zahlung erfassen
-     * („Ich habe erhalten von …“, DIV-74); der angemeldete Nutzer muss dabei Zahler oder Empfänger sein.
+     * („Ich habe erhalten von …“, DIV-74); der angemeldete Nutzer muss dabei Zahler oder Empfänger sein und aktuell zur
+     * Gruppe gehören. Die Gegenpartei darf ehemalig sein (DIV-109, siehe Klassenbeschreibung).
      *
      * @return Zahler-Cart, dann Empfänger-Cart (beide mit {@code settlementId})
      */
@@ -64,9 +71,9 @@ public class SettlementService {
         var receiver = dataLoaderService.loadUser(dto.getMember().getId());
         verificationService.verifyPayerIsNotReceiver(payer, receiver);
         verificationService.verifyIsPartyOfPayment(user, payer, receiver);
-        verificationService.verifyIsPartOfGroup(payer, group);
-        verificationService.verifyIsPartOfGroup(receiver, group);
-        verifyPartiesWereMembersAt(group, payer, receiver, dto.getDatePurchased());
+        // Nur die Gegenpartei darf ehemalig sein: der Handelnde muss aktuell zur Gruppe gehören (DIV-109, R1)
+        verificationService.verifyIsPartOfGroup(user, group);
+        var parties = verifyParties(group, payer, receiver, dto.getDatePurchased());
 
         var settlement = new Settlement();
         settlement.setGroup(group);
@@ -82,6 +89,8 @@ public class SettlementService {
         var receiverCart = new Cart();
         payerCart.setSettlement(settlement);
         receiverCart.setSettlement(settlement);
+        payerCart.setDeleted(parties.payerFormer());
+        receiverCart.setDeleted(parties.receiverFormer());
         projectCarts(settlement, payerCart, receiverCart, category);
         cartRepository.save(payerCart);
         cartRepository.save(receiverCart);
@@ -92,7 +101,8 @@ public class SettlementService {
      * Ändert Betrag, Datum und – nur durch den Zahler – den Empfänger eines Settlements und setzt beide Carts daraus neu
      * (Ids bleiben, Titel werden in Request-Sprache neu erzeugt). Der Zahler ist nicht änderbar. Das Settlement wird
      * zuerst gesperrt: gleichzeitige Änderungen laufen nacheinander, das Paar ist danach immer vollständig das Ergebnis
-     * einer der Änderungen (Last-Write-Wins auf das ganze Paar). Alle Prüfungen laufen vor dem ersten Write.
+     * einer der Änderungen (Last-Write-Wins auf das ganze Paar). Alle Prüfungen laufen vor dem ersten Write. Zahler und
+     * (neuer) Empfänger dürfen ehemalig sein (DIV-109); ein neuer ehemaliger Empfänger bekommt einen gelöschten Cart.
      *
      * @return Zahler-Cart, dann Empfänger-Cart
      */
@@ -113,9 +123,8 @@ public class SettlementService {
         if (receiverChanged) {
             verificationService.verifyMayChangeReceiver(user, settlement, receiver);
             verificationService.verifyPayerIsNotReceiver(payer, receiver);
-            verificationService.verifyIsPartOfGroup(receiver, group);
         }
-        verifyPartiesWereMembersAt(group, payer, receiver, dto.getDatePurchased());
+        var parties = verifyParties(group, payer, receiver, dto.getDatePurchased());
 
         var carts = cartRepository.findBySettlementIdOrderByIdAsc(settlement.getId());
         var payerCart = carts.stream().filter(c -> c.getUser().getId().equals(payer.getId())).findFirst().orElse(null);
@@ -129,8 +138,9 @@ public class SettlementService {
         settlement.setDatePurchased(DateUtils.toDate(dto.getDatePurchased()));
         settlement.setReceiver(receiver);
         if (receiverChanged) {
-            // Neuer Empfänger ist aktuell Teil der Gruppe; ein Altwert eines entfernten Empfängers gilt nicht mehr
-            receiverCart.setDeleted(false);
+            // Kennzeichen des neuen Empfängers (DIV-109): gelöscht nur, wenn er ehemalig ist; ein Altwert des bisherigen
+            // Empfängers gilt nicht mehr. Ohne Wechsel bleibt es unverändert (pflegt GroupService.setIsDeletedForCart).
+            receiverCart.setDeleted(parties.receiverFormer());
         }
         projectCarts(settlement, payerCart, receiverCart, payerCart.getCategory());
         return List.of(new CartDto(payerCart), new CartDto(receiverCart));
@@ -153,13 +163,41 @@ public class SettlementService {
         settlementRepository.delete(settlement);
     }
 
-    /** Zahler vor Empfänger: Liegen beide außerhalb, nennt die Fehlerantwort den Zahler (details.userId, DIV-108). */
-    private void verifyPartiesWereMembersAt(Group group, User payer, User receiver, LocalDate date)
+    /** Welche Partei ehemalig ist (nicht mehr aktuell Teil der Gruppe, aber in ihrer Historie). */
+    private record Parties(boolean payerFormer, boolean receiverFormer) {
+    }
+
+    /**
+     * Prüft Zahler und Empfänger (DIV-109): erst Zugehörigkeit beider (aktuell, sonst Historie nötig → 403), dann das
+     * Datum (aktuell: in einer Mitgliedschaft; ehemalig: ≥ Beginn der ersten). Zahler vor Empfänger: Liegen beide
+     * außerhalb, nennt die Fehlerantwort den Zahler (details.userId, DIV-108).
+     */
+    private Parties verifyParties(Group group, User payer, User receiver, LocalDate date)
+            throws NotOwnerOrMemberOfGroupException, DatePurchasedNotWithinMembershipPeriodException {
+        var payerHistory = dataLoaderService.loadMembershipHistoryForGroupAndUser(group.getId(), payer.getId());
+        var receiverHistory = dataLoaderService.loadMembershipHistoryForGroupAndUser(group.getId(), receiver.getId());
+        var parties = new Parties(isFormerParty(payer, group, payerHistory), isFormerParty(receiver, group, receiverHistory));
+        verifyPartyDate(payerHistory, parties.payerFormer(), date, payer.getId());
+        verifyPartyDate(receiverHistory, parties.receiverFormer(), date, receiver.getId());
+        return parties;
+    }
+
+    private boolean isFormerParty(User party, Group group, List<GroupMembershipHistory> history)
+            throws NotOwnerOrMemberOfGroupException {
+        if (verificationService.isPartOfGroup(party, group)) {
+            return false;
+        }
+        verificationService.verifyHasMembershipHistory(party, history);
+        return true;
+    }
+
+    private void verifyPartyDate(List<GroupMembershipHistory> history, boolean former, LocalDate date, Long userId)
             throws DatePurchasedNotWithinMembershipPeriodException {
-        verificationService.verifyDatePurchasedWithinMembershipPeriod(
-                dataLoaderService.loadMembershipHistoryForGroupAndUser(group.getId(), payer.getId()), date, payer.getId());
-        verificationService.verifyDatePurchasedWithinMembershipPeriod(
-                dataLoaderService.loadMembershipHistoryForGroupAndUser(group.getId(), receiver.getId()), date, receiver.getId());
+        if (former) {
+            verificationService.verifyDateOnOrAfterFirstMembershipStart(history, date, userId);
+        } else {
+            verificationService.verifyDatePurchasedWithinMembershipPeriod(history, date, userId);
+        }
     }
 
     /**
