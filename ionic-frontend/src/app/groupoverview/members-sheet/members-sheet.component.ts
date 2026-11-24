@@ -10,6 +10,9 @@ import { GroupService } from 'src/app/service/group.service';
 import { EmailValidator } from 'src/app/Validator/email-validator';
 import { memberActions, MemberActions } from '../group-permissions';
 import { GROUP_GONE_ROLE } from '../group-sheet-roles';
+import { OverviewService } from 'src/app/domains/overview/service/overview.service';
+import { ScientificCurrencyPipe } from 'src/app/pipe/scientific.pipe';
+import { DEFAULT_CURRENCY } from 'src/app/constants/currency';
 
 export type MembersSheetView = 'list' | 'add';
 export type MembersLoadState = 'loading' | 'loaded' | 'error';
@@ -85,6 +88,7 @@ export class MembersSheetComponent implements OnInit, OnDestroy {
   private loadGeneration = 0;
   /** Gerade offener Bestätigungs-Alert (schließt mit dem Sheet). */
   private openAlert: HTMLIonAlertElement | undefined;
+  private readonly currencyPipe = new ScientificCurrencyPipe();
 
   constructor(
     private modalCtrl: ModalController,
@@ -93,6 +97,7 @@ export class MembersSheetComponent implements OnInit, OnDestroy {
     private authService: AuthService,
     private translate: TranslateService,
     private destroyRef: DestroyRef,
+    private overviewService: OverviewService,
   ) {
     // Gruppe für den Nutzer verschwunden (Löschung, eigene Entfernung – auch per Live-Event): Sheet schließen
     effect(() => {
@@ -166,10 +171,21 @@ export class MembersSheetComponent implements OnInit, OnDestroy {
     await this.run(() => this.groupService.changeGroupOwner({ newOwner: { id: member.id, userName: member.userName }, groupId: this.groupId }));
   }
 
-  /** „Mitglied entfernen“ mit dem bisherigen Bestätigungs-Alert; nach dem eigenen Austritt schließt das Sheet. */
+  /**
+   * „Mitglied entfernen“ bzw. eigener Austritt mit Bestätigungs-Alert; nach dem eigenen Austritt schließt das Sheet.
+   * DIV-109: Hat das Mitglied einen offenen Saldo, nennt der Alert ihn (eigener Text für Austritt und Entfernen) – ohne
+   * zu blockieren. Saldo 0, unbekannt oder nicht ladbar: der bisherige Alert.
+   */
   async removeMember(member: UserDto) {
     if (this.closed || this.saving()) return;
-    const confirmed = await this.confirm('alerts.group.remove_member', { memberName: member.userName, group: this.groupName });
+    const balance = await this.openBalance(member.id);
+    if (this.closed) return;
+    const own = member.id === this.userId();
+    const key = balance === null ? 'alerts.group.remove_member'
+      : own ? 'alerts.group.leave_open_balance' : 'alerts.group.remove_member_open_balance';
+    const params: Record<string, string> = { memberName: member.userName, group: this.groupName };
+    if (balance !== null) params['balance'] = this.currencyPipe.transform(balance, this.currencyCode());
+    const confirmed = await this.confirm(key, params);
     if (!confirmed || this.closed || this.saving()) return;
     const ok = await this.run(() => this.groupService.removeMemberFromGroup({ id: this.groupId, name: this.groupName, member }));
     if (ok && member.id === this.userId()) this.closeWith(MEMBERS_SHEET_LEFT_ROLE);
@@ -222,6 +238,27 @@ export class MembersSheetComponent implements OnInit, OnDestroy {
 
   close() {
     this.modalCtrl.dismiss(undefined, 'close', this.modalId);
+  }
+
+  /**
+   * Offener Gesamtsaldo des Mitglieds in dieser Gruppe (DIV-109), auf Cent gerundet ≠ 0; sonst `null` (auch wenn er nicht
+   * ladbar ist oder das Mitglied in den Salden fehlt). Während der Abfrage ist das Sheet wie bei einem Request gesperrt,
+   * ein zweites Auslösen wirkt also nicht.
+   */
+  private async openBalance(memberId: number): Promise<number | null> {
+    this.saving.set(true);
+    try {
+      const balances = await this.overviewService.loadUserBalances(this.groupId);
+      const diff = balances?.find(user => user.userId === memberId)?.diff;
+      return diff !== undefined && Math.round(diff * 100) !== 0 ? diff : null;
+    } finally {
+      this.saving.set(false);
+    }
+  }
+
+  /** Währung der Gruppe für den Saldo im Alert (wie die übrige Betragsanzeige, DIV-77). */
+  private currencyCode(): string {
+    return this.groupService.groupOverviewList().find(group => group.id === this.groupId)?.currencyCode ?? DEFAULT_CURRENCY;
   }
 
   /** Führt einen Request mit Schließ-Sperre aus; der Service weist nie zurück. */

@@ -74,9 +74,28 @@ public class VerificationService {
     }
 
     public void verifyIsPartOfGroup(User user, Group group) throws NotOwnerOrMemberOfGroupException {
-        if (!(group.getOwner().equals(user) || group.getMembers().contains(user))) {
-            throw new NotOwnerOrMemberOfGroupException("User with ID " + user.getId() + " is either a member nor the owner of the group");
+        if (!isPartOfGroup(user, group)) {
+            throw notOwnerOrMember(user);
         }
+    }
+
+    /** Aktuell Owner oder Mitglied der Gruppe (dieselbe Definition wie {@link #verifyIsPartOfGroup}). */
+    public boolean isPartOfGroup(User user, Group group) {
+        return group.getOwner().equals(user) || group.getMembers().contains(user);
+    }
+
+    /**
+     * Ehemalige Partei einer Ausgleichszahlung (DIV-109): Sie muss in der Mitgliedschaftshistorie der Gruppe stehen
+     * ({@code gmh} = ihre Historie in dieser Gruppe), sonst wie ein Nicht-Mitglied 403.
+     */
+    public void verifyHasMembershipHistory(User user, List<GroupMembershipHistory> gmh) throws NotOwnerOrMemberOfGroupException {
+        if (gmh.isEmpty()) {
+            throw notOwnerOrMember(user);
+        }
+    }
+
+    private static NotOwnerOrMemberOfGroupException notOwnerOrMember(User user) {
+        return new NotOwnerOrMemberOfGroupException("User with ID " + user.getId() + " is either a member nor the owner of the group");
     }
 
     public void verifyIsOwnerOfCart(User user, Cart cart) throws NotOwnerOfCartException {
@@ -167,6 +186,24 @@ public class VerificationService {
             }
         }
         throw DatePurchasedNotWithinMembershipPeriodException.notWithinMembership(userId);
+    }
+
+    /**
+     * Datum einer Ausgleichszahlung mit einer ehemaligen Partei (DIV-109, R3): frühestens am Beginn ihrer ersten
+     * Mitgliedschaft in der Gruppe, ohne Ende (auch nach dem Austritt und in Lücken zwischen Mitgliedschaften).
+     *
+     * @param userId die ehemalige Partei; bei einem Datum vor dem ersten Beginn als {@code details.userId} gemeldet
+     */
+    public void verifyDateOnOrAfterFirstMembershipStart(List<GroupMembershipHistory> gmh, LocalDate datePurchased, Long userId)
+            throws DatePurchasedNotWithinMembershipPeriodException {
+        if (datePurchased == null) {
+            throw DatePurchasedNotWithinMembershipPeriodException.required();
+        }
+        var onOrAfterAnyStart = gmh.stream()
+                .anyMatch(timePeriod -> !datePurchased.isBefore(toLocalDate(timePeriod.getMembershipStart())));
+        if (!onOrAfterAnyStart) {
+            throw DatePurchasedNotWithinMembershipPeriodException.notWithinMembership(userId);
+        }
     }
 
     /**

@@ -17,6 +17,7 @@ import { LoadOptions } from 'src/app/model/load-options';
 import { SettlementEditData } from '../settlement-sheet/settlement-form';
 import { UserDto } from 'src/app/model/user-dto';
 import { API_ERROR_CODES, apiErrorCode, apiErrorUserId } from 'src/app/service/api-error';
+import { userDisplayName } from 'src/app/domains/overview/overview-display';
 
 @Injectable({
   providedIn: 'root'
@@ -294,8 +295,11 @@ export class CartService {
             if (isNotWithinMembership(err)) {
               // Betroffene Partei per details.userId (DIV-108): zuerst der aktuelle Empfänger `payment.member` (der Zahler kann
               // ihn geändert haben), dann der Zahler. Ohne bekannte Id die Gegenpartei des angemeldeten Nutzers (DIV-110).
-              const counterpart = settlement.role === 'payer' ? payment.member : settlement.payer;
-              const userName = affectedPartyName(err, [payment.member, settlement.payer], counterpart);
+              // Der Zahler kommt roh aus dem Cart: ein gelöschter heißt dort `DELETED` und wird zum Label (DIV-109)
+              const payer = { ...settlement.payer,
+                userName: userDisplayName(settlement.payer.userName, this.translate.instant('global.user.deleted')) };
+              const counterpart = settlement.role === 'payer' ? payment.member : payer;
+              const userName = affectedPartyName(err, [payment.member, payer], counterpart);
               this.alertService.showErrorAlert(
                 this.translate.instant('alerts.cart.invalid_membership.header'),
                 this.translate.instant('alerts.cart.invalid_membership.message_settlementpayment', { userName })

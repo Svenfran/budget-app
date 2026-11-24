@@ -4,7 +4,8 @@ import { GroupMembers } from 'src/app/groupmembers/model/groupmembers-dto';
 import { aCart, aUser } from 'src/testing/test-data';
 import { Zeitraum } from '../new-edit-cart/model/gmh-zeitraum';
 import {
-  AMOUNT_VALIDATORS, editRecipients, isDaySelectable, settlementEditData, settlementRecipients, toSettlementPaymentDto,
+  AMOUNT_VALIDATORS, displayParty, editRecipients, formerSettlementParties, isDaySelectable, settlementEditData,
+  settlementRecipients, toSettlementPaymentDto,
 } from './settlement-form';
 
 describe('settlement-form (DIV-70)', () => {
@@ -230,17 +231,89 @@ describe('settlement-form (DIV-70)', () => {
     });
 
     describe('editRecipients', () => {
+      const LABEL = 'Gelöscht';
+
       it('lässt die Liste unverändert, wenn der bisherige Empfänger noch auswählbar ist', () => {
-        expect(editRecipients([owner, anna], anna)).toEqual([owner, anna]);
+        expect(editRecipients([owner, anna], anna, LABEL)).toEqual([owner, anna]);
       });
 
       it('ergänzt einen ausgetretenen bisherigen Empfänger, damit er gewählt bleibt', () => {
-        expect(editRecipients([owner], anna)).toEqual([owner, anna]);
+        expect(editRecipients([owner], anna, LABEL)).toEqual([owner, { id: anna.id, userName: 'Anna' }]);
       });
 
       it('zeigt den bisherigen Empfänger auch, wenn sonst niemand auswählbar ist', () => {
-        expect(editRecipients([], anna)).toEqual([anna]);
+        expect(editRecipients([], anna, LABEL)).toEqual([{ id: anna.id, userName: 'Anna' }]);
       });
+
+      // DIV-109: Saldo 0 oder Salden nicht geladen – der gelöschte Empfänger steht nicht in der Auswahl
+      it('gelöschter bisheriger Empfänger, der nicht in der Auswahl steht: ergänzt mit Label statt „DELETED“', () => {
+        const geloescht = { id: 99, userName: 'DELETED' };
+
+        expect(editRecipients([owner], geloescht, LABEL))
+          .toEqual([owner, { id: 99, userName: LABEL, former: true, deleted: true }]);
+      });
+    });
+  });
+
+  describe('displayParty (DIV-109)', () => {
+    it('gelöschter Nutzer: Label und Kennzeichen', () => {
+      expect(displayParty({ id: 3, userName: 'DELETED' }, 'Gelöscht'))
+        .toEqual({ id: 3, userName: 'Gelöscht', former: true, deleted: true });
+    });
+
+    it('Marker „REMOVED“ am Ende wird entfernt, sonst bleibt der Name', () => {
+      expect(displayParty({ id: 4, userName: 'Anna Lena REMOVED' }, 'Gelöscht')).toEqual({ id: 4, userName: 'Anna Lena' });
+      expect(displayParty({ id: 5, userName: 'Ben' }, 'Gelöscht')).toEqual({ id: 5, userName: 'Ben' });
+    });
+  });
+
+  describe('formerSettlementParties (DIV-109)', () => {
+    const LABEL = 'Gelöscht';
+    const ben = aUser({ userName: 'Ben' });
+    const saldo = (userId: number, userName: string, diff: number) => ({ userId, userName, sum: 0, diff });
+    const salden = [
+      saldo(owner.id, 'Olga', 50),
+      saldo(me.id, 'Ich', -20),
+      saldo(anna.id, 'Anna', -10),
+      saldo(ben.id, 'Ben REMOVED', -100),
+      saldo(90, 'DELETED', -30),
+      saldo(91, 'DELETED', 60),
+      saldo(92, 'Cleo REMOVED', 0),
+      saldo(93, 'Dora REMOVED', 0.004),
+    ];
+
+    it('nur ehemalige und gelöschte mit Saldo ≠ 0, mit Anzeigename, Kennzeichen und Saldo, in der Reihenfolge der Salden', () => {
+      expect(formerSettlementParties(salden, groupMembers(), 1, me.id, LABEL)).toEqual([
+        { id: ben.id, userName: 'Ben', former: true, deleted: false, balance: -100 },
+        { id: 90, userName: LABEL, former: true, deleted: true, balance: -30 },
+        { id: 91, userName: LABEL, former: true, deleted: true, balance: 60 },
+      ]);
+    });
+
+    // Ausschlussfälle als Matrix (Codex-Review 2): wer nie als ehemalige Partei erscheint
+    [
+      { fall: 'ich selbst (auch mit Saldo)', userId: me.id },
+      { fall: 'der Owner', userId: owner.id },
+      { fall: 'ein aktuelles Mitglied', userId: anna.id },
+      { fall: 'ein Ex-Mitglied mit Saldo 0 (AK3)', userId: 92 },
+      { fall: 'ein Ex-Mitglied mit Saldo, der auf 0 Cent rundet', userId: 93 },
+    ].forEach(({ fall, userId }) => {
+      it(`schließt ${fall} aus`, () => {
+        expect(formerSettlementParties(salden, groupMembers(), 1, me.id, LABEL).map(party => party.id)).not.toContain(userId);
+      });
+    });
+
+    it('Mitgliederliste einer anderen Gruppe (noch nicht geladen): keine ehemaligen Parteien', () => {
+      expect(formerSettlementParties(salden, { ...groupMembers(), id: 2 }, 1, me.id, LABEL)).toEqual([]);
+    });
+
+    it('ohne Salden (nicht geladen oder Fehler): keine ehemaligen Parteien', () => {
+      expect(formerSettlementParties(null, groupMembers(), 1, me.id, LABEL)).toEqual([]);
+    });
+
+    it('Owner allein (keine Mitglieder): Ex-Mitglieder mit Saldo bleiben wählbar', () => {
+      expect(formerSettlementParties(salden, groupMembers([]), 1, owner.id, LABEL).map(party => party.id))
+        .toEqual([me.id, anna.id, ben.id, 90, 91]);
     });
   });
 });

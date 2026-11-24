@@ -50,7 +50,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * S1  group.service.ts updateGroup (DIV-77)         409  CURRENCY_CHANGE_CONFIRMATION_REQUIRED 'Changing the currency of a group with bookings requires confirmation'  GroupControllerApiSpec
  * </pre>
  * M1 details.userId: die Partei, deren Mitgliedschaft das Datum nicht abdeckt (bei Ausgleichszahlungen Zahler vor
- * Empfänger). Fehlendes Datum: DATE_PURCHASED_REQUIRED (kein Mitgliedschaftshinweis).
+ * Empfänger). Seit DIV-109 kann das auch eine ehemalige Gegenpartei sein (Datum vor dem Beginn ihrer ersten
+ * Mitgliedschaft). Fehlendes Datum: DATE_PURCHASED_REQUIRED (kein Mitgliedschaftshinweis).
  * Alle übrigen gemappten Exceptions haben ebenfalls einen Code (ApiErrorCode, RestResponseEntityExceptionHandlerSpec),
  * das Frontend wertet sie aber nicht aus. Der Unique-Constraint-Handler (parallele Registrierungen/E-Mail-Änderungen)
  * liefert EMAIL_ALREADY_EXISTS mit dem Text 'User with email already exists' ohne Adresse – über den Code erkennt das
@@ -789,6 +790,45 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
         then:
         response.status == 400
         response.contentAsString == 'Date purchased is not within membership period'
+    }
+
+    def "Mit X-Error-Format json: Ausgleichszahlung mit ehemaliger Gegenpartei, #fall (DIV-109)"() {
+        given: 'Owner seit 2024-06-15; Ben war nur 2025-01-01 bis 2025-06-15 Mitglied (ehemalig); Fremder ohne Historie'
+        def ben = fixtures.user()
+        def fremder = fixtures.user()
+        def wg = fixtures.group()
+        fixtures.membership(wg, ben, membershipStart: DateUtils.toDate(LocalDate.of(2025, 1, 1)),
+                membershipEnd: DateUtils.toDate(TestData.REFERENCE_DATE))
+        def (ownerId, benId, fremderId) = [wg.owner.id, ben.id, fremder.id]
+        def ids = [owner: ownerId, ben: benId, fremder: fremderId]
+        def body = [amount: 30, groupId: wg.group.id, member: [id: ids[empfaenger]], payer: [id: ids[zahler]], datePurchased: datum]
+        flushAndClear()
+        LOG.info('Szenario: Gruppe {}, Owner {} (angemeldet), Ben {} (ehemalig), Fremder {}; {} -> {} am {}', wg.group.id,
+                ownerId, benId, fremderId, zahler, empfaenger, datum)
+
+        when:
+        def response = send(post('/api/carts/settlement-payment/add').header('X-Error-Format', 'json').header('Accept-Language', 'de'),
+                user: wg.owner, body: body)
+        def antwort = json(response)
+        LOG.info('Antwort: {} {}', response.status, antwort)
+
+        then:
+        response.status == status
+        if (status == 200) {
+            assert antwort*.userDto*.id == [ids[zahler], ids[empfaenger]]
+            assert antwort*.amount == [30, -30]
+            assert antwort*.deleted == [zahler == 'ben', empfaenger == 'ben']
+        } else {
+            assert antwort.code == code
+            assert (antwort.details ?: [:]) == (betroffen ? [userId: ids[betroffen]] : [:])
+        }
+
+        where:
+        fall                                         | zahler    | empfaenger | datum        || status | code                          | betroffen
+        'erhalten von Ben nach seinem Austritt: 200' | 'ben'     | 'owner'    | '2025-06-20' || 200    | null                          | null
+        'gezahlt an Ben nach seinem Austritt: 200'   | 'owner'   | 'ben'      | '2025-06-20' || 200    | null                          | null
+        'Zahler ohne Historie: 403'                  | 'fremder' | 'owner'    | '2025-06-20' || 403    | 'NOT_GROUP_OWNER_OR_MEMBER'   | null
+        'Datum vor Bens erstem Beginn: 400'          | 'owner'   | 'ben'      | '2024-12-01' || 400    | 'DATE_NOT_WITHIN_MEMBERSHIP'  | 'ben'
     }
 
     def "Kategorien als JSON enthalten das Settlement-Kennzeichen"() {

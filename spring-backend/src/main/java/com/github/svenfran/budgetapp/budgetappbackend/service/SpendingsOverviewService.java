@@ -166,7 +166,10 @@ public class SpendingsOverviewService {
 
     /**
      * Summe und exakter Saldo je Nutzer über die Carts eines Zeitraums (DIV-34), in der Reihenfolge der Historie. Nur
-     * Nutzer, deren Mitgliedschaften memberInPeriod erfüllen; der Name wird wie bisher vor dieser Prüfung aufgelöst.
+     * Nutzer, deren Mitgliedschaften memberInPeriod erfüllen oder die eigene Carts im Zeitraum haben (DIV-109: eine
+     * Ausgleichszahlung mit einem ehemaligen Mitglied nach dessen Austritt; ohne seine Zeile ergäben die Salden des
+     * Zeitraums nicht 0). Maßgeblich ist, ob ein eigener Cart existiert, nicht die Summe (+x und −x im selben Zeitraum).
+     * Der Name wird wie bisher vor dieser Prüfung aufgelöst.
      */
     private List<UserTotals> calculateUserTotals(OverviewData data, Predicate<Cart> inPeriod,
                                                  Predicate<List<GroupMembershipHistory>> memberInPeriod) throws UserNotFoundException {
@@ -176,10 +179,12 @@ public class SpendingsOverviewService {
         for (Long userId : data.userIds()) {
             long sumCents = 0;
             var shareNumerator = BigInteger.ZERO;
+            var hasOwnCartInPeriod = false;
 
             for (Cart cart : periodCarts) {
                 if (cart.getUser().getId().equals(userId)) {
                     sumCents += toCents(cart.getAmount());
+                    hasOwnCartInPeriod = true;
                 }
 
                 shareNumerator = shareNumerator.add(data.shares().numerator(cart, userId));
@@ -190,7 +195,7 @@ public class SpendingsOverviewService {
             var validMemberships = data.membership().stream()
                     .filter(gmh -> gmh.getUserId().equals(userId))
                     .toList();
-            if (memberInPeriod.test(validMemberships)) {
+            if (memberInPeriod.test(validMemberships) || hasOwnCartInPeriod) {
                 userTotals.add(new UserTotals(userId, userName, sumCents, diffNumerator));
             }
         }

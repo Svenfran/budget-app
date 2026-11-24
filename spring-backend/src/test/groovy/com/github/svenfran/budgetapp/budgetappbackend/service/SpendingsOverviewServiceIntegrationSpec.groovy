@@ -1,5 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service
 
+import com.github.svenfran.budgetapp.budgetappbackend.dto.RemoveGroupMemberDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.SpendingsOverviewUserDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto
@@ -42,6 +43,7 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
     @Autowired CartRepository cartRepository
     @Autowired UserRepository userRepository
     @Autowired SettlementService settlementService
+    @Autowired GroupService groupService
 
     def "Austritt und Eintritt über den Jahreswechsel: Jahre 2024 und 2025 sowie Gesamtübersicht"() {
         given: "Anna (Owner) seit 01.01.2024, Ben 01.01.–31.12.2024, Cleo ab 01.01.2025 10 Uhr (Beitritt mit Uhrzeit)"
@@ -625,6 +627,102 @@ class SpendingsOverviewServiceIntegrationSpec extends IntegrationSpec {
         jahr.spendingsTotalYear.spendingsTotalUser == []
         jahr.spendingsPerMonth == []
         jahr.availableYears == [2024]
+    }
+
+    def "DIV-109 R10: Zahlung eines Ex-Mitglieds nach dem Austritt (#fall) erscheint in Jahr und Monat, Salden je Zeitraum 0"() {
+        given: "Anna (Owner) und Ben seit 01.01.2024; Anna kauft am 01.03.2024 für 200 ein → Anna +100, Ben −100"
+        def anna = fixtures.user(name: 'Anna')
+        def ben = fixtures.user(name: 'Ben')
+        def (annaId, benId) = [anna, ben]*.id
+        def wg = fixtures.group(owner: anna, members: [ben], memberSince: of(2024, 1, 1))
+        fixtures.cart(wg, user: anna, amount: 200d, datePurchased: DateUtils.toDate(of(2024, 3, 1)))
+
+        and: "Ben wird am #austritt entfernt; danach kauft Anna am 01.04.2025 allein für 30 ein (Monat ohne Bens Carts)"
+        entferne(wg, benId, austritt)
+        fixtures.cart(wg, user: anna, amount: 30d, datePurchased: DateUtils.toDate(of(2025, 4, 1)))
+
+        and: "Anna (angemeldet, aktuelles Mitglied) erfasst am #zahlungstag 100 erhalten von Ben"
+        testClock.today = zahlungstag
+        loginAs(userRepository.findById(annaId).get())
+        def dto = new SettlementPaymentDto(100d, wg.group.id, new UserDto(id: annaId), zahlungstag)
+        dto.payer = new UserDto(id: benId)
+        settlementService.addSettlementPayment(dto)
+        flushAndClear()
+        loginAs(userRepository.findById(annaId).get())
+        LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {} entfernt am {}; Zahlung Ben -> Anna 100 am {}; Anna allein 30 am 2025-04-01',
+                wg.group.id, annaId, benId, austritt, zahlungstag)
+
+        when:
+        def jahr = spendingsOverviewService.getSpendingsForGroupAndYear(2025, wg.group.id)
+        def alle = spendingsOverviewService.getSpendingsForGroupAndAllYears(wg.group.id)
+        def jahrAusAlle = alle.spendingsPerYear.find { it.year == 2025 }.spendingsYearlyUser
+        def zahlungsmonat = jahr.spendingsPerMonth.find { it.month == zahlungstag.monthValue }.spendingsMonthlyUser
+        def april = jahr.spendingsPerMonth.find { it.month == 4 }.spendingsMonthlyUser
+        logUebersicht('spendingsOverviewService.getSpendingsForGroupAndYear(2025)', jahr)
+        LOG.info('Monat {} [sum, diff] {}, April {}, spendingsPerYear 2025 {}, gesamt {}', zahlungstag.monthValue,
+                werte(zahlungsmonat), werte(april), werte(jahrAusAlle), werte(alle.spendingsTotalYear.spendingsTotalUser))
+
+        then: "spendingsTotalYear des Jahres 2025: Ben ist enthalten (als entfernt markiert), Summe der Salden 0"
+        jahr.spendingsTotalYear.spendingsTotalUser*.userId.contains(benId)
+        jahr.spendingsTotalYear.spendingsTotalUser.find { it.userId == benId }.userName == 'Ben REMOVED'
+        diffSummeInCent(jahr.spendingsTotalYear.spendingsTotalUser) == 0L
+
+        and: "spendingsPerMonth des Zahlungsmonats: Ben +100, Anna −100"
+        werte(zahlungsmonat) == [(annaId): [-100d, -100d], (benId): [100d, 100d]]
+
+        and: "spendingsPerYear 2025 der Gesamtübersicht enthält Ben, Summe 0"
+        jahrAusAlle*.userId.contains(benId)
+        diffSummeInCent(jahrAusAlle) == 0L
+
+        and: "Gegenprobe: im April (ohne Mitgliedschaft und ohne eigene Carts) fehlt Ben weiterhin"
+        april*.userId == [annaId]
+
+        and: "Gesamt: beide Salden 0 (AK1)"
+        alle.spendingsTotalYear.spendingsTotalUser.collectEntries { [it.userId, it.diff] } == [(annaId): 0d, (benId): 0d]
+
+        where:
+        fall                                  | austritt         | zahlungstag
+        'Austritt im Vorjahr'                 | of(2024, 12, 15) | of(2025, 2, 10)
+        'Austritt im selben Jahr, Monat vorher' | of(2025, 3, 15) | of(2025, 5, 10)
+    }
+
+    def "DIV-109 R10: Gegenläufige eigene Carts eines Ex-Mitglieds (Summe 0) zeigen seine Zeile trotzdem"() {
+        given: "Anna (Owner) und Ben seit 01.01.2024; Ben wird am 15.12.2024 entfernt"
+        def anna = fixtures.user(name: 'Anna')
+        def ben = fixtures.user(name: 'Ben')
+        def (annaId, benId) = [anna, ben]*.id
+        def wg = fixtures.group(owner: anna, members: [ben], memberSince: of(2024, 1, 1))
+        entferne(wg, benId, of(2024, 12, 15))
+
+        and: "im Februar 2025: Ben zahlt Anna 50, Anna zahlt Ben 50 (Bens Carts +50 und −50)"
+        def tag = of(2025, 2, 10)
+        testClock.today = tag
+        loginAs(userRepository.findById(annaId).get())
+        def erhalten = new SettlementPaymentDto(50d, wg.group.id, new UserDto(id: annaId), tag)
+        erhalten.payer = new UserDto(id: benId)
+        settlementService.addSettlementPayment(erhalten)
+        settlementService.addSettlementPayment(new SettlementPaymentDto(50d, wg.group.id, new UserDto(id: benId), tag))
+        flushAndClear()
+        loginAs(userRepository.findById(annaId).get())
+        LOG.info('Szenario: Gruppe {}, Anna {} (Owner), Ben {} entfernt am 2024-12-15; Ben -> Anna 50 und Anna -> Ben 50 am {}',
+                wg.group.id, annaId, benId, tag)
+
+        when:
+        def februar = spendingsOverviewService.getSpendingsForGroupAndYear(2025, wg.group.id)
+                .spendingsPerMonth.find { it.month == 2 }.spendingsMonthlyUser
+        LOG.info('spendingsOverviewService.getSpendingsForGroupAndYear(2025) -> Februar [sum, diff] {}', werte(februar))
+
+        then:
+        werte(februar) == [(annaId): [0d, 0d], (benId): [0d, 0d]]
+    }
+
+    /** Entfernt ein Mitglied über GroupService wie die App; das Austrittsdatum kommt aus testClock. */
+    private void entferne(GroupScenario wg, Long memberId, LocalDate austritt) {
+        testClock.today = austritt
+        loginAs(userRepository.findById(wg.owner.id).get())
+        groupService.removeMemberFromGroup(new RemoveGroupMemberDto(id: wg.group.id, member: new UserDto(id: memberId)))
+        flushAndClear()
+        LOG.info('groupService.removeMemberFromGroup(Gruppe {}, User {}) am {} aufgerufen', wg.group.id, memberId, austritt)
     }
 
     /** Ergebnis eines Übersichts-Aufrufs (INFO): Summe und [sum, diff] je Nutzer. */
