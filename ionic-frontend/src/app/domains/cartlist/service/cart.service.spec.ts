@@ -397,6 +397,21 @@ describe('CartService', () => {
       expect(translate).not.toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'Sven' });
     });
 
+    it('Mitgliedschaftsfehler, Zahler ist ein gelöschter Nutzer: Hinweis nennt ihn mit Label statt „DELETED“ (DIV-109)', async () => {
+      const translate = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
+      const dto = { ...payment(), member: aUser({ userName: 'Ich' }) };
+      const geloescht = aUser({ userName: 'DELETED' });
+      const alsEmpfaenger: Pick<SettlementEditData, 'role' | 'payer'> = { role: 'receiver', payer: geloescht };
+
+      const result = service.updateSettlementPayment(dto, group, () => true, alsEmpfaenger);
+      http.expectOne(`${api}/settlement-payment/update`).flush(notWithinMembership(geloescht.id), badRequest);
+
+      expect(await result).toBeFalse();
+      expect(translate).toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment',
+        { userName: 'global.user.deleted' });
+      expect(translate).not.toHaveBeenCalledWith('alerts.cart.invalid_membership.message_settlementpayment', { userName: 'DELETED' });
+    });
+
     it('Mitgliedschaftsfehler, userId = angemeldeter Zahler: Hinweis nennt den Zahler (DIV-108)', async () => {
       const translate = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
 

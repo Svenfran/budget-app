@@ -122,6 +122,7 @@
                     "date": "Fecha*",
                     "btn_cancel": "Cancelar",
                     "no_members": "No hay miembros disponibles",
+                    "former_member": "antiguo miembro",
                     "discard": {
                         "header": "¿Descartar los datos?",
                         "message": "Se perderán los datos del repago.",

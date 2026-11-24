@@ -122,6 +122,7 @@
                     "date": "Date*",
                     "btn_cancel": "Cancel",
                     "no_members": "No members available",
+                    "former_member": "former",
                     "discard": {
                         "header": "Discard entries?",
                         "message": "Your repayment entries will be lost.",

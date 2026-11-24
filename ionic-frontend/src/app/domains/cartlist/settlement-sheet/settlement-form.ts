@@ -6,6 +6,8 @@ import { Zeitraum } from '../new-edit-cart/model/gmh-zeitraum';
 import { SettlementPaymentDto } from '../model/settlement-payment-dto';
 import { Cart } from '../model/cart';
 import { purchaseDayOf } from '../filter-sheet/cart-filter-form';
+import { SpendingsOverviewUserDto } from 'src/app/domains/overview/model/spendings-overview-user-dto';
+import { isDeletedMarker, userDisplayName } from 'src/app/domains/overview/overview-display';
 
 /**
  * Formularlogik der Ausgleichszahlung (DIV-70), verhaltensgleich aus der früheren SettlementPaymentPage übernommen.
@@ -136,12 +138,61 @@ export function settlementEditData(cart: Cart, carts: Cart[]): SettlementEditDat
 }
 
 /**
- * Wählbare Empfänger im Edit-Modus des Zahlers (DIV-74): die aktuellen Empfänger plus der bisherige Empfänger, falls er
- * die Gruppe inzwischen verlassen hat. So bleibt die Ausgleichszahlung bearbeitbar; nur ein neu gewählter Empfänger
- * muss aktuell Mitglied sein (prüft das Backend).
+ * Wählbare Empfänger im Edit-Modus des Zahlers (DIV-74): die übergebene Auswahl plus der bisherige Empfänger, falls er
+ * dort fehlt (Gruppe verlassen und Saldo 0, oder Salden nicht geladen). So bleibt die Ausgleichszahlung bearbeitbar.
+ * Der ergänzte Empfänger kommt roh aus dem Cart und wird für die Anzeige aufgelöst (DIV-109: gelöscht → Label).
  */
-export function editRecipients(recipients: UserDto[], currentReceiver: UserDto): UserDto[] {
-  return recipients.some(r => r.id === currentReceiver.id) ? recipients : [...recipients, currentReceiver];
+export function editRecipients(recipients: SettlementParty[], currentReceiver: UserDto, deletedLabel: string): SettlementParty[] {
+  return recipients.some(r => r.id === currentReceiver.id)
+    ? recipients
+    : [...recipients, displayParty(currentReceiver, deletedLabel)];
+}
+
+/**
+ * Gegenpartei in der Auswahl (DIV-109). Aktuelle Mitglieder nur mit Id und Name; ehemalige Mitglieder und gelöschte
+ * Nutzer mit `former` und ihrem offenen Saldo (`balance`, Gesamtsaldo der Übersicht), gelöschte zusätzlich `deleted`.
+ * `userName` ist immer der Anzeigename (ohne Marker, gelöscht → Label).
+ */
+export interface SettlementParty extends UserDto {
+  former?: boolean;
+  deleted?: boolean;
+  balance?: number;
+}
+
+/**
+ * Anzeige einer Partei aus einem Cart (`userDto`): ein gelöschter Nutzer heißt dort `DELETED` und wird zum übersetzten
+ * Label mit `deleted`, ein Marker `REMOVED` am Ende wird entfernt, sonst bleibt der Name (DIV-109).
+ */
+export function displayParty(user: UserDto, deletedLabel: string): SettlementParty {
+  const deleted = isDeletedMarker(user.userName ?? '');
+  return {
+    id: user.id,
+    userName: userDisplayName(user.userName ?? '', deletedLabel),
+    ...(deleted ? { former: true, deleted: true } : {}),
+  };
+}
+
+/**
+ * Ehemalige Mitglieder und gelöschte Nutzer, mit denen eine Ausgleichszahlung erfasst werden kann (DIV-109): alle
+ * Nutzer der Gesamtsalden (`balances`, Gruppe `groupId`), die weder ich noch Owner noch aktuelles Mitglied sind und deren
+ * Saldo auf Cent gerundet ≠ 0 ist. „Aktuell“ entscheidet die Mitgliederliste, nicht der Marker im Namen; sie muss zu
+ * `groupId` gehören, sonst (noch nicht geladen, andere Gruppe) gibt es keine ehemaligen Parteien, weil sonst jeder als
+ * ehemalig gälte. Reihenfolge wie in `balances` (Historie).
+ */
+export function formerSettlementParties(balances: SpendingsOverviewUserDto[] | null, groupMembers: GroupMembers,
+                                        groupId: number, userId: number | undefined,
+                                        deletedLabel: string): SettlementParty[] {
+  if (!balances || groupMembers.id !== groupId) return [];
+  const current = new Set([groupMembers.ownerId, ...groupMembers.members.map(member => member.id)]);
+  return balances
+    .filter(user => user.userId !== userId && !current.has(user.userId) && Math.round(user.diff * 100) !== 0)
+    .map(user => ({
+      id: user.userId,
+      userName: userDisplayName(user.userName, deletedLabel),
+      former: true,
+      deleted: isDeletedMarker(user.userName),
+      balance: user.diff,
+    }));
 }
 
 function utcDay(value: Date | string): string {

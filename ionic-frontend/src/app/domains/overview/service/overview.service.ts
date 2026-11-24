@@ -3,6 +3,8 @@ import { computed, Injectable, signal } from '@angular/core';
 import { environment } from 'src/environments/environment';
 import { SpendingsOverviewDto } from '../model/spendings-overview-dto';
 import { SpendingsOverviewYearlyDto } from '../model/spendings-overview-yearly-dto';
+import { SpendingsOverviewUserDto } from '../model/spendings-overview-user-dto';
+import { firstValueFrom } from 'rxjs';
 import { Group } from 'src/app/model/group';
 import { INIT_VALUES } from 'src/app/constants/default-values';
 
@@ -41,6 +43,22 @@ export class OverviewService {
 
   triggerUpdate() {
     this.overviewRefresh.set(this.overviewRefresh() + 1);
+  }
+
+  /**
+   * Gesamtsaldo je Nutzer der Gruppe (DIV-109) aus der Gesamtübersicht (`GET /api/spendings/{groupId}`), für die Auswahl
+   * ehemaliger Mitglieder im Settlement-Sheet und die Warnung beim Austritt. Reiner Lesevorgang: ändert keine Signals
+   * der Übersichtsseite. Namen tragen die Marker `DELETED`/`REMOVED` (overview-display.ts).
+   *
+   * @returns die Nutzerzeilen (`diff` = offener Saldo), `null` bei Fehler; das Promise wird nie zurückgewiesen
+   */
+  loadUserBalances(groupId: number): Promise<SpendingsOverviewUserDto[] | null> {
+    return firstValueFrom(this.http.get<SpendingsOverviewYearlyDto>(`${this.spendingsOverviewUrl}/${groupId}`))
+      .then(result => result?.spendingsTotalYear?.spendingsTotalUser ?? [])
+      .catch(err => {
+        console.error('Error loading user balances:', err);
+        return null;
+      });
   }
 
 
