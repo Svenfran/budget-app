@@ -1,5 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service
 
+import com.github.svenfran.budgetapp.budgetappbackend.dto.AddGroupMemberDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.RemoveGroupMemberDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto
@@ -535,6 +536,40 @@ class SettlementServiceIntegrationSpec extends IntegrationSpec {
         DateUtils.toLocalDate(settlement.datePurchased) == neuesDatum
         carts*.amount == [45d, -45d]
         carts*.deleted == [true, false]
+    }
+
+    def "Wiedereintritt nach einer Zahlung nach dem Austritt: Bens Einkauf der Ausgleichszahlung ist nicht mehr gelöscht (R9, DIV-109)"() {
+        given: "Ben wird am REFERENCE_DATE entfernt; der Owner erfasst 5 Tage später 30.00 erhalten von Ben"
+        LocaleContextHolder.setLocale(Locale.GERMAN)
+        def ben = fixtures.user()
+        def wg = fixtures.group(members: [ben])
+        def (groupId, ownerId, benId, benEmail) = [wg.group.id, wg.owner.id, ben.id, ben.email]
+        entferne(groupId, benId)
+        flushAndClear()
+        def zahlungstag = TestData.REFERENCE_DATE.plusDays(5)
+        testClock.today = zahlungstag
+        def dto = new SettlementPaymentDto(30d, groupId, new UserDto(id: ownerId), zahlungstag)
+        dto.payer = new UserDto(id: benId)
+        loginAs(userRepository.findById(ownerId).get())
+        def paar = settlementService.addSettlementPayment(dto)
+        flushAndClear()
+        def vorher = paar*.id.collect { cartRepository.findById(it).get().deleted }
+        testClock.today = TestData.REFERENCE_DATE.plusDays(10)
+        LOG.info('Szenario: Gruppe {}, Owner {}, Ben {} seit {} entfernt; Settlement {} (Carts {}) am {}, gelöscht {}; ' +
+                'Wiedereintritt am {}', groupId, ownerId, benId, TestData.REFERENCE_DATE, paar[0].settlementId, paar*.id,
+                zahlungstag, vorher, testClock.today)
+
+        when:
+        loginAs(userRepository.findById(ownerId).get())
+        groupService.addMemberToGroup(new AddGroupMemberDto(id: groupId, newMemberEmail: benEmail))
+        flushAndClear()
+        def nachher = paar*.id.collect { cartRepository.findById(it).get() }
+        LOG.info('groupService.addMemberToGroup(Ben {}) -> Carts User {}, gelöscht {}', benId, nachher*.user*.id, nachher*.deleted)
+
+        then:
+        vorher == [true, false]
+        nachher*.user*.id == [benId, ownerId]
+        nachher*.deleted == [false, false]
     }
 
     // ----- Löschen (Phase 2) -----
