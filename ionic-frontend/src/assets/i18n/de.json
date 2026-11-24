@@ -182,6 +182,18 @@
                 "cancel": "Nein",
                 "ok": "Ja"
             },
+            "leave_open_balance": {
+                "header": "Gruppe verlassen:",
+                "message": "Du hast in der Gruppe \"{{group}}\" noch einen offenen Saldo von {{balance}}. Nach dem Austritt lässt er sich nur noch per Ausgleichszahlung begleichen. Möchtest du die Gruppe trotzdem verlassen?",
+                "cancel": "Nein",
+                "ok": "Ja"
+            },
+            "remove_member_open_balance": {
+                "header": "Mitglied entfernen:",
+                "message": "\"{{memberName}}\" hat in der Gruppe \"{{group}}\" noch einen offenen Saldo von {{balance}}. Nach dem Entfernen lässt er sich nur noch per Ausgleichszahlung begleichen. Möchtest du das Mitglied trotzdem entfernen inkl. aller gespeicherten Ausgaben?",
+                "cancel": "Nein",
+                "ok": "Ja"
+            },
             "change_owner": {
                 "header": "Zum Admin machen?",
                 "message": "Soll „{{memberName}}“ Admin der Gruppe „{{group}}“ werden? Du verlierst dadurch deine Admin-Rechte.",

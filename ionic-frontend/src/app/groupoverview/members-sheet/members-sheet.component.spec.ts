@@ -16,6 +16,8 @@ import { authServiceStub, provideServiceTesting } from 'src/testing/test-provide
 import { GROUP_GONE_ROLE } from '../group-sheet-roles';
 import { GroupOverview } from '../model/group-overview';
 import { MEMBERS_SHEET_LEFT_ROLE, MembersSheetComponent, MembersSheetView } from './members-sheet.component';
+import { OverviewService } from 'src/app/domains/overview/service/overview.service';
+import { ScientificCurrencyPipe } from 'src/app/pipe/scientific.pipe';
 
 describe('MembersSheetComponent (DIV-80)', () => {
   let modalCtrl: jasmine.SpyObj<ModalController>;
@@ -28,6 +30,7 @@ describe('MembersSheetComponent (DIV-80)', () => {
   let changeGroupOwner: jasmine.Spy;
   let removeMemberFromGroup: jasmine.Spy;
   let addMemberToGroup: jasmine.Spy;
+  let loadUserBalances: jasmine.Spy;
 
   const MODAL_ID = 'members-sheet-3';
   const anna = aLoggedInUser({ name: 'Anna' });
@@ -87,6 +90,8 @@ describe('MembersSheetComponent (DIV-80)', () => {
     changeGroupOwner = jasmine.createSpy('changeGroupOwner').and.resolveTo(true);
     removeMemberFromGroup = jasmine.createSpy('removeMemberFromGroup').and.resolveTo(true);
     addMemberToGroup = jasmine.createSpy('addMemberToGroup').and.resolveTo({ ok: true });
+    // Ohne offenen Saldo bleibt der bisherige Bestätigungs-Alert (DIV-109)
+    loadUserBalances = jasmine.createSpy('loadUserBalances').and.resolveTo([]);
     const auth = authServiceStub(null);
     (Object.getOwnPropertyDescriptor(auth, 'user')!.get as jasmine.Spy).and.returnValue(session);
     TestBed.configureTestingModule({
@@ -97,6 +102,7 @@ describe('MembersSheetComponent (DIV-80)', () => {
         { provide: ModalController, useValue: modalCtrl },
         { provide: AlertController, useValue: { create: alertCreate } },
         { provide: AuthService, useValue: auth },
+        { provide: OverviewService, useValue: { loadUserBalances } },
         {
           provide: GroupService, useValue: {
             groupMembers,
@@ -263,6 +269,87 @@ describe('MembersSheetComponent (DIV-80)', () => {
       fixture.detectChanges();
 
       expect(names(el)).toEqual(['Anna', 'Ben', 'Cleo', 'Dora']);
+    });
+  });
+
+  describe('Warnung bei offenem Saldo (DIV-109, AK5)', () => {
+    const saldo = (userId: number, diff: number) => ({ userId, userName: 'x', sum: 0, diff });
+    const betrag = (diff: number) =>
+      new ScientificCurrencyPipe().transform(diff, overview().find(group => group.id === WG)!.currencyCode);
+
+    it('Entfernen eines Mitglieds mit offenem Saldo: Alert nennt den Saldo, Entfernen bleibt möglich', async () => {
+      const translate = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
+      loadUserBalances.and.resolveTo([saldo(anna.id, 100), saldo(cleo.id, -100)]);
+      const { component } = await loaded();
+
+      await component.removeMember(cleo);
+
+      expect(loadUserBalances).toHaveBeenCalledOnceWith(WG);
+      expect(translate).toHaveBeenCalledWith('alerts.group.remove_member_open_balance.message',
+        { memberName: 'Cleo', group: 'WG', balance: betrag(-100) });
+      expect(removeMemberFromGroup).toHaveBeenCalledOnceWith({ id: WG, name: 'WG', member: cleo });
+    });
+
+    it('eigener Austritt mit offenem Saldo: eigener Text, Austritt bleibt möglich', async () => {
+      const translate = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
+      session.next(aLoggedInUser({ id: ben.id, name: 'Ben' }));
+      loadUserBalances.and.resolveTo([saldo(ben.id, 25.5)]);
+      const { component } = await loaded();
+
+      await component.removeMember(ben);
+
+      expect(translate).toHaveBeenCalledWith('alerts.group.leave_open_balance.message',
+        { memberName: 'Ben', group: 'WG', balance: betrag(25.5) });
+      expect(modalCtrl.dismiss).toHaveBeenCalledOnceWith(undefined, MEMBERS_SHEET_LEFT_ROLE, MODAL_ID);
+    });
+
+    [
+      { fall: 'Saldo 0', balances: [saldo(cleo.id, 0)] },
+      { fall: 'Saldo rundet auf 0 Cent', balances: [saldo(cleo.id, 0.004)] },
+      { fall: 'Mitglied fehlt in den Salden', balances: [saldo(ben.id, 50)] },
+      { fall: 'Salden nicht ladbar', balances: null },
+    ].forEach(({ fall, balances }) => {
+      it(`${fall}: bisheriger Alert ohne Saldo`, async () => {
+        const translate = spyOn(TestBed.inject(TranslateService), 'instant').and.callThrough();
+        loadUserBalances.and.resolveTo(balances);
+        const { component } = await loaded();
+
+        await component.removeMember(cleo);
+
+        expect(translate).toHaveBeenCalledWith('alerts.group.remove_member.message', { memberName: 'Cleo', group: 'WG' });
+        expect(translate).not.toHaveBeenCalledWith('alerts.group.remove_member_open_balance.message', jasmine.anything());
+      });
+    });
+
+    it('sperrt während der Saldo-Abfrage: zweites Auslösen ohne zweiten Alert', async () => {
+      let resolve!: (balances: unknown) => void;
+      loadUserBalances.and.returnValue(new Promise(r => resolve = r));
+      const { component } = await loaded();
+
+      const first = component.removeMember(cleo);
+      expect(component.saving()).toBeTrue();
+      await component.removeMember(cleo);
+      resolve([saldo(cleo.id, -10)]);
+      await first;
+
+      expect(loadUserBalances).toHaveBeenCalledTimes(1);
+      expect(alertCreate).toHaveBeenCalledTimes(1);
+      expect(component.saving()).toBeFalse();
+    });
+
+    it('Sheet schließt während der Saldo-Abfrage: kein Alert, nichts entfernt', async () => {
+      let resolve!: (balances: unknown) => void;
+      loadUserBalances.and.returnValue(new Promise(r => resolve = r));
+      const { fixture, component } = await loaded();
+
+      const pending = component.removeMember(cleo);
+      overview.set([]);
+      fixture.detectChanges();
+      resolve([saldo(cleo.id, -10)]);
+      await pending;
+
+      expect(alertCreate).not.toHaveBeenCalled();
+      expect(removeMemberFromGroup).not.toHaveBeenCalled();
     });
   });
 

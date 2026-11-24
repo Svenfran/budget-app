@@ -182,6 +182,18 @@
                 "cancel": "No",
                 "ok": "Sí"
             },
+            "leave_open_balance": {
+                "header": "Salir del grupo:",
+                "message": "Todavía tienes un saldo pendiente de {{balance}} en el grupo \"{{group}}\". Después de salir, solo podrá saldarse con un repago. ¿Deseas salir del grupo de todos modos?",
+                "cancel": "No",
+                "ok": "Sí"
+            },
+            "remove_member_open_balance": {
+                "header": "Eliminar miembro:",
+                "message": "\"{{memberName}}\" todavía tiene un saldo pendiente de {{balance}} en el grupo \"{{group}}\". Después de eliminarlo, solo podrá saldarse con un repago. ¿Deseas eliminar al miembro de todos modos, incluyendo todos los gastos guardados?",
+                "cancel": "No",
+                "ok": "Sí"
+            },
             "change_owner": {
                 "header": "¿Hacer administrador?",
                 "message": "¿Debe \"{{memberName}}\" ser administrador del grupo \"{{group}}\"? Perderás tus derechos de administrador.",

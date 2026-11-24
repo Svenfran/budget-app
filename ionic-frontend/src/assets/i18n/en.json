@@ -182,6 +182,18 @@
                 "cancel": "No",
                 "ok": "Yes"
             },
+            "leave_open_balance": {
+                "header": "Leave group:",
+                "message": "You still have an open balance of {{balance}} in the group \"{{group}}\". After leaving, it can only be settled with a repayment. Do you still want to leave the group?",
+                "cancel": "No",
+                "ok": "Yes"
+            },
+            "remove_member_open_balance": {
+                "header": "Remove member:",
+                "message": "\"{{memberName}}\" still has an open balance of {{balance}} in the group \"{{group}}\". After removal, it can only be settled with a repayment. Do you still want to remove the member including all saved expenses?",
+                "cancel": "No",
+                "ok": "Yes"
+            },
             "change_owner": {
                 "header": "Make admin?",
                 "message": "Should \"{{memberName}}\" become admin of the group \"{{group}}\"? You will lose your admin rights.",
