@@ -4,7 +4,7 @@ import { ReactiveFormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { IonicModule, LoadingController } from '@ionic/angular';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { throwError } from 'rxjs';
+import { throwError, TimeoutError } from 'rxjs';
 import { alertServiceSpy, authServiceStub, provideServiceTesting, storageServiceFake } from 'src/testing/test-providers';
 import { AlertService } from '../service/alert.service';
 import { LanguageService } from '../service/language.service';
@@ -54,6 +54,16 @@ describe('AuthPage – Fehler bei Login', () => {
     expect(alerts.showAlertSeverUnavailable).not.toHaveBeenCalled();
     expect(navigate).not.toHaveBeenCalled();
     expect(loading.dismiss).toHaveBeenCalled();
+  }));
+
+  it('keine Antwort im Zeitbudget (TimeoutError): wie Status 0 nur der Server-Alert', fakeAsync(() => {
+    auth.login.and.returnValue(throwError(() => new TimeoutError()));
+
+    page.authenticate('', 'anna@divvy.test', 'geheim123');
+    flushMicrotasks();
+
+    expect(alerts.showAlertSeverUnavailable).toHaveBeenCalledTimes(1);
+    expect(alerts.showErrorAlert).not.toHaveBeenCalled();
   }));
 
   it('Server nicht erreichbar (Status 0): nur der Server-Alert, kein zweiter Fehler-Alert', fakeAsync(() => {

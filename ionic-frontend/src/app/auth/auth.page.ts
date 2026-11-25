@@ -1,5 +1,5 @@
 import { Component, OnInit, ViewChild } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, TimeoutError } from 'rxjs';
 import { AuthResponseData, AuthService, SessionEndedError } from './auth.service';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -168,7 +168,8 @@ export class AuthPage implements OnInit {
           ? this.translate.instant('alerts.authenticate.error_messages.header_register') 
           : this.translate.instant('alerts.authenticate.error_messages.header_login');
         let message = this.translate.instant('alerts.authenticate.error_messages.message');
-        if (errRes.status === 0) {
+        // Status 0 bzw. keine Antwort innerhalb des Zeitbudgets: Server nicht erreichbar
+        if (errRes.status === 0 || errRes instanceof TimeoutError) {
           loadingEl.dismiss();
           this.alertService.showAlertSeverUnavailable();
           // kein zweiter Alert: Passwort/E-Mail waren nicht das Problem

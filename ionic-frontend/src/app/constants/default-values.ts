@@ -27,6 +27,11 @@ export enum INIT_NUMBERS {
     /** Timeout des HTTP-Aufrufs beim Refresh (DIV-65); danach gilt der Refresh als vorübergehend gescheitert. */
     REFRESH_TIMEOUT_MS = 15000,
     /**
+     * Höchstdauer eines Login-/Registrierungsversuchs inkl. Warten auf die DeviceId (DIV-65). Anmeldungen laufen
+     * nacheinander; ohne Grenze würde ein hängender Versuch alle weiteren blockieren.
+     */
+    AUTH_ATTEMPT_TIMEOUT_MS = 15000,
+    /**
      * Wartebudget der Aufrufer auf den Session-Speicher (DIV-65), gemessen ab dem Einreihen – kein Timeout des nativen
      * Zugriffs selbst. Refresh wartet so lange auf das Speichern, autoLogin auf das Laden.
      */

@@ -236,6 +236,9 @@ export class AuthService {
    * beendet ist. So verarbeitet der Server die Logins in derselben Reihenfolge, in der die App ihre Antworten übernimmt,
    * und der zuletzt gestartete Login gewinnt (ein früherer wurde serverseitig per RELOGIN ersetzt). Gab es seit dem
    * Abonnieren einen Logout oder ein Session-Ende, wird der Versuch nicht gesendet bzw. seine Antwort verworfen (F3).
+   * Jeder Versuch ist auf `INIT_NUMBERS.AUTH_ATTEMPT_TIMEOUT_MS` begrenzt (TimeoutError), damit ein hängender Request
+   * die Warteschlange nicht blockiert. Grenze: Ein lokal abgebrochener Versuch kann serverseitig noch verarbeitet werden
+   * und eine spätere Session per RELOGIN ersetzen – dann führt der nächste Refresh zur Anmeldung.
    */
   private authenticateAndStart(request: (deviceId: string) => Observable<AuthResponseData>): Observable<AuthResponseData> {
     return defer(() => {
@@ -245,16 +248,20 @@ export class AuthService {
       const finished = new Promise<void>(resolve => release = resolve);
       const previous = this.authAttempts;
       this.authAttempts = previous.then(() => finished);
+      const ended = () => throwError(() => new SessionEndedError());
       return from(previous).pipe(
-        switchMap(() => stillValid() ? this.getDeviceId() : throwError(() => new SessionEndedError())),
-        switchMap(request),
+        // erst ab hier läuft der Versuch; das Zeitbudget gilt ihm (DeviceId + Request), nicht der Wartezeit davor
+        switchMap(() => !stillValid() ? ended() : this.getDeviceId().pipe(
+          // direkt vor dem Senden erneut prüfen: Logout während des Wartens auf die DeviceId
+          switchMap(deviceId => stillValid() ? request(deviceId) : ended()),
+          timeout(INIT_NUMBERS.AUTH_ATTEMPT_TIMEOUT_MS))),
         tap(response => {
           if (!stillValid()) {
             throw new SessionEndedError();
           }
           this.startSession(response);
         }),
-        // auch bei Fehler oder Abbestellen: der nächste Versuch darf starten
+        // auch bei Fehler, Timeout oder Abbestellen: der nächste Versuch darf starten
         finalize(() => release()));
     });
   }

@@ -130,6 +130,38 @@ describe('AuthService', () => {
       expect(storage.stored()?.refreshToken).toBe('refresh-1');
     }));
 
+    it('DeviceId antwortet nie: nach dem Zeitbudget TimeoutError, ein späterer Versuch läuft (Review 3 F-001)', fakeAsync(() => {
+      let error: unknown;
+      service.login('anna@divvy.test', 'geheim123').subscribe({ error: e => error = e });
+      flushMicrotasks();
+
+      tick(INIT_NUMBERS.AUTH_ATTEMPT_TIMEOUT_MS);
+      expect(error).toEqual(jasmine.any(TimeoutError));
+      http.expectNone(`${api}/authenticate`);
+
+      resolveDeviceId('device-1');
+      service.login('anna@divvy.test', 'geheim123').subscribe();
+      flushMicrotasks();
+      http.expectOne(`${api}/authenticate`).flush(response());
+      flushMicrotasks();
+      expect(currentUser()?.id).toBe(1);
+    }));
+
+    it('Logout während des Wartens auf die DeviceId: der Versuch wird nicht gesendet (Review 3 F-002)', fakeAsync(() => {
+      let error: unknown;
+      service.register('Anna', 'anna@divvy.test', 'geheim123').subscribe({ error: e => error = e });
+      flushMicrotasks();
+      service.logout();
+      http.expectOne(`${api}/logout`).flush(null);
+
+      resolveDeviceId('device-1');
+      flushMicrotasks();
+
+      http.expectNone(`${api}/register`);
+      expect(error).toEqual(jasmine.any(SessionEndedError));
+      expect(currentUser()).toBeNull();
+    }));
+
     it('Login setzt den Nutzer und speichert den Refresh Token nur im TokenStorage (AC1, AC9)', fakeAsync(() => {
       resolveDeviceId('device-1');
       const resp = response();
@@ -260,6 +292,44 @@ describe('AuthService', () => {
       expect(b.error).toEqual(jasmine.any(SessionEndedError));
       expect(currentUser()).toBeNull();
       expect(storage.stored()).toBeNull();
+    }));
+
+    it('A antwortet nicht: nach dem Zeitbudget TimeoutError und Abbruch, der wartende B startet danach (Review 3 F-001)', fakeAsync(() => {
+      const a: { error?: unknown } = {};
+      service.login('anna@divvy.test', 'geheim123').subscribe({ error: e => a.error = e });
+      flushMicrotasks();
+      const reqA = http.expectOne(`${api}/authenticate`);
+      service.login('anna@divvy.test', 'geheim123').subscribe();
+      flushMicrotasks();
+
+      tick(INIT_NUMBERS.AUTH_ATTEMPT_TIMEOUT_MS);
+      flushMicrotasks();
+
+      expect(a.error).toEqual(jasmine.any(TimeoutError));
+      expect(reqA.cancelled).toBeTrue();
+      http.expectOne(`${api}/authenticate`).flush(response({ token: 'access-b', refreshToken: 'refresh-b' }));
+      flushMicrotasks();
+      expect(service.currentAccessToken()).toBe('access-b');
+    }));
+
+    it('A hängt, dann Logout und neuer Login B: B läuft nach dem Zeitbudget von A und wird übernommen', fakeAsync(() => {
+      service.login('anna@divvy.test', 'geheim123').subscribe({ error: () => undefined });
+      flushMicrotasks();
+      http.expectOne(`${api}/authenticate`);
+      logoutOhneSession();
+      const b: { response?: AuthResponseData } = {};
+      service.login('anna@divvy.test', 'geheim123').subscribe(r => b.response = r);
+      flushMicrotasks();
+      http.expectNone(`${api}/authenticate`);
+
+      tick(INIT_NUMBERS.AUTH_ATTEMPT_TIMEOUT_MS);
+      flushMicrotasks();
+      http.expectOne(`${api}/authenticate`).flush(response({ token: 'access-b', refreshToken: 'refresh-b' }));
+      flushMicrotasks();
+
+      expect(b.response?.token).toBe('access-b');
+      expect(currentUser()?.id).toBe(1);
+      expect(storage.stored()?.refreshToken).toBe('refresh-b');
     }));
 
     it('ein abbestellter Login gibt die Warteschlange frei', fakeAsync(() => {
