@@ -152,8 +152,7 @@ class TestData {
         Date issuedAt = values.issuedAt ?: new Date(expiration.time - 21L * 24 * 60 * 60 * 1000)
         Jwts.builder()
                 .setHeaderParam('typ', 'JWT')
-                .setClaims(values.sessionId == null ? [deviceId: values.deviceId]
-                        : [deviceId: values.deviceId, sid: String.valueOf(values.sessionId)])
+                .setClaims(values.sessionId == null ? [deviceId: values.deviceId] : [deviceId: values.deviceId, sid: String.valueOf(values.sessionId)])
                 .setSubject(values.subject as String)
                 .setIssuedAt(issuedAt)
                 .setExpiration(expiration)
