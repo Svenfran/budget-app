@@ -223,6 +223,8 @@ export class AppComponent {
     const longBackground = isLongBackground(this.pausedAt, Date.now(), INIT_NUMBERS.RESYNC_AFTER_BACKGROUND_MS);
     this.pausedAt = null;
     if (this.connectedUserId === null) return;
+    // WebSocket nach gescheitertem Token-Refresh (Backoff läuft) sofort neu versuchen (DIV-65)
+    this.webSocketService.reconnectNow();
     // einzelne unsichtbare Abfrage, unabhängig von Verbindung und Drossel; aktualisiert nur backendStatus
     this.healthService.getHealthStatus();
     if (longBackground) {

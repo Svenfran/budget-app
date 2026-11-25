@@ -1,6 +1,6 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
-import { fakeAsync, flushMicrotasks, TestBed } from '@angular/core/testing';
+import { fakeAsync, flushMicrotasks, TestBed, tick } from '@angular/core/testing';
 import { Client, StompConfig } from '@stomp/stompjs';
 import { environment } from 'src/environments/environment';
 import { FakeStompClient } from 'src/testing/fake-stomp-client';
@@ -8,7 +8,7 @@ import { aGroup } from 'src/testing/test-data';
 import { provideServiceTesting } from 'src/testing/test-providers';
 import { DEVICE_ID } from '../auth/device-id';
 import { GroupService } from './group.service';
-import { AuthorizationProvider, STOMP_CLIENT_FACTORY, WebSocketService } from './websocket.service';
+import { AuthorizationProvider, STOMP_CLIENT_FACTORY, WebSocketService, WsAuthResult } from './websocket.service';
 
 describe('WebSocketService', () => {
   let service: WebSocketService;
@@ -100,19 +100,28 @@ describe('WebSocketService', () => {
       expect(client.connectHeaders['Authorization']).toBe('Bearer neu');
     }));
 
-    ([
-      ['no-session (keine bzw. beendete Session)', () => Promise.resolve({ kind: 'no-session' })],
-      ['retry (vorerst wie no-session, Wiederverbindung folgt in Phase 6)', () => Promise.resolve({ kind: 'retry' })],
-      ['einen abgelehnten Provider (gilt als retry)', () => Promise.reject(new Error('unerwartet'))],
-    ] as [string, AuthorizationProvider][]).forEach(([fall, provider]) => {
-      it(`deaktiviert den Client bei ${fall}`, fakeAsync(() => {
-        const client = connect(provider);
+    it('deaktiviert den Client ohne Wiederverbindung bei no-session (keine bzw. beendete Session)', fakeAsync(() => {
+      const client = connect(() => Promise.resolve({ kind: 'no-session' }));
 
-        expect(client.deactivate).toHaveBeenCalled();
-        expect(client.active).toBeFalse();
-        expect(client.connectHeaders).toEqual({});
-      }));
-    });
+      expect(client.deactivate).toHaveBeenCalled();
+      expect(client.active).toBeFalse();
+      expect(client.connectHeaders).toEqual({});
+      tick(60000);
+      flushMicrotasks();
+      expect(clients.length).toBe(1);
+    }));
+
+    it('ein abgelehnter Provider gilt als retry: deaktiviert, Wiederverbindung geplant', fakeAsync(() => {
+      const client = connect(() => Promise.reject(new Error('unerwartet')));
+
+      expect(client.deactivate).toHaveBeenCalled();
+      expect(client.connectHeaders).toEqual({});
+      tick(5000);
+      flushMicrotasks();
+      expect(clients.length).toBe(2);
+      service.disconnect();
+      flushMicrotasks();
+    }));
 
     it('bleibt aktiv, wenn der Server eine bestehende Sitzung mit einem STOMP-Fehler beendet (Heartbeat-Timeout)', fakeAsync(() => {
       // Regression: Spring schickt nach 30 s ohne Client-Heartbeat (z. B. gedrosselter Hintergrund-Tab) ERROR
@@ -170,6 +179,162 @@ describe('WebSocketService', () => {
       client.simulateClose();
 
       http.expectOne(healthUrl).flush({ status: 'UP' });
+    }));
+  });
+
+  describe('Eigene Wiederverbindung nach retry (DIV-65)', () => {
+    const TOKEN: WsAuthResult = { kind: 'token', value: 'Bearer test-jwt' };
+    const RETRY: WsAuthResult = { kind: 'retry' };
+
+    /** Provider, der die Ergebnisse der Reihe nach liefert; das letzte wiederholt sich. */
+    function sequence(...results: WsAuthResult[]): AuthorizationProvider {
+      let call = 0;
+      return () => Promise.resolve(results[Math.min(call++, results.length - 1)]);
+    }
+
+    /** Lässt den gerade erzeugten Client seinen Verbindungsaufbau durchlaufen (beforeConnect). */
+    function runLatest(): FakeStompClient {
+      const client = clients[clients.length - 1];
+      client.runBeforeConnect();
+      flushMicrotasks();
+      return client;
+    }
+
+    /** Wartet `ms` und liefert, ob dabei ein neuer Client entstanden ist. */
+    function waitForNewClient(ms: number): boolean {
+      const count = clients.length;
+      tick(ms);
+      flushMicrotasks();
+      return clients.length > count;
+    }
+
+    it('bestehende Verbindung bricht ab, Refresh scheitert: nach 5 s neuer Client, Topics neu, reconnected$ genau einmal', fakeAsync(() => {
+      const reconnected = jasmine.createSpy('reconnected');
+      service.reconnected$.subscribe(reconnected);
+      const handler = jasmine.createSpy('handler');
+      service.subscribe(topic, handler, { owner: 'app' });
+      const first = connected(sequence(TOKEN, RETRY, TOKEN));
+
+      first.simulateClose();
+      runLatest();                                  // stompjs-Reconnect fragt den Provider: retry
+      expect(first.deactivate).toHaveBeenCalled();
+
+      expect(waitForNewClient(4999)).toBeFalse();
+      expect(waitForNewClient(1)).toBeTrue();
+      const second = runLatest();
+      expect(second.activate).toHaveBeenCalledTimes(1);
+      expect(second.connectHeaders).toEqual({ Authorization: 'Bearer test-jwt', DeviceId: 'device-1' });
+      second.simulateConnect();
+      second.deliver(topic, JSON.stringify({ id: 1 }));
+
+      expect(reconnected).toHaveBeenCalledTimes(1);
+      expect(second.aliveSubscriptions(topic).length).toBe(1);
+      expect(handler).toHaveBeenCalledOnceWith({ id: 1 });
+      http.expectOne(healthUrl).flush({ status: 'UP' });
+    }));
+
+    it('Offline-Start: erster Versuch retry, nach dem Backoff verbunden -> reconnected$ (Resync holt Anfangsabrufe nach)', fakeAsync(() => {
+      const reconnected = jasmine.createSpy('reconnected');
+      service.reconnected$.subscribe(reconnected);
+      const first = connect(sequence(RETRY, TOKEN));
+
+      expect(first.deactivate).toHaveBeenCalled();
+      expect(waitForNewClient(5000)).toBeTrue();
+      runLatest().simulateConnect();
+
+      expect(reconnected).toHaveBeenCalledTimes(1);
+    }));
+
+    it('normaler erster Connect ohne vorheriges Scheitern meldet kein reconnected$', fakeAsync(() => {
+      const reconnected = jasmine.createSpy('reconnected');
+      service.reconnected$.subscribe(reconnected);
+
+      connected(sequence(TOKEN));
+
+      expect(reconnected).not.toHaveBeenCalled();
+    }));
+
+    it('mehrfaches retry: Backoff 5, 10, 30, dann alle 60 s; zurückgesetzt erst nach erfolgreichem Connect', fakeAsync(() => {
+      connect(sequence(RETRY));
+      const abstaende: number[] = [];
+      for (let versuch = 0; versuch < 5; versuch++) {
+        let gewartet = 0;
+        while (!waitForNewClient(1000)) {
+          gewartet += 1000;
+        }
+        abstaende.push(gewartet + 1000);
+        runLatest();
+      }
+      expect(abstaende).toEqual([5000, 10000, 30000, 60000, 60000]);
+
+      service.disconnect();
+      flushMicrotasks();
+    }));
+
+    it('nach erfolgreichem Connect beginnt der Backoff wieder bei 5 s', fakeAsync(() => {
+      connect(sequence(RETRY, RETRY, TOKEN, RETRY));
+      expect(waitForNewClient(5000)).toBeTrue();
+      runLatest();                                  // retry -> 10 s
+      expect(waitForNewClient(10000)).toBeTrue();
+      const verbunden = runLatest();                // token
+      verbunden.simulateConnect();
+
+      verbunden.simulateClose();
+      runLatest();                                  // retry -> wieder 5 s
+      expect(waitForNewClient(5000)).toBeTrue();
+
+      service.disconnect();
+      flushMicrotasks();
+      http.expectOne(healthUrl).flush({ status: 'UP' });
+    }));
+
+    it('disconnect während des Wartens: kein neuer Client, die nächste Sitzung beginnt ohne reconnected$', fakeAsync(() => {
+      const reconnected = jasmine.createSpy('reconnected');
+      service.reconnected$.subscribe(reconnected);
+      connect(sequence(RETRY));
+
+      service.disconnect();
+      flushMicrotasks();
+      expect(waitForNewClient(60000)).toBeFalse();
+
+      connected(sequence(TOKEN));
+      expect(reconnected).not.toHaveBeenCalled();
+    }));
+
+    it('Nutzerwechsel: der Timer der alten Sitzung läuft nicht nach', fakeAsync(() => {
+      connect(sequence(RETRY));
+      service.disconnect();
+      flushMicrotasks();
+      connect(tokenProvider('Bearer anderer-nutzer'));
+      const anzahl = clients.length;
+
+      tick(60000);
+      flushMicrotasks();
+
+      expect(clients.length).toBe(anzahl);
+    }));
+
+    it('reconnectNow (Resume) versucht es während des Backoffs sofort und ersetzt den Timer', fakeAsync(() => {
+      connect(sequence(RETRY, TOKEN));
+      const anzahl = clients.length;
+
+      service.reconnectNow();
+      flushMicrotasks();
+      expect(clients.length).toBe(anzahl + 1);
+      runLatest().simulateConnect();
+
+      expect(waitForNewClient(60000)).toBeFalse();
+    }));
+
+    it('reconnectNow ohne Sitzung oder bei aktivem Client tut nichts', fakeAsync(() => {
+      service.reconnectNow();
+      flushMicrotasks();
+      expect(clients.length).toBe(0);
+
+      connected(sequence(TOKEN));
+      service.reconnectNow();
+      flushMicrotasks();
+      expect(clients.length).toBe(1);
     }));
   });
 
