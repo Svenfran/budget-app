@@ -1,5 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.entity
 
+import com.github.svenfran.budgetapp.budgetappbackend.constants.SessionRevokeReason
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
 import spock.lang.Specification
 
@@ -150,5 +151,26 @@ class EntityToStringSpec extends Specification {
 
         then:
         text == "Token{id=60, tokenType=BEARER, expired=false, revoked=false, userId=1}"
+    }
+
+    def "toString von Session und Refresh Token enthält weder Hash noch Geräte-ID, Beziehungen nur als ID"() {
+        given: "DIV-65"
+        def anna = TestData.user(id: 1L)
+        def session = TestData.authSession(id: 80L, deviceId: 'geraet-4711', user: anna,
+                revokeReason: SessionRevokeReason.LOGOUT)
+        def nachfolger = TestData.refreshToken(id: 91L, session: session)
+        def token = TestData.refreshToken(id: 90L, tokenHash: 'ab' * 32, session: session, replacedBy: nachfolger)
+
+        when:
+        def sessionText = session.toString()
+        def tokenText = token.toString()
+
+        then:
+        sessionText.startsWith('AuthSession{id=80, ')
+        sessionText.endsWith(', revokeReason=LOGOUT, userId=1}')
+        !sessionText.contains('geraet-4711')
+        tokenText.startsWith('RefreshToken{id=90, ')
+        tokenText.endsWith(', sessionId=80, replacedById=91}')
+        !tokenText.contains('abab')
     }
 }

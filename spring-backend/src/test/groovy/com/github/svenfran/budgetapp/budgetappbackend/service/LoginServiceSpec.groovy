@@ -7,6 +7,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.exceptions.InvalidEmailExc
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.MissingDeviceIdException
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.TooManyLoginAttemptsException
 import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository
+import com.github.svenfran.budgetapp.budgetappbackend.service.auth.LoginReservation
 import org.springframework.dao.DataAccessResourceFailureException
 import org.springframework.security.authentication.BadCredentialsException
 import org.springframework.security.crypto.password.PasswordEncoder

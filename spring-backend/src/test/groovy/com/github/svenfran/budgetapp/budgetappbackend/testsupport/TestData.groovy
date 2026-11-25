@@ -109,6 +109,18 @@ class TestData {
                    deviceId: 'device-1'] + overrides)
     }
 
+    /** Aktive Session (DIV-65) ab REFERENCE_DATE, 90 Tage gültig. Nutzer setzt der Aufrufer. */
+    static AuthSession authSession(Map overrides = [:]) {
+        def created = REFERENCE_DATE.atStartOfDay()
+        new AuthSession([deviceId: 'device-1', createdAt: created, absoluteExpiresAt: created.plusDays(90)] + overrides)
+    }
+
+    /** Aktueller Refresh Token (DIV-65) mit Platzhalter-Hash statt echtem HMAC. Session setzt der Aufrufer. */
+    static RefreshToken refreshToken(Map overrides = [:]) {
+        def issued = REFERENCE_DATE.atStartOfDay()
+        new RefreshToken([tokenHash: String.format('%064x', nextId()), issuedAt: issued, expiresAt: issued.plusDays(30)] + overrides)
+    }
+
     /**
      * Signiertes JWT wie JwtService.generateToken (Header typ JWT, HS256, Claim deviceId, Subject), aber mit festen
      * Zeitpunkten statt der realen Uhr. Pflicht: secret (Base64 wie secret_key, nur Dummy-Werte) und expiration
