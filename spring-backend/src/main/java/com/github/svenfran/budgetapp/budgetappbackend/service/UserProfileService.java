@@ -1,5 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service;
 
+import com.github.svenfran.budgetapp.budgetappbackend.constants.SessionRevokeReason;
 import com.github.svenfran.budgetapp.budgetappbackend.constants.UserEnum;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.GroupDto;
 import com.github.svenfran.budgetapp.budgetappbackend.dto.PasswordChangeDto;
@@ -21,6 +22,13 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.util.HashSet;
 
+/**
+ * Profilaktionen. Passwortänderung, Passwort-Reset, E-Mail-Änderung und Konto löschen beenden alle Sessions des
+ * Nutzers (DIV-65, E4): Sie sperren zuerst die Nutzerzeile (erster Zugriff auf die Entity, feste Reihenfolge Nutzer
+ * vor Sessions) und widerrufen bzw. löschen die Sessions in derselben Transaktion. Ein paralleler Login wartet auf die
+ * Sperre und prüft danach das neue Passwort bzw. findet die alte E-Mail nicht mehr - oder er war vorher fertig, dann
+ * trifft der Widerruf auch seine Session.
+ */
 @Service
 public class UserProfileService {
 
@@ -64,6 +72,8 @@ public class UserProfileService {
 
     private final Clock clock;
 
+    private final AuthSessionService authSessionService;
+
     public UserProfileService(UserRepository userRepository, DataLoaderService dataLoaderService,
                               GroupService groupService, CartRepository cartRepository, GroupRepository groupRepository,
                               CategoryRepository categoryRepository, ShoppingListRepository shoppingListRepository,
@@ -74,7 +84,7 @@ public class UserProfileService {
                               EmailSenderService senderService, VerificationService verificationService,
                               CartTemplateRepository cartTemplateRepository, NotificationService notificationService,
                               GroupMembershipHistoryRepository gmhRepository, Translator translator,
-                              Clock clock) {
+                              Clock clock, AuthSessionService authSessionService) {
         this.userRepository = userRepository;
         this.dataLoaderService = dataLoaderService;
         this.groupService = groupService;
@@ -95,12 +105,13 @@ public class UserProfileService {
         this.gmhRepository = gmhRepository;
         this.translator = translator;
         this.clock = clock;
+        this.authSessionService = authSessionService;
     }
 
     @Transactional
     public void deleteUserProfile(Long userId) throws UserNotFoundException, UserIsNotAuthenticatedUser {
+        var userDelete = lockUser(userId);
         var userAuth = dataLoaderService.getAuthenticatedUser();
-        var userDelete = dataLoaderService.loadUser(userId);
         verificationService.verifyIsAuthenticatedUser(userDelete, userAuth);
 
         var groupsOwner = groupRepository.findGroupsByOwnerOrderById(userDelete);
@@ -116,7 +127,14 @@ public class UserProfileService {
         }
 
         tokenRepository.deleteAll(tokenRepository.findAllByUserId(userDelete.getId()));
+        authSessionService.deleteAllForUser(userDelete);
         anonymizeUser(userDelete);
+    }
+
+    /** Sperrt die Nutzerzeile (DIV-65); muss der erste Zugriff auf die Entity in der Transaktion sein. */
+    private User lockUser(Long userId) throws UserNotFoundException {
+        return userRepository.findByIdForUpdate(userId)
+                .orElseThrow(() -> new UserNotFoundException(String.format("User with Id %s not found", userId)));
     }
 
     private void deleteGroupAsOwner(Group group) throws UserNotFoundException {
@@ -176,9 +194,10 @@ public class UserProfileService {
         return new UserDto(userRepository.save(userChange), userChange.getEmail());
     }
 
+    @Transactional
     public UserDto changeUserEmail(UserDto userDto, BindingResult bindingResult) throws UserNotFoundException, UserIsNotAuthenticatedUser, UserAlreadyExistException, InvalidEmailException {
+        var userChange = lockUser(userDto.getId());
         var userAuth = dataLoaderService.getAuthenticatedUser();
-        var userChange = dataLoaderService.loadUser(userDto.getId());
         verificationService.verifyIsAuthenticatedUser(userChange, userAuth);
         verificationService.verifyEmailIsValid(bindingResult, "userEmail");
         // Same address as before after normalization (e.g. only case differs): nothing to change
@@ -187,21 +206,32 @@ public class UserProfileService {
         }
         verificationService.verifyEmailNotExists(userDto.getUserEmail());
         userChange.setEmail(userDto.getUserEmail());
-        return new UserDto(userRepository.save(userChange), userChange.getEmail());
+        var saved = userRepository.save(userChange);
+        authSessionService.revokeAllSessions(saved, SessionRevokeReason.EMAIL_CHANGED);
+        return new UserDto(saved, saved.getEmail());
     }
 
+    @Transactional
     public void changePassword(PasswordChangeDto passwordChangeDto) throws UserNotFoundException, UserIsNotAuthenticatedUser, WrongPasswordException {
+        var userPwChange = lockUser(passwordChangeDto.getUserId());
         var userAuth = dataLoaderService.getAuthenticatedUser();
-        var userPwChange = dataLoaderService.loadUser(passwordChangeDto.getUserId());
         verificationService.verifyIsAuthenticatedUser(userPwChange, userAuth);
         verificationService.verifyIsCorrectPassword(userPwChange, passwordChangeDto.getOldPassword());
         userPwChange.setPassword(passwordEncoder.encode(passwordChangeDto.getNewPassword()));
         userRepository.save(userPwChange);
+        authSessionService.revokeAllSessions(userPwChange, SessionRevokeReason.PASSWORD_CHANGED);
     }
 
+    /**
+     * Setzt ein Zufallspasswort und mailt es (öffentlich). Beendet alle Sessions des Nutzers (DIV-65, E4).
+     * Die Mail geht vor dem Commit raus; scheitert der Versand mit einer geprüften Exception, bleibt die Änderung wie
+     * bisher bestehen (Rollback standardmäßig nur bei RuntimeException).
+     */
+    @Transactional
     public void passwordReset(String email, BindingResult bindingResult) throws Exception {
         verificationService.verifyEmailIsValid(bindingResult, "email");
-        var user = dataLoaderService.loadUserByEmail(email);
+        var user = userRepository.findByEmailForUpdate(EmailUtils.normalize(email))
+                .orElseThrow(() -> new UserNotFoundException(String.format("User with email %s not found", email)));
         var generatedPassword = RandomStringUtils.randomNumeric(6);
         var subject = translator.translate("email.reset.password.subject");
 
@@ -223,6 +253,7 @@ public class UserProfileService {
 
         user.setPassword(passwordEncoder.encode(generatedPassword));
         userRepository.save(user);
+        authSessionService.revokeAllSessions(user, SessionRevokeReason.PASSWORD_RESET);
         senderService.sendEmail(user.getEmail(), body, subject);
     }
 }

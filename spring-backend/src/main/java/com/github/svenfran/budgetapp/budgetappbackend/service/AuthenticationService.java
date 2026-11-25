@@ -139,10 +139,15 @@ public class AuthenticationService {
                 issued.sessionExpiresAt().toInstant(ZoneOffset.UTC).toEpochMilli());
     }
 
+    /**
+     * Aufräumen (Cron {@code task.clearToken.schedule}): widerrufene Legacy-Tokens und seit DIV-65 beendete Sessions
+     * samt Refresh Tokens ({@link AuthSessionService#deleteEndedSessions}).
+     */
     @Scheduled(cron = "${task.clearToken.schedule}")
     public void deleteExpiredTokens() {
         var tokens = tokenRepository.findAllByExpiredIsTrueAndRevokedIsTrue();
         tokenRepository.deleteAll(tokens);
+        authSessionService.deleteEndedSessions();
     }
 
 }

@@ -28,6 +28,7 @@ import java.time.LocalDate
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 
 /**
  * DIV-22: E-Mail-Adressen sind unabhängig von Groß-/Kleinschreibung und umgebenden Leerzeichen.
@@ -41,8 +42,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * DIV-65: Login liefert Access (15 min, sid) + Refresh Token; Refresh mit Rotation, Kulanzfenster (60 s, ohne
  * Widerruf), Replay (Widerruf der Session), Leerlauf- und absolutes Ende; Logout per Refresh Token und/oder (auch
  * abgelaufenem) Bearer; nicht angemeldet → 401 UNAUTHENTICATED, Login-Fehler bleiben 403 mit leerem Body; Health nur
- * mit gültigem Session-Token. Zeit über testClock. Rollback-Spec: Service und Requests teilen die Test-Transaktion,
- * Widerrufe sind ohne Commit sichtbar (Commit-Verhalten: AuthSessionServiceCommitIntegrationSpec).
+ * mit gültigem Session-Token; Passwortänderung beendet die Sessions aller Geräte (E4). Zeit über testClock.
+ * Rollback-Spec: Service und Requests teilen die Test-Transaktion, Widerrufe sind ohne Commit sichtbar
+ * (Commit-Verhalten: AuthSessionServiceCommitIntegrationSpec, AuthenticationServiceCommitIntegrationSpec).
  * Enthält auch Fälle des Fehlercode-Vertrags mit Legacy-Text-Pins (Liste: {@link CartControllerApiSpec}).
  */
 class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequests {
@@ -1026,6 +1028,28 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
         'nicht angemeldet'    | null   || 'Unauthenticated'
         'abgelehnter Refresh' | 'json' || [code: 'REFRESH_TOKEN_INVALID', message: 'Invalid refresh token']
         'abgelehnter Refresh' | null   || 'Invalid refresh token'
+    }
+
+    def "Nach der Passwortänderung sind Access und Refresh Token beider Geräte ungültig (E4)"() {
+        given:
+        def erstes = loginMax()
+        def zweites = json(authenticate('max@example.de', null, DEVICE_2))
+        LOG.info('Szenario: max (Nutzer {}) angemeldet auf {} und {}, ändert auf {} sein Passwort', erstes.id, DEVICE,
+                DEVICE_2, DEVICE)
+
+        when:
+        def aenderung = send(put('/api/userprofile/update-password')
+                .header('Authorization', JwtService.BEARER_PREFIX + erstes.token).header('deviceId', DEVICE),
+                body: [userId: erstes.id, oldPassword: 'geheim123', newPassword: 'neu12345'])
+        def danach = [access1 : callProtectedEndpoint(erstes.token).status,
+                      refresh1: refresh(erstes.refreshToken).status,
+                      access2 : callProtectedEndpoint(zweites.token, DEVICE_2).status,
+                      refresh2: refresh(zweites.refreshToken, DEVICE_2).status]
+        LOG.info('Antwort: Passwortänderung {}, danach {}', aenderung.status, danach)
+
+        then:
+        aenderung.status == 201
+        danach == [access1: 401, refresh1: 401, access2: 401, refresh2: 401]
     }
 
     def "CORS-Preflight der App für #endpoint ist erlaubt"() {
