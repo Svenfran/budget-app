@@ -18,10 +18,20 @@ Project-specific details live in the sub-project files — read the relevant one
 
 ## How frontend and backend fit together
 
-- **REST**: all endpoints under `/api` (`/api/auth` public). The frontend's `AuthHttpInterceptorService` sends `Authorization` (JWT), `DeviceId` and `Accept-Language` on every request; the backend uses `Accept-Language` for i18n and `DeviceId` for token handling.
+- **REST**: all endpoints under `/api` (`/api/auth` public: login, register, refresh, logout).
+  - **Auth (DIV-65):** short-lived access tokens (JWT, 15 min, claim `sid`) plus server-side refresh-token sessions
+    (30 days sliding, max. 90 days, rotation with replay detection). The backend stores sessions in
+    `auth_session`/`refresh_token`, refresh tokens only as HMAC hash.
+  - **Storage in the app:** the refresh token lives in the Android Keystore, the access token only in memory.
+  - **Headers:** the frontend's `AuthHttpInterceptorService` sends `Accept-Language` and `X-Error-Format` on every
+    request. While a session exists it also sends `Authorization` + `DeviceId` on `/api/**` (except `/api/auth/**`)
+    and `/actuator/health`; on a 401 it refreshes once and retries. The backend uses `Accept-Language` for i18n and
+    `DeviceId` to bind a session to a device.
+  - **Status codes:** unauthenticated requests to protected paths get **401** `UNAUTHENTICATED`. Business rule
+    violations stay 403, failed logins stay 403 with an empty body.
 - **Backend URL**: frontend `src/config/config.ts` (dev, LAN IP on port 9090 = backend `dev` profile) / `config.prod.ts` (Railway) — both git-ignored, created from `src/config/config.example.ts`. New client origins must be added to the backend's `app.cors.allowed-origins`, not in code.
 - **DTO contract**: backend `dto/` classes ↔ frontend `model/*Dto` interfaces. There is no shared schema or code generation — a field change must be made on both sides by hand.
-- **WebSocket** (`/ws`, STOMP over SockJS): CONNECT needs the same credentials as REST (`Authorization: Bearer <jwt>` + `DeviceId`), the session principal is the userId. Backend `NotificationService` sends via `convertAndSendToUser(userId, "/notification/<action>")` to every group member **except the user who triggered the change** (that client updates its own state from the REST response); clients subscribe to `/user/notification/<action>` (no userId in the topic). Plus a global `/notification/health` broadcast (`{status}`) every 10 s. Clients may only subscribe to these destinations and never SEND.
+- **WebSocket** (`/ws`, STOMP over SockJS): CONNECT needs the same credentials as REST (`Authorization: Bearer <access token>` + `DeviceId`; the session from `sid` must be active), the session principal is the userId. Backend `NotificationService` sends via `convertAndSendToUser(userId, "/notification/<action>")` to every group member **except the user who triggered the change** (that client updates its own state from the REST response); clients subscribe to `/user/notification/<action>` (no userId in the topic). Plus a global `/notification/health` broadcast (`{status}`) every 10 s. Clients may only subscribe to these destinations and never SEND.
   - Currently synced live: groups, members, owner change, shopping lists and items including their order (`reorder-lists`/`reorder-items`; where each is subscribed: see `ionic-frontend/CLAUDE.md`).
   - **Not** synced live: carts, categories, settlements and statistics (`GET /api/statistics`, read-only aggregation across the user's groups) — other members only see them on refetch.
   - Notifications are sent **after commit** (`TransactionSynchronization.afterCommit` in `NotificationService`; immediately if no transaction is active). Recipients and payload are determined inside the transaction; a rollback sends nothing. Entities have no `@Version` / optimistic locking, so concurrent edits are last-write-wins.

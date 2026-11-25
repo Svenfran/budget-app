@@ -52,16 +52,34 @@ Standard layered Spring MVC: **Controller → Service → Repository (Spring Dat
   - `DataLoaderService` — central loader. `getAuthenticatedUser()` pulls the current user from the `SecurityContext`; `loadGroup`/`loadCart`/etc. fetch entities or throw the appropriate `*NotFoundException`. Services start almost every method by calling these instead of using repositories directly.
   - `VerificationService` — authorization checks (`verifyIsPartOfGroup`, owner checks, etc.). The standard method shape is: load user → load entity → `verificationService.verify…` → do work. Preserve this ordering when adding endpoints.
 - **DTOs** (`dto/`) convert from entities, often via a constructor `new XxxDto(entity)` or a dedicated mapper in `service/mapper/`. Entities are never returned from controllers.
-- **Entities** (`entity/`): core domain is `User`, `Group`, `Cart`, `Category`, `ShoppingList`, `ShoppingItem`, plus `GroupMembershipHistory`, `CartTemplate`, and `Token`.
+- **Entities** (`entity/`): core domain is `User`, `Group`, `Cart`, `Category`, `ShoppingList`, `ShoppingItem`, plus `GroupMembershipHistory`, `CartTemplate`, the auth sessions `AuthSession`/`RefreshToken` (DIV-65) and the legacy `Token` (no longer written, removal pending).
 - **Exceptions** (`exceptions/`): one checked exception per domain rule. They are translated to HTTP responses centrally in `controller/RestResponseEntityExceptionHandler`. When adding a business rule, add a typed exception and map it there rather than throwing generic errors.
 
 ### Cross-cutting concerns
 
-- **Auth**: stateless JWT. `JwtAuthenticationFilter` (registered in `SecurityConfiguration`) validates the `Authorization` bearer token per request and populates the `SecurityContext`; `JwtService` issues/parses tokens; `Token` entities are persisted (used for logout/revocation). Public paths: `/api/auth/**`, `/api/userprofile/password-reset`, `/ws/**`, `/wss/**`. CORS allowed origins come from the `app.cors.allowed-origins` property (comma-separated; dev: LAN IPs + localhost:8100 for the Ionic dev server; prod: only `http://localhost` and `https://localhost`, the WebView origins of the Capacitor Android app), injected into `SecurityConfiguration` (`corsConfigurationSource`, applies to all paths via the security filter chain) and `WebSocketConfig` — add new origins there, not in code. `helper/OriginLoggingFilter` logs the `Origin` header of incoming requests.
+- **Auth** (DIV-65): stateless access token + server-side refresh-token session.
+  - **Issuing:** `AuthSessionService` creates sessions and rotates refresh tokens (32 random bytes, stored only as
+    HMAC hash via `helper/RefreshTokenHasher`). It also issues the access token through `JwtService` (claims `sub`,
+    `deviceId`, `sid`; validity and lifetimes from `config/AuthProperties`, `app.auth.*`).
+  - **Validation:** `JwtAuthenticationFilter` → `config/TokenValidator` validates the bearer token per request. The
+    session from `sid` must exist, belong to the user, match the `DeviceId` and be neither revoked nor past its
+    absolute lifetime; tokens without `sid` are rejected.
+  - **Rotation:** `POST /api/auth/refresh` rotates; a reused rotated token within 60 s is rejected without revocation,
+    later reuse revokes the session. `AuthSessionService.refresh` returns `RefreshResult` instead of throwing, so a
+    revocation commits before the 401.
+  - **Logout:** `POST /api/auth/logout` (controller, no Spring `logout()`) revokes by refresh token and/or the `sid` of
+    a (possibly expired) bearer token and always answers 200.
+  - **401:** unauthenticated requests get 401 `UNAUTHENTICATED` (`config/UnauthenticatedEntryPoint`). A failed login
+    stays 403 with an empty body (explicit handler).
+  - **Locking:** always user row → session rows (`UserRepository.findByIdForUpdate`/`findByEmailForUpdate`). Login,
+    password/e-mail change, password reset and account deletion lock the user first; refresh locks only the session.
+    Password/e-mail change and reset revoke all sessions of the user, account deletion deletes them.
+
+  Public paths: `/api/auth/**`, `/api/userprofile/password-reset`, `/ws/**`, `/wss/**`. CORS allowed origins come from the `app.cors.allowed-origins` property (comma-separated; dev: LAN IPs + localhost:8100 for the Ionic dev server; prod: only `http://localhost` and `https://localhost`, the WebView origins of the Capacitor Android app), injected into `SecurityConfiguration` (`corsConfigurationSource`, applies to all paths via the security filter chain) and `WebSocketConfig` — add new origins there, not in code. `helper/OriginLoggingFilter` logs the `Origin` header of incoming requests.
 - **WebSocket / notifications**: STOMP over SockJS (`WebSocketConfig`), endpoint from `websocket.url` — `/ws` in all profiles (`/wss` is still permitted in `SecurityConfiguration` but unused). The handshake is public; authentication happens on STOMP level in `config/WebSocketAuthInterceptor` (clientInboundChannel): CONNECT/STOMP are validated with the same `config/TokenValidator` as the REST filter (principal name = userId), SUBSCRIBE only to `/user/notification/*` and `/notification/health`, SEND is always rejected. Simple broker prefix is only `/notification` (user destination prefix `/user`, app prefix `/app`), heartbeats 10 s/10 s via the `messageBrokerTaskScheduler`. `NotificationService` sends after commit (`TransactionSynchronization`), see root `CLAUDE.md`.
 - **Scheduling** (`@EnableScheduling` in `config/SchedulingConfig`, switched off with `app.scheduling.enabled=false` — only the `test` profile does that): cron expressions come from properties so dev runs them aggressively and prod sparingly.
   - `CartService` recurring-cart job (`task.recurringCart.schedule`) — materializes new `Cart`s from active `CartTemplate`s. Recurrence is modeled as a `CartTemplate` (with `RecurrenceType`, `nextExecutionDate`, `active`); a one-off cart has no template (`RecurrenceType.NONE`). See `../docs/sketches` in the repo root.
-  - `AuthenticationService` token cleanup (`task.clearToken.schedule`).
+  - `AuthenticationService` token cleanup (`task.clearToken.schedule`) — legacy `token` rows and sessions that ended more than 7 days ago (with their refresh tokens).
   - `NotificationService` has a `@Scheduled(fixedRate = 10000)` sweep.
 - **i18n**: `messages.properties` (German, default), `messages_en.properties`, `messages_es.properties`. Locale is resolved from the `Accept-Language` header (`AppLanguageConfig` → `AcceptHeaderLocaleResolver`, supported locales `de`/`en`/`es`, default `Locale.GERMAN`, no system-locale fallback): regional variants map to their language (`en-US` → `en`), unsupported languages fall back to `de`, so `LocaleContextHolder.getLocale()` only ever returns one of the three. A new language needs an entry there plus a `messages_<lang>.properties`. Use the `Translator` component (`translate(key, args...)`) for any user-facing string — services pass message *keys* (e.g. `"categories.default.settlement"`) rather than literals. The spending export (sheet names, CSV headers and file names inside the ZIP) is localized the same way.
 - **Email**: Brevo (SendinBlue) via `BrevoMailSenderService` for verification / password reset, configured by `brevo.*` properties.
@@ -73,7 +91,7 @@ Standard layered Spring MVC: **Controller → Service → Repository (Spring Dat
   - **Calendar days at the API** (DIV-81): business days such as `datePurchased` in `CartDto`/`SettlementPaymentDto` are `LocalDate`, serialized as `"YYYY-MM-DD"`; the entities keep `Date` on a `DATE` column, converted only at the DTO boundary via `DateUtils`. Requests in the legacy format `"YYYY-MM-DDT00:00:00.000Z"` (older app versions) are still accepted and read as that UTC day (pinned in `CartControllerApiSpec`).
   - **The JVM runs in UTC**: `BudgetAppApplication.main` calls `useUtcAsDefaultTimeZone()` first; Surefire and Failsafe start the test JVMs with `-Duser.timezone=UTC` (`pom.xml`). `DateUtils` uses `ZoneId.systemDefault()`, i.e. UTC.
   - Known limits: "today" for recurring carts (scheduler, first occurrence of a new template) is the UTC day, so a user west of UTC may see a preview that differs from the stored next date in the evening; membership start/end are UTC days.
-- **Validation**: custom `@ValidEmail` constraint (`validator/`) on auth/user DTOs. Enums such as `RecurrenceType` and `TokenType` live in `constants/`.
+- **Validation**: custom `@ValidEmail` constraint (`validator/`) on auth/user DTOs. Enums such as `RecurrenceType`, `TokenType` and `SessionRevokeReason` live in `constants/`.
 - **Health**: Spring Actuator exposes only `/actuator/health`.
 
 ### Database / Liquibase
@@ -110,13 +128,13 @@ Layout: the package mirrors `main` (`controller/`, `service/`, `service/mapper/`
 ### API specs
 
 - `class <ControllerClass>ApiSpec extends IntegrationSpec implements ApiRequests` with `@Autowired ObjectMapper objectMapper` — e.g. `CartControllerApiSpec`.
-- Send requests through `send(request, user:, body:)`, never `mockMvc.perform` directly. Omitting `user:` means unauthenticated (Spring Security answers **403, not 401**); `user: null` fails on purpose, so a permission test can't turn green by accident. Read JSON with `json(response)` and Groovy comparisons (`body*.title == ['Pizza']`) instead of `jsonPath`.
+- Send requests through `send(request, user:, body:)`, never `mockMvc.perform` directly. Omitting `user:` means unauthenticated (the backend answers **401** `UNAUTHENTICATED`); `user: null` fails on purpose, so a permission test can't turn green by accident. `user:` bypasses the token/session check — test token and session behavior with real `Authorization` headers (see `AuthenticationControllerApiSpec`). Read JSON with `json(response)` and Groovy comparisons (`body*.title == ['Pizza']`) instead of `jsonPath`.
 - URLs are string literals in the test, not constants from production code (they are the contract with the frontend); path variables via MockMvc URI variables (`get('/api/carts/{id}', id)`); an endpoint called several times gets a private helper in the spec.
 - Full rules: Groovydoc of `testsupport/ApiRequests.groovy`.
 
 ### Test data
 
-- `TestData` — static, **not persisted**: one valid object per call, every field overridable by named argument (`TestData.user(name: 'ben')`). For unit specs and as building blocks.
+- `TestData` — static, **not persisted**: one valid object per call, every field overridable by named argument (`TestData.user(name: 'ben')`). For unit specs and as building blocks. Auth helpers: `jwt(...)` (optional `sessionId:` for the `sid` claim), `authSession`, `refreshToken`, `issuedSession`; persisted sessions come from `AuthSessionService.createSession` rather than a fixture.
 - `Fixtures` — Spring component, **persisted**, consistent scenarios: `fixtures.group(members: [ben])` returns a `GroupScenario` (`group`, `owner`, `members`, `category`) with membership history; plus `user`, `category`, `cart`, `template`, `token`.
 - Defaults are valid, names/e-mails unique, dates fixed (`TestData.REFERENCE_DATE` = 2025-06-15; memberships start one year before, `memberSince:` overrides). Values the test asserts on are set in the test, not hidden in defaults.
 - Groovy named args go into the first (`Map`) parameter: `fixtures.cart(wg, title: 'Pizza')`.
@@ -174,7 +192,7 @@ Every spec logs what it does, so a run can be followed without a debugger. INFO,
 
 ### Error-code contract
 
-Every exception mapped in `RestResponseEntityExceptionHandler` has a code (`constants/ApiErrorCode`, map `ERROR_CODES`; exceptions with per-instance code or details implement `exceptions/ApiErrorInfo`, e.g. `DatePurchasedNotWithinMembershipPeriodException` with `details.userId`). With the request header `X-Error-Format: json` the body is `dto/ApiErrorDto` `{ code, message, details? }`; without it the body stays the old plain text — older app versions evaluate that text. `RestResponseEntityExceptionHandlerSpec` pins that every class of the four status handlers has its expected code. The cases the frontend evaluates (M1–M10, X1–X3, S1: frontend location, status, code, legacy text, covering spec) are listed in the Groovydoc of `controller/CartControllerApiSpec.groovy`; each one has an API test with the header (code) and one without (exact legacy text; the legacy content type is pinned in `GroupControllerApiSpec`). When you change a code or a legacy text, or the frontend evaluates a new code, update the tests and the list. The legacy texts can only be dropped once a minimum app version is enforced.
+Every exception mapped in `RestResponseEntityExceptionHandler` has a code (`constants/ApiErrorCode`, map `ERROR_CODES`; exceptions with per-instance code or details implement `exceptions/ApiErrorInfo`, e.g. `DatePurchasedNotWithinMembershipPeriodException` with `details.userId`). With the request header `X-Error-Format: json` the body is `dto/ApiErrorDto` `{ code, message, details? }`; without it the body stays the old plain text — older app versions evaluate that text. `RestResponseEntityExceptionHandlerSpec` pins that every class of the four status handlers has its expected code. The cases the frontend evaluates (M1–M10, X1–X3, S1, R1, U1–U2: frontend location, status, code, legacy text, covering spec) are listed in the Groovydoc of `controller/CartControllerApiSpec.groovy`; each one has an API test with the header (code) and one without (exact legacy text; the legacy content type is pinned in `GroupControllerApiSpec`). When you change a code or a legacy text, or the frontend evaluates a new code, update the tests and the list. The legacy texts can only be dropped once a minimum app version is enforced.
 
 ### Reference specs
 
