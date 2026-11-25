@@ -30,7 +30,7 @@ class LoginServiceSpec extends Specification {
     def request = new AuthenticationRequest('max@example.de', 'geheim123', 'device-1')
     def bindingResult = new BeanPropertyBindingResult(request, 'request')
     def reservation = new LoginReservation('acc', 'ip', 'header', [:])
-    def response = new AuthenticationResponse(1L, 'max', 'max@example.de', 0L, 'jwt')
+    def response = new AuthenticationResponse(1L, 'max', 'max@example.de', 0L, 'jwt', 'refresh', 0L)
 
     def "Erfolgreicher Login: reservieren, prüfen, freigeben – in dieser Reihenfolge"() {
         when:

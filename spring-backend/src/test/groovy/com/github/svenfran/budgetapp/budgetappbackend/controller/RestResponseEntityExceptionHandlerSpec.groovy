@@ -8,6 +8,7 @@ import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.mock.web.MockHttpServletRequest
+import org.springframework.security.authentication.BadCredentialsException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.context.request.ServletWebRequest
 import org.springframework.web.context.request.WebRequest
@@ -23,12 +24,16 @@ import static com.github.svenfran.budgetapp.budgetappbackend.constants.ApiErrorC
  */
 class RestResponseEntityExceptionHandlerSpec extends Specification {
 
-    /** Die vier fachlichen Statushandler; handleDataIntegrityViolation und geerbte Handler gehören nicht dazu. */
-    static final List<String> STATUS_HANDLERS = ['handleNotFound', 'handleBadRequest', 'handleForbidden', 'handleConflict']
+    /**
+     * Die fünf fachlichen Statushandler; handleDataIntegrityViolation, handleTooManyLoginAttempts, handleLoginFailure
+     * und geerbte Handler gehören nicht dazu.
+     */
+    static final List<String> STATUS_HANDLERS = ['handleNotFound', 'handleBadRequest', 'handleUnauthorized',
+                                                 'handleForbidden', 'handleConflict']
 
     def handler = new RestResponseEntityExceptionHandler()
 
-    def "Jede Exception der vier Statushandler hat einen Fehlercode, und es gibt keine Codes für ungemappte Klassen"() {
+    def "Jede Exception der fünf Statushandler hat einen Fehlercode, und es gibt keine Codes für ungemappte Klassen"() {
         when:
         def gemappt = STATUS_HANDLERS.collectMany { name ->
             RestResponseEntityExceptionHandler.getDeclaredMethod(name, Exception, WebRequest)
@@ -36,7 +41,7 @@ class RestResponseEntityExceptionHandlerSpec extends Specification {
         } as Set
 
         then:
-        gemappt.size() == 38
+        gemappt.size() == 39
         RestResponseEntityExceptionHandler.ERROR_CODES.keySet() == gemappt
     }
 
@@ -63,6 +68,7 @@ class RestResponseEntityExceptionHandlerSpec extends Specification {
         UserAlreadyExistException                        || EMAIL_ALREADY_EXISTS
         InvalidEmailException                            || INVALID_EMAIL
         MissingDeviceIdException                         || DEVICE_ID_REQUIRED
+        InvalidRefreshTokenException                     || REFRESH_TOKEN_INVALID
         UserNameAlreadyExistsException                   || USER_NAME_ALREADY_EXISTS
         UserIsNotAuthenticatedUser                       || NOT_AUTHENTICATED_USER
         WrongPasswordException                           || INCORRECT_PASSWORD
@@ -137,6 +143,31 @@ class RestResponseEntityExceptionHandlerSpec extends Specification {
         format          | header || contentType                | body
         'Text (Legacy)' | null   || null                       | 'Too many login attempts'
         'JSON mit Code' | 'json' || MediaType.APPLICATION_JSON | new ApiErrorDto(TOO_MANY_LOGIN_ATTEMPTS, 'Too many login attempts', [:])
+    }
+
+    def "Abgelehnter Refresh (DIV-65) mit X-Error-Format '#header': 401 und Body #format"() {
+        when:
+        def response = handler.handleUnauthorized(new InvalidRefreshTokenException(), request(header))
+
+        then:
+        response.statusCode == HttpStatus.UNAUTHORIZED
+        response.headers.getContentType() == contentType
+        response.body == body
+
+        where:
+        format          | header || contentType                | body
+        'Text (Legacy)' | null   || null                       | 'Invalid refresh token'
+        'JSON mit Code' | 'json' || MediaType.APPLICATION_JSON | new ApiErrorDto(REFRESH_TOKEN_INVALID, 'Invalid refresh token', [:])
+    }
+
+    def "Falsche Zugangsdaten beim Login bleiben 403 mit leerem Body (DIV-64/DIV-65)"() {
+        when:
+        def response = handler.handleLoginFailure(new BadCredentialsException('Bad credentials'))
+
+        then:
+        response.statusCode == HttpStatus.FORBIDDEN
+        response.body == null
+        response.headers.isEmpty()
     }
 
     def "Verletzung des E-Mail-Unique-Constraints (parallele Requests) wird zu 400 'already exists'"() {

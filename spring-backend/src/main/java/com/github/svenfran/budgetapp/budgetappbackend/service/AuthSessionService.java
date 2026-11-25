@@ -51,21 +51,23 @@ public class AuthSessionService {
     private final UserRepository userRepository;
     private final RefreshTokenHasher hasher;
     private final AuthProperties properties;
+    private final JwtService jwtService;
     private final Clock clock;
 
     public AuthSessionService(AuthSessionRepository sessionRepository, RefreshTokenRepository tokenRepository,
                               UserRepository userRepository, RefreshTokenHasher hasher, AuthProperties properties,
-                              Clock clock) {
+                              JwtService jwtService, Clock clock) {
         this.sessionRepository = sessionRepository;
         this.tokenRepository = tokenRepository;
         this.userRepository = userRepository;
         this.hasher = hasher;
         this.properties = properties;
+        this.jwtService = jwtService;
         this.clock = clock;
     }
 
     /**
-     * Legt unter Nutzersperre eine neue Session mit erstem Refresh Token an. Nicht widerrufene Sessions desselben
+     * Legt unter Nutzersperre eine neue Session mit erstem Refresh Token und Access Token an. Nicht widerrufene Sessions desselben
      * Nutzers auf derselben DeviceId werden widerrufen ({@code RELOGIN}) – höchstens eine aktive Session je Gerät.
      */
     @Transactional
@@ -92,7 +94,7 @@ public class AuthSessionService {
         var token = newToken(session, plain, now);
         tokenRepository.save(token);
         LOG.info("event=session_created sessionId={} userId={}", session.getId(), lockedUser.getId());
-        return issued(session, plain, token);
+        return issued(session, lockedUser, plain, token);
     }
 
     /**
@@ -105,7 +107,8 @@ public class AuthSessionService {
      *       aktuellen Tokens und innerhalb des Kulanzfensters → abgelehnt ohne Widerruf; sonst Replay → Session
      *       widerrufen ({@code REUSE_DETECTED}).</li>
      *   <li>Aktueller Token nach Leerlauf abgelaufen → abgelehnt.</li>
-     *   <li>Sonst rotieren: neuer Token gilt {@code refreshTokenValidity}, höchstens bis zur absoluten Grenze.</li>
+     *   <li>Sonst rotieren: neuer Token gilt {@code refreshTokenValidity}, höchstens bis zur absoluten Grenze; dazu ein
+     *       neuer Access Token derselben Session.</li>
      * </ol>
      * Wirft nicht, damit ein Widerruf committet wird (siehe {@link RefreshResult}).
      */
@@ -162,7 +165,7 @@ public class AuthSessionService {
         presented.setReplacedBy(next);
         session.setLastUsedAt(now);
         LOG.debug("event=refresh_token_rotated sessionId={}", session.getId());
-        return new RefreshResult.Rotated(issued(session, plain, next));
+        return new RefreshResult.Rotated(issued(session, session.getUser(), plain, next));
     }
 
     /**
@@ -243,8 +246,10 @@ public class AuthSessionService {
         return token;
     }
 
-    private static IssuedSession issued(AuthSession session, String plain, RefreshToken token) {
-        return new IssuedSession(session.getId(), session.getUser().getId(), plain, token.getExpiresAt(),
+    private IssuedSession issued(AuthSession session, User user, String plainRefreshToken, RefreshToken token) {
+        var accessToken = jwtService.generateToken(user, session.getDeviceId(), session.getId());
+        return new IssuedSession(session.getId(), user.getId(), user.getName(), user.getEmail(), accessToken,
+                jwtService.extractExpiration(accessToken).toInstant(), plainRefreshToken, token.getExpiresAt(),
                 session.getAbsoluteExpiresAt());
     }
 

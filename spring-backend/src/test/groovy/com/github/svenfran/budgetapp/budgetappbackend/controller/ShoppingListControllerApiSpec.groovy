@@ -157,13 +157,13 @@ class ShoppingListControllerApiSpec extends IntegrationSpec implements ApiReques
         0 * notificationService._
     }
 
-    def "Ohne Anmeldung wird das Laden der Listen mit 403 abgelehnt"() {
+    def "Ohne Anmeldung wird das Laden der Listen mit 401 abgelehnt"() {
         given:
         def wg = fixtures.group()
         LOG.info('Szenario: Gruppe {}, Request ohne Anmeldung', wg.group.id)
 
-        expect: 'Ist-Verhalten: Spring Security antwortet ohne Authentifizierung mit 403, nicht 401'
-        send(get('/api/groups/shopping-lists-with-items/{groupId}', wg.group.id)).status == 403
+        expect: 'nicht angemeldet: 401 UNAUTHENTICATED (DIV-65), fachliche Verbote bleiben 403'
+        send(get('/api/groups/shopping-lists-with-items/{groupId}', wg.group.id)).status == 401
     }
 
     def "Liste einer fremden Gruppe umbenennen: 404"() {
@@ -268,7 +268,7 @@ class ShoppingListControllerApiSpec extends IntegrationSpec implements ApiReques
 
         where:
         fall                | wer        | unbekannteGruppe || status
-        'ohne Anmeldung'    | null       | false            || 403
+        'ohne Anmeldung'    | null       | false            || 401
         'als Nicht-Mitglied'| 'fremder'  | false            || 403
         'unbekannte Gruppe' | 'mitglied' | true             || 404
     }
@@ -367,14 +367,14 @@ class ShoppingListControllerApiSpec extends IntegrationSpec implements ApiReques
         response.status == 403
     }
 
-    def "Ohne Anmeldung wird der Abruf der Vorschläge mit 403 abgelehnt"() {
+    def "Ohne Anmeldung wird der Abruf der Vorschläge mit 401 abgelehnt"() {
         given:
         def wg = fixtures.group()
         def liste = fixtures.shoppingList(wg)
         LOG.info('Szenario: Gruppe {}, Liste {}, Request ohne Anmeldung', wg.group.id, liste.id)
 
         expect:
-        send(get('/api/groups/shopping-list/suggestions/{groupId}/{shoppingListId}', wg.group.id, liste.id)).status == 403
+        send(get('/api/groups/shopping-list/suggestions/{groupId}/{shoppingListId}', wg.group.id, liste.id)).status == 401
     }
 
     def "Vorschläge für die Liste einer fremden Gruppe: 404"() {

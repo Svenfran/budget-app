@@ -11,6 +11,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.context.request.WebRequest;
@@ -22,7 +23,7 @@ import static java.util.Map.entry;
 
 
 /**
- * Übersetzt die fachlichen Exceptions zentral in HTTP-Antworten. Status über die vier Handler-Listen, Fehlercode über
+ * Übersetzt die fachlichen Exceptions zentral in HTTP-Antworten. Status über die fünf Handler-Listen, Fehlercode über
  * {@link #ERROR_CODES} (DIV-108).
  *
  * Fehlerformat: Mit dem Request-Header {@code X-Error-Format: json} (neue App-Versionen) ist der Body
@@ -39,7 +40,7 @@ public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionH
     static final String ERROR_FORMAT_JSON = "json";
 
     /**
-     * Fehlercode je Exception-Klasse; muss jede Klasse der vier Statushandler enthalten (RestResponseEntityExceptionHandlerSpec).
+     * Fehlercode je Exception-Klasse; muss jede Klasse der fünf Statushandler enthalten (RestResponseEntityExceptionHandlerSpec).
      * Exceptions mit {@link ApiErrorInfo} liefern Code und Details selbst.
      */
     static final Map<Class<? extends Exception>, ApiErrorCode> ERROR_CODES = Map.ofEntries(
@@ -60,6 +61,7 @@ public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionH
             entry(UserAlreadyExistException.class, ApiErrorCode.EMAIL_ALREADY_EXISTS),
             entry(InvalidEmailException.class, ApiErrorCode.INVALID_EMAIL),
             entry(MissingDeviceIdException.class, ApiErrorCode.DEVICE_ID_REQUIRED),
+            entry(InvalidRefreshTokenException.class, ApiErrorCode.REFRESH_TOKEN_INVALID),
             entry(UserNameAlreadyExistsException.class, ApiErrorCode.USER_NAME_ALREADY_EXISTS),
             entry(UserIsNotAuthenticatedUser.class, ApiErrorCode.NOT_AUTHENTICATED_USER),
             entry(WrongPasswordException.class, ApiErrorCode.INCORRECT_PASSWORD),
@@ -121,6 +123,28 @@ public class RestResponseEntityExceptionHandler extends ResponseEntityExceptionH
     })
     protected ResponseEntity<Object> handleBadRequest(Exception ex, WebRequest request) {
         return buildResponse(ex, HttpStatus.BAD_REQUEST, request);
+    }
+
+    /**
+     * Refresh abgelehnt (DIV-65). Nicht angemeldete Requests auf geschützte Pfade beantwortet nicht dieser Handler,
+     * sondern {@code config.UnauthenticatedEntryPoint} (ebenfalls 401, Code {@code UNAUTHENTICATED}).
+     */
+    @ExceptionHandler(value = {
+            InvalidRefreshTokenException.class
+    })
+    protected ResponseEntity<Object> handleUnauthorized(Exception ex, WebRequest request) {
+        return buildResponse(ex, HttpStatus.UNAUTHORIZED, request);
+    }
+
+    /**
+     * Falsche Zugangsdaten beim Login: weiterhin 403 mit leerem Body (Frontend {@code auth-error-message.ts}, DIV-64).
+     * Ohne diesen Handler landete die Exception beim Entry Point und wäre seit DIV-65 ein 401.
+     */
+    @ExceptionHandler(AuthenticationException.class)
+    protected ResponseEntity<Object> handleLoginFailure(AuthenticationException ex) {
+        // nur die Klasse: die Meldung kann den Nutzernamen enthalten
+        LOG.debug("Login failed: {}", ex.getClass().getSimpleName());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
     }
 
     @ExceptionHandler(value = {

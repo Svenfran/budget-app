@@ -6,7 +6,6 @@ import com.github.svenfran.budgetapp.budgetappbackend.dto.AuthenticationRequest
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AuthenticationResponse
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.TooManyLoginAttemptsException
 import com.github.svenfran.budgetapp.budgetappbackend.helper.LoginAttemptKeys
-import com.github.svenfran.budgetapp.budgetappbackend.repository.TokenRepository
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.DatabaseCleaner
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
 import org.slf4j.Logger
@@ -32,6 +31,7 @@ import java.util.concurrent.TimeUnit
  * Commit-Grenzen des Logins mit Rate-Limit (DIV-64, Finding F-003): LoginService ist nicht transaktional, der Zähler
  * committet vor der Passwortprüfung und überlebt den Rollback des fehlgeschlagenen Logins; eine Abweisung ändert
  * keinen Zähler; ein Erfolg gibt die eigene Reservierung committet frei; eine Freigabe ohne Zeile ist ein No-op.
+ * Seit DIV-65 legt der Login eine Session an (statt einer token-Zeile) und sperrt dafür zuerst die Nutzerzeile.
  *
  * Commit-abhängig: keine Test-Transaktion, Aufräumen vor jedem Feature. IPs aus 192.0.2.0/24 (nicht 127.0.0.1, das
  * die API-Specs nutzen – die Zeilen bleiben nach dem Feature liegen).
@@ -49,7 +49,6 @@ class LoginServiceCommitIntegrationSpec extends IntegrationSpec {
     @Autowired LoginRateLimiter rateLimiter
     @Autowired LoginAttemptKeys keys
     @Autowired PasswordEncoder passwordEncoder
-    @Autowired TokenRepository tokenRepository
     @Autowired PlatformTransactionManager transactionManager
     @Autowired JdbcTemplate jdbcTemplate
     @Autowired DatabaseCleaner databaseCleaner
@@ -93,7 +92,7 @@ class LoginServiceCommitIntegrationSpec extends IntegrationSpec {
         nachher == vorher
     }
 
-    def "Erfolg nach 2 Fehlversuchen: Token gespeichert, eigene Reservierung committet freigegeben"() {
+    def "Erfolg nach 2 Fehlversuchen: Session angelegt, eigene Reservierung committet freigegeben"() {
         given:
         def email = nutzer('lsc-erfolg@example.org')
         def userId = userIdVon(email)
@@ -103,25 +102,27 @@ class LoginServiceCommitIntegrationSpec extends IntegrationSpec {
 
         when:
         def antwort = login(email, PASSWORT, ip) as AuthenticationResponse
-        def tokens = tokenRepository.findAllByUserId(userId)*.deviceId
+        def sessions = aktiveSessionGeraete(userId)
         def zaehler = zaehlerstaende(email, ip)
-        LOG.info('Login -> Nutzer {}; Tokens (DeviceIds) {}; Zähler {}', antwort.id, tokens, zaehler)
+        LOG.info('Login -> Nutzer {}; aktive Sessions (DeviceIds) {}; Zähler {}', antwort.id, sessions, zaehler)
 
         then:
         antwort.id == userId
-        tokens == [DEVICE]
+        sessions == [DEVICE]
         zaehler == [IP: 2, ACCOUNT: 2, ACCOUNT_IP: null]
     }
 
     def "Freigabe ohne Zeile (zwischen Reservierung und Freigabe aufgeräumt) ist ein No-op, der Login gelingt"() {
         given:
         def email = nutzer('lsc-noop@example.org')
+        def userId = userIdVon(email)
         def ip = '192.0.2.4'
         def gesperrt = new CountDownLatch(1)
         def freigabe = new CountDownLatch(1)
         def pool = Executors.newFixedThreadPool(2)
         def transaction = new TransactionTemplate(transactionManager)
-        LOG.info('Szenario: Nutzer lsc-noop von {}; T1 sperrt die Tabelle token, der Login wartet nach der Reservierung darauf', ip)
+        LOG.info('Szenario: Nutzer {} (lsc-noop) von {}; T1 sperrt die Nutzerzeile, der Login wartet nach der Reservierung darauf',
+                userId, ip)
 
         when:
         Map<String, Integer> waehrendLogin
@@ -129,7 +130,8 @@ class LoginServiceCommitIntegrationSpec extends IntegrationSpec {
         try {
             def t1 = pool.submit({
                 transaction.execute {
-                    jdbcTemplate.execute('LOCK TABLE token IN ACCESS EXCLUSIVE MODE')
+                    // dieselbe Zeile sperrt AuthenticationService.authenticate vor der Passwortprüfung (DIV-65)
+                    jdbcTemplate.queryForList('select id from user_details where id = ? for update', Long, userId)
                     gesperrt.countDown()
                     assert freigabe.await(TIMEOUT, TimeUnit.SECONDS)
                 }
@@ -166,6 +168,11 @@ class LoginServiceCommitIntegrationSpec extends IntegrationSpec {
 
     private Long userIdVon(String email) {
         jdbcTemplate.queryForObject('select id from user_details where email = ?', Long, email)
+    }
+
+    private List<String> aktiveSessionGeraete(Long userId) {
+        jdbcTemplate.queryForList('select device_id from auth_session where user_id = ? and revoked_at is null order by id',
+                String, userId)
     }
 
     private Object login(String email, String passwort, String ip) {

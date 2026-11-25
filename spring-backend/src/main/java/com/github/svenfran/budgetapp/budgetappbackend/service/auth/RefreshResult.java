@@ -9,7 +9,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.service.AuthSessionService
  */
 public sealed interface RefreshResult {
 
-    /** Token rotiert: neuer Refresh Token in {@code session}. */
+    /** Token rotiert: neues Paar aus Access und Refresh Token in {@code session}. */
     record Rotated(IssuedSession session) implements RefreshResult {
     }
 

@@ -24,7 +24,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * Referenz-API-Spec (MockMvc): HTTP-Status, Exception-Mapping von {@link RestResponseEntityExceptionHandler},
  * JSON-Form der DTOs, Security-Regeln und Fehlercode-Vertrag zum Frontend (mit Legacy-Text-Pins).
  *
- * - Requests über ApiRequests.send (Anmeldung per user: → .with(user(entity))); ohne Anmeldung antwortet Spring Security mit 403, nicht 401.
+ * - Requests über ApiRequests.send (Anmeldung per user: → .with(user(entity))); ohne Anmeldung antwortet das Backend
+ *   seit DIV-65 mit 401 UNAUTHENTICATED (vorher 403).
  * - JSON über den Jackson-ObjectMapper und Groovy-Vergleiche statt jsonPath.
  *
  * Fehlercode-Vertrag (DIV-108): Mit dem Request-Header X-Error-Format: json (sendet die App seit DIV-108) ist der
@@ -49,12 +50,16 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * X3  auth-error-message.ts Login/Registrierung     400  DEVICE_ID_REQUIRED                    'DeviceId is required'                     AuthenticationControllerApiSpec
  * S1  group.service.ts updateGroup (DIV-77)         409  CURRENCY_CHANGE_CONFIRMATION_REQUIRED 'Changing the currency of a group with bookings requires confirmation'  GroupControllerApiSpec
  * R1  auth-error-message.ts Login (DIV-64)         429  TOO_MANY_LOGIN_ATTEMPTS               'Too many login attempts'                  AuthenticationControllerApiSpec
+ * U1  Interceptor (DIV-65, Frontend ab Phase 5)     401  UNAUTHENTICATED                       'Unauthenticated'                          AuthenticationControllerApiSpec
+ * U2  AuthService.refresh (DIV-65, ab Phase 5)      401  REFRESH_TOKEN_INVALID                 'Invalid refresh token'                    AuthenticationControllerApiSpec
  * </pre>
  * M1 details.userId: die Partei, deren Mitgliedschaft das Datum nicht abdeckt (bei Ausgleichszahlungen Zahler vor
  * Empfänger). Seit DIV-109 kann das auch eine ehemalige Gegenpartei sein (Datum vor dem Beginn ihrer ersten
  * Mitgliedschaft). Fehlendes Datum: DATE_PURCHASED_REQUIRED (kein Mitgliedschaftshinweis).
  * R1: Das Frontend erkennt 429 am Status (alle App-Versionen), nicht am Code; die Restzeit steht im Header Retry-After
  * (per CORS freigegeben). Code und Text sind trotzdem gepinnt.
+ * U1/U2: Das Frontend wertet den Status 401 aus (geschützter Request → Refresh + Retry; Refresh → Session beenden),
+ * nicht Code oder Text; fachliche 403 lösen keinen Refresh aus. Login-Fehler bleiben 403 mit leerem Body (DIV-64).
  * Alle übrigen gemappten Exceptions haben ebenfalls einen Code (ApiErrorCode, RestResponseEntityExceptionHandlerSpec),
  * das Frontend wertet sie aber nicht aus. Der Unique-Constraint-Handler (parallele Registrierungen/E-Mail-Änderungen)
  * liefert EMAIL_ALREADY_EXISTS mit dem Text 'User with email already exists' ohne Adresse – über den Code erkennt das
@@ -99,13 +104,13 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
         send(get('/api/carts/carts-by-groupid/{id}', wg.group.id), user: fixtures.user()).status == 403
     }
 
-    def "Ohne Anmeldung wird der Zugriff mit 403 abgelehnt"() {
+    def "Ohne Anmeldung wird der Zugriff mit 401 abgelehnt"() {
         given:
         def wg = fixtures.group()
         LOG.info('Szenario: Gruppe {}, Request ohne Anmeldung', wg.group.id)
 
-        expect: 'Ist-Verhalten: Spring Security antwortet ohne Authentifizierung mit 403, nicht 401'
-        send(get('/api/carts/carts-by-groupid/{id}', wg.group.id)).status == 403
+        expect: 'nicht angemeldet: 401 UNAUTHENTICATED (DIV-65), fachliche Verbote bleiben 403'
+        send(get('/api/carts/carts-by-groupid/{id}', wg.group.id)).status == 401
     }
 
     def "Unbekannter Einkauf: 404"() {
@@ -946,12 +951,12 @@ class CartControllerApiSpec extends IntegrationSpec implements ApiRequests {
         response.status == 404
     }
 
-    def "Export ohne Anmeldung: 403"() {
+    def "Export ohne Anmeldung: 401"() {
         given:
         LOG.info('Szenario: kein angemeldeter Nutzer')
 
         expect:
-        send(get('/api/carts/export').param('format', 'XLSX')).status == 403
+        send(get('/api/carts/export').param('format', 'XLSX')).status == 401
     }
 
     def "Export mit ungültigen Parametern (#fall): 400"() {

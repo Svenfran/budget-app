@@ -35,8 +35,9 @@ class AuthSessionServiceIntegrationSpec extends IntegrationSpec {
     @Autowired AuthSessionRepository sessionRepository
     @Autowired RefreshTokenRepository tokenRepository
     @Autowired RefreshTokenHasher hasher
+    @Autowired JwtService jwtService
 
-    def "Neue Session: Refresh Token nur als Hash gespeichert, 30 Tage gültig, Session 90 Tage"() {
+    def "Neue Session: Refresh Token nur als Hash gespeichert, 30 Tage gültig, Session 90 Tage, Access Token mit sid"() {
         given:
         def anna = fixtures.user()
         def start = now()
@@ -65,6 +66,14 @@ class AuthSessionServiceIntegrationSpec extends IntegrationSpec {
         tokens[0].rotatedAt == null
         issued.refreshTokenExpiresAt() == start.plusDays(30)
         issued.sessionExpiresAt() == start.plusDays(90)
+
+        and: 'Access Token (Phase 2): 15 min, Session-Id und DeviceId im Token'
+        jwtService.extractSessionId(issued.accessToken()) == issued.sessionId()
+        jwtService.extractDeviceId(issued.accessToken()) == DEVICE
+        jwtService.extractUsername(issued.accessToken()) == anna.email
+        issued.accessTokenExpiresAt() == testClock.instant().plus(Duration.ofMinutes(15))
+        issued.userEmail() == anna.email
+        !issued.toString().contains(issued.accessToken())
     }
 
     def "Rotation: alter Token rotiert mit Verweis auf den Nachfolger, neuer Token 30 Tage ab jetzt gültig"() {
@@ -89,6 +98,8 @@ class AuthSessionServiceIntegrationSpec extends IntegrationSpec {
         neu.sessionId() == issued.sessionId()
         neu.refreshTokenExpiresAt() == zeitpunkt.plusDays(30)
         neu.sessionExpiresAt() == issued.sessionExpiresAt()
+        jwtService.extractSessionId(neu.accessToken()) == issued.sessionId()
+        neu.accessTokenExpiresAt() == testClock.instant().plus(Duration.ofMinutes(15))
         tokens.size() == 2
         tokens[0].rotatedAt == zeitpunkt
         tokens[0].replacedBy.id == tokens[1].id
