@@ -4,7 +4,7 @@ import { fakeAsync, flushMicrotasks, TestBed } from '@angular/core/testing';
 import { Client, StompConfig } from '@stomp/stompjs';
 import { environment } from 'src/environments/environment';
 import { FakeStompClient } from 'src/testing/fake-stomp-client';
-import { aGroup, aLoggedInUser, REFERENCE_DATE } from 'src/testing/test-data';
+import { aGroup } from 'src/testing/test-data';
 import { provideServiceTesting } from 'src/testing/test-providers';
 import { DEVICE_ID } from '../auth/device-id';
 import { GroupService } from './group.service';
@@ -17,7 +17,9 @@ describe('WebSocketService', () => {
   const activeGroup = signal(aGroup({ id: 1 }));
   const healthUrl = `${environment.apiBaseUrl}/actuator/health`;
   const topic = '/user/notification/add-item';
-  const bearer: AuthorizationProvider = () => 'Bearer test-jwt';
+  /** Provider, der immer denselben Authorization-Wert liefert (DIV-65: asynchron, als WsAuthResult). */
+  const tokenProvider = (value: string): AuthorizationProvider => () => Promise.resolve({ kind: 'token', value });
+  const bearer = tokenProvider('Bearer test-jwt');
 
   /** connect() bis einschließlich beforeConnect durchlaufen lassen; liefert den neu erzeugten Client. */
   function connect(authorization: AuthorizationProvider = bearer): FakeStompClient {
@@ -80,36 +82,37 @@ describe('WebSocketService', () => {
     }));
 
     it('setzt Authorization unverändert aus dem Provider (kein doppeltes "Bearer ") und die DeviceId', fakeAsync(() => {
-      jasmine.clock().mockDate(REFERENCE_DATE);
-      try {
-        const user = aLoggedInUser({ token: 'Bearer test-jwt' });
+      const client = connect(tokenProvider('Bearer test-jwt'));
 
-        const client = connect(() => user.token);
-
-        expect(client.connectHeaders).toEqual({ Authorization: 'Bearer test-jwt', DeviceId: 'device-1' });
-      } finally {
-        jasmine.clock().uninstall();
-      }
+      expect(client.connectHeaders).toEqual({ Authorization: 'Bearer test-jwt', DeviceId: 'device-1' });
     }));
 
-    it('liest das Token vor jedem (Re-)Connect neu', fakeAsync(() => {
+    it('fragt den Provider vor jedem (Re-)Connect neu ab', fakeAsync(() => {
       let token = 'Bearer alt';
-      const client = connect(() => token);
+      const provider = jasmine.createSpy('provider').and.callFake(() => Promise.resolve({ kind: 'token', value: token }));
+      const client = connect(provider);
 
       token = 'Bearer neu';
       client.runBeforeConnect();
       flushMicrotasks();
 
+      expect(provider).toHaveBeenCalledTimes(2);
       expect(client.connectHeaders['Authorization']).toBe('Bearer neu');
     }));
 
-    it('deaktiviert den Client, wenn der Provider kein Token liefert', fakeAsync(() => {
-      const client = connect(() => undefined);
+    ([
+      ['no-session (keine bzw. beendete Session)', () => Promise.resolve({ kind: 'no-session' })],
+      ['retry (vorerst wie no-session, Wiederverbindung folgt in Phase 6)', () => Promise.resolve({ kind: 'retry' })],
+      ['einen abgelehnten Provider (gilt als retry)', () => Promise.reject(new Error('unerwartet'))],
+    ] as [string, AuthorizationProvider][]).forEach(([fall, provider]) => {
+      it(`deaktiviert den Client bei ${fall}`, fakeAsync(() => {
+        const client = connect(provider);
 
-      expect(client.deactivate).toHaveBeenCalled();
-      expect(client.active).toBeFalse();
-      expect(client.connectHeaders).toEqual({});
-    }));
+        expect(client.deactivate).toHaveBeenCalled();
+        expect(client.active).toBeFalse();
+        expect(client.connectHeaders).toEqual({});
+      }));
+    });
 
     it('bleibt aktiv, wenn der Server eine bestehende Sitzung mit einem STOMP-Fehler beendet (Heartbeat-Timeout)', fakeAsync(() => {
       // Regression: Spring schickt nach 30 s ohne Client-Heartbeat (z. B. gedrosselter Hintergrund-Tab) ERROR
@@ -185,7 +188,7 @@ describe('WebSocketService', () => {
       expect(client.aliveSubscriptions(topic)).toEqual([]);
       expect(service.isConnected()).toBeFalse();
 
-      const next = connected(() => 'Bearer anderer-nutzer');
+      const next = connected(tokenProvider('Bearer anderer-nutzer'));
       next.deliver(topic, JSON.stringify({ id: 7 }));
 
       expect(next.aliveSubscriptions(topic).length).toBe(1);
@@ -202,7 +205,7 @@ describe('WebSocketService', () => {
 
       service.disconnect();
       service.subscribe(topic, handler, { owner: 'app' });
-      const current = connect(() => 'Bearer anderer-nutzer');
+      const current = connect(tokenProvider('Bearer anderer-nutzer'));
 
       old.simulateConnect();
       oldCallback({ body: JSON.stringify({ groupId: 1 }) } as any);
@@ -236,9 +239,9 @@ describe('WebSocketService', () => {
       const finishDeactivation = openDeactivation(old);
       service.disconnect();
 
-      service.connect(() => 'Bearer A');
+      service.connect(tokenProvider('Bearer A'));
       service.disconnect();
-      service.connect(() => 'Bearer B');
+      service.connect(tokenProvider('Bearer B'));
       flushMicrotasks();
       finishDeactivation();
       flushMicrotasks();

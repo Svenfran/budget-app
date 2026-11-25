@@ -20,8 +20,14 @@ export const STOMP_CLIENT_FACTORY = new InjectionToken<StompClientFactory>('STOM
   }),
 });
 
-/** Liefert den fertigen Authorization-Wert (`"Bearer <jwt>"`, wie `User.token`) oder nichts, wenn keiner vorliegt. */
-export type AuthorizationProvider = () => string | null | undefined;
+/**
+ * Zugangsdaten für einen (Re-)Connect (DIV-65): `token` mit fertigem Authorization-Wert (`"Bearer <jwt>"`),
+ * `no-session` (nicht angemeldet bzw. Session beendet) oder `retry` (vorübergehender Fehler beim Erneuern des Tokens).
+ */
+export type WsAuthResult = { kind: 'token'; value: string } | { kind: 'no-session' } | { kind: 'retry' };
+
+/** Liefert die Zugangsdaten vor jedem (Re-)Connect; soll nie ablehnen (eine Ablehnung gilt als `retry`). */
+export type AuthorizationProvider = () => Promise<WsAuthResult>;
 
 export interface SubscribeOptions {
   /** Wer das Topic registriert hat; `unsubscribeOwner(owner)` entfernt nur dessen Topics. */
@@ -84,14 +90,16 @@ export class WebSocketService {
       heartbeatIncoming: 10000,
       heartbeatOutgoing: 10000,
       debug: () => {},
+      // wirft bewusst nie: eine Exception in beforeConnect plant bei stompjs keinen Reconnect
       beforeConnect: async () => {
-        const authorizationValue = authorization();
+        const auth = await authorization().catch((): WsAuthResult => ({ kind: 'retry' }));
         const deviceId = await this.deviceId;
-        if (!authorizationValue) {
+        if (auth.kind !== 'token') {
+          // no-session: wie bisher deaktivieren; retry: vorerst ebenfalls (eigene Wiederverbindung folgt, DIV-65 Phase 6)
           this.deactivate(client);
           return;
         }
-        client.connectHeaders = { Authorization: authorizationValue, DeviceId: deviceId };
+        client.connectHeaders = { Authorization: auth.value, DeviceId: deviceId };
       },
       onConnect: () => this.onConnect(client),
       onStompError: (frame: IFrame) => {

@@ -23,5 +23,16 @@ export enum INIT_NUMBERS {
     /** Höchstens ein Resync pro Intervall (DIV-36). */
     RESYNC_MIN_INTERVAL_MS = 60000,
     /** Health-Abfrage gilt nach dieser Zeit ohne Antwort als DOWN (Server bzw. Netz antwortet nicht). */
-    HEALTH_CHECK_TIMEOUT_MS = 10000
+    HEALTH_CHECK_TIMEOUT_MS = 10000,
+    /** Timeout des HTTP-Aufrufs beim Refresh (DIV-65); danach gilt der Refresh als vorübergehend gescheitert. */
+    REFRESH_TIMEOUT_MS = 15000,
+    /**
+     * Wartebudget der Aufrufer auf den Session-Speicher (DIV-65), gemessen ab dem Einreihen – kein Timeout des nativen
+     * Zugriffs selbst. Refresh wartet so lange auf das Speichern, autoLogin auf das Laden.
+     */
+    STORAGE_WAIT_MS = 5000,
+    /** Access Token gilt für Requests nur als gültig, wenn er noch mindestens so lange läuft (DIV-65). */
+    ACCESS_TOKEN_MIN_VALIDITY_MS = 30000,
+    /** Mindestrestlaufzeit des Access Tokens beim WebSocket-CONNECT (DIV-65). */
+    WEBSOCKET_TOKEN_MIN_VALIDITY_MS = 60000
 }

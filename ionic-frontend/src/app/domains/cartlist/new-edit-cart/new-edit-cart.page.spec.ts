@@ -74,7 +74,7 @@ describe('NewEditCartPage', () => {
           groupMembershipHistory: signal([]),
           getGroupMembershipHistoryForGroupAndUser: jasmine.createSpy('getGroupMembershipHistoryForGroupAndUser'),
         } },
-        { provide: AuthService, useValue: authServiceStub(aLoggedInUser({ id: 9, name: 'Anna', expirationDate: REFERENCE_NOON.getTime() + 60 * 60 * 1000 })) },
+        { provide: AuthService, useValue: authServiceStub(aLoggedInUser({ id: 9, name: 'Anna' })) },
         { provide: LoadingController, useValue: { create: loadingCreate } },
         { provide: MenuController, useValue: { enable: jasmine.createSpy('enable').and.resolveTo(true) } },
         { provide: LanguageService, useValue: { currentLang: signal('de') } },
