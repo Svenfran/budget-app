@@ -224,10 +224,10 @@ public class UserProfileService {
 
     /**
      * Setzt ein Zufallspasswort und mailt es (öffentlich). Beendet alle Sessions des Nutzers (DIV-65, E4).
-     * Die Mail geht vor dem Commit raus; scheitert der Versand mit einer geprüften Exception, bleibt die Änderung wie
-     * bisher bestehen (Rollback standardmäßig nur bei RuntimeException).
+     * Scheitert der Mailversand (Brevo wirft eine geprüfte Exception), wird alles zurückgerollt: das alte Passwort
+     * gilt weiter, die Sessions bleiben aktiv – sonst wäre der Nutzer ohne Mail ausgesperrt.
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void passwordReset(String email, BindingResult bindingResult) throws Exception {
         verificationService.verifyEmailIsValid(bindingResult, "email");
         var user = userRepository.findByEmailForUpdate(EmailUtils.normalize(email))
