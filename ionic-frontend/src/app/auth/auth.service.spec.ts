@@ -162,6 +162,133 @@ describe('AuthService', () => {
     }));
   });
 
+  describe('Verspätete Anmeldeantworten (Review F-001)', () => {
+    beforeEach(() => setup());
+
+    /** Startet die Anmeldung, hält die HTTP-Antwort zurück und sammelt Ergebnis bzw. Fehler. */
+    const pending = (start: () => ReturnType<AuthService['login']>, url: string) => {
+      const result: { response?: AuthResponseData; error?: unknown } = {};
+      start().subscribe({ next: r => result.response = r, error: e => result.error = e });
+      flushMicrotasks();
+      return { result, req: http.expectOne(url) };
+    };
+
+    const logoutOhneSession = () => {
+      service.logout();
+      http.expectOne(`${api}/logout`).flush(null);
+      flushMicrotasks();
+    };
+
+    it('Login-Antwort nach Logout wird verworfen: kein Nutzer, kein Token, nichts gespeichert', fakeAsync(() => {
+      const { result, req } = pending(() => service.login('anna@divvy.test', 'geheim123'), `${api}/authenticate`);
+      logoutOhneSession();
+
+      req.flush(response());
+      flushMicrotasks();
+
+      expect(result.error).toEqual(jasmine.any(SessionEndedError));
+      expect(result.response).toBeUndefined();
+      expect(currentUser()).toBeNull();
+      expect(service.hasSession()).toBeFalse();
+      expect(service.currentAccessToken()).toBeNull();
+      expect(storage.calls()).toEqual(['clear']);
+    }));
+
+    it('Registrierungsantwort nach Logout wird ebenso verworfen', fakeAsync(() => {
+      const { result, req } = pending(() => service.register('Anna', 'anna@divvy.test', 'geheim123'), `${api}/register`);
+      logoutOhneSession();
+
+      req.flush(response());
+      flushMicrotasks();
+
+      expect(result.error).toEqual(jasmine.any(SessionEndedError));
+      expect(currentUser()).toBeNull();
+      expect(storage.stored()).toBeNull();
+    }));
+
+    it('zwei überlappende Logins desselben Nutzers und Geräts: B sendet erst nach A, der zuletzt gestartete gewinnt', fakeAsync(() => {
+      const a: { response?: AuthResponseData; error?: unknown } = {};
+      const b: { response?: AuthResponseData; error?: unknown } = {};
+      service.login('anna@divvy.test', 'geheim123').subscribe({ next: r => a.response = r, error: e => a.error = e });
+      service.login('anna@divvy.test', 'geheim123').subscribe({ next: r => b.response = r, error: e => b.error = e });
+      flushMicrotasks();
+
+      const reqA = http.expectOne(`${api}/authenticate`);    // B wartet noch: genau ein Request
+      reqA.flush(response({ token: 'access-a', refreshToken: 'refresh-a' }));
+      flushMicrotasks();
+      expect(service.currentAccessToken()).toBe('access-a');
+
+      http.expectOne(`${api}/authenticate`).flush(response({ token: 'access-b', refreshToken: 'refresh-b' }));
+      flushMicrotasks();
+
+      expect(a.response?.token).toBe('access-a');
+      expect(b.response?.token).toBe('access-b');
+      expect(service.currentAccessToken()).toBe('access-b');
+      expect(storage.stored()?.refreshToken).toBe('refresh-b');
+      expect(storage.calls()).toEqual(['save:refresh-a', 'save:refresh-b']);
+    }));
+
+    it('scheitert der erste Login, wird der wartende zweite trotzdem gesendet und übernommen', fakeAsync(() => {
+      const a: { error?: { status: number } } = {};
+      service.login('anna@divvy.test', 'falsch').subscribe({ error: e => a.error = e });
+      service.login('anna@divvy.test', 'geheim123').subscribe();
+      flushMicrotasks();
+
+      http.expectOne(`${api}/authenticate`).flush(null, { status: 403, statusText: 'Forbidden' });
+      flushMicrotasks();
+      http.expectOne(`${api}/authenticate`).flush(response({ token: 'access-b', refreshToken: 'refresh-b' }));
+      flushMicrotasks();
+
+      expect(a.error?.status).toBe(403);
+      expect(service.currentAccessToken()).toBe('access-b');
+    }));
+
+    it('Logout, während ein zweiter Login wartet: der wartende wird nicht gesendet und verworfen', fakeAsync(() => {
+      const a: { error?: unknown } = {};
+      const b: { error?: unknown } = {};
+      service.login('anna@divvy.test', 'geheim123').subscribe({ error: e => a.error = e });
+      service.login('anna@divvy.test', 'geheim123').subscribe({ error: e => b.error = e });
+      flushMicrotasks();
+      const reqA = http.expectOne(`${api}/authenticate`);
+      logoutOhneSession();
+
+      reqA.flush(response());
+      flushMicrotasks();
+
+      http.expectNone(`${api}/authenticate`);
+      expect(a.error).toEqual(jasmine.any(SessionEndedError));
+      expect(b.error).toEqual(jasmine.any(SessionEndedError));
+      expect(currentUser()).toBeNull();
+      expect(storage.stored()).toBeNull();
+    }));
+
+    it('ein abbestellter Login gibt die Warteschlange frei', fakeAsync(() => {
+      const abo = service.login('anna@divvy.test', 'geheim123').subscribe();
+      flushMicrotasks();
+      const reqA = http.expectOne(`${api}/authenticate`);
+      service.login('anna@divvy.test', 'geheim123').subscribe();
+      flushMicrotasks();
+
+      abo.unsubscribe();
+      flushMicrotasks();
+
+      expect(reqA.cancelled).toBeTrue();
+      http.expectOne(`${api}/authenticate`).flush(response({ token: 'access-b', refreshToken: 'refresh-b' }));
+      flushMicrotasks();
+      expect(service.currentAccessToken()).toBe('access-b');
+    }));
+
+    it('ohne Wechsel dazwischen startet die Antwort die Session wie bisher', fakeAsync(() => {
+      const { result, req } = pending(() => service.login('anna@divvy.test', 'geheim123'), `${api}/authenticate`);
+
+      req.flush(response());
+      flushMicrotasks();
+
+      expect(result.response?.id).toBe(1);
+      expect(currentUser()?.id).toBe(1);
+    }));
+  });
+
   describe('Login mit hängendem Speicher', () => {
     beforeEach(() => setup({ manualStorage: true }));
 

@@ -1,7 +1,7 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Inject, Injectable } from '@angular/core';
 import { Router } from '@angular/router';
-import { BehaviorSubject, Observable, firstValueFrom, from, of, throwError } from 'rxjs';
+import { BehaviorSubject, Observable, defer, firstValueFrom, from, of, throwError } from 'rxjs';
 import { catchError, finalize, map, shareReplay, switchMap, tap, timeout } from 'rxjs/operators';
 import { environment } from 'src/environments/environment';
 import { INIT_NUMBERS } from '../constants/default-values';
@@ -79,6 +79,10 @@ export class AuthService {
   private accessToken: string | null = null;
   private accessTokenExpiresAt = 0;
   private generation = 0;
+  /** Zählt Logouts und Session-Enden; eine Anmeldung, die davor gestartet wurde, wird verworfen. */
+  private sessionEnds = 0;
+  /** Ende des zuletzt eingereihten Anmeldeversuchs (Anmeldungen laufen nacheinander). */
+  private authAttempts: Promise<void> = Promise.resolve();
   private refreshOperation: RefreshOperation | null = null;
   /** Wiederherstellung aus dem Speicher, höchstens einmal pro App-Laufzeit (geteilt). */
   private restore: Promise<void> | null = null;
@@ -123,18 +127,19 @@ export class AuthService {
     return from(this.deviceIdReady);
   }
 
+  /**
+   * Meldet an und startet die Session. Anmeldeversuche laufen nacheinander; der zuletzt gestartete gewinnt. Gab es seit
+   * dem Start einen Logout oder ein Session-Ende, wird der Versuch verworfen: {@link SessionEndedError}, keine Session.
+   */
   login(userEmail: string, password: string): Observable<AuthResponseData> {
-    return this.getDeviceId().pipe(
-      switchMap(deviceId => this.http.post<AuthResponseData>(this.authUrl,
-        { email: userEmail, password: password, deviceId: deviceId })),
-      tap(response => this.startSession(response)));
+    return this.authenticateAndStart(deviceId => this.http.post<AuthResponseData>(this.authUrl,
+      { email: userEmail, password: password, deviceId: deviceId }));
   }
 
+  /** Registriert und startet die Session; verspätete Antworten wie bei {@link login}. */
   register(userName: string, userEmail: string, password: string): Observable<AuthResponseData> {
-    return this.getDeviceId().pipe(
-      switchMap(deviceId => this.http.post<AuthResponseData>(this.registerUrl,
-        { name: userName, email: userEmail, password: password, deviceId: deviceId })),
-      tap(response => this.startSession(response)));
+    return this.authenticateAndStart(deviceId => this.http.post<AuthResponseData>(this.registerUrl,
+      { name: userName, email: userEmail, password: password, deviceId: deviceId }));
   }
 
   /**
@@ -226,6 +231,34 @@ export class AuthService {
     this.store.save(this.generation);
   }
 
+  /**
+   * Anmeldeversuche laufen nacheinander (Review-Korrektur K1): Ein weiterer Versuch sendet erst, wenn der vorherige
+   * beendet ist. So verarbeitet der Server die Logins in derselben Reihenfolge, in der die App ihre Antworten übernimmt,
+   * und der zuletzt gestartete Login gewinnt (ein früherer wurde serverseitig per RELOGIN ersetzt). Gab es seit dem
+   * Abonnieren einen Logout oder ein Session-Ende, wird der Versuch nicht gesendet bzw. seine Antwort verworfen (F3).
+   */
+  private authenticateAndStart(request: (deviceId: string) => Observable<AuthResponseData>): Observable<AuthResponseData> {
+    return defer(() => {
+      const sessionEnds = this.sessionEnds;
+      const stillValid = () => sessionEnds === this.sessionEnds;
+      let release!: () => void;
+      const finished = new Promise<void>(resolve => release = resolve);
+      const previous = this.authAttempts;
+      this.authAttempts = previous.then(() => finished);
+      return from(previous).pipe(
+        switchMap(() => stillValid() ? this.getDeviceId() : throwError(() => new SessionEndedError())),
+        switchMap(request),
+        tap(response => {
+          if (!stillValid()) {
+            throw new SessionEndedError();
+          }
+          this.startSession(response);
+        }),
+        // auch bei Fehler oder Abbestellen: der nächste Versuch darf starten
+        finalize(() => release()));
+    });
+  }
+
   private startSession(response: AuthResponseData) {
     this.generation++;
     this.restore ??= Promise.resolve();
@@ -308,6 +341,7 @@ export class AuthService {
 
   private clearLocalSession() {
     this.generation++;
+    this.sessionEnds++;
     this.restore ??= Promise.resolve();
     this.refreshOperation = null;
     this.session = null;

@@ -1,6 +1,7 @@
 import { HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { fakeAsync, flushMicrotasks, TestBed } from '@angular/core/testing';
 import { ReactiveFormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { IonicModule, LoadingController } from '@ionic/angular';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { throwError } from 'rxjs';
@@ -9,7 +10,7 @@ import { AlertService } from '../service/alert.service';
 import { LanguageService } from '../service/language.service';
 import { StorageService } from '../service/storage.service';
 import { AuthPage } from './auth.page';
-import { AuthService } from './auth.service';
+import { AuthService, SessionEndedError } from './auth.service';
 
 // Fehlerzweig von authenticate(): welcher Alert erscheint (Texte per i18n-Key, TranslateService ohne Loader)
 describe('AuthPage – Fehler bei Login', () => {
@@ -41,6 +42,19 @@ describe('AuthPage – Fehler bei Login', () => {
     page.authenticate('', 'anna@divvy.test', 'geheim123');
     flushMicrotasks();
   }
+
+  it('verworfene Anmeldung (Logout bzw. anderer Login dazwischen): kein Alert, keine Navigation (Review F-001)', fakeAsync(() => {
+    const navigate = spyOn(TestBed.inject(Router), 'navigateByUrl').and.resolveTo(true);
+    auth.login.and.returnValue(throwError(() => new SessionEndedError()));
+
+    page.authenticate('', 'anna@divvy.test', 'geheim123');
+    flushMicrotasks();
+
+    expect(alerts.showErrorAlert).not.toHaveBeenCalled();
+    expect(alerts.showAlertSeverUnavailable).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(loading.dismiss).toHaveBeenCalled();
+  }));
 
   it('Server nicht erreichbar (Status 0): nur der Server-Alert, kein zweiter Fehler-Alert', fakeAsync(() => {
     loginFailsWith({ status: 0, error: null });

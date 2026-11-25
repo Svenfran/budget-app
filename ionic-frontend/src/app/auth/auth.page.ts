@@ -1,6 +1,6 @@
 import { Component, OnInit, ViewChild } from '@angular/core';
 import { Observable } from 'rxjs';
-import { AuthResponseData, AuthService } from './auth.service';
+import { AuthResponseData, AuthService, SessionEndedError } from './auth.service';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AlertController, IonPopover, LoadingController, MenuController, ToastController } from '@ionic/angular';
@@ -158,6 +158,11 @@ export class AuthPage implements OnInit {
         let message = this.translate.instant('alerts.authenticate.message');
         this.showToast(message);
       }, errRes => {
+        if (errRes instanceof SessionEndedError) {
+          // verworfene Anmeldung (inzwischen Logout bzw. anderer Login, DIV-65): weder navigieren noch Fehler melden
+          loadingEl.dismiss();
+          return;
+        }
         // console.log(errRes.error);
         let header = !this.isLogin 
           ? this.translate.instant('alerts.authenticate.error_messages.header_register') 
