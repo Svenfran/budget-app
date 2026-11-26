@@ -9,7 +9,6 @@ import org.springframework.security.core.userdetails.UserDetails;
 import javax.persistence.*;
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 
 @Entity
@@ -48,11 +47,7 @@ public class User implements UserDetails {
     @JsonBackReference
     private Set<Cart> carts;
 
-    @OneToMany(mappedBy = "user")
-    @JsonBackReference
-    private List<Token> tokens;
-
-    public User(Long id, String name, String email, String password, Set<Group> groups, Set<Group> groupList, Set<Cart> carts, List<Token> tokens) {
+    public User(Long id, String name, String email, String password, Set<Group> groups, Set<Group> groupList, Set<Cart> carts) {
         this.id = id;
         this.name = name;
         this.email = EmailUtils.normalize(email);
@@ -60,7 +55,6 @@ public class User implements UserDetails {
         this.groups = groups;
         this.groupList = groupList;
         this.carts = carts;
-        this.tokens = tokens;
     }
 
     public User() {
@@ -123,14 +117,6 @@ public class User implements UserDetails {
 
     public void setGroupList(Set<Group> groupList) {
         this.groupList = groupList;
-    }
-
-    public List<Token> getTokens() {
-        return tokens;
-    }
-
-    public void setTokens(List<Token> tokens) {
-        this.tokens = tokens;
     }
 
     @Override

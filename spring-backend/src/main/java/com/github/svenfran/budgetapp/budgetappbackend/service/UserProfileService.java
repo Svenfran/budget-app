@@ -56,8 +56,6 @@ public class UserProfileService {
 
     private final PasswordEncoder passwordEncoder;
 
-    private final TokenRepository tokenRepository;
-
     private final EmailSenderService senderService;
 
     private final VerificationService verificationService;
@@ -80,8 +78,7 @@ public class UserProfileService {
                               ShoppingItemRepository shoppingItemRepository,
                               ShoppingPurchaseRepository shoppingPurchaseRepository, SettlementRepository settlementRepository,
                               GroupMembershipHistoryService gmhService,
-                              PasswordEncoder passwordEncoder, TokenRepository tokenRepository,
-                              EmailSenderService senderService, VerificationService verificationService,
+                              PasswordEncoder passwordEncoder, EmailSenderService senderService, VerificationService verificationService,
                               CartTemplateRepository cartTemplateRepository, NotificationService notificationService,
                               GroupMembershipHistoryRepository gmhRepository, Translator translator,
                               Clock clock, AuthSessionService authSessionService) {
@@ -97,7 +94,6 @@ public class UserProfileService {
         this.settlementRepository = settlementRepository;
         this.gmhService = gmhService;
         this.passwordEncoder = passwordEncoder;
-        this.tokenRepository = tokenRepository;
         this.senderService = senderService;
         this.verificationService = verificationService;
         this.cartTemplateRepository = cartTemplateRepository;
@@ -126,7 +122,6 @@ public class UserProfileService {
             removeUserFromGroup(group, userDelete);
         }
 
-        tokenRepository.deleteAll(tokenRepository.findAllByUserId(userDelete.getId()));
         authSessionService.deleteAllForUser(userDelete);
         anonymizeUser(userDelete);
     }
