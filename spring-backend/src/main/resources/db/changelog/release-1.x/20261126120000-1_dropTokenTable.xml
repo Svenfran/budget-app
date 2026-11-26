@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!-- DIV-122: Legacy-Tabelle token entfernen. Seit DIV-65 nicht mehr geschrieben (Access Tokens werden über
+         auth_session geprüft). Die bestehenden Token-Changesets laufen auf einer frischen Datenbank vorher und bleiben
+         unverändert. Der Rollback legt die Tabelle nur leer wieder an; die Altwerte sind nur über ein Backup
+         wiederherstellbar. -->
+    <changeSet author="sven" id="20261126120000-1">
+        <dropTable tableName="token"/>
+        <rollback>
+            <createTable tableName="token">
+                <column autoIncrement="true" name="id" type="bigint">
+                    <constraints primaryKey="true" nullable="false"/>
+                </column>
+                <column name="token" type="VARCHAR(255)">
+                    <constraints nullable="false"/>
+                </column>
+                <column name="token_type" type="VARCHAR(255)">
+                    <constraints nullable="false"/>
+                </column>
+                <column name="expired" type="BOOLEAN">
+                    <constraints nullable="false"/>
+                </column>
+                <column name="revoked" type="BOOLEAN">
+                    <constraints nullable="false"/>
+                </column>
+                <column name="user_id" type="BIGINT">
+                    <constraints nullable="false"/>
+                </column>
+                <column name="device_id" type="VARCHAR(255)">
+                    <constraints nullable="false"/>
+                </column>
+            </createTable>
+            <addForeignKeyConstraint baseTableName="token" baseColumnNames="user_id" constraintName="fk_token_user"
+                                     referencedTableName="user_details" referencedColumnNames="id"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
