@@ -13,11 +13,9 @@ import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserAlreadyExis
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNameAlreadyExistsException;
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.UserNotFoundException;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.EmailUtils;
-import com.github.svenfran.budgetapp.budgetappbackend.repository.TokenRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository;
 import com.github.svenfran.budgetapp.budgetappbackend.service.auth.IssuedSession;
 import com.github.svenfran.budgetapp.budgetappbackend.service.auth.RefreshResult;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -43,8 +41,6 @@ public class AuthenticationService {
 
     private final AuthenticationManager authManager;
 
-    private final TokenRepository tokenRepository;
-
     private final VerificationService verificationService;
 
     private final GroupService groupService;
@@ -52,14 +48,12 @@ public class AuthenticationService {
     private final AuthSessionService authSessionService;
 
     public AuthenticationService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtService jwtService,
-                                 AuthenticationManager authManager, TokenRepository tokenRepository,
-                                 VerificationService verificationService, GroupService groupService,
-                                 AuthSessionService authSessionService) {
+                                 AuthenticationManager authManager, VerificationService verificationService,
+                                 GroupService groupService, AuthSessionService authSessionService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.authManager = authManager;
-        this.tokenRepository = tokenRepository;
         this.verificationService = verificationService;
         this.groupService = groupService;
         this.authSessionService = authSessionService;
@@ -137,17 +131,6 @@ public class AuthenticationService {
         return new AuthenticationResponse(issued.userId(), issued.userName(), issued.userEmail(),
                 issued.accessTokenExpiresAt().toEpochMilli(), issued.accessToken(), issued.refreshToken(),
                 issued.sessionExpiresAt().toInstant(ZoneOffset.UTC).toEpochMilli());
-    }
-
-    /**
-     * Aufräumen (Cron {@code task.clearToken.schedule}): widerrufene Legacy-Tokens und seit DIV-65 beendete Sessions
-     * samt Refresh Tokens ({@link AuthSessionService#deleteEndedSessions}).
-     */
-    @Scheduled(cron = "${task.clearToken.schedule}")
-    public void deleteExpiredTokens() {
-        var tokens = tokenRepository.findAllByExpiredIsTrueAndRevokedIsTrue();
-        tokenRepository.deleteAll(tokens);
-        authSessionService.deleteEndedSessions();
     }
 
 }

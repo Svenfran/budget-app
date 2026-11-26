@@ -140,12 +140,12 @@ class AuthenticationServiceCommitIntegrationSpec extends IntegrationSpec {
                 + 'Session {} an Tag 38 angelegt; Job an Tag 38', anna.id, widerrufen, leerlauf, aktiv)
 
         when:
-        authenticationService.deleteExpiredTokens()
+        authSessionService.deleteEndedSessions()
         def sessions = jdbcTemplate.queryForList('select id from auth_session where user_id = ? order by id', Long, anna.id)
         def tokens = jdbcTemplate.queryForList(
                 'select distinct session_id from refresh_token where session_id in (?, ?, ?) order by session_id', Long,
                 widerrufen, leerlauf, aktiv)
-        LOG.info('deleteExpiredTokens() -> Sessions {}, Sessions mit Refresh Tokens {}', sessions, tokens)
+        LOG.info('deleteEndedSessions() (Cron) -> Sessions {}, Sessions mit Refresh Tokens {}', sessions, tokens)
 
         then:
         sessions == [aktiv]
