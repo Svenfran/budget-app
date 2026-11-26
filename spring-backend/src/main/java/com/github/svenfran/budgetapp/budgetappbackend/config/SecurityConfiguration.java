@@ -10,15 +10,12 @@ import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.security.web.authentication.logout.LogoutHandler;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import javax.servlet.http.HttpServletResponse;
 import java.util.Arrays;
 import java.util.List;
 
@@ -32,15 +29,15 @@ public class SecurityConfiguration {
 
     private final AuthenticationProvider authenticationProvider;
 
-    private final LogoutHandler logoutHandler;
+    private final UnauthenticatedEntryPoint unauthenticatedEntryPoint;
 
     public SecurityConfiguration(@Value("${app.cors.allowed-origins}") List<String> allowedOrigins,
                                  JwtAuthenticationFilter jwtAuthFilter, AuthenticationProvider authenticationProvider,
-                                 LogoutHandler logoutHandler) {
+                                 UnauthenticatedEntryPoint unauthenticatedEntryPoint) {
         this.allowedOrigins = allowedOrigins;
         this.jwtAuthFilter = jwtAuthFilter;
         this.authenticationProvider = authenticationProvider;
-        this.logoutHandler = logoutHandler;
+        this.unauthenticatedEntryPoint = unauthenticatedEntryPoint;
     }
 
     @Bean
@@ -64,14 +61,13 @@ public class SecurityConfiguration {
                 .and()
                 .authenticationProvider(authenticationProvider)
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                // nicht angemeldet -> 401 UNAUTHENTICATED statt 403 (DIV-65)
+                .exceptionHandling()
+                .authenticationEntryPoint(unauthenticatedEntryPoint)
+                .and()
+                // Logout ist ein normaler Endpunkt (AuthenticationController), nicht Springs LogoutFilter
                 .logout()
-                .logoutUrl("/api/auth/logout")
-                .addLogoutHandler(logoutHandler)
-                .logoutSuccessHandler(((request, response, authentication) -> {
-                    response.setStatus(HttpServletResponse.SC_OK);
-                    response.setHeader("Access-Control-Allow-Origin" , "*");
-                    SecurityContextHolder.clearContext();
-                }))
+                .disable()
         ;
 
         return http.build();

@@ -79,4 +79,6 @@
 
     <include context="dev,test,prod" file="db/changelog/release-1.x/20261122120000-1_dropColumnAveragePerMemberFromCartTable.xml" relativeToChangelogFile="false"/>
 
+    <include context="dev,test,prod" file="db/changelog/release-1.x/20261124120000-1_createAuthSessionAndRefreshTokenTables.xml" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

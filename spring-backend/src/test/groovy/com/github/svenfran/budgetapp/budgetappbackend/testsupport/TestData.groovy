@@ -11,6 +11,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.helper.Translator
 import com.github.svenfran.budgetapp.budgetappbackend.helper.export.CartExportRow
 import com.github.svenfran.budgetapp.budgetappbackend.helper.export.GroupExport
 import com.github.svenfran.budgetapp.budgetappbackend.helper.export.MembershipExportRow
+import com.github.svenfran.budgetapp.budgetappbackend.service.auth.IssuedSession
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.SignatureAlgorithm
 import io.jsonwebtoken.io.Decoders
@@ -19,7 +20,10 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook
 import org.springframework.context.support.ResourceBundleMessageSource
 
 import java.nio.charset.StandardCharsets
+import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneOffset
 import java.util.concurrent.atomic.AtomicLong
 import java.util.zip.ZipInputStream
 
@@ -109,10 +113,37 @@ class TestData {
                    deviceId: 'device-1'] + overrides)
     }
 
+    /** Aktive Session (DIV-65) ab REFERENCE_DATE, 90 Tage gültig. Nutzer setzt der Aufrufer. */
+    static AuthSession authSession(Map overrides = [:]) {
+        def created = REFERENCE_DATE.atStartOfDay()
+        new AuthSession([deviceId: 'device-1', createdAt: created, absoluteExpiresAt: created.plusDays(90)] + overrides)
+    }
+
+    /** Aktueller Refresh Token (DIV-65) mit Platzhalter-Hash statt echtem HMAC. Session setzt der Aufrufer. */
+    static RefreshToken refreshToken(Map overrides = [:]) {
+        def issued = REFERENCE_DATE.atStartOfDay()
+        new RefreshToken([tokenHash: String.format('%064x', nextId()), issuedAt: issued, expiresAt: issued.plusDays(30)] + overrides)
+    }
+
+    /** Ausgestellte Session (DIV-65) mit Platzhaltern statt echter Tokens; Zeiten ab REFERENCE_DATE. */
+    static IssuedSession issuedSession(Map overrides = [:]) {
+        def issued = REFERENCE_DATE.atStartOfDay()
+        long n = nextId()
+        def values = [sessionId: n, userId: n, userName: "user$n", userEmail: "user$n@divvy.test",
+                      accessToken: "access-$n", accessTokenExpiresAt: issued.plusMinutes(15).toInstant(ZoneOffset.UTC),
+                      refreshToken: "refresh-$n", refreshTokenExpiresAt: issued.plusDays(30),
+                      sessionExpiresAt: issued.plusDays(90)] + overrides
+        new IssuedSession(values.sessionId as Long, values.userId as Long, values.userName as String,
+                values.userEmail as String, values.accessToken as String, values.accessTokenExpiresAt as Instant,
+                values.refreshToken as String, values.refreshTokenExpiresAt as LocalDateTime,
+                values.sessionExpiresAt as LocalDateTime)
+    }
+
     /**
-     * Signiertes JWT wie JwtService.generateToken (Header typ JWT, HS256, Claim deviceId, Subject), aber mit festen
-     * Zeitpunkten statt der realen Uhr. Pflicht: secret (Base64 wie secret_key, nur Dummy-Werte) und expiration
-     * (Date, Umrechnung über DateUtils.toDate beim Aufrufer); issuedAt ist standardmäßig 21 Tage davor.
+     * Signiertes JWT wie JwtService.generateToken (Header typ JWT, HS256, Claims deviceId und optional sid, Subject),
+     * aber mit festen Zeitpunkten statt der realen Uhr. Pflicht: secret (Base64 wie secret_key, nur Dummy-Werte) und
+     * expiration (Date, Umrechnung über DateUtils.toDate beim Aufrufer); issuedAt ist standardmäßig 21 Tage davor.
+     * sessionId (DIV-65): ohne Angabe fehlt der Claim sid wie bei vor DIV-65 ausgestellten Tokens.
      */
     static String jwt(Map overrides = [:]) {
         def values = [subject: "user${nextId()}@divvy.test", deviceId: 'device-1'] + overrides
@@ -121,7 +152,7 @@ class TestData {
         Date issuedAt = values.issuedAt ?: new Date(expiration.time - 21L * 24 * 60 * 60 * 1000)
         Jwts.builder()
                 .setHeaderParam('typ', 'JWT')
-                .setClaims([deviceId: values.deviceId])
+                .setClaims(values.sessionId == null ? [deviceId: values.deviceId] : [deviceId: values.deviceId, sid: String.valueOf(values.sessionId)])
                 .setSubject(values.subject as String)
                 .setIssuedAt(issuedAt)
                 .setExpiration(expiration)

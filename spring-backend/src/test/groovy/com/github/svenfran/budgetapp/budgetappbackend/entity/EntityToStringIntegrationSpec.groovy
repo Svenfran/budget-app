@@ -4,7 +4,10 @@ import com.github.svenfran.budgetapp.budgetappbackend.dto.CartDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
+import com.github.svenfran.budgetapp.budgetappbackend.repository.AuthSessionRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository
+import com.github.svenfran.budgetapp.budgetappbackend.repository.RefreshTokenRepository
+import com.github.svenfran.budgetapp.budgetappbackend.service.AuthSessionService
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CategoryRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingItemRepository
@@ -41,6 +44,9 @@ class EntityToStringIntegrationSpec extends IntegrationSpec {
     @Autowired ShoppingItemRepository shoppingItemRepository
     @Autowired TokenRepository tokenRepository
     @Autowired SettlementService settlementService
+    @Autowired AuthSessionService authSessionService
+    @Autowired AuthSessionRepository authSessionRepository
+    @Autowired RefreshTokenRepository refreshTokenRepository
 
     def "toString geladener Entities lädt keine Lazy-Beziehungen nach"() {
         given: "Ben ist Mitglied der WG und hat einen wiederkehrenden Einkauf (mit Template)"
@@ -187,5 +193,48 @@ class EntityToStringIntegrationSpec extends IntegrationSpec {
         listText.endsWith(", groupId=$groupId}")
         itemText.endsWith(", shoppingListId=$listId}")
         tokenText.endsWith(", userId=$ownerId}")
+    }
+
+    def "toString von Session und Refresh Token lädt Nutzer, Session und Nachfolger nicht nach und wirft detacht keinen Fehler"() {
+        given: "DIV-65: Session mit rotiertem Token (Nachfolger gesetzt); alle @ManyToOne sind lazy"
+        def anna = fixtures.user()
+        def issued = authSessionService.createSession(anna, 'device-1')
+        authSessionService.refresh(issued.refreshToken(), 'device-1')
+        def (annaId, sessionId) = [anna.id, issued.sessionId()]
+        def (rotatedId, successorId) = refreshTokenRepository.findBySessionIdOrderById(sessionId)*.id
+        flushAndClear()
+        // einzeln und je in frischem Persistence Context laden: sonst löst Hibernate die Beziehung auf die
+        // mitgeladene Entity auf, und sie gilt als initialisiert
+        def rotated = refreshTokenRepository.findById(rotatedId).get()
+        def lazyState = {
+            ['RefreshToken.session'   : Hibernate.isInitialized(rotated.session),
+             'RefreshToken.replacedBy': Hibernate.isInitialized(rotated.replacedBy)]
+        }
+        LOG.info('Szenario: Nutzer {}, Session {}, Token {} rotiert zu {}; geladen: rotierter Token, danach Session',
+                annaId, sessionId, rotatedId, successorId)
+
+        when: "toString im Persistence Context, danach detacht – erst Token, dann Session"
+        def before = lazyState()
+        rotated.toString()
+        def afterToken = lazyState()
+        entityManager.clear()
+        def tokenText = rotated.toString()
+        def loadedSession = authSessionRepository.findById(sessionId).get()
+        def sessionBefore = Hibernate.isInitialized(loadedSession.user)
+        loadedSession.toString()
+        def sessionAfter = Hibernate.isInitialized(loadedSession.user)
+        entityManager.clear()
+        def sessionText = loadedSession.toString()
+        def after = afterToken + ['AuthSession.user': sessionAfter]
+        before += ['AuthSession.user': sessionBefore]
+        LOG.info('toString von RefreshToken {} und AuthSession {} -> initialisiert vorher {}, nachher {}, detacht ohne Exception',
+                rotatedId, sessionId, before.findAll { it.value }.keySet(), after.findAll { it.value }.keySet())
+
+        then:
+        noExceptionThrown()
+        before.findAll { it.value } == [:]
+        after == before
+        sessionText.endsWith(", userId=$annaId}")
+        tokenText.endsWith(", sessionId=$sessionId, replacedById=$successorId}")
     }
 }

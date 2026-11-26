@@ -17,7 +17,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * GET /api/spendings/{groupId}/{year} (Jahresübersicht).
  *
  * DIV-33 – Berechtigungen und DTO-Vertrag:
- * - Ohne Anmeldung 403 (Ist-Verhalten von Spring Security, nicht 401), Nutzer ohne Gruppenzugehörigkeit 403,
+ * - Ohne Anmeldung 401 (seit DIV-65, vorher 403), Nutzer ohne Gruppenzugehörigkeit 403,
  *   unbekannte Gruppe 404, Owner und Mitglied 200. Die Regel selbst testet VerificationServiceSpec.
  * - Die JSON-Struktur wird gegen die Frontend-Modelle in ionic-frontend/src/app/domains/overview/model/ geprüft
  *   (Jahresübersicht: SpendingsOverviewDto, Gesamtübersicht: SpendingsOverviewYearlyDto): Jedes Modellfeld ist
@@ -67,13 +67,13 @@ class SpendingsOverviewControllerApiSpec extends IntegrationSpec implements ApiR
         null    || 'März'
     }
 
-    def "#endpoint: ohne Anmeldung wird der Zugriff mit 403 abgelehnt"() {
+    def "#endpoint: ohne Anmeldung wird der Zugriff mit 401 abgelehnt"() {
         given:
         def wg = fixtures.group()
         LOG.info('Szenario: Gruppe {}, Request ohne Anmeldung', wg.group.id)
 
-        expect: 'Ist-Verhalten: Spring Security antwortet ohne Authentifizierung mit 403, nicht 401'
-        send(spendings(wg.group.id, year)).status == 403
+        expect: 'nicht angemeldet: 401 UNAUTHENTICATED (DIV-65), fachliche Verbote bleiben 403'
+        send(spendings(wg.group.id, year)).status == 401
 
         where:
         endpoint          | year

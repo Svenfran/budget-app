@@ -1,6 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.config
 
-import com.github.svenfran.budgetapp.budgetappbackend.repository.TokenRepository
+import com.github.svenfran.budgetapp.budgetappbackend.repository.AuthSessionRepository
 import com.github.svenfran.budgetapp.budgetappbackend.service.JwtService
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
 import io.jsonwebtoken.ExpiredJwtException
@@ -11,6 +11,8 @@ import org.springframework.security.core.userdetails.UserDetailsService
 import spock.lang.Specification
 
 import javax.servlet.FilterChain
+import java.time.Clock
+import java.time.ZoneOffset
 
 /**
  * DIV-18: Fälle des JWT-Filters, die sich über HTTP nicht deterministisch herstellen lassen (Ende-zu-Ende-Fälle:
@@ -24,21 +26,24 @@ class JwtAuthenticationFilterSpec extends Specification {
     static final String JWT = 'jwt-1'
     static final String EMAIL = 'alfred@divvy.test'
     static final String DEVICE = 'device-1'
+    static final Long SESSION_ID = 7L
 
     def jwtService = Stub(JwtService)
     def userDetailsService = Stub(UserDetailsService)
-    def tokenRepository = Stub(TokenRepository)
+    def sessionRepository = Stub(AuthSessionRepository)
     def chain = Mock(FilterChain)
-    def filter = new JwtAuthenticationFilter(new TokenValidator(jwtService, userDetailsService, tokenRepository))
+    def clock = Clock.fixed(TestData.REFERENCE_DATE.atStartOfDay().toInstant(ZoneOffset.UTC), ZoneOffset.UTC)
+    def filter = new JwtAuthenticationFilter(new TokenValidator(jwtService, userDetailsService, sessionRepository, clock))
     def request = new MockHttpServletRequest()
     def response = new MockHttpServletResponse()
 
     def setup() {
-        def alfred = TestData.user(email: EMAIL)
+        def alfred = TestData.user(id: 41L, email: EMAIL)
         userDetailsService.loadUserByUsername(EMAIL) >> alfred
-        tokenRepository.findByToken(JWT) >> Optional.of(TestData.token(user: alfred, token: JWT, deviceId: DEVICE))
+        sessionRepository.findById(SESSION_ID) >> Optional.of(TestData.authSession(id: SESSION_ID, user: alfred, deviceId: DEVICE))
         jwtService.extractUsername(JWT) >> EMAIL
         jwtService.extractDeviceId(JWT) >> DEVICE
+        jwtService.extractSessionId(JWT) >> SESSION_ID
 
         request.addHeader('Authorization', JwtService.BEARER_PREFIX + JWT)
         request.addHeader('deviceId', DEVICE)

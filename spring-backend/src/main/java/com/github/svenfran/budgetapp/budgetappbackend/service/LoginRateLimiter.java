@@ -6,6 +6,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.constants.LoginRateLimitMo
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.TooManyLoginAttemptsException;
 import com.github.svenfran.budgetapp.budgetappbackend.helper.LoginAttemptKeys;
 import com.github.svenfran.budgetapp.budgetappbackend.repository.LoginAttemptRepository;
+import com.github.svenfran.budgetapp.budgetappbackend.service.auth.LoginReservation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;

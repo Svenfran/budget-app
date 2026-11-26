@@ -33,7 +33,6 @@ describe('UserprofileService', () => {
   ];
 
   beforeEach(() => {
-    // User.token prüft gegen die aktuelle Uhrzeit – fest auf REFERENCE_DATE, der Testnutzer ist eine Stunde gültig.
     jasmine.clock().install();
     jasmine.clock().mockDate(REFERENCE_DATE);
 
@@ -89,7 +88,7 @@ describe('UserprofileService', () => {
   });
 
   describe('changeUserName', () => {
-    it('übernimmt den neuen Namen in die Anmeldedaten und behält Token und Ablaufzeit', () => {
+    it('übernimmt den neuen Namen in die Session, ohne Tokens anzufassen (DIV-65)', () => {
       const dto = { id: 5, userName: 'Annika' };
 
       service.changeUserName(dto);
@@ -98,13 +97,7 @@ describe('UserprofileService', () => {
       expect(req.request.body).toEqual(dto);
       req.flush({ id: 5, userName: 'Annika', userEmail: 'anna@example.com' });
 
-      expect(auth.setUserData).toHaveBeenCalledOnceWith({
-        id: 5,
-        name: 'Annika',
-        email: 'anna@example.com',
-        expirationDate: user.expirationDate,
-        token: 'token-5',
-      });
+      expect(auth.updateUserName).toHaveBeenCalledOnceWith('Annika');
     });
 
     it('stößt nach dem Ändern das Neuladen von Übersicht und Ausgaben an', () => {
@@ -127,7 +120,7 @@ describe('UserprofileService', () => {
         const prefix = `alerts.user_profile.change_username.error_message_service.${c.key}`;
         expect(alerts.showErrorAlert).toHaveBeenCalledOnceWith(`${prefix}.header`, `${prefix}.message`);
         expect(instant).toHaveBeenCalledWith(`${prefix}.message`, { userName: c.userName });
-        expect(auth.setUserData).not.toHaveBeenCalled();
+        expect(auth.updateUserName).not.toHaveBeenCalled();
       });
     });
 
@@ -136,7 +129,7 @@ describe('UserprofileService', () => {
       http.expectOne(`${api}/update-username`).flush('Server error', serverError);
 
       expect(alerts.showErrorAlert).not.toHaveBeenCalled();
-      expect(auth.setUserData).not.toHaveBeenCalled();
+      expect(auth.updateUserName).not.toHaveBeenCalled();
     });
 
     withoutCode.forEach(c => {
@@ -145,7 +138,7 @@ describe('UserprofileService', () => {
         c.fail(http.expectOne(`${api}/update-username`), 'User with name Annika already exists');
 
         expect(alerts.showErrorAlert).not.toHaveBeenCalled();
-        expect(auth.setUserData).not.toHaveBeenCalled();
+        expect(auth.updateUserName).not.toHaveBeenCalled();
       });
     });
 

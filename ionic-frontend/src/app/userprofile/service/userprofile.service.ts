@@ -59,13 +59,8 @@ export class UserprofileService {
       .put<UserDto>(this.changeUserNameUrl, userDto)
       .subscribe({
         next: (result) => {
-          this.authService.setUserData({
-            id: result.id,
-            name: result.userName,
-            email: this.user.email,
-            expirationDate: this.user.expirationDate,
-            token: this.user.token ? this.user.token.slice(7) : ""
-          })
+          // nur das Profil der Session; Tokens bleiben unverändert (DIV-65)
+          this.authService.updateUserName(result.userName);
           // Übersicht und Ausgaben zeigen Namen aus Server-Daten: neu laden, damit der neue Name ohne
           // manuelles Aktualisieren erscheint
           this.groupService.triggerUpdate();

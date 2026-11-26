@@ -1,0 +1,79 @@
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!-- DIV-65: Refresh-Token-Sessions. auth_session ist die Token-Familie eines Logins auf einem Gerät
+         (absolute Höchstdauer, Widerruf); refresh_token enthält jeden je ausgestellten Refresh Token der Session
+         (nur als HMAC-SHA256-Hex, nie im Klartext). Aktuell ist der einzige Token mit rotated_at IS NULL;
+         replaced_by_id zeigt auf den direkten Nachfolger. Rotierte Tokens bleiben bis zum Löschen der Session
+         erhalten, damit ein wiederverwendeter alter Token seiner Session zugeordnet werden kann (Replay-Erkennung).
+         Zeiten in UTC. Rein additiv, keine Datenmigration (die Tabelle token bleibt unverändert). -->
+    <changeSet author="sven" id="20261124120000-1">
+        <createTable tableName="auth_session">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_auth_session_user"
+                             referencedTableName="user_details" referencedColumnNames="id"/>
+            </column>
+            <column name="device_id" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="absolute_expires_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_used_at" type="TIMESTAMP"/>
+            <column name="revoked_at" type="TIMESTAMP"/>
+            <column name="revoke_reason" type="VARCHAR(30)"/>
+        </createTable>
+        <createIndex tableName="auth_session" indexName="idx_auth_session_user_device">
+            <column name="user_id"/>
+            <column name="device_id"/>
+        </createIndex>
+        <createIndex tableName="auth_session" indexName="idx_auth_session_revoked_at">
+            <column name="revoked_at"/>
+        </createIndex>
+        <createIndex tableName="auth_session" indexName="idx_auth_session_absolute_expires_at">
+            <column name="absolute_expires_at"/>
+        </createIndex>
+
+        <createTable tableName="refresh_token">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="session_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_refresh_token_session"
+                             referencedTableName="auth_session" referencedColumnNames="id"
+                             deleteCascade="true"/>
+            </column>
+            <column name="token_hash" type="VARCHAR(64)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uq_refresh_token_hash"/>
+            </column>
+            <column name="issued_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expires_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="rotated_at" type="TIMESTAMP"/>
+            <column name="replaced_by_id" type="BIGINT">
+                <constraints nullable="true" foreignKeyName="fk_refresh_token_replaced_by"
+                             referencedTableName="refresh_token" referencedColumnNames="id"/>
+            </column>
+        </createTable>
+        <createIndex tableName="refresh_token" indexName="idx_refresh_token_session">
+            <column name="session_id"/>
+        </createIndex>
+        <!-- Für die FK-Prüfung beim Löschen von Sessions (Cascade auf refresh_token, Selbstverweis) -->
+        <createIndex tableName="refresh_token" indexName="idx_refresh_token_replaced_by">
+            <column name="replaced_by_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

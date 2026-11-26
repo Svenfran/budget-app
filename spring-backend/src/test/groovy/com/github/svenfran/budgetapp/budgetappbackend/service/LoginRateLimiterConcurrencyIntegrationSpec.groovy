@@ -8,6 +8,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.config.ClientIp
 import com.github.svenfran.budgetapp.budgetappbackend.exceptions.TooManyLoginAttemptsException
 import com.github.svenfran.budgetapp.budgetappbackend.helper.LoginAttemptKeys
 import com.github.svenfran.budgetapp.budgetappbackend.repository.LoginAttemptRepository
+import com.github.svenfran.budgetapp.budgetappbackend.service.auth.LoginReservation
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.DatabaseCleaner
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
 import org.slf4j.Logger

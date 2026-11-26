@@ -1,6 +1,7 @@
-package com.github.svenfran.budgetapp.budgetappbackend.service;
+package com.github.svenfran.budgetapp.budgetappbackend.service.auth;
 
 import com.github.svenfran.budgetapp.budgetappbackend.constants.LoginAttemptScope;
+import com.github.svenfran.budgetapp.budgetappbackend.service.LoginRateLimiter;
 
 import java.time.LocalDateTime;
 import java.util.Collections;
@@ -27,7 +28,7 @@ public record LoginReservation(String accountPseudonym, String ipPseudonym, Stri
                 : Collections.unmodifiableMap(new EnumMap<>(windows));
     }
 
-    static LoginReservation empty(String accountPseudonym, String ipPseudonym, String ipSource) {
+    public static LoginReservation empty(String accountPseudonym, String ipPseudonym, String ipSource) {
         return new LoginReservation(accountPseudonym, ipPseudonym, ipSource, Map.of());
     }
 

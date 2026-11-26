@@ -38,6 +38,12 @@ public enum ApiErrorCode {
     UNSUPPORTED_CURRENCY,
     INVALID_AMOUNT,
 
+    // 401 (DIV-65)
+    /** Geschützter Request ohne gültige Anmeldung (Access Token fehlt, abgelaufen oder Session beendet). */
+    UNAUTHENTICATED,
+    /** Refresh Token unbekannt, abgelaufen, widerrufen oder bereits rotiert; der Grund steht nur im Log. */
+    REFRESH_TOKEN_INVALID,
+
     // 403
     NOT_GROUP_OWNER,
     MEMBER_ALREADY_EXISTS,

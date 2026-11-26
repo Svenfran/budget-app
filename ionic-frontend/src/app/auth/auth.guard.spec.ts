@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRouteSnapshot, Route, Router, RouterStateSnapshot } from '@angular/router';
 import { firstValueFrom, Observable, of } from 'rxjs';
-import { REFERENCE_DATE, aLoggedInUser } from 'src/testing/test-data';
+import { aLoggedInUser } from 'src/testing/test-data';
 import { authServiceStub, provideServiceTesting } from 'src/testing/test-providers';
 import { routes } from '../app-routing.module';
 import { AuthGuard } from './auth.guard';
@@ -11,14 +11,6 @@ import { User } from './user';
 describe('AuthGuard', () => {
   let auth: jasmine.SpyObj<AuthService>;
   let navigateByUrl: jasmine.Spy;
-
-  beforeEach(() => {
-    // User.token prüft die aktuelle Zeit – Uhr vor dem Anlegen des Stubs stellen
-    jasmine.clock().install();
-    jasmine.clock().mockDate(REFERENCE_DATE);
-  });
-
-  afterEach(() => jasmine.clock().uninstall());
 
   function setup(user: User | null): AuthGuard {
     auth = authServiceStub(user);

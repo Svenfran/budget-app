@@ -1,6 +1,6 @@
 import { Component, OnInit, ViewChild } from '@angular/core';
-import { Observable } from 'rxjs';
-import { AuthResponseData, AuthService } from './auth.service';
+import { Observable, TimeoutError } from 'rxjs';
+import { AuthResponseData, AuthService, SessionEndedError } from './auth.service';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AlertController, IonPopover, LoadingController, MenuController, ToastController } from '@ionic/angular';
@@ -158,12 +158,18 @@ export class AuthPage implements OnInit {
         let message = this.translate.instant('alerts.authenticate.message');
         this.showToast(message);
       }, errRes => {
+        if (errRes instanceof SessionEndedError) {
+          // verworfene Anmeldung (inzwischen Logout bzw. anderer Login, DIV-65): weder navigieren noch Fehler melden
+          loadingEl.dismiss();
+          return;
+        }
         // console.log(errRes.error);
         let header = !this.isLogin 
           ? this.translate.instant('alerts.authenticate.error_messages.header_register') 
           : this.translate.instant('alerts.authenticate.error_messages.header_login');
         let message = this.translate.instant('alerts.authenticate.error_messages.message');
-        if (errRes.status === 0) {
+        // Status 0 bzw. keine Antwort innerhalb des Zeitbudgets: Server nicht erreichbar
+        if (errRes.status === 0 || errRes instanceof TimeoutError) {
           loadingEl.dismiss();
           this.alertService.showAlertSeverUnavailable();
           // kein zweiter Alert: Passwort/E-Mail waren nicht das Problem

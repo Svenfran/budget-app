@@ -896,7 +896,7 @@ describe('GroupService – Anmelde-Sitzung (DIV-36)', () => {
     session.next(aLoggedInUser({ id: 7 }));
     expect(service.session()).withContext('Login').toBe(start + 1);
     session.next(aLoggedInUser({ id: 7 }));
-    expect(service.session()).withContext('derselbe Nutzer erneut (z. B. setUserData)').toBe(start + 1);
+    expect(service.session()).withContext('derselbe Nutzer erneut (z. B. updateUserName)').toBe(start + 1);
     session.next(null);
     expect(service.session()).withContext('Logout').toBe(start + 2);
     session.next(aLoggedInUser({ id: 7 }));
@@ -962,7 +962,7 @@ describe('GroupService – Anmelde-Sitzung (DIV-36)', () => {
     expect(service.hasNoGroups()).withContext('hasNoGroups').toBeFalse();
   });
 
-  it('leert bei erneuter Emission desselben Nutzers nichts (z. B. setUserData)', () => {
+  it('leert bei erneuter Emission desselben Nutzers nichts (z. B. updateUserName)', () => {
     session.next(aLoggedInUser({ id: 7 }));
     const { sideNav, overview, members, history } = givenGroupDataOfUser();
 

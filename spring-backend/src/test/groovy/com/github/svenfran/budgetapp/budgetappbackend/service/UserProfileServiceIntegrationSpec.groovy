@@ -1,7 +1,10 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service
 
+import com.github.svenfran.budgetapp.budgetappbackend.constants.SessionRevokeReason
+import com.github.svenfran.budgetapp.budgetappbackend.dto.PasswordChangeDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.SettlementPaymentDto
 import com.github.svenfran.budgetapp.budgetappbackend.dto.UserDto
+import com.github.svenfran.budgetapp.budgetappbackend.exceptions.WrongPasswordException
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.CartTemplateRepository
@@ -14,6 +17,9 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.context.i18n.LocaleContextHolder
+import org.springframework.security.crypto.password.PasswordEncoder
+import org.springframework.validation.BeanPropertyBindingResult
+import org.springframework.validation.MapBindingResult
 
 import java.time.LocalDate
 
@@ -28,6 +34,8 @@ class UserProfileServiceIntegrationSpec extends IntegrationSpec {
     @Autowired SettlementService settlementService
     @Autowired SettlementRepository settlementRepository
     @Autowired CartRepository cartRepository
+    @Autowired AuthSessionService authSessionService
+    @Autowired PasswordEncoder passwordEncoder
 
     def "Konto löschen als Owner löst delete-group für die eigene Gruppe mit den aktiven Mitgliedern aus"() {
         given:
@@ -160,5 +168,129 @@ class UserProfileServiceIntegrationSpec extends IntegrationSpec {
 
         then: "kein Löschkennzeichen für den Einkauf des Owners"
         !gespeichert.deleted
+    }
+
+    // Widerruf aller Sessions (DIV-65, E4)
+
+    def "#aktion widerruft alle Sessions des Nutzers mit Grund #grund, Sessions anderer Nutzer bleiben"() {
+        given:
+        def anna = fixtures.user(email: 'anna@example.de', password: passwordEncoder.encode('alt'))
+        def ben = fixtures.user()
+        def annaSessions = [authSessionService.createSession(anna, 'device-1'), authSessionService.createSession(anna, 'device-2')]*.sessionId()
+        def benSession = authSessionService.createSession(ben, 'device-1').sessionId()
+        def annaId = anna.id
+        flushAndClear()
+        loginAs(anna)
+        LOG.info('Szenario: Nutzer {} (angemeldet) mit Sessions {}, Nutzer {} mit Session {}; {}', annaId, annaSessions,
+                ben.id, benSession, aktion)
+
+        when:
+        ausfuehren(aktion, annaId)
+        def stand = widerrufsgruende(annaSessions + [benSession])
+        LOG.info('{} -> Widerrufsgründe {}', aktion, stand)
+
+        then:
+        annaSessions.every { stand[it] == grund }
+        stand[benSession] == null
+
+        where:
+        aktion            || grund
+        'Passwort ändern' || SessionRevokeReason.PASSWORD_CHANGED
+        'Passwort-Reset'  || SessionRevokeReason.PASSWORD_RESET
+        'E-Mail ändern'   || SessionRevokeReason.EMAIL_CHANGED
+    }
+
+    def "Fehlgeschlagene Passwortänderung (falsches altes Passwort) widerruft keine Session"() {
+        given:
+        def anna = fixtures.user(password: passwordEncoder.encode('alt'))
+        def sessionId = authSessionService.createSession(anna, 'device-1').sessionId()
+        def annaId = anna.id
+        flushAndClear()
+        loginAs(anna)
+        LOG.info('Szenario: Nutzer {} (angemeldet) mit Session {}, Passwortänderung mit falschem alten Passwort', annaId, sessionId)
+
+        when:
+        LOG.info('userProfileService.changePassword(Nutzer {}, altes Passwort falsch), erwartet WrongPasswordException', annaId)
+        userProfileService.changePassword(new PasswordChangeDto(annaId, 'falsch', 'neu'))
+
+        then:
+        thrown(WrongPasswordException)
+        widerrufsgruende([sessionId]) == [(sessionId): null]
+    }
+
+    def "E-Mail-Änderung auf die eigene Adresse in anderer Schreibweise widerruft keine Session"() {
+        given:
+        def anna = fixtures.user(email: 'anna@example.de')
+        def sessionId = authSessionService.createSession(anna, 'device-1').sessionId()
+        def annaId = anna.id
+        flushAndClear()
+        loginAs(anna)
+        LOG.info('Szenario: Nutzer {} (anna@example.de, angemeldet) mit Session {}, ändert E-Mail auf Anna@Example.de', annaId, sessionId)
+
+        when:
+        def dto = new UserDto(id: annaId, userEmail: 'Anna@Example.de')
+        def antwort = userProfileService.changeUserEmail(dto, new BeanPropertyBindingResult(dto, 'dto'))
+        def stand = widerrufsgruende([sessionId])
+        LOG.info('changeUserEmail -> {}; Widerrufsgründe {}', antwort.userEmail, stand)
+
+        then:
+        antwort.userEmail == 'anna@example.de'
+        stand == [(sessionId): null]
+    }
+
+    def "Konto löschen entfernt alle Sessions und Refresh Tokens des Nutzers, andere bleiben"() {
+        given:
+        def anna = fixtures.user()
+        def ben = fixtures.user()
+        def annaSessions = [authSessionService.createSession(anna, 'device-1'), authSessionService.createSession(anna, 'device-2')]*.sessionId()
+        def benSession = authSessionService.createSession(ben, 'device-1').sessionId()
+        def annaId = anna.id
+        flushAndClear()
+        loginAs(anna)
+        LOG.info('Szenario: Nutzer {} (angemeldet) mit Sessions {} löscht sein Konto, Nutzer {} mit Session {}', annaId,
+                annaSessions, ben.id, benSession)
+
+        when:
+        userProfileService.deleteUserProfile(annaId)
+        def sessions = vorhandeneSessions(annaSessions + [benSession])
+        def tokens = entityManager.createQuery(
+                'select count(t) from RefreshToken t where t.session.id in :ids', Long)
+                .setParameter('ids', annaSessions).singleResult
+        LOG.info('deleteUserProfile(Nutzer {}) -> vorhandene Sessions {}, Refresh Tokens von Nutzer {}: {}', annaId,
+                sessions, annaId, tokens)
+
+        then:
+        sessions == [benSession]
+        tokens == 0
+    }
+
+    /** Führt die Profilaktion für den angemeldeten Nutzer aus (anna@example.de, Passwort alt). */
+    private void ausfuehren(String aktion, Long userId) {
+        switch (aktion) {
+            case 'Passwort ändern' -> userProfileService.changePassword(new PasswordChangeDto(userId, 'alt', 'neu'))
+            case 'Passwort-Reset' -> {
+                def dto = [email: 'anna@example.de']
+                userProfileService.passwordReset('anna@example.de', new MapBindingResult(dto, 'dto'))
+            }
+            case 'E-Mail ändern' -> {
+                def dto = new UserDto(id: userId, userEmail: 'anna.neu@example.de')
+                userProfileService.changeUserEmail(dto, new BeanPropertyBindingResult(dto, 'dto'))
+            }
+            default -> throw new IllegalArgumentException(aktion)
+        }
+    }
+
+    /** Widerrufsgrund je Session-Id (null = aktiv); JPQL, Hibernate flusht vorher. */
+    private Map<Long, SessionRevokeReason> widerrufsgruende(List<Long> sessionIds) {
+        entityManager.createQuery('select s.id, s.revokeReason from AuthSession s where s.id in :ids', Object[])
+                .setParameter('ids', sessionIds)
+                .resultList
+                .collectEntries { [(it[0] as Long): it[1] as SessionRevokeReason] }
+    }
+
+    private List<Long> vorhandeneSessions(List<Long> sessionIds) {
+        entityManager.createQuery('select s.id from AuthSession s where s.id in :ids order by s.id', Long)
+                .setParameter('ids', sessionIds)
+                .resultList
     }
 }

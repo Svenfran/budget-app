@@ -20,7 +20,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * - JSON-Form des StatisticsDto (Frontend-Modell statistics/model/statistics-dto.ts): Felder, Typen, settlement als
  *   Boolean, from/to als ISO-Datum (yyyy-MM-dd); groupView (DIV-72) mit cartCount, averagePerCart, memberCount,
  *   timeline und categories in derselben Form.
- * - Ohne Anmeldung 403 (Ist-Verhalten von Spring Security), fremde Gruppe 403, unbekannte Gruppe 404.
+ * - Ohne Anmeldung 401 (seit DIV-65, vorher 403), fremde Gruppe 403, unbekannte Gruppe 404.
  * - Ungültige Parameterkombinationen 400 statt 500, auch technisch nicht darstellbare Jahre; keine fachliche
  *   Jahresgrenze.
  * - Die Berechnung testen StatisticsCalculatorSpec und StatisticsServiceIntegrationSpec.
@@ -109,12 +109,12 @@ class StatisticsControllerApiSpec extends IntegrationSpec implements ApiRequests
         body.timeline[1] == [year: 2025, month: 2, week: null, from: null, to: null, amount: 40.0]
     }
 
-    def "Ohne Anmeldung wird der Zugriff mit 403 abgelehnt"() {
+    def "Ohne Anmeldung wird der Zugriff mit 401 abgelehnt"() {
         given:
         LOG.info('Szenario: Request ohne Anmeldung')
 
-        expect: 'Ist-Verhalten: Spring Security antwortet ohne Authentifizierung mit 403, nicht 401'
-        send(statistics(period: 'ALL')).status == 403
+        expect: 'nicht angemeldet: 401 UNAUTHENTICATED (DIV-65), fachliche Verbote bleiben 403'
+        send(statistics(period: 'ALL')).status == 401
     }
 
     def "Angemeldeter Nutzer ohne Gruppenzugehörigkeit erhält für die Gruppe 403"() {

@@ -1,5 +1,8 @@
 package com.github.svenfran.budgetapp.budgetappbackend.config
 
+import com.github.svenfran.budgetapp.budgetappbackend.constants.SessionRevokeReason
+import com.github.svenfran.budgetapp.budgetappbackend.repository.AuthSessionRepository
+import com.github.svenfran.budgetapp.budgetappbackend.service.JwtService
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
 import org.springframework.messaging.Message
 import org.springframework.messaging.MessageChannel
@@ -9,13 +12,18 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor
 import org.springframework.messaging.support.MessageBuilder
 import org.springframework.messaging.support.MessageHeaderAccessor
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
+import org.springframework.security.core.userdetails.UserDetailsService
 import spock.lang.Specification
 
 import java.security.Principal
+import java.time.Clock
+import java.time.Duration
+import java.time.ZoneOffset
 
 /**
  * DIV-36 (P1.1–P1.3): Regeln für eingehende STOMP-Frames. Die Token-Prüfung selbst (TokenValidator, dieselbe wie
- * beim REST-Filter) ist gestubbt; hier geht es um Header, Principal-Name, erlaubte Destinations und SEND.
+ * beim REST-Filter) ist gestubbt; hier geht es um Header, Principal-Name, erlaubte Destinations und SEND. Ausnahme:
+ * CONNECT mit dem Token einer widerrufenen Session (DIV-65) läuft über den echten TokenValidator.
  *
  * Destinations stehen als Literale im Test – sie sind der Vertrag mit den Subscriptions im Frontend.
  */
@@ -67,6 +75,45 @@ class WebSocketAuthInterceptorSpec extends Specification {
         StompCommand.STOMP   | 'Token vom Validator abgelehnt' | [Authorization: 'Bearer jwt-ungueltig', DeviceId: DEVICE]
         StompCommand.STOMP   | 'ohne DeviceId'                 | [Authorization: 'Bearer ' + JWT]
         StompCommand.STOMP   | 'mit fremder DeviceId'          | [Authorization: 'Bearer ' + JWT, DeviceId: 'device-2']
+    }
+
+    def "#command mit Token einer #zustand Session: #ergebnis (echter TokenValidator, DIV-65)"() {
+        given: 'Dummy-Schlüssel (Base64, nur für Tests); Session 7 von Nutzer 42 auf device-1'
+        def jetzt = TestData.REFERENCE_DATE.atTime(12, 0)
+        def clock = Clock.fixed(jetzt.toInstant(ZoneOffset.UTC), ZoneOffset.UTC)
+        def jwtService = new JwtService('ZGl2dnktd2Vic29ja2V0c3BlYy1kdW1teS1udXItZnVlci10ZXN0cw==', clock,
+                new AuthProperties(Duration.ofMinutes(15), Duration.ofDays(30), Duration.ofDays(90), Duration.ofSeconds(60)))
+        def ben = TestData.user(id: 42L)
+        def userDetailsService = Stub(UserDetailsService) { loadUserByUsername(ben.email) >> ben }
+        def session = TestData.authSession(id: 7L, user: ben, deviceId: DEVICE)
+        if (widerrufen) {
+            session.revoke(jetzt.minusMinutes(1), SessionRevokeReason.LOGOUT)
+        }
+        def sessions = Stub(AuthSessionRepository) { findById(7L) >> Optional.of(session) }
+        def echterInterceptor = new WebSocketAuthInterceptor(new TokenValidator(jwtService, userDetailsService, sessions, clock))
+        def message = frame(command, [Authorization: 'Bearer ' + jwtService.generateToken(ben, DEVICE, 7L), DeviceId: DEVICE])
+
+        when:
+        def result = null
+        def abgelehnt = false
+        try {
+            result = echterInterceptor.preSend(message, channel)
+        } catch (MessagingException ignored) {
+            abgelehnt = true
+        }
+
+        then:
+        abgelehnt == widerrufen
+        widerrufen || MessageHeaderAccessor.getAccessor(result, StompHeaderAccessor).user.name == '42'
+
+        where:
+        command              | widerrufen
+        StompCommand.CONNECT | false
+        StompCommand.CONNECT | true
+        StompCommand.STOMP   | true
+
+        zustand = widerrufen ? 'widerrufenen' : 'aktiven'
+        ergebnis = widerrufen ? 'abgelehnt' : 'verbunden'
     }
 
     def "SUBSCRIBE auf #destination ist mit angemeldeter Session erlaubt"() {

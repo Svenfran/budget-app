@@ -129,15 +129,15 @@ class ShoppingItemControllerApiSpec extends IntegrationSpec implements ApiReques
         0 * notificationService._
     }
 
-    def "Ohne Anmeldung wird das Anlegen eines Eintrags mit 403 abgelehnt"() {
+    def "Ohne Anmeldung wird das Anlegen eines Eintrags mit 401 abgelehnt"() {
         given:
         def wg = fixtures.group()
         def liste = fixtures.shoppingList(wg)
         LOG.info('Szenario: Gruppe {}, Liste {}, Request ohne Anmeldung', wg.group.id, liste.id)
 
-        expect: 'Ist-Verhalten: Spring Security antwortet ohne Authentifizierung mit 403, nicht 401'
+        expect: 'nicht angemeldet: 401 UNAUTHENTICATED (DIV-65), fachliche Verbote bleiben 403'
         send(post('/api/groups/shopping-list/add-item'),
-                body: [name: 'Milch', shoppingListId: liste.id, groupId: wg.group.id]).status == 403
+                body: [name: 'Milch', shoppingListId: liste.id, groupId: wg.group.id]).status == 401
     }
 
     def "Eintrag einer anderen Liste ändern: 404"() {
@@ -277,7 +277,7 @@ class ShoppingItemControllerApiSpec extends IntegrationSpec implements ApiReques
 
         where:
         fall                         | wer        | listeDerAnderenGruppe || status
-        'ohne Anmeldung'             | null       | false                 || 403
+        'ohne Anmeldung'             | null       | false                 || 401
         'als Nicht-Mitglied'         | 'fremder'  | false                 || 403
         'mit Liste fremder Gruppe'   | 'mitglied' | true                  || 404
     }
@@ -344,7 +344,7 @@ class ShoppingItemControllerApiSpec extends IntegrationSpec implements ApiReques
 
         where:
         fall                                  | wer        | quelle | ziel || status
-        'ohne Anmeldung'                      | null       | 'A'    | 'B'  || 403
+        'ohne Anmeldung'                      | null       | 'A'    | 'B'  || 401
         'als Nicht-Mitglied'                  | 'fremder'  | 'A'    | 'B'  || 403
         'in dieselbe Liste'                   | 'mitglied' | 'A'    | 'A'  || 400
         'mit Eintrag nicht in der Quellliste' | 'mitglied' | 'B'    | 'A'  || 404
@@ -415,7 +415,7 @@ class ShoppingItemControllerApiSpec extends IntegrationSpec implements ApiReques
         0 * notificationService._
     }
 
-    def "Ohne Anmeldung wird das Übernehmen mehrerer Einträge mit 403 abgelehnt"() {
+    def "Ohne Anmeldung wird das Übernehmen mehrerer Einträge mit 401 abgelehnt"() {
         given:
         def wg = fixtures.group()
         def liste = fixtures.shoppingList(wg)
@@ -423,7 +423,7 @@ class ShoppingItemControllerApiSpec extends IntegrationSpec implements ApiReques
 
         expect:
         send(post('/api/groups/shopping-list/add-items'),
-                body: [groupId: wg.group.id, shoppingListId: liste.id, names: ['Milch']]).status == 403
+                body: [groupId: wg.group.id, shoppingListId: liste.id, names: ['Milch']]).status == 401
     }
 
     def "Mehrere Einträge in die Liste einer fremden Gruppe übernehmen: 404"() {
@@ -503,16 +503,16 @@ class ShoppingItemControllerApiSpec extends IntegrationSpec implements ApiReques
         0 * notificationService._
     }
 
-    def "Ohne Anmeldung wird Alle Einträge löschen mit 403 abgelehnt"() {
+    def "Ohne Anmeldung wird Alle Einträge löschen mit 401 abgelehnt"() {
         given:
         def wg = fixtures.group()
         def liste = fixtures.shoppingList(wg)
         def milch = fixtures.shoppingItem(liste, completed: false)
         LOG.info('Szenario: Gruppe {}, Liste {} mit Eintrag {}, Request ohne Anmeldung', wg.group.id, liste.id, milch.id)
 
-        expect: 'Ist-Verhalten: Spring Security antwortet ohne Authentifizierung mit 403, nicht 401'
+        expect: 'nicht angemeldet: 401 UNAUTHENTICATED (DIV-65), fachliche Verbote bleiben 403'
         send(post('/api/groups/shopping-list/clear-items'),
-                body: [[id: milch.id, completed: false, shoppingListId: liste.id, groupId: wg.group.id]]).status == 403
+                body: [[id: milch.id, completed: false, shoppingListId: liste.id, groupId: wg.group.id]]).status == 401
     }
 
     def "Alle Einträge löschen mit unbekannter ID an zweiter Stelle: 404, nichts wird gelöscht"() {

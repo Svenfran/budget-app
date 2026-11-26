@@ -5,9 +5,10 @@ import ch.qos.logback.classic.Logger as LogbackLogger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.github.svenfran.budgetapp.budgetappbackend.constants.SessionRevokeReason
 import com.github.svenfran.budgetapp.budgetappbackend.helper.DateUtils
-import com.github.svenfran.budgetapp.budgetappbackend.repository.TokenRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository
+import com.github.svenfran.budgetapp.budgetappbackend.service.AuthSessionService
 import com.github.svenfran.budgetapp.budgetappbackend.service.JwtService
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.ApiRequests
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
@@ -22,21 +23,28 @@ import org.springframework.security.core.userdetails.User as SpringUser
 import org.springframework.test.web.servlet.request.RequestPostProcessor
 
 import java.time.Duration
-
 import java.time.LocalDate
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 
 /**
  * DIV-22: E-Mail-Adressen sind unabhängig von Groß-/Kleinschreibung und umgebenden Leerzeichen.
- * DIV-18: JWT-Filter Ende-zu-Ende – widerrufene/abgelaufene Tokens (DB-Flags und JWT-exp), falsche DeviceId,
- * Logout, nicht verwertbare JWTs (403 statt Serverfehler) und öffentliche Endpunkte mit ungültigem Bearer-Header.
- * DIV-46: DeviceId ist Pflichtfeld bei Login und Registrierung (400, es wird kein Token gespeichert).
+ * DIV-18/DIV-65: Access-Token-Prüfung Ende-zu-Ende mit echten Bearer-Headern (nicht send(user:)) – Session aus dem
+ * Claim sid widerrufen/abgelaufen, falsche DeviceId, Legacy-JWT ohne sid, nicht verwertbare JWTs: 401 statt
+ * Serverfehler; öffentliche Endpunkte mit ungültigem Bearer-Header.
+ * DIV-46: DeviceId ist Pflichtfeld bei Login, Registrierung und Refresh (400, es entsteht keine Session).
  * DIV-64: Login-Rate-Limit (5 Account+IP / 20 Account / 30 IP je 15 Minuten) – 429 mit Retry-After, Freigabe nach
  * Ablauf, keine Account Enumeration, Forwarding-Header ohne Wirkung (Test-Profil: Client-IP = remoteAddr), keine
  * Klartext-Kennungen im Log. Rollback-Spec: nach einer Abweisung werden nur Status/Antworten geprüft, keine Zähler.
+ * DIV-65: Login liefert Access (15 min, sid) + Refresh Token; Refresh mit Rotation, Kulanzfenster (60 s, ohne
+ * Widerruf), Replay (Widerruf der Session), Leerlauf- und absolutes Ende; Logout per Refresh Token und/oder (auch
+ * abgelaufenem) Bearer; nicht angemeldet → 401 UNAUTHENTICATED, Login-Fehler bleiben 403 mit leerem Body; Health nur
+ * mit gültigem Session-Token; Passwortänderung beendet die Sessions aller Geräte (E4). Zeit über testClock.
+ * Rollback-Spec: Service und Requests teilen die Test-Transaktion, Widerrufe sind ohne Commit sichtbar
+ * (Commit-Verhalten: AuthSessionServiceCommitIntegrationSpec, AuthenticationServiceCommitIntegrationSpec).
  * Enthält auch Fälle des Fehlercode-Vertrags mit Legacy-Text-Pins (Liste: {@link CartControllerApiSpec}).
  */
 class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequests {
@@ -44,6 +52,7 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
     private static final Logger LOG = LoggerFactory.getLogger(AuthenticationControllerApiSpec)
 
     static final String DEVICE = 'device-1'
+    static final String DEVICE_2 = 'device-2'
     /** Platzhalter für die Request-Helfer: deviceId wird im Body weggelassen (null sendet explizites JSON-null). */
     static final Object FEHLT = new Object()
     /** Dummy-Secret (Base64, 45 Byte), das nicht dem Test-Secret entspricht. */
@@ -53,11 +62,13 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
     /** Falsche Passwörter für Fehlversuche (DIV-64); FALSCH_LOG ist eindeutig genug für die Suche im Log. */
     static final String FALSCH = 'falsch'
     static final String FALSCH_LOG = 'falsches-passwort-div64'
+    /** Syntaktisch gültiger, aber nie ausgestellter Refresh Token (43 Zeichen Base64url). */
+    static final String UNBEKANNTER_REFRESH_TOKEN = 'A' * 43
 
     @Autowired UserRepository userRepository
-    @Autowired TokenRepository tokenRepository
     @Autowired ObjectMapper objectMapper
     @Autowired JwtService jwtService
+    @Autowired AuthSessionService authSessionService
     @Value('${secret_key}') String secretKey
 
     def "Registrierung speichert die E-Mail normalisiert und liefert sie so zurück"() {
@@ -137,65 +148,65 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
         response.contentAsString == 'User with name max already exists'
     }
 
-    def "Vor der Umstellung ausgestelltes Token mit abweichender Schreibweise im Subject bleibt gültig"() {
+    def "Token mit abweichender Schreibweise der E-Mail im Subject bleibt gültig"() {
         given: 'Token wurde ausgestellt, als die Adresse noch als Alfred@Divvy.test gespeichert war'
         def alfred = fixtures.user(email: 'alfred@divvy.test')
-        def jwt = jwtService.generateToken(userDetails('Alfred@Divvy.test'), DEVICE)
-        def token = fixtures.token(alfred, token: jwt, deviceId: DEVICE)
-        LOG.info('Szenario: Token {} für Subject Alfred@Divvy.test auf {}, Nutzer {} gespeichert als alfred@divvy.test',
-                token.id, DEVICE, alfred.id)
+        def sessionId = authSessionService.createSession(alfred, DEVICE).sessionId()
+        def jwt = jwtService.generateToken(userDetails('Alfred@Divvy.test'), DEVICE, sessionId)
+        LOG.info('Szenario: Session {} von Nutzer {} (alfred@divvy.test) auf {}, Token für Subject Alfred@Divvy.test',
+                sessionId, alfred.id, DEVICE)
 
         expect:
         jwtService.extractUsername(jwt) == 'Alfred@Divvy.test'
         callProtectedEndpoint(jwt).status == 200
     }
 
-    def "Token eines nicht (mehr) existierenden Nutzers führt zu 403 statt Serverfehler"() {
+    def "Token eines nicht (mehr) existierenden Nutzers führt zu 401 statt Serverfehler"() {
         given:
         def anderer = fixtures.user()
-        def jwt = jwtService.generateToken(userDetails('geloescht@divvy.test'), DEVICE)
-        def token = fixtures.token(anderer, token: jwt, deviceId: DEVICE)
-        LOG.info('Szenario: Token {} für Subject geloescht@divvy.test (kein Nutzer) auf {}, gespeichert bei Nutzer {}',
-                token.id, DEVICE, anderer.id)
+        def sessionId = authSessionService.createSession(anderer, DEVICE).sessionId()
+        def jwt = jwtService.generateToken(userDetails('geloescht@divvy.test'), DEVICE, sessionId)
+        LOG.info('Szenario: Token für Subject geloescht@divvy.test (kein Nutzer) mit Session {} von Nutzer {} auf {}',
+                sessionId, anderer.id, DEVICE)
 
         expect:
-        callProtectedEndpoint(jwt).status == 403
+        callProtectedEndpoint(jwt).status == 401
     }
 
-    def "Gespeicherter Token mit expired=#expired, revoked=#revoked wird mit 403 abgelehnt"() {
+    def "Token einer widerrufenen Session (#grund) wird mit 401 abgelehnt"() {
         given:
         def alfred = fixtures.user()
-        def jwt = jwtService.generateToken(alfred, DEVICE)
-        def token = fixtures.token(alfred, token: jwt, deviceId: DEVICE, expired: expired, revoked: revoked)
-        LOG.info('Szenario: Token {} von Nutzer {} auf {}, expired {}, revoked {}', token.id, alfred.id, DEVICE, expired, revoked)
+        def issued = authSessionService.createSession(alfred, DEVICE)
+        def vorher = callProtectedEndpoint(issued.accessToken()).status
+        authSessionService.revokeBySessionId(issued.sessionId(), grund)
+        LOG.info('Szenario: Session {} von Nutzer {} auf {}, vor dem Widerruf {}, widerrufen mit {}',
+                issued.sessionId(), alfred.id, DEVICE, vorher, grund)
 
         expect:
-        callProtectedEndpoint(jwt).status == 403
+        vorher == 200
+        callProtectedEndpoint(issued.accessToken()).status == 401
 
         where:
-        expired | revoked
-        true    | false
-        false   | true
-        true    | true
+        grund << [SessionRevokeReason.LOGOUT, SessionRevokeReason.REUSE_DETECTED]
     }
 
-    def "Falsche DeviceId (#fall) führt zu 403"() {
+    def "Falsche DeviceId (#fall) führt zu 401"() {
         given:
         def alfred = fixtures.user()
-        def jwt = jwtService.generateToken(alfred, claimDevice)
-        def token = fixtures.token(alfred, token: jwt, deviceId: gespeichertesDevice)
-        LOG.info('Szenario: Token {} von Nutzer {}, DeviceId im Claim {}, gespeichert {}, im Header {}',
-                token.id, alfred.id, claimDevice, gespeichertesDevice, headerDevice)
+        def sessionId = authSessionService.createSession(alfred, sessionDevice).sessionId()
+        def jwt = jwtService.generateToken(alfred, claimDevice, sessionId)
+        LOG.info('Szenario: Session {} von Nutzer {} auf {}, DeviceId im Claim {}, im Header {}',
+                sessionId, alfred.id, sessionDevice, claimDevice, headerDevice)
 
         expect:
-        callProtectedEndpoint(jwt, headerDevice).status == 403
+        callProtectedEndpoint(jwt, headerDevice).status == 401
 
         where:
-        fall                              | claimDevice | gespeichertesDevice | headerDevice
-        'Header weicht ab'                | DEVICE      | DEVICE              | 'device-2'
-        'Header fehlt'                    | DEVICE      | DEVICE              | null
-        'gespeicherte DeviceId weicht ab' | DEVICE      | 'device-2'          | DEVICE
-        'Claim weicht ab'                 | 'device-2'  | DEVICE              | DEVICE
+        fall                                 | claimDevice | sessionDevice | headerDevice
+        'Header weicht ab'                   | DEVICE      | DEVICE        | DEVICE_2
+        'Header fehlt'                       | DEVICE      | DEVICE        | null
+        'DeviceId der Session weicht ab'     | DEVICE      | DEVICE_2      | DEVICE
+        'Claim weicht ab'                    | DEVICE_2    | DEVICE        | DEVICE
     }
 
     def "Mit dem beim Login ausgegebenen Token ist ein geschützter Request erlaubt"() {
@@ -208,7 +219,7 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
         callProtectedEndpoint(login.token).status == 200
     }
 
-    def "Nach dem Logout wird derselbe Token mit 403 abgelehnt"() {
+    def "Nach dem Logout wird derselbe Token mit 401 abgelehnt"() {
         given:
         def registrierung = json(register('max', 'max@example.de'))
         def jwt = registrierung.token
@@ -216,40 +227,47 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
 
         when:
         def vorher = callProtectedEndpoint(jwt).status
-        def abgemeldet = logout(jwt).status
+        def abgemeldet = logout(bearer: jwt).status
         def nachher = callProtectedEndpoint(jwt).status
         LOG.info('Antwort: vor dem Logout {}, Logout {}, nach dem Logout {}', vorher, abgemeldet, nachher)
 
         then:
         vorher == 200
         abgemeldet == 200
-        nachher == 403
+        nachher == 401
     }
 
-    def "Nicht verwertbares JWT (#fall) führt zu 403 statt Serverfehler"() {
+    def "Nicht verwertbares JWT (#fall) führt zu 401 statt Serverfehler"() {
         given:
         def alfred = fixtures.user()
+        def sessionId = authSessionService.createSession(alfred, DEVICE).sessionId()
         def jwt = [
-                'abgelaufen'    : { TestData.jwt(secret: secretKey, subject: alfred.email, deviceId: DEVICE,
+                'abgelaufen'    : { TestData.jwt(secret: secretKey, subject: alfred.email, deviceId: DEVICE, sessionId: sessionId,
                                                  issuedAt: AUSGESTELLT_AM, expiration: ABGELAUFEN_AM) },
                 'fremd signiert': { TestData.jwt(secret: FREMDER_SECRET, subject: alfred.email, deviceId: DEVICE,
-                                                 expiration: DateUtils.toDate(DateUtils.NO_END_DATE)) },
+                                                 sessionId: sessionId, expiration: DateUtils.toDate(DateUtils.NO_END_DATE)) },
                 'unlesbar'      : { 'kein-jwt' },
                 'leer'          : { '' },
         ][fall]()
-        // unlesbar/leer ohne DB-Zeile: das JWT wird vor dem Token-Lookup geparst
-        def tokenId = gespeichert ? fixtures.token(alfred, token: jwt, deviceId: DEVICE).id : null
-        LOG.info('Szenario: JWT {} für Nutzer {} auf {}, gespeichert als Token {}', fall, alfred.id, DEVICE, tokenId)
+        LOG.info('Szenario: JWT {} für Nutzer {} mit aktiver Session {} auf {}', fall, alfred.id, sessionId, DEVICE)
 
         expect:
-        callProtectedEndpoint(jwt).status == 403
+        callProtectedEndpoint(jwt).status == 401
 
         where:
-        fall             | gespeichert
-        'abgelaufen'     | true
-        'fremd signiert' | true
-        'unlesbar'       | false
-        'leer'           | false
+        fall << ['abgelaufen', 'fremd signiert', 'unlesbar', 'leer']
+    }
+
+    def "JWT ohne sid (vor DIV-65 ausgestellt) wird mit 401 abgelehnt, auch bei gültiger Signatur und aktiver Session"() {
+        given:
+        def alfred = fixtures.user()
+        def sessionId = authSessionService.createSession(alfred, DEVICE).sessionId()
+        def legacy = TestData.jwt(secret: secretKey, subject: alfred.email, deviceId: DEVICE,
+                expiration: DateUtils.toDate(DateUtils.NO_END_DATE))
+        LOG.info('Szenario: Nutzer {} mit aktiver Session {} auf {}, Legacy-JWT ohne sid (exp 2999)', alfred.id, sessionId, DEVICE)
+
+        expect:
+        callProtectedEndpoint(legacy).status == 401
     }
 
     def "Login mit abgelaufenem Bearer-Header liefert 200 und einen verwendbaren Token"() {
@@ -273,7 +291,7 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
         geschuetzt == 200
     }
 
-    def "Registrierung ohne DeviceId (#fall) wird mit 400 abgelehnt, es entstehen weder Nutzer noch Token"() {
+    def "Registrierung ohne DeviceId (#fall) wird mit 400 abgelehnt, es entstehen weder Nutzer noch Session"() {
         given:
         LOG.info('Szenario: neuer Nutzer max mit max@example.de, DeviceId {}', fall)
 
@@ -297,29 +315,25 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
         'nur Leerzeichen' | '   '
     }
 
-    def "Login ohne DeviceId (#fall) wird mit 400 abgelehnt, bestehende Tokens bleiben unverändert"() {
+    def "Login ohne DeviceId (#fall) wird mit 400 abgelehnt, bestehende Sessions bleiben unverändert"() {
         given:
         def max = json(register('max', 'max@example.de'))
         def maxId = max.id as Long
-        def tokenIdsVorher = tokenRepository.findAllByUserId(maxId)*.id
-        LOG.info('Szenario: registriert max (Nutzer {}) auf {} mit Token {}, Login mit DeviceId {}',
-                maxId, DEVICE, tokenIdsVorher, fall)
+        def sessionsVorher = aktiveSessions(maxId)
+        LOG.info('Szenario: registriert max (Nutzer {}) auf {} mit aktiver Session {}, Login mit DeviceId {}',
+                maxId, DEVICE, sessionsVorher, fall)
 
         when:
         def response = authenticate('max@example.de', null, deviceId)
         def meldung = response.contentAsString
-        flushAndClear()
-        def tokens = tokenRepository.findAllByUserId(maxId)
-        def ungueltig = tokens.findAll { it.expired || it.revoked }*.id
+        def sessions = aktiveSessions(maxId)
         def geschuetzt = callProtectedEndpoint(max.token).status
-        LOG.info('Antwort: {}, Tokens danach {}, davon expired/revoked {}, geschützter Request mit altem Token {}',
-                meldung, tokens*.id, ungueltig, geschuetzt)
+        LOG.info('Antwort: {}, aktive Sessions danach {}, geschützter Request mit altem Token {}', meldung, sessions, geschuetzt)
 
         then:
         response.status == 400
         meldung == 'DeviceId is required'
-        tokens*.id == tokenIdsVorher
-        ungueltig == []
+        sessions == sessionsVorher
         geschuetzt == 200
 
         where:
@@ -535,7 +549,7 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
         response.getHeader('Retry-After') == '900'
     }
 
-    def "Kein Log (aller Logger, Security auf DEBUG) enthält Passwort, JWT, E-Mail oder IP im Klartext (AC7)"() {
+    def "Kein Log (aller Logger, Security auf DEBUG) enthält Passwort, Token, E-Mail oder IP im Klartext (AC7, DIV-65)"() {
         given:
         register('max', 'max@example.de')
         def ip = '198.51.100.77'
@@ -543,11 +557,13 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
         def root = LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME) as LogbackLogger
         def security = LoggerFactory.getLogger('org.springframework.security') as LogbackLogger
         def securityLevel = security.level
-        LOG.info('Szenario: registriert max; Fehlversuch max, Fehlversuch unbekannt, gültiger Login, 6 Fehlversuche max (6. -> 429)')
+        LOG.info('Szenario: registriert max; Fehlversuch max, Fehlversuch unbekannt, gültiger Login, 6 Fehlversuche max '
+                + '(6. -> 429); danach Refresh, Replay des alten Refresh Tokens nach 61 s und Logout')
 
         when:
-        String jwt
+        List<String> tokens = []
         List<Integer> statusse
+        List<Integer> sessionStatusse
         appender.start()
         root.addAppender(appender)
         security.level = Level.DEBUG
@@ -555,27 +571,39 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
             statusse = [authenticate('max@example.de', password: FALSCH_LOG, ip: ip).status,
                         authenticate('niemand@example.de', password: FALSCH_LOG, ip: ip).status]
             def erfolg = authenticate('max@example.de', ip: ip)
-            jwt = json(erfolg).token
+            def login = json(erfolg)
+            tokens += [login.token, login.refreshToken]
             statusse << erfolg.status
             statusse.addAll((1..6).collect { authenticate('max@example.de', password: FALSCH_LOG, ip: ip).status })
+
+            def erneuert = refresh(login.refreshToken)
+            def paar = json(erneuert)
+            tokens += [paar.token, paar.refreshToken]
+            testClock.advance(Duration.ofSeconds(61))
+            sessionStatusse = [erneuert.status, refresh(login.refreshToken).status,
+                               logout(refreshToken: paar.refreshToken, bearer: paar.token).status]
         } finally {
             security.level = securityLevel
             root.detachAppender(appender)
         }
         def zeilen = appender.list.collect { [it.loggerName, it.formattedMessage, it.throwableProxy?.message].join(' ') }
         def securityDebug = appender.list.count { it.loggerName.startsWith('org.springframework.security') && it.level == Level.DEBUG }
-        def geheimnisse = ['geheim123', FALSCH_LOG, jwt, 'max@example.de', 'niemand@example.de', ip]
+        def geheimnisse = ['geheim123', FALSCH_LOG, 'max@example.de', 'niemand@example.de', ip] + tokens
         def treffer = zeilen.findAll { zeile -> geheimnisse.any { zeile.contains(it) } }
         def ereignisse = appender.list*.formattedMessage.findAll { it.startsWith('event=') }
-        LOG.info('Antwort: {}; {} Log-Zeilen ({} Security-DEBUG), Treffer {}, Ereignisse {}',
-                statusse, zeilen.size(), securityDebug, treffer.size(), ereignisse)
+        LOG.info('Antwort: {} / {}; {} Log-Zeilen ({} Security-DEBUG), Treffer {}, Ereignisse {}',
+                statusse, sessionStatusse, zeilen.size(), securityDebug, treffer.size(), ereignisse)
 
         then:
         statusse == [403, 403, 200, 403, 403, 403, 403, 403, 429]
+        sessionStatusse == [200, 401, 200]
+        tokens.every { it }
         securityDebug > 0
         treffer == []
         ereignisse.count { it ==~ /event=login_failed account=[0-9a-f]{16} ip=[0-9a-f]{16} ipSource=remoteAddr/ } == 7
         ereignisse.any { it ==~ /event=login_rate_limited scope=ACCOUNT_IP account=[0-9a-f]{16} ip=[0-9a-f]{16} ipSource=remoteAddr retryAfter=900/ }
+        ereignisse.any { it ==~ /event=session_created sessionId=\d+ userId=\d+/ }
+        ereignisse.any { it ==~ /event=refresh_token_reuse_detected sessionId=\d+ userId=\d+/ }
     }
 
     def "Mit X-Error-Format json: #fall -> 400 mit Code #code und bisherigem Text"() {
@@ -622,6 +650,428 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
         erlaubt?.toLowerCase(Locale.ROOT)?.contains('x-error-format')
     }
 
+    // Refresh-Token-Sessions (DIV-65)
+
+    def "Login liefert Access Token (15 min), Refresh Token und Session-Ablauf (90 Tage) (AC1)"() {
+        given:
+        def max = json(register('max', 'max@example.de'))
+        def jetzt = testClock.instant()
+        LOG.info('Szenario: registriert max (Nutzer {}), Login auf {} um {}', max.id, DEVICE, jetzt)
+
+        when:
+        def response = authenticate('max@example.de')
+        def login = json(response)
+        def sessionId = jwtService.extractSessionId(login.token)
+        def aktiv = aktiveSessions(max.id as Long)
+        LOG.info('Antwort: {}, Session {}, expirationDate {}, sessionExpirationDate {}, Refresh Token {} Zeichen; aktive Sessions {}',
+                response.status, sessionId, login.expirationDate, login.sessionExpirationDate, login.refreshToken?.size(), aktiv)
+
+        then:
+        response.status == 200
+        login.expirationDate == (jetzt + Duration.ofMinutes(15)).toEpochMilli()
+        login.sessionExpirationDate == (jetzt + Duration.ofDays(90)).toEpochMilli()
+        login.refreshToken ==~ /[A-Za-z0-9_-]{43}/
+        jwtService.extractDeviceId(login.token) == DEVICE
+
+        and: 'die Session der Registrierung auf demselben Gerät ist durch den Login ersetzt'
+        aktiv == [sessionId]
+    }
+
+    def "Registrierung liefert ebenfalls ein Token-Paar mit aktiver Session"() {
+        given:
+        LOG.info('Szenario: neuer Nutzer max auf {}', DEVICE)
+
+        when:
+        def registrierung = json(register('max', 'max@example.de'))
+        def sessionId = jwtService.extractSessionId(registrierung.token)
+        def aktiv = aktiveSessions(registrierung.id as Long)
+        def erneuert = refresh(registrierung.refreshToken).status
+        LOG.info('Antwort: Nutzer {}, Session {}, aktive Sessions {}, Refresh mit dem Refresh Token -> {}',
+                registrierung.id, sessionId, aktiv, erneuert)
+
+        then:
+        aktiv == [sessionId]
+        erneuert == 200
+    }
+
+    def "Access Token gilt 15 Minuten, danach 401 UNAUTHENTICATED"() {
+        given:
+        def login = loginMax()
+        LOG.info('Szenario: max angemeldet auf {} um {}', DEVICE, testClock.instant())
+
+        when:
+        testClock.advance(Duration.ofMinutes(14))
+        def nach14 = callProtectedEndpoint(login.token).status
+        testClock.advance(Duration.ofMinutes(1).plusSeconds(1))
+        def nach15 = callProtectedEndpoint(login.token, DEVICE, ['X-Error-Format': 'json'])
+        def antwort = json(nach15)
+        LOG.info('Antwort: nach 14 min {}, nach 15 min 1 s {} {}', nach14, nach15.status, antwort)
+
+        then:
+        nach14 == 200
+        nach15.status == 401
+        antwort.code == 'UNAUTHENTICATED'
+    }
+
+    def "Refresh liefert ein neues Paar derselben Session, der neue Access Token funktioniert (AC2)"() {
+        given:
+        def login = loginMax()
+        def sessionId = jwtService.extractSessionId(login.token)
+        testClock.advance(Duration.ofMinutes(16))
+        def jetzt = testClock.instant()
+        LOG.info('Szenario: max angemeldet auf {} (Session {}), 16 min später, Access Token abgelaufen', DEVICE, sessionId)
+
+        when:
+        def alt = callProtectedEndpoint(login.token).status
+        def response = refresh(login.refreshToken)
+        def paar = json(response)
+        def neu = callProtectedEndpoint(paar.token).status
+        LOG.info('Antwort: alter Access Token {}, Refresh {}, neuer Access Token {}, expirationDate {}', alt, response.status,
+                neu, paar.expirationDate)
+
+        then:
+        alt == 401
+        response.status == 200
+        neu == 200
+        jwtService.extractSessionId(paar.token) == sessionId
+        paar.refreshToken != login.refreshToken
+        paar.expirationDate == (jetzt + Duration.ofMinutes(15)).toEpochMilli()
+        paar.sessionExpirationDate == login.sessionExpirationDate
+        paar.id == login.id
+        paar.email == 'max@example.de'
+    }
+
+    def "Alter Refresh Token im Kulanzfenster: 401 REFRESH_TOKEN_INVALID ohne Widerruf der Session (E5)"() {
+        given:
+        def login = loginMax()
+        def paar = json(refresh(login.refreshToken))
+        testClock.advance(Duration.ofSeconds(30))
+        LOG.info('Szenario: max angemeldet, einmal rotiert; 30 s später erneut mit dem alten Refresh Token')
+
+        when:
+        def duplikat = refresh(login.refreshToken, DEVICE, ['X-Error-Format': 'json'])
+        def antwort = json(duplikat)
+        def neuerAccess = callProtectedEndpoint(paar.token).status
+        def weiter = refresh(paar.refreshToken).status
+        LOG.info('Antwort: Duplikat {} {}, neuer Access Token danach {}, Refresh mit dem neuen Refresh Token {}',
+                duplikat.status, antwort, neuerAccess, weiter)
+
+        then:
+        duplikat.status == 401
+        antwort.code == 'REFRESH_TOKEN_INVALID'
+        neuerAccess == 200
+        weiter == 200
+    }
+
+    def "Alter Refresh Token nach dem Kulanzfenster: Replay widerruft die Session samt neuem Access Token (AC3)"() {
+        given:
+        def login = loginMax()
+        def sessionId = jwtService.extractSessionId(login.token)
+        def paar = json(refresh(login.refreshToken))
+        testClock.advance(Duration.ofSeconds(61))
+        LOG.info('Szenario: max angemeldet (Session {}), einmal rotiert; 61 s später erneut mit dem alten Refresh Token', sessionId)
+
+        when:
+        def replay = refresh(login.refreshToken).status
+        def neuerAccess = callProtectedEndpoint(paar.token).status
+        def neuerRefresh = refresh(paar.refreshToken).status
+        def grund = widerrufsgrund(sessionId)
+        LOG.info('Antwort: Replay {}, neuer Access Token {}, neuer Refresh Token {}, Session widerrufen mit {}',
+                replay, neuerAccess, neuerRefresh, grund)
+
+        then:
+        replay == 401
+        neuerAccess == 401
+        neuerRefresh == 401
+        grund == SessionRevokeReason.REUSE_DETECTED
+    }
+
+    def "Refresh nach 30 Tagen ohne Nutzung: 401"() {
+        given:
+        def login = loginMax()
+        testClock.advance(Duration.ofDays(30))
+        LOG.info('Szenario: max angemeldet, 30 Tage keine Nutzung')
+
+        expect:
+        refresh(login.refreshToken).status == 401
+    }
+
+    def "Session endet nach 90 Tagen trotz regelmäßiger Rotation (AC8)"() {
+        given:
+        def login = loginMax()
+        LOG.info('Szenario: max angemeldet; Refresh an Tag 20, 40, 60, 80, dann an Tag 90')
+
+        when:
+        def refreshToken = login.refreshToken
+        def statusse = []
+        def sessionEnden = []
+        4.times {
+            testClock.advance(Duration.ofDays(20))
+            def response = refresh(refreshToken)
+            def paar = json(response)
+            statusse << response.status
+            sessionEnden << paar.sessionExpirationDate
+            refreshToken = paar.refreshToken
+        }
+        testClock.advance(Duration.ofDays(10))
+        def tag90 = refresh(refreshToken).status
+        LOG.info('Antwort: Tag 20 bis 80 {}, Session-Ende jeweils {}, Tag 90 {}', statusse, sessionEnden.unique(false), tag90)
+
+        then:
+        statusse == [200] * 4
+        sessionEnden.every { it == login.sessionExpirationDate }
+        tag90 == 401
+    }
+
+    def "Refresh mit #fall: #status, die Session bleibt nutzbar"() {
+        given:
+        def login = loginMax()
+        LOG.info('Szenario: max angemeldet auf {}, Refresh mit {}', DEVICE, fall)
+
+        when:
+        def response = refresh(login.refreshToken, deviceId)
+        def meldung = response.contentAsString
+        def danach = refresh(login.refreshToken).status
+        LOG.info('Antwort: {} "{}", danach Refresh mit richtiger DeviceId {}', response.status, meldung, danach)
+
+        then:
+        response.status == status
+        meldung == text
+        danach == 200
+
+        where:
+        fall                 | deviceId || status | text
+        'falscher DeviceId'  | DEVICE_2 || 401    | 'Invalid refresh token'
+        'fehlender DeviceId' | FEHLT    || 400    | 'DeviceId is required'
+        'leerer DeviceId'    | '  '     || 400    | 'DeviceId is required'
+    }
+
+    def "Refresh mit #fall Refresh Token: 401"() {
+        given:
+        LOG.info('Szenario: Refresh mit {} Refresh Token', fall)
+
+        expect:
+        refresh(token).status == 401
+
+        where:
+        fall          | token
+        'unbekanntem' | UNBEKANNTER_REFRESH_TOKEN
+        'leerem'      | ''
+        'fehlendem'   | null
+    }
+
+    def "Refresh Token als Bearer-Token verwendet: 401 (FA8)"() {
+        given:
+        def login = loginMax()
+        LOG.info('Szenario: max angemeldet, geschützter Request mit dem Refresh Token als Bearer')
+
+        expect:
+        callProtectedEndpoint(login.refreshToken).status == 401
+    }
+
+    def "Login auf zweitem Gerät lässt die erste Session aktiv, erneuter Login auf demselben Gerät ersetzt sie"() {
+        given:
+        def erstes = loginMax()
+        def zweites = json(authenticate('max@example.de', null, DEVICE_2))
+        LOG.info('Szenario: max angemeldet auf {} (Session {}) und {} (Session {}), dann erneut auf {}', DEVICE,
+                jwtService.extractSessionId(erstes.token), DEVICE_2, jwtService.extractSessionId(zweites.token), DEVICE)
+
+        when:
+        def beideAktiv = [callProtectedEndpoint(erstes.token).status, callProtectedEndpoint(zweites.token, DEVICE_2).status]
+        def neu = json(authenticate('max@example.de'))
+        def danach = [alt       : callProtectedEndpoint(erstes.token).status,
+                      altRefresh: refresh(erstes.refreshToken).status,
+                      zweites   : callProtectedEndpoint(zweites.token, DEVICE_2).status,
+                      neu       : callProtectedEndpoint(neu.token).status]
+        def grund = widerrufsgrund(jwtService.extractSessionId(erstes.token))
+        LOG.info('Antwort: vorher {}, nach erneutem Login {}, alte Session widerrufen mit {}', beideAktiv, danach, grund)
+
+        then:
+        beideAktiv == [200, 200]
+        danach == [alt: 401, altRefresh: 401, zweites: 200, neu: 200]
+        grund == SessionRevokeReason.RELOGIN
+    }
+
+    def "Logout #fall beendet die Session, das zweite Gerät bleibt angemeldet (AC7)"() {
+        given:
+        def erstes = loginMax()
+        def zweites = json(authenticate('max@example.de', null, DEVICE_2))
+        def sessionId = jwtService.extractSessionId(erstes.token)
+        testClock.advance(Duration.ofMinutes(minutenSpaeter))
+        LOG.info('Szenario: max angemeldet auf {} (Session {}) und {}; {} min später Logout auf {} {}', DEVICE, sessionId,
+                DEVICE_2, minutenSpaeter, DEVICE, fall)
+
+        when:
+        def abgemeldet = logout(refreshToken: mitRefresh ? erstes.refreshToken : null,
+                bearer: mitBearer ? erstes.token : null).status
+        def access = callProtectedEndpoint(erstes.token).status
+        def erneuern = refresh(erstes.refreshToken).status
+        def grund = widerrufsgrund(sessionId)
+        def zweitesGeraet = refresh(zweites.refreshToken, DEVICE_2).status
+        LOG.info('Antwort: Logout {}, danach Access Token {}, Refresh {}, Widerruf {}, Refresh auf {} {}', abgemeldet, access,
+                erneuern, grund, DEVICE_2, zweitesGeraet)
+
+        then:
+        abgemeldet == 200
+        access == 401
+        erneuern == 401
+        grund == SessionRevokeReason.LOGOUT
+        zweitesGeraet == 200
+
+        where:
+        fall                                              | mitRefresh | mitBearer | minutenSpaeter
+        'mit Refresh Token'                               | true       | false     | 1
+        'nur mit Bearer-Token'                            | false      | true      | 1
+        'mit abgelaufenem Access Token und Refresh Token' | true       | true      | 16
+        'nur mit abgelaufenem Bearer-Token'               | false      | true      | 16
+    }
+
+    def "Logout #fall: 200"() {
+        given:
+        def login = loginMax()
+        LOG.info('Szenario: max angemeldet, Logout {}', fall)
+
+        when:
+        def statusse = (1..wiederholungen).collect {
+            logout(refreshToken: refreshToken == 'eigener' ? login.refreshToken : refreshToken,
+                    bearer: bearer == 'eigener' ? login.token : bearer).status
+        }
+        def access = callProtectedEndpoint(login.token).status
+        LOG.info('Antwort: {}, eigener Access Token danach {}', statusse, access)
+
+        then:
+        statusse == [200] * wiederholungen
+        access == accessDanach
+
+        where:
+        fall                            | refreshToken              | bearer     | wiederholungen || accessDanach
+        'ohne Token'                    | null                      | null       | 1              || 200
+        'mit unbekanntem Refresh Token' | UNBEKANNTER_REFRESH_TOKEN | null       | 1              || 200
+        'mit unlesbarem Bearer-Token'   | null                      | 'kein-jwt' | 1              || 200
+        'zweimal hintereinander'        | 'eigener'                 | 'eigener'  | 2              || 401
+    }
+
+    def "Logout ohne Body und ohne Content-Type: 200"() {
+        given:
+        LOG.info('Szenario: POST /api/auth/logout ohne Body (wie ältere App-Versionen)')
+
+        expect:
+        send(post('/api/auth/logout')).status == 200
+    }
+
+    def "Unbekannte E-Mail: 403 mit leerem Body, es entsteht keine Session"() {
+        given:
+        def vorher = sessionAnzahl()
+        LOG.info('Szenario: Login mit niemand@example.de (kein Nutzer), {} Sessions vorhanden', vorher)
+
+        when:
+        def response = authenticate('niemand@example.de')
+        def nachher = sessionAnzahl()
+        LOG.info('Antwort: {} "{}", Sessions danach {}', response.status, response.contentAsString, nachher)
+
+        then:
+        response.status == 403
+        response.contentAsString == ''
+        nachher == vorher
+    }
+
+    def "Health (#fall): #status"() {
+        given:
+        def login = loginMax()
+        if (widerrufen) {
+            authSessionService.revokeBySessionId(jwtService.extractSessionId(login.token), SessionRevokeReason.LOGOUT)
+        }
+        LOG.info('Szenario: max angemeldet, Session widerrufen {}, GET /actuator/health {}', widerrufen, fall)
+
+        when:
+        def request = get('/actuator/health')
+        if (mitToken) {
+            request.header('Authorization', JwtService.BEARER_PREFIX + login.token).header('deviceId', DEVICE)
+        }
+        def response = send(request)
+        LOG.info('Antwort: {}', response.status)
+
+        then:
+        response.status == status
+
+        where:
+        fall                         | mitToken | widerrufen || status
+        'mit gültigem Session-Token' | true     | false      || 200
+        'ohne Token'                 | false    | false      || 401
+        'mit widerrufener Session'   | true     | true       || 401
+    }
+
+    def "#fall mit X-Error-Format #header: 401 mit Code bzw. Legacy-Text"() {
+        given:
+        LOG.info('Szenario: {} mit X-Error-Format {}', fall, header)
+
+        when:
+        def headers = header == null ? [:] : ['X-Error-Format': header]
+        def response
+        if (fall == 'nicht angemeldet') {
+            def request = get('/api/groups/sidenav')
+            headers.each { name, wert -> request.header(name, wert) }
+            response = send(request)
+        } else {
+            response = refresh(UNBEKANNTER_REFRESH_TOKEN, DEVICE, headers)
+        }
+        def body = header == null ? response.contentAsString : json(response)
+        LOG.info('Antwort: {} {} ({})', response.status, body, response.contentType)
+
+        then:
+        response.status == 401
+        body == erwartet
+
+        where:
+        fall                  | header || erwartet
+        'nicht angemeldet'    | 'json' || [code: 'UNAUTHENTICATED', message: 'Unauthenticated']
+        'nicht angemeldet'    | null   || 'Unauthenticated'
+        'abgelehnter Refresh' | 'json' || [code: 'REFRESH_TOKEN_INVALID', message: 'Invalid refresh token']
+        'abgelehnter Refresh' | null   || 'Invalid refresh token'
+    }
+
+    def "Nach der Passwortänderung sind Access und Refresh Token beider Geräte ungültig (E4)"() {
+        given:
+        def erstes = loginMax()
+        def zweites = json(authenticate('max@example.de', null, DEVICE_2))
+        LOG.info('Szenario: max (Nutzer {}) angemeldet auf {} und {}, ändert auf {} sein Passwort', erstes.id, DEVICE,
+                DEVICE_2, DEVICE)
+
+        when:
+        def aenderung = send(put('/api/userprofile/update-password')
+                .header('Authorization', JwtService.BEARER_PREFIX + erstes.token).header('deviceId', DEVICE),
+                body: [userId: erstes.id, oldPassword: 'geheim123', newPassword: 'neu12345'])
+        def danach = [access1 : callProtectedEndpoint(erstes.token).status,
+                      refresh1: refresh(erstes.refreshToken).status,
+                      access2 : callProtectedEndpoint(zweites.token, DEVICE_2).status,
+                      refresh2: refresh(zweites.refreshToken, DEVICE_2).status]
+        LOG.info('Antwort: Passwortänderung {}, danach {}', aenderung.status, danach)
+
+        then:
+        aenderung.status == 201
+        danach == [access1: 401, refresh1: 401, access2: 401, refresh2: 401]
+    }
+
+    def "CORS-Preflight der App für #endpoint ist erlaubt"() {
+        given: 'WebView-Origin der Prod-App (androidScheme https)'
+        LOG.info('Szenario: Preflight von https://localhost für POST {}', endpoint)
+
+        when:
+        def response = send(options(endpoint)
+                .header('Origin', 'https://localhost')
+                .header('Access-Control-Request-Method', 'POST')
+                .header('Access-Control-Request-Headers', 'authorization,content-type,deviceid,x-error-format'))
+        def origin = response.getHeader('Access-Control-Allow-Origin')
+        LOG.info('Antwort: {}, Allow-Origin {}, Allow-Headers {}', response.status, origin,
+                response.getHeader('Access-Control-Allow-Headers'))
+
+        then:
+        response.status == 200
+        origin == 'https://localhost'
+
+        where:
+        endpoint << ['/api/auth/refresh', '/api/auth/logout']
+    }
     /** deviceId FEHLT: Body ohne deviceId (wie ein Client, der keine sendet); null: explizites JSON-null. */
     private MockHttpServletResponse register(String name, String email, Object deviceId = DEVICE) {
         def body = [name: name, email: email, password: 'geheim123']
@@ -659,6 +1109,14 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
         send(request, body: [email: email, password: optionen.password ?: 'geheim123', deviceId: DEVICE])
     }
 
+    /** Registriert max@example.de und meldet ihn auf DEVICE an; liefert die Login-Antwort (DIV-65). */
+    private Map loginMax() {
+        register('max', 'max@example.de')
+        def response = authenticate('max@example.de')
+        assert response.status == 200
+        json(response) as Map
+    }
+
     /** Sechs Fehlversuche; je Antwort Status, Body, Header-Namen und Retry-After (Vergleich in AC5). */
     private List<Map> verlauf(String email, String ip) {
         (1..6).collect {
@@ -668,19 +1126,54 @@ class AuthenticationControllerApiSpec extends IntegrationSpec implements ApiRequ
         }
     }
 
-    /** deviceId null: Header wird weggelassen. */
-    private MockHttpServletResponse callProtectedEndpoint(String jwt, String deviceId = DEVICE) {
+    /** deviceId null: Header wird weggelassen; headers: zusätzliche Request-Header. */
+    private MockHttpServletResponse callProtectedEndpoint(String jwt, String deviceId = DEVICE, Map headers = [:]) {
         def request = get('/api/groups/sidenav').header('Authorization', JwtService.BEARER_PREFIX + jwt)
         if (deviceId != null) {
             request.header('deviceId', deviceId)
         }
+        headers.each { name, wert -> request.header(name as String, wert as String) }
         send(request)
     }
 
-    private MockHttpServletResponse logout(String jwt) {
-        send(post('/api/auth/logout')
-                .header('Authorization', JwtService.BEARER_PREFIX + jwt)
-                .header('deviceId', DEVICE))
+    /** POST /api/auth/refresh (DIV-65); deviceId FEHLT wie bei register, headers: zusätzliche Request-Header. */
+    private MockHttpServletResponse refresh(String refreshToken, Object deviceId = DEVICE, Map headers = [:]) {
+        def request = post('/api/auth/refresh')
+        headers.each { name, wert -> request.header(name as String, wert as String) }
+        def body = [refreshToken: refreshToken]
+        if (!deviceId.is(FEHLT)) {
+            body.deviceId = deviceId
+        }
+        send(request, body: body)
+    }
+
+    /** POST /api/auth/logout (DIV-65); refreshToken (Body) und bearer (Header) jeweils optional. */
+    private MockHttpServletResponse logout(Map optionen) {
+        assert ['refreshToken', 'bearer'].containsAll(optionen.keySet()): "Unbekannte Option: ${optionen.keySet()}"
+        def request = post('/api/auth/logout')
+        if (optionen.bearer != null) {
+            request.header('Authorization', JwtService.BEARER_PREFIX + optionen.bearer).header('deviceId', DEVICE)
+        }
+        optionen.refreshToken == null ? send(request) : send(request, body: [refreshToken: optionen.refreshToken])
+    }
+
+    /** Ids der nicht widerrufenen Sessions des Nutzers (JPQL: Hibernate flusht vorher). */
+    private List<Long> aktiveSessions(Long userId) {
+        entityManager.createQuery(
+                'select s.id from AuthSession s where s.user.id = :userId and s.revokedAt is null order by s.id', Long)
+                .setParameter('userId', userId)
+                .resultList
+    }
+
+    private SessionRevokeReason widerrufsgrund(Long sessionId) {
+        entityManager.createQuery('select s.revokeReason from AuthSession s where s.id = :id', SessionRevokeReason)
+                .setParameter('id', sessionId)
+                .singleResult
+    }
+
+    /** Anzahl aller Sessions; nur als Vorher/Nachher-Vergleich innerhalb eines Features (Commit-Specs hinterlassen Zeilen). */
+    private long sessionAnzahl() {
+        entityManager.createQuery('select count(s) from AuthSession s', Long).singleResult
     }
 
     private static userDetails(String username) {

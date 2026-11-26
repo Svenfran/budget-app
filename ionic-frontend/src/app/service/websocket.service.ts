@@ -9,6 +9,9 @@ import { HealthCheckService } from './healthcheck.service';
 
 export type StompClientFactory = (config: StompConfig) => Client;
 
+/** Wartezeiten der eigenen Wiederverbindung nach `retry` (DIV-65); danach bleibt es beim letzten Wert. */
+export const RECONNECT_BACKOFF_MS = [5000, 10000, 30000, 60000];
+
 /** Erzeugt den STOMP-Client (SockJS). Als Token, damit Tests einen Fake-Client einsetzen können (wie `DEVICE_ID`). */
 export const STOMP_CLIENT_FACTORY = new InjectionToken<StompClientFactory>('STOMP_CLIENT_FACTORY', {
   providedIn: 'root',
@@ -20,8 +23,14 @@ export const STOMP_CLIENT_FACTORY = new InjectionToken<StompClientFactory>('STOM
   }),
 });
 
-/** Liefert den fertigen Authorization-Wert (`"Bearer <jwt>"`, wie `User.token`) oder nichts, wenn keiner vorliegt. */
-export type AuthorizationProvider = () => string | null | undefined;
+/**
+ * Zugangsdaten für einen (Re-)Connect (DIV-65): `token` mit fertigem Authorization-Wert (`"Bearer <jwt>"`),
+ * `no-session` (nicht angemeldet bzw. Session beendet) oder `retry` (vorübergehender Fehler beim Erneuern des Tokens).
+ */
+export type WsAuthResult = { kind: 'token'; value: string } | { kind: 'no-session' } | { kind: 'retry' };
+
+/** Liefert die Zugangsdaten vor jedem (Re-)Connect; soll nie ablehnen (eine Ablehnung gilt als `retry`). */
+export type AuthorizationProvider = () => Promise<WsAuthResult>;
 
 export interface SubscribeOptions {
   /** Wer das Topic registriert hat; `unsubscribeOwner(owner)` entfernt nur dessen Topics. */
@@ -50,12 +59,25 @@ interface Registration {
  * - Nachrichten werden zentral geparst, optional nach aktiver Gruppe gefiltert; Fehler im Handler werden geloggt
  *   und brechen die weitere Verarbeitung nicht ab.
  * - Verspätete Callbacks eines alten, noch deaktivierenden Clients werden ignoriert.
+ * - Eigene Wiederverbindung (DIV-65): Liefert der Provider `retry` (Access Token wegen Netz-/Serverfehler nicht
+ *   erneuerbar), wird der Client deaktiviert und nach Backoff ({@link RECONNECT_BACKOFF_MS}) ein neuer aufgebaut;
+ *   `reconnectNow()` (App-Resume) versucht es sofort. Der stompjs-Reconnect hilft hier nicht: In 7.2.0 wartet
+ *   `Client._connect()` auf `beforeConnect`, ohne Fehler abzufangen – eine Exception plant keinen Reconnect, deshalb
+ *   wirft `beforeConnect` nie. Timer und Backoff gehören zur logischen Verbindungssitzung (`connect()` bis
+ *   `disconnect()`), ebenso der Resync-Zustand: Interne Wiederaufbauten setzen ihn nicht zurück, und nach einem
+ *   gescheiterten ersten Versuch (Offline-Start) meldet schon der erste erfolgreiche Connect `reconnected$`.
  */
 @Injectable({ providedIn: 'root' })
 export class WebSocketService {
   private client: Client | null = null;
   private connected = false;
   private hasConnectedBefore = false;
+  /** Ein Verbindungsversuch der Sitzung ist mit `retry` gescheitert; der nächste Connect gilt als Wiederverbindung. */
+  private missedConnect = false;
+  /** Provider der laufenden logischen Verbindungssitzung (`null` = keine Sitzung). */
+  private authorization: AuthorizationProvider | null = null;
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private retryAttempt = 0;
   private registrations = new Map<string, Registration>();
   private pendingDeactivation: Promise<void> = Promise.resolve();
   private latestRequest = 0;
@@ -69,14 +91,35 @@ export class WebSocketService {
     @Inject(DEVICE_ID) private deviceId: Promise<string>,
   ) {}
 
+  /** Beginnt eine logische Verbindungssitzung (Login bzw. Nutzerwechsel). */
   async connect(authorization: AuthorizationProvider): Promise<void> {
     if (this.client?.active) {
       return;
     }
     const request = ++this.latestRequest;
+    this.resetSession();
+    this.authorization = authorization;
+    await this.open(request);
+  }
+
+  /**
+   * Sofortiger Verbindungsversuch (App-Resume), falls eine Sitzung besteht und gerade kein Client aktiv ist (z. B.
+   * während des Backoffs nach `retry`). Ein aktiver Client verbindet sich selbst neu.
+   */
+  reconnectNow(): void {
+    if (!this.authorization || this.client?.active) {
+      return;
+    }
+    this.clearRetryTimer();
+    this.open(this.latestRequest);
+  }
+
+  /** Baut einen neuen Client der laufenden Sitzung auf, ohne deren Resync-Zustand zurückzusetzen. */
+  private async open(request: number): Promise<void> {
     await this.pendingDeactivation;
-    if (request !== this.latestRequest || this.client) {
-      return; // inzwischen überholt durch einen neueren connect()/disconnect()
+    const authorization = this.authorization;
+    if (request !== this.latestRequest || this.client || !authorization) {
+      return; // inzwischen überholt durch einen neueren connect()/disconnect() bzw. schon verbunden
     }
 
     const client: Client = this.createClient({
@@ -84,14 +127,23 @@ export class WebSocketService {
       heartbeatIncoming: 10000,
       heartbeatOutgoing: 10000,
       debug: () => {},
+      // wirft bewusst nie: eine Exception in beforeConnect plant bei stompjs keinen Reconnect
       beforeConnect: async () => {
-        const authorizationValue = authorization();
+        const auth = await authorization().catch((): WsAuthResult => ({ kind: 'retry' }));
         const deviceId = await this.deviceId;
-        if (!authorizationValue) {
-          this.deactivate(client);
+        if (client !== this.client) {
           return;
         }
-        client.connectHeaders = { Authorization: authorizationValue, DeviceId: deviceId };
+        if (auth.kind !== 'token') {
+          // no-session: deaktivieren wie bisher; retry: deaktivieren und eigene Wiederverbindung planen
+          this.deactivate(client);
+          if (auth.kind === 'retry') {
+            this.missedConnect = true;
+            this.scheduleRetry(request);
+          }
+          return;
+        }
+        client.connectHeaders = { Authorization: auth.value, DeviceId: deviceId };
       },
       onConnect: () => this.onConnect(client),
       onStompError: (frame: IFrame) => {
@@ -110,7 +162,6 @@ export class WebSocketService {
     });
     this.client = client;
     this.connected = false;
-    this.hasConnectedBefore = false;
     client.activate();
   }
 
@@ -120,6 +171,7 @@ export class WebSocketService {
    */
   disconnect(): Promise<void> {
     this.latestRequest++;
+    this.resetSession();
     this.registrations.forEach(registration => this.unsubscribeStomp(registration));
     if (this.client) {
       this.deactivate(this.client);
@@ -156,10 +208,40 @@ export class WebSocketService {
     if (client !== this.client) return;
     this.connected = true;
     this.registrations.forEach(registration => this.subscribeStomp(client, registration));
-    if (this.hasConnectedBefore) {
+    if (this.hasConnectedBefore || this.missedConnect) {
       this.reconnectedSubject.next();
     }
     this.hasConnectedBefore = true;
+    this.missedConnect = false;
+    this.retryAttempt = 0;
+  }
+
+  private scheduleRetry(request: number) {
+    if (this.retryTimer || request !== this.latestRequest) {
+      return;
+    }
+    const delay = RECONNECT_BACKOFF_MS[Math.min(this.retryAttempt, RECONNECT_BACKOFF_MS.length - 1)];
+    this.retryAttempt++;
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      this.open(request);
+    }, delay);
+  }
+
+  private clearRetryTimer() {
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
+  }
+
+  /** Beendet den Zustand der logischen Verbindungssitzung (Timer, Backoff, Resync-Zustand). */
+  private resetSession() {
+    this.clearRetryTimer();
+    this.authorization = null;
+    this.retryAttempt = 0;
+    this.hasConnectedBefore = false;
+    this.missedConnect = false;
   }
 
   private onWebSocketClose(client: Client) {
