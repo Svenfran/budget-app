@@ -1,7 +1,6 @@
 package com.github.svenfran.budgetapp.budgetappbackend.service
 
 import com.github.svenfran.budgetapp.budgetappbackend.dto.AuthenticationRequest
-import com.github.svenfran.budgetapp.budgetappbackend.repository.TokenRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.TestData
 import org.springframework.security.authentication.AuthenticationManager
@@ -21,7 +20,7 @@ class AuthenticationServiceSpec extends Specification {
     AuthenticationManager authManager = Mock()
     AuthSessionService authSessionService = Mock()
     def service = new AuthenticationService(userRepository, Mock(PasswordEncoder), Mock(JwtService), authManager,
-            Mock(TokenRepository), new VerificationService(Mock(PasswordEncoder), Mock(UserRepository)),
+            new VerificationService(Mock(PasswordEncoder), Mock(UserRepository)),
             Mock(GroupService), authSessionService)
 
     def "Unbekannte E-Mail: Passwortprüfung läuft trotzdem genau einmal, danach BadCredentials und keine Session"() {

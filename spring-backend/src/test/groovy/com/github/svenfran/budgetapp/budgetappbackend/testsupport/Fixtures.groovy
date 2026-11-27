@@ -25,7 +25,6 @@ class Fixtures {
     @Autowired CartRepository cartRepository
     @Autowired CartTemplateRepository templateRepository
     @Autowired GroupMembershipHistoryRepository membershipRepository
-    @Autowired TokenRepository tokenRepository
     @Autowired ShoppingListRepository shoppingListRepository
     @Autowired ShoppingItemRepository shoppingItemRepository
     @Autowired ShoppingPurchaseRepository shoppingPurchaseRepository
@@ -92,10 +91,6 @@ class Fixtures {
         cart.template = template
         cartRepository.save(cart)
         template
-    }
-
-    Token token(Map overrides = [:], User user) {
-        tokenRepository.save(TestData.token([user: user] + overrides))
     }
 
     ShoppingList shoppingList(Map overrides = [:], GroupScenario scenario) {

@@ -15,6 +15,7 @@ import com.github.svenfran.budgetapp.budgetappbackend.service.auth.RefreshResult
 import com.github.svenfran.budgetapp.budgetappbackend.service.auth.RefreshResult.Reason;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -223,7 +224,9 @@ public class AuthSessionService {
     /**
      * Löscht Sessions, die seit mehr als {@link #CLEANUP_RETENTION} beendet sind (widerrufen, absolut abgelaufen oder
      * aktueller Token im Leerlauf abgelaufen), samt Refresh Tokens. Rotierte Tokens aktiver Sessions bleiben.
+     * Läuft per Cron {@code task.sessionCleanup.schedule} (DIV-122); der Scheduler ignoriert den Rückgabewert.
      */
+    @Scheduled(cron = "${task.sessionCleanup.schedule}")
     @Transactional
     public int deleteEndedSessions() {
         var deleted = sessionRepository.deleteEndedBefore(now().minus(CLEANUP_RETENTION));

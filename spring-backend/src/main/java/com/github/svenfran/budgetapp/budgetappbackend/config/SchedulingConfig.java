@@ -5,7 +5,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
- * Aktiviert die @Scheduled-Jobs (Recurring Carts, Token-Cleanup, Health-Heartbeat).
+ * Aktiviert die @Scheduled-Jobs (Recurring Carts, Session-Cleanup, Health-Heartbeat).
  * Im Testprofil über app.scheduling.enabled=false abgeschaltet; ohne Property (dev, prod) aktiv.
  */
 @Configuration

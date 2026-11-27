@@ -12,7 +12,6 @@ import com.github.svenfran.budgetapp.budgetappbackend.repository.CategoryReposit
 import com.github.svenfran.budgetapp.budgetappbackend.repository.GroupRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingItemRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.ShoppingListRepository
-import com.github.svenfran.budgetapp.budgetappbackend.repository.TokenRepository
 import com.github.svenfran.budgetapp.budgetappbackend.repository.UserRepository
 import com.github.svenfran.budgetapp.budgetappbackend.service.SettlementService
 import com.github.svenfran.budgetapp.budgetappbackend.testsupport.IntegrationSpec
@@ -42,7 +41,6 @@ class EntityToStringIntegrationSpec extends IntegrationSpec {
     @Autowired CategoryRepository categoryRepository
     @Autowired ShoppingListRepository shoppingListRepository
     @Autowired ShoppingItemRepository shoppingItemRepository
-    @Autowired TokenRepository tokenRepository
     @Autowired SettlementService settlementService
     @Autowired AuthSessionService authSessionService
     @Autowired AuthSessionRepository authSessionRepository
@@ -68,8 +66,7 @@ class EntityToStringIntegrationSpec extends IntegrationSpec {
              'Group.memberList'  : Hibernate.isInitialized(loadedGroup.memberList),
              'User.groups'       : Hibernate.isInitialized(loadedUser.groups),
              'User.groupList'    : Hibernate.isInitialized(loadedUser.groupList),
-             'User.carts'        : Hibernate.isInitialized(loadedUser.carts),
-             'User.tokens'       : Hibernate.isInitialized(loadedUser.tokens)]
+             'User.carts'        : Hibernate.isInitialized(loadedUser.carts)]
         }
         def before = lazyState()
         LOG.info('Szenario: Gruppe {}, Mitglied {}, Einkauf {} mit Template; geladen: Cart, Group, User', groupId, benId, cartId)
@@ -151,39 +148,35 @@ class EntityToStringIntegrationSpec extends IntegrationSpec {
         LocaleContextHolder.resetLocaleContext()
     }
 
-    def "toString von Kategorie, Einkaufsliste, Eintrag und Token lädt nichts nach und wirft detacht keinen Fehler"() {
-        given: "Kategorie mit Einkauf, Einkaufsliste mit Eintrag, Token des Owners"
+    def "toString von Kategorie, Einkaufsliste und Eintrag lädt nichts nach und wirft detacht keinen Fehler"() {
+        given: "Kategorie mit Einkauf, Einkaufsliste mit Eintrag"
         def wg = fixtures.group()
         fixtures.cart(wg)
         def list = fixtures.shoppingList(wg)
         def item = fixtures.shoppingItem(list)
-        def token = fixtures.token(wg.owner)
-        def (groupId, ownerId, categoryId, listId, itemId, tokenId) =
-                [wg.group.id, wg.owner.id, wg.category.id, list.id, item.id, token.id]
+        def (groupId, categoryId, listId, itemId) = [wg.group.id, wg.category.id, list.id, item.id]
         flushAndClear()
         def loadedCategory = categoryRepository.findById(categoryId).get()
         def loadedList = shoppingListRepository.findById(listId).get()
         def loadedItem = shoppingItemRepository.findById(itemId).get()
-        def loadedToken = tokenRepository.findById(tokenId).get()
         def lazyState = {
             ['Category.carts'            : Hibernate.isInitialized(loadedCategory.carts),
              'ShoppingList.shoppingItems': Hibernate.isInitialized(loadedList.shoppingItems)]
         }
         def before = lazyState()
-        LOG.info('Szenario: Gruppe {}, Owner {}, Kategorie {} mit Einkauf, Einkaufsliste {} mit Eintrag {}, Token {}',
-                groupId, ownerId, categoryId, listId, itemId, tokenId)
+        LOG.info('Szenario: Gruppe {}, Kategorie {} mit Einkauf, Einkaufsliste {} mit Eintrag {}',
+                groupId, categoryId, listId, itemId)
 
         when: "toString im Persistence Context, danach detacht"
-        [loadedCategory, loadedList, loadedItem, loadedToken]*.toString()
+        [loadedCategory, loadedList, loadedItem]*.toString()
         def after = lazyState()
         entityManager.clear()
         def categoryText = loadedCategory.toString()
         def listText = loadedList.toString()
         def itemText = loadedItem.toString()
-        def tokenText = loadedToken.toString()
-        LOG.info('toString von Category, ShoppingList, ShoppingItem, Token -> initialisiert vorher {}, nachher {}, ' +
+        LOG.info('toString von Category, ShoppingList, ShoppingItem -> initialisiert vorher {}, nachher {}, ' +
                 'detacht ohne Exception', before.findAll { it.value }.keySet(), after.findAll { it.value }.keySet())
-        LOG.debug('toString: {} / {} / {} / {}', categoryText, listText, itemText, tokenText)
+        LOG.debug('toString: {} / {} / {}', categoryText, listText, itemText)
 
         then:
         noExceptionThrown()
@@ -192,7 +185,6 @@ class EntityToStringIntegrationSpec extends IntegrationSpec {
         categoryText.endsWith(", groupId=$groupId}")
         listText.endsWith(", groupId=$groupId}")
         itemText.endsWith(", shoppingListId=$listId}")
-        tokenText.endsWith(", userId=$ownerId}")
     }
 
     def "toString von Session und Refresh Token lädt Nutzer, Session und Nachfolger nicht nach und wirft detacht keinen Fehler"() {

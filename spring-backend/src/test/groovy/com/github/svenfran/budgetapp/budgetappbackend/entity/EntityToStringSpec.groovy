@@ -140,19 +140,6 @@ class EntityToStringSpec extends Specification {
         itemText == "ShoppingItem{id=50, name='Milch', isCompleted=true, dateCreated=null, lastUpdate=null, sortOrder=0, shoppingListId=40}"
     }
 
-    def "toString des Tokens enthält weder Tokenwert noch Geräte-ID"() {
-        given:
-        def anna = TestData.user(id: 1L)
-        def token = TestData.token(id: 60L, token: 'jwt-wert-4711', deviceId: 'geraet-4711', user: anna)
-        anna.tokens = [token]
-
-        when:
-        def text = token.toString()
-
-        then:
-        text == "Token{id=60, tokenType=BEARER, expired=false, revoked=false, userId=1}"
-    }
-
     def "toString von Session und Refresh Token enthält weder Hash noch Geräte-ID, Beziehungen nur als ID"() {
         given: "DIV-65"
         def anna = TestData.user(id: 1L)
